@@ -16,14 +16,14 @@ public interface IIndexedPathHeuristic
 }
 
 // Reusable search scratch storage. Calls on one instance must not overlap.
-public sealed class IndexedPathSearch
+public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPathGraph
 {
     private PathEdge[] _edges = [];
     private float[] _pathCosts = [];
     private int[] _pathPredecessors = [];
     private readonly PriorityQueue<OpenNode, float> _open = new PriorityQueue<OpenNode, float>();
 
-    public void ExpandTree(IIndexedPathGraph graph, int start, Span<float> costs, Span<int> predecessors, float maxCost = float.PositiveInfinity)
+    public void ExpandTree(TGraph graph, int start, Span<float> costs, Span<int> predecessors, float maxCost = float.PositiveInfinity)
     {
         EnsureCapacity(graph);
         ValidateNode(graph, start, nameof(start));
@@ -74,7 +74,12 @@ public sealed class IndexedPathSearch
         }
     }
 
-    public PathResult FindPath(IIndexedPathGraph graph, int start, int destination, List<int> result, IIndexedPathHeuristic? heuristic = null)
+    public PathResult FindPath(TGraph graph, int start, int destination, List<int> result)
+    {
+        return FindPath(graph, start, destination, result, new ZeroHeuristic());
+    }
+
+    public PathResult FindPath<THeuristic>(TGraph graph, int start, int destination, List<int> result, THeuristic heuristic) where THeuristic : struct, IIndexedPathHeuristic
     {
         ArgumentNullException.ThrowIfNull(result);
         EnsureCapacity(graph);
@@ -156,9 +161,8 @@ public sealed class IndexedPathSearch
         throw new ArgumentException("The predecessor buffer contains a cycle.", nameof(predecessors));
     }
 
-    private void EnsureCapacity(IIndexedPathGraph graph)
+    private void EnsureCapacity(TGraph graph)
     {
-        ArgumentNullException.ThrowIfNull(graph);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(graph.NodeCount);
         ArgumentOutOfRangeException.ThrowIfNegative(graph.MaximumDegree);
         if (_edges.Length < graph.MaximumDegree)
@@ -173,7 +177,7 @@ public sealed class IndexedPathSearch
         }
     }
 
-    private int GetEdges(IIndexedPathGraph graph, int origin)
+    private int GetEdges(TGraph graph, int origin)
     {
         int edgeCount = graph.GetEdges(origin, _edges.AsSpan(0, graph.MaximumDegree));
         if (edgeCount < 0 || edgeCount > graph.MaximumDegree)
@@ -198,13 +202,8 @@ public sealed class IndexedPathSearch
         return edgeCount;
     }
 
-    private static float EstimateCost(IIndexedPathHeuristic? heuristic, int origin, int destination)
+    private static float EstimateCost<THeuristic>(THeuristic heuristic, int origin, int destination) where THeuristic : struct, IIndexedPathHeuristic
     {
-        if (heuristic == null)
-        {
-            return 0f;
-        }
-
         float cost = heuristic.EstimateCost(origin, destination);
         if (!float.IsFinite(cost) || cost < 0f)
         {
@@ -214,7 +213,7 @@ public sealed class IndexedPathSearch
         return cost;
     }
 
-    private static void ValidateNode(IIndexedPathGraph graph, int node, string parameterName)
+    private static void ValidateNode(TGraph graph, int node, string parameterName)
     {
         if ((uint)node >= (uint)graph.NodeCount)
         {
@@ -223,4 +222,12 @@ public sealed class IndexedPathSearch
     }
 
     private readonly record struct OpenNode(int Index, float Cost);
+
+    private readonly struct ZeroHeuristic : IIndexedPathHeuristic
+    {
+        public float EstimateCost(int origin, int destination)
+        {
+            return 0f;
+        }
+    }
 }

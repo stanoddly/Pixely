@@ -14,13 +14,13 @@ public sealed class IndexedPathSearchTests
             [(1, 1f)],
             []
         ]);
-        IndexedPathSearch search = new IndexedPathSearch();
+        IndexedPathSearch<TestGraph> search = new IndexedPathSearch<TestGraph>();
         float[] costs = new float[graph.NodeCount];
         int[] predecessors = new int[graph.NodeCount];
         List<int> path = new List<int>();
 
         search.ExpandTree(graph, 0, costs, predecessors);
-        PathResult result = IndexedPathSearch.ReconstructPath(0, 3, predecessors, path);
+        PathResult result = IndexedPathSearch<TestGraph>.ReconstructPath(0, 3, predecessors, path);
 
         Assert.Multiple(() =>
         {
@@ -40,7 +40,7 @@ public sealed class IndexedPathSearchTests
             [(3, 2f)],
             []
         ]);
-        IndexedPathSearch search = new IndexedPathSearch();
+        IndexedPathSearch<TestGraph> search = new IndexedPathSearch<TestGraph>();
         float[] costs = new float[graph.NodeCount];
         int[] predecessors = new int[graph.NodeCount];
 
@@ -66,7 +66,7 @@ public sealed class IndexedPathSearchTests
             [(1, 0.5f), (3, 100f)],
             []
         ]);
-        IndexedPathSearch search = new IndexedPathSearch();
+        IndexedPathSearch<TestGraph> search = new IndexedPathSearch<TestGraph>();
         List<int> path = new List<int> { 99 };
 
         PathResult result = search.FindPath(graph, 0, 3, path, new TestHeuristic([0f, 0f, 2.5f, 0f]));
@@ -82,7 +82,7 @@ public sealed class IndexedPathSearchTests
     public void FindPath_ReturnsNotFoundAndClearsResult()
     {
         TestGraph graph = new TestGraph([[(1, 1f)], [], []]);
-        IndexedPathSearch search = new IndexedPathSearch();
+        IndexedPathSearch<TestGraph> search = new IndexedPathSearch<TestGraph>();
         List<int> path = new List<int> { 99 };
 
         PathResult result = search.FindPath(graph, 0, 2, path);
@@ -98,13 +98,13 @@ public sealed class IndexedPathSearchTests
     public void Search_RejectsInvalidGraphEdges()
     {
         TestGraph graph = new TestGraph([[(1, -1f)], []]);
-        IndexedPathSearch search = new IndexedPathSearch();
+        IndexedPathSearch<TestGraph> search = new IndexedPathSearch<TestGraph>();
         List<int> path = new List<int>();
 
         Assert.That(() => search.FindPath(graph, 0, 1, path), Throws.InvalidOperationException);
     }
 
-    private sealed class TestGraph : IIndexedPathGraph
+    private readonly struct TestGraph : IIndexedPathGraph
     {
         private readonly PathEdge[][] _edges;
 
@@ -133,7 +133,7 @@ public sealed class IndexedPathSearchTests
         }
     }
 
-    private sealed class TestHeuristic : IIndexedPathHeuristic
+    private readonly struct TestHeuristic : IIndexedPathHeuristic
     {
         private readonly float[] _costs;
 
