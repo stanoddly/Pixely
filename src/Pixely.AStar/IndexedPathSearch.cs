@@ -16,6 +16,7 @@ public interface IIndexedPathHeuristic
 }
 
 // Reusable search scratch storage. Calls on one instance must not overlap.
+// The struct constraint lets the JIT specialize the search for each graph type and inline constrained interface calls.
 public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPathGraph
 {
     private PathEdge[] _edges = [];
