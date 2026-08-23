@@ -15,8 +15,17 @@ public interface IIndexedPathHeuristic
     float EstimateCost(int origin, int destination);
 }
 
-// Reusable search scratch storage. Calls on one instance must not overlap.
-// The struct constraint lets the JIT specialize the search for each graph type and inline constrained interface calls.
+/// <summary>
+/// Finds least-cost paths and shortest-path trees in graphs whose nodes have stable dense integer indices.
+/// </summary>
+/// <remarks>
+/// Choose this type for repeated searches when every node maps to an index from zero through <see cref="IIndexedPathGraph.NodeCount"/> minus one.
+/// It uses array-indexed state, accepts caller-owned tree buffers, and reuses its internal search storage to avoid hash lookups and steady-state search allocations.
+/// <see cref="ExpandTree"/> and the <see cref="FindPath(TGraph, int, int, List{int})"/> overload use Dijkstra search; the heuristic overload uses A*.
+/// Use <see cref="PathFinder{TPoint}"/> instead when nodes are more naturally represented by arbitrary value types or stable dense indices are unavailable.
+/// Calls on the same instance must not overlap. The struct constraint lets the JIT specialize the search for each graph type and inline constrained interface calls.
+/// </remarks>
+/// <typeparam name="TGraph">A value-type adapter that exposes the indexed graph.</typeparam>
 public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPathGraph
 {
     private PathEdge[] _edges = [];
@@ -24,6 +33,12 @@ public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPat
     private int[] _pathPredecessors = [];
     private readonly PriorityQueue<OpenNode, float> _open = new PriorityQueue<OpenNode, float>();
 
+    /// <summary>
+    /// Uses Dijkstra search to write the cheapest cost and predecessor for every node reachable within the maximum cost.
+    /// </summary>
+    /// <remarks>
+    /// Both buffers must have at least <see cref="IIndexedPathGraph.NodeCount"/> entries and are overwritten. Unreachable nodes receive an infinite cost and a predecessor of minus one.
+    /// </remarks>
     public void ExpandTree(TGraph graph, int start, Span<float> costs, Span<int> predecessors, float maxCost = float.PositiveInfinity)
     {
         EnsureCapacity(graph);
@@ -75,11 +90,20 @@ public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPat
         }
     }
 
+    /// <summary>
+    /// Uses Dijkstra search to find a least-cost path to one destination.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
     public PathResult FindPath(TGraph graph, int start, int destination, List<int> result)
     {
         return FindPath(graph, start, destination, result, new ZeroHeuristic());
     }
 
+    /// <summary>
+    /// Uses A* to find a least-cost path to one destination with an admissible heuristic.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
+    /// <typeparam name="THeuristic">A value-type heuristic whose estimates do not exceed the cheapest remaining path cost.</typeparam>
     public PathResult FindPath<THeuristic>(TGraph graph, int start, int destination, List<int> result, THeuristic heuristic) where THeuristic : struct, IIndexedPathHeuristic
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -126,6 +150,10 @@ public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPat
         return PathResult.NotFound;
     }
 
+    /// <summary>
+    /// Reconstructs one path from a predecessor tree produced by <see cref="ExpandTree"/>.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
     public static PathResult ReconstructPath(int start, int destination, ReadOnlySpan<int> predecessors, List<int> result)
     {
         ArgumentNullException.ThrowIfNull(result);
