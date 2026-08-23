@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Pixely.AStar;
+namespace Pixely.PathFinding;
 
 public enum PathResult
 {
@@ -44,6 +44,16 @@ public interface IPathFinder<TPoint> where TPoint : struct
     AreaResult<TPoint> ExpandArea(TPoint start, float maxCost);
 }
 
+/// <summary>
+/// Finds least-cost paths and reachable areas in graphs whose nodes are represented by arbitrary value types.
+/// </summary>
+/// <remarks>
+/// Choose this type when nodes do not have stable dense integer indices, or when the convenience of point-based results is more important than search allocation.
+/// It uses hash-based collections for graph state and asks an <see cref="IPathFinderMap{TPoint}"/> to expand each node.
+/// <see cref="FindPath"/> uses A*, while <see cref="ExpandArea"/> uses bounded Dijkstra search and reports the edges leaving the reachable area.
+/// For repeated searches over nodes indexed from zero to a fixed node count, prefer <see cref="IndexedPathSearch{TGraph}"/>.
+/// </remarks>
+/// <typeparam name="TPoint">The value type used to identify graph nodes.</typeparam>
 public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
 {
     private readonly IDistanceHeuristicProvider<TPoint> _distanceHeuristicProvider;
@@ -51,14 +61,25 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
     private readonly IPathFinderMap<TPoint> _map;
 
     public PathFinder(IPathFinderMap<TPoint> map, IDistanceHeuristicProvider<TPoint> distanceHeuristicProvider)
+        : this(map, distanceHeuristicProvider, int.MaxValue)
     {
+    }
+
+    public PathFinder(IPathFinderMap<TPoint> map, IDistanceHeuristicProvider<TPoint> distanceHeuristicProvider, int expansionLimit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expansionLimit);
         _map = map;
         _distanceHeuristicProvider = distanceHeuristicProvider;
-        _expansionLimit = int.MaxValue;
+        _expansionLimit = expansionLimit;
     }
 
     public AreaResult<TPoint> ExpandArea(TPoint start, float maxCost)
     {
+        if (float.IsNaN(maxCost) || maxCost < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxCost), maxCost, "Maximum cost must be non-negative.");
+        }
+
         HashSet<TPoint> outside = new HashSet<TPoint>();
         Dictionary<TPoint, float> costs = new Dictionary<TPoint, float>();
         PriorityQueue<TPoint, float> open = new PriorityQueue<TPoint, float>();
@@ -87,6 +108,7 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
 
             foreach ((TPoint neighborLocation, float neighborCost) in neighbors)
             {
+                ValidateEdgeCost(neighborCost);
                 float neighborFinalCost = evaluatedLocationCost + neighborCost;
                 if (neighborFinalCost > maxCost)
                 {
@@ -110,7 +132,7 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
         List<AreaEdge<TPoint>> edges = new List<AreaEdge<TPoint>>();
         foreach (TPoint outsidePosition in outside)
         {
-            if (cameFrom.ContainsKey(outsidePosition) || outsidePosition.Equals(start))
+            if (costs.ContainsKey(outsidePosition))
             {
                 continue;
             }
@@ -119,7 +141,7 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
             _map.ExpandPosition(outsidePosition, neighbors);
             foreach ((TPoint neighborLocation, float _) in neighbors)
             {
-                if (cameFrom.ContainsKey(neighborLocation))
+                if (costs.ContainsKey(neighborLocation))
                 {
                     edges.Add(new AreaEdge<TPoint>(neighborLocation, outsidePosition));
                 }
@@ -131,32 +153,27 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
 
     public PathResult FindPath(TPoint start, TPoint destination, List<(TPoint, float)> result)
     {
+        ArgumentNullException.ThrowIfNull(result);
+        result.Clear();
         int expansionsCount = 0;
-        PriorityQueue<TPoint, float> open = new PriorityQueue<TPoint, float>();
-        HashSet<TPoint> closed = new HashSet<TPoint>();
+        PriorityQueue<(TPoint Position, float Cost), float> open = new PriorityQueue<(TPoint Position, float Cost), float>();
         Dictionary<TPoint, TPoint> cameFrom = new Dictionary<TPoint, TPoint>();
         Dictionary<TPoint, float> costs = new Dictionary<TPoint, float>();
         List<(TPoint Position, float Cost)> neighbors = new List<(TPoint Position, float Cost)>();
 
         costs[start] = 0;
-        open.Enqueue(start, _distanceHeuristicProvider.GetCost(start, destination));
+        open.Enqueue((start, 0f), _distanceHeuristicProvider.GetCost(start, destination));
 
-        while (open.TryDequeue(out TPoint current, out float potentialCost))
+        while (open.TryDequeue(out (TPoint Position, float Cost) entry, out float potentialCost))
         {
-            if (closed.Contains(current))
+            TPoint current = entry.Position;
+            if (entry.Cost > costs[current])
             {
                 continue;
             }
 
-            expansionsCount++;
-            if (expansionsCount >= _expansionLimit)
-            {
-                return PathResult.ExpansionLimitExceeded;
-            }
-
             if (float.IsInfinity(potentialCost))
             {
-                closed.Add(current);
                 continue;
             }
 
@@ -166,18 +183,19 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
                 return PathResult.Found;
             }
 
-            closed.Add(current);
+            if (expansionsCount >= _expansionLimit)
+            {
+                return PathResult.ExpansionLimitExceeded;
+            }
+
+            expansionsCount++;
             neighbors.Clear();
             _map.ExpandPosition(current, neighbors);
 
             foreach ((TPoint neighborLocation, float neighborCost) in neighbors)
             {
-                if (closed.Contains(neighborLocation))
-                {
-                    continue;
-                }
-
-                float cost = costs[current] + neighborCost;
+                ValidateEdgeCost(neighborCost);
+                float cost = entry.Cost + neighborCost;
                 if (costs.TryGetValue(neighborLocation, out float existingCost) && cost >= existingCost)
                 {
                     continue;
@@ -187,7 +205,7 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
                 costs[neighborLocation] = cost;
                 float potentialNeighborCost =
                     cost + _distanceHeuristicProvider.GetCost(neighborLocation, destination);
-                open.Enqueue(neighborLocation, potentialNeighborCost);
+                open.Enqueue((neighborLocation, cost), potentialNeighborCost);
             }
         }
 
@@ -208,5 +226,13 @@ public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
         }
 
         result.Reverse();
+    }
+
+    private static void ValidateEdgeCost(float cost)
+    {
+        if (!float.IsFinite(cost) || cost < 0f)
+        {
+            throw new InvalidOperationException("The map returned a non-finite or negative edge cost.");
+        }
     }
 }

@@ -1,6 +1,6 @@
-using Pixely.AStar;
+using Pixely.PathFinding;
 
-namespace Pixely.AStar.Tests;
+namespace Pixely.PathFinding.Tests;
 
 public class PathFinderTests
 {
@@ -61,6 +61,58 @@ public class PathFinderTests
         areaPathFinder.ExpandArea(0, 7);
 
         Assert.That(areaMap.UsedOneNeighborCollection, Is.True);
+    }
+
+    [Test]
+    public void ExpandArea_IncludesBoundaryEdgeFromStart()
+    {
+        TestMap map = new TestMap(new Dictionary<int, (int Position, float Cost)[]>
+        {
+            [0] = [(1, 2f)],
+            [1] = [(0, 2f)]
+        });
+        PathFinder<int> pathFinder = new PathFinder<int>(map, new ZeroHeuristic());
+
+        AreaResult<int> result = pathFinder.ExpandArea(0, 1f);
+
+        Assert.That(result.Edges, Does.Contain(new AreaEdge<int>(0, 1)));
+    }
+
+    [Test]
+    public void FindPath_ClearsExistingResult()
+    {
+        TestMap map = new TestMap(new Dictionary<int, (int Position, float Cost)[]>
+        {
+            [0] = [(1, 1f)],
+            [1] = []
+        });
+        PathFinder<int> pathFinder = new PathFinder<int>(map, new ZeroHeuristic());
+        List<(int Position, float Cost)> path = new List<(int Position, float Cost)> { (99, 99f) };
+
+        PathResult result = pathFinder.FindPath(0, 1, path);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(PathResult.Found));
+            Assert.That(path, Is.EqualTo(new[] { (1, 1f) }));
+        });
+    }
+
+    [Test]
+    public void FindPath_EnforcesExpansionLimit()
+    {
+        TestMap map = new TestMap(new Dictionary<int, (int Position, float Cost)[]>
+        {
+            [0] = [(1, 1f)],
+            [1] = [(2, 1f)],
+            [2] = []
+        });
+        PathFinder<int> pathFinder = new PathFinder<int>(map, new ZeroHeuristic(), 1);
+        List<(int Position, float Cost)> path = new List<(int Position, float Cost)>();
+
+        PathResult result = pathFinder.FindPath(0, 2, path);
+
+        Assert.That(result, Is.EqualTo(PathResult.ExpansionLimitExceeded));
     }
 
     private sealed class TestMap : IPathFinderMap<int>

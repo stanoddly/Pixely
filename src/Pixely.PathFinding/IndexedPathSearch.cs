@@ -1,0 +1,262 @@
+namespace Pixely.PathFinding;
+
+public readonly record struct PathEdge(int Destination, float Cost);
+
+public interface IIndexedPathGraph
+{
+    int NodeCount { get; }
+    int MaximumDegree { get; }
+    int GetEdges(int origin, Span<PathEdge> edges);
+}
+
+public interface IIndexedPathHeuristic
+{
+    // Estimates must not exceed the cheapest remaining path cost.
+    float EstimateCost(int origin, int destination);
+}
+
+/// <summary>
+/// Finds least-cost paths and shortest-path trees in graphs whose nodes have stable dense integer indices.
+/// </summary>
+/// <remarks>
+/// Choose this type for repeated searches when every node maps to an index from zero through <see cref="IIndexedPathGraph.NodeCount"/> minus one.
+/// It uses array-indexed state, accepts caller-owned tree buffers, and reuses its internal search storage to avoid hash lookups and steady-state search allocations.
+/// <see cref="ExpandTree"/> and the <see cref="FindPath(TGraph, int, int, List{int})"/> overload use Dijkstra search; the heuristic overload uses A*.
+/// Use <see cref="PathFinder{TPoint}"/> instead when nodes are more naturally represented by arbitrary value types or stable dense indices are unavailable.
+/// Calls on the same instance must not overlap. The struct constraint lets the JIT specialize the search for each graph type and inline constrained interface calls.
+/// </remarks>
+/// <typeparam name="TGraph">A value-type adapter that exposes the indexed graph.</typeparam>
+public sealed class IndexedPathSearch<TGraph> where TGraph : struct, IIndexedPathGraph
+{
+    private PathEdge[] _edges = [];
+    private float[] _pathCosts = [];
+    private int[] _pathPredecessors = [];
+    private readonly PriorityQueue<OpenNode, float> _open = new PriorityQueue<OpenNode, float>();
+
+    /// <summary>
+    /// Uses Dijkstra search to write the cheapest cost and predecessor for every node reachable within the maximum cost.
+    /// </summary>
+    /// <remarks>
+    /// Both buffers must have at least <see cref="IIndexedPathGraph.NodeCount"/> entries and are overwritten. Unreachable nodes receive an infinite cost and a predecessor of minus one.
+    /// </remarks>
+    public void ExpandTree(TGraph graph, int start, Span<float> costs, Span<int> predecessors, float maxCost = float.PositiveInfinity)
+    {
+        EnsureCapacity(graph);
+        ValidateNode(graph, start, nameof(start));
+        if (float.IsNaN(maxCost) || maxCost < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxCost), maxCost, "Maximum cost must be non-negative.");
+        }
+
+        if (costs.Length < graph.NodeCount)
+        {
+            throw new ArgumentException("The cost buffer must contain an entry for every graph node.", nameof(costs));
+        }
+
+        if (predecessors.Length < graph.NodeCount)
+        {
+            throw new ArgumentException("The predecessor buffer must contain an entry for every graph node.", nameof(predecessors));
+        }
+
+        costs = costs[..graph.NodeCount];
+        predecessors = predecessors[..graph.NodeCount];
+        costs.Fill(float.PositiveInfinity);
+        predecessors.Fill(-1);
+        _open.Clear();
+        costs[start] = 0f;
+        _open.Enqueue(new OpenNode(start, 0f), 0f);
+
+        while (_open.TryDequeue(out OpenNode current, out float _))
+        {
+            if (current.Cost > costs[current.Index])
+            {
+                continue;
+            }
+
+            int edgeCount = GetEdges(graph, current.Index);
+            for (int index = 0; index < edgeCount; index++)
+            {
+                PathEdge edge = _edges[index];
+                float cost = current.Cost + edge.Cost;
+                if (cost > maxCost || cost >= costs[edge.Destination])
+                {
+                    continue;
+                }
+
+                costs[edge.Destination] = cost;
+                predecessors[edge.Destination] = current.Index;
+                _open.Enqueue(new OpenNode(edge.Destination, cost), cost);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Uses Dijkstra search to find a least-cost path to one destination.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
+    public PathResult FindPath(TGraph graph, int start, int destination, List<int> result)
+    {
+        return FindPath(graph, start, destination, result, new ZeroHeuristic());
+    }
+
+    /// <summary>
+    /// Uses A* to find a least-cost path to one destination with an admissible heuristic.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
+    /// <typeparam name="THeuristic">A value-type heuristic whose estimates do not exceed the cheapest remaining path cost.</typeparam>
+    public PathResult FindPath<THeuristic>(TGraph graph, int start, int destination, List<int> result, THeuristic heuristic) where THeuristic : struct, IIndexedPathHeuristic
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        EnsureCapacity(graph);
+        ValidateNode(graph, start, nameof(start));
+        ValidateNode(graph, destination, nameof(destination));
+        result.Clear();
+        Array.Fill(_pathCosts, float.PositiveInfinity, 0, graph.NodeCount);
+        Array.Fill(_pathPredecessors, -1, 0, graph.NodeCount);
+        _open.Clear();
+        _pathCosts[start] = 0f;
+        _open.Enqueue(new OpenNode(start, 0f), EstimateCost(heuristic, start, destination));
+
+        while (_open.TryDequeue(out OpenNode current, out float _))
+        {
+            if (current.Cost > _pathCosts[current.Index])
+            {
+                continue;
+            }
+
+            if (current.Index == destination)
+            {
+                ReconstructPath(start, destination, _pathPredecessors, result);
+                return PathResult.Found;
+            }
+
+            int edgeCount = GetEdges(graph, current.Index);
+            for (int index = 0; index < edgeCount; index++)
+            {
+                PathEdge edge = _edges[index];
+                float cost = current.Cost + edge.Cost;
+                if (cost >= _pathCosts[edge.Destination])
+                {
+                    continue;
+                }
+
+                _pathCosts[edge.Destination] = cost;
+                _pathPredecessors[edge.Destination] = current.Index;
+                float estimatedCost = cost + EstimateCost(heuristic, edge.Destination, destination);
+                _open.Enqueue(new OpenNode(edge.Destination, cost), estimatedCost);
+            }
+        }
+
+        return PathResult.NotFound;
+    }
+
+    /// <summary>
+    /// Reconstructs one path from a predecessor tree produced by <see cref="ExpandTree"/>.
+    /// </summary>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
+    public static PathResult ReconstructPath(int start, int destination, ReadOnlySpan<int> predecessors, List<int> result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(start, predecessors.Length);
+        ArgumentOutOfRangeException.ThrowIfNegative(destination);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(destination, predecessors.Length);
+        result.Clear();
+        if (start == destination)
+        {
+            return PathResult.Found;
+        }
+
+        int current = destination;
+        for (int count = 0; count < predecessors.Length; count++)
+        {
+            int predecessor = predecessors[current];
+            if (predecessor < 0 || predecessor >= predecessors.Length)
+            {
+                result.Clear();
+                return PathResult.NotFound;
+            }
+
+            result.Add(current);
+            if (predecessor == start)
+            {
+                result.Reverse();
+                return PathResult.Found;
+            }
+
+            current = predecessor;
+        }
+
+        throw new ArgumentException("The predecessor buffer contains a cycle.", nameof(predecessors));
+    }
+
+    private void EnsureCapacity(TGraph graph)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(graph.NodeCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(graph.MaximumDegree);
+        if (_edges.Length < graph.MaximumDegree)
+        {
+            _edges = new PathEdge[graph.MaximumDegree];
+        }
+
+        if (_pathCosts.Length < graph.NodeCount)
+        {
+            _pathCosts = new float[graph.NodeCount];
+            _pathPredecessors = new int[graph.NodeCount];
+        }
+    }
+
+    private int GetEdges(TGraph graph, int origin)
+    {
+        int edgeCount = graph.GetEdges(origin, _edges.AsSpan(0, graph.MaximumDegree));
+        if (edgeCount < 0 || edgeCount > graph.MaximumDegree)
+        {
+            throw new InvalidOperationException("The graph returned an invalid edge count.");
+        }
+
+        for (int index = 0; index < edgeCount; index++)
+        {
+            PathEdge edge = _edges[index];
+            if ((uint)edge.Destination >= (uint)graph.NodeCount)
+            {
+                throw new InvalidOperationException("The graph returned an edge outside its node range.");
+            }
+
+            if (!float.IsFinite(edge.Cost) || edge.Cost < 0f)
+            {
+                throw new InvalidOperationException("The graph returned a non-finite or negative edge cost.");
+            }
+        }
+
+        return edgeCount;
+    }
+
+    private static float EstimateCost<THeuristic>(THeuristic heuristic, int origin, int destination) where THeuristic : struct, IIndexedPathHeuristic
+    {
+        float cost = heuristic.EstimateCost(origin, destination);
+        if (!float.IsFinite(cost) || cost < 0f)
+        {
+            throw new InvalidOperationException("The heuristic returned a non-finite or negative estimate.");
+        }
+
+        return cost;
+    }
+
+    private static void ValidateNode(TGraph graph, int node, string parameterName)
+    {
+        if ((uint)node >= (uint)graph.NodeCount)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, node, "The node is outside the graph.");
+        }
+    }
+
+    private readonly record struct OpenNode(int Index, float Cost);
+
+    private readonly struct ZeroHeuristic : IIndexedPathHeuristic
+    {
+        public float EstimateCost(int origin, int destination)
+        {
+            return 0f;
+        }
+    }
+}

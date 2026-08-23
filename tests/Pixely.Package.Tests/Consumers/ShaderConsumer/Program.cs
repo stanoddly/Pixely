@@ -5,7 +5,7 @@ using System.Reflection;
 string[] runtimeAssemblies =
 [
     "Pixely",
-    "Pixely.AStar",
+    "Pixely.PathFinding",
     "Pixely.Architecture",
     "Pixely.Architecture.Testing",
     "Pixely.Audio",
