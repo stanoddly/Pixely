@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Pixely.AStar\Pixely.AStar.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.PathFinding\Pixely.PathFinding.csproj" />
     </ItemGroup>
 
 </Project>

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Pixely.AStar;
+namespace Pixely.PathFinding;
 
 public enum PathResult
 {

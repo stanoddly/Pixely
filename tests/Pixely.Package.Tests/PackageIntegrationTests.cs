@@ -16,7 +16,7 @@ public class PackageIntegrationTests
     private const long NuGetPackageSizeLimitBytes = 250_000_000;
     private static readonly string[] RuntimeAssemblies =
     [
-        "Pixely.AStar",
+        "Pixely.PathFinding",
         "Pixely.Architecture.Testing",
         "Pixely.Architecture",
         "Pixely.Audio",

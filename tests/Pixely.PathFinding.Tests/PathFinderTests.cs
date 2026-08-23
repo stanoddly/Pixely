@@ -1,6 +1,6 @@
-using Pixely.AStar;
+using Pixely.PathFinding;
 
-namespace Pixely.AStar.Tests;
+namespace Pixely.PathFinding.Tests;
 
 public class PathFinderTests
 {

@@ -1,4 +1,4 @@
-namespace Pixely.AStar;
+namespace Pixely.PathFinding;
 
 public readonly record struct PathEdge(int Destination, float Cost);
 

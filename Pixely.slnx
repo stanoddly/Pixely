@@ -5,7 +5,7 @@
   <Folder Name="/src/">
     <Project Path="src/Pixely.Architecture/Pixely.Architecture.csproj" />
     <Project Path="src/Pixely.Architecture.Testing/Pixely.Architecture.Testing.csproj" />
-    <Project Path="src/Pixely.AStar/Pixely.AStar.csproj" />
+    <Project Path="src/Pixely.PathFinding/Pixely.PathFinding.csproj" />
     <Project Path="src/Pixely.Audio/Pixely.Audio.csproj" />
     <Project Path="src/Pixely.Collections/Pixely.Collections.csproj" />
     <Project Path="src/Pixely.Core/Pixely.Core.csproj" />
@@ -21,7 +21,7 @@
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Pixely.AStar.Tests/Pixely.AStar.Tests.csproj" />
+    <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
     <Project Path="tests/Pixely.Componentize.Tests/Pixely.Componentize.Tests.csproj" />
     <Project Path="tests/Pixely.Content.Tests/Pixely.Content.Tests.csproj" />
