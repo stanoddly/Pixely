@@ -47,6 +47,60 @@ textInputService.Start();
 bool containsMouse = mouseService.IsInWindow();
 ```
 
+## Custom render contexts
+
+`AddWindow` creates a Pixely-managed window without registering a render coordinator. Combine it
+with `UseRenderCoordinator<T>` when the application needs a context with resources such as depth
+targets or cameras:
+
+```csharp
+PixelyAppBuilder builder = new PixelyAppBuilder()
+    .AddWindow(
+        new WindowConfig(
+            Size: new Size<uint>(1280, 720),
+            Title: "Game"))
+    .UseRenderCoordinator<GameRenderContext>(
+        static (provider, renderers) => new GameRenderCoordinator(
+            provider.GetWindow(),
+            provider.GetRequiredService<GpuDevice>(),
+            provider.GetRequiredService<GpuMemorySystem>(),
+            renderers));
+```
+
+`ServiceProvider.GetWindow` resolves the window belonging to that provider and its ancestors. It
+activates reachable window registrations before selecting by `ViewScope`, so registration order
+does not affect coordinator construction.
+
+The custom coordinator receives the managed `Window` directly and creates the application-specific
+context:
+
+```csharp
+protected override bool TryCreateRenderContext(out GameRenderContext? renderContext)
+{
+    if (!_window.IsVisible)
+    {
+        renderContext = null;
+        return false;
+    }
+
+    CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+    if (!_window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+    {
+        commandBuffer.Dispose();
+        renderContext = null;
+        return false;
+    }
+
+    renderContext = new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera);
+    return true;
+}
+```
+
+`GameRenderContext` implements `IRenderContext` and submits its command buffer when disposed in the
+same way as other render contexts. Window registration, event routing and disposal remain managed by
+Pixely. A hidden window remains active but the custom coordinator should skip context creation as
+shown above.
+
 ## Multiple windows
 
 Define stable scope values for additional windows:

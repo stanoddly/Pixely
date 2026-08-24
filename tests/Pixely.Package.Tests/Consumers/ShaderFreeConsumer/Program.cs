@@ -1,4 +1,5 @@
 using Pixely;
+using Pixely.App;
 using Pixely.DependencyInjection;
 
 PixelyException exception = new("package runtime API");
@@ -16,5 +17,18 @@ if (provider.GetRequiredService<GeneratedService>() is null)
 }
 
 Console.WriteLine("Package consumer succeeded.");
+
+public static class ManagedWindowApiConsumer
+{
+    public static Window ResolveManagedWindow(ServiceProvider provider)
+    {
+        return provider.GetWindow(new ViewScope(1));
+    }
+
+    public static void ConfigureManagedWindow(PixelyAppBuilder builder)
+    {
+        builder.AddWindow(new ViewScope(1), new WindowConfig(Title: "Package consumer"));
+    }
+}
 
 public sealed class GeneratedService;

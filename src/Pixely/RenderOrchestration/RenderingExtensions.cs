@@ -87,16 +87,10 @@ public static class RenderingExtensions
         ViewScope viewScope,
         WindowConfig config)
     {
-        services.AddSingleton<Window>(provider =>
-            provider.GetRequiredService<PixelyFactory>().CreateWindow(
-                viewScope,
-                provider.GetRequiredService<GpuDevice>(),
-                provider.GetRequiredService<PixelyFrameContext>(),
-                config,
-                provider.GetRequiredService<PlatformInfo>()));
+        services.AddWindow(viewScope, config);
         services.AddSingleton<IRenderCoordinator>(provider =>
             new DefaultRenderCoordinator(
-                provider.GetRequiredService<WindowRegistry>().GetWindow(viewScope),
+                provider.GetWindow(viewScope),
                 provider.GetRequiredService<GpuDevice>(),
                 provider.GetRequiredService<GpuMemorySystem>(),
                 provider.GetRequiredService<ServiceRegistry<IRenderer<DefaultRenderContext>>>()));

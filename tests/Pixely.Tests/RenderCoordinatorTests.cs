@@ -27,6 +27,20 @@ public class RenderCoordinatorTests
     }
 
     [Test]
+    public void AddWindow_RegistersWindowWithoutRenderCoordinator()
+    {
+        PixelyAppBuilder builder = new();
+
+        builder.AddWindow();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.IsRegistered<Window>(), Is.True);
+            Assert.That(builder.IsRegistered<IRenderCoordinator>(), Is.False);
+        });
+    }
+
+    [Test]
     public void Renderer_WithoutExplicitViewScope_UsesDefaultScope()
     {
         IRenderer<TestRenderContext> renderer =
