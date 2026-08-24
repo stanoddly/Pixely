@@ -10,10 +10,9 @@ namespace Pixely.App;
 
 public class PixelyAppBuilder : ServiceCollection
 {
-    private readonly FileSystemBuilder _fileSystemBuilder = new();
-
     public PixelyAppBuilder()
     {
+        ContentServiceCollectionExtensions.EnsureFileSystemRegistration(this);
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<DefaultRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
@@ -23,42 +22,6 @@ public class PixelyAppBuilder : ServiceCollection
             int rightOrder = right is IOrderable rightOrderable ? rightOrderable.Order : 0;
             return leftOrder.CompareTo(rightOrder);
         });
-    }
-
-    public PixelyAppBuilder AddContentFromDirectory(string directory)
-    {
-        _fileSystemBuilder.AddContentFromDirectory(directory);
-        return this;
-    }
-
-    public PixelyAppBuilder AddFileSystem(VirtualFileSystem fileSystem)
-    {
-        _fileSystemBuilder.AddSourceFileSystem(fileSystem);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromProjectDirectory(string directory)
-    {
-        _fileSystemBuilder.AddContentFromProjectDirectory(directory);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromDirectoryPattern(string pattern)
-    {
-        _fileSystemBuilder.AddContentFromDirectoryPattern(pattern);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromZipPattern(string pattern)
-    {
-        _fileSystemBuilder.AddContentFromZipPattern(pattern);
-        return this;
-    }
-
-    public PixelyAppBuilder AddFileSystemCache()
-    {
-        _fileSystemBuilder.WithCache();
-        return this;
     }
 
     public IPixelyApp Build()
@@ -115,8 +78,6 @@ public class PixelyAppBuilder : ServiceCollection
         AddAlias<IFontSystem, FontSystem>();
 
         AddSingleton<AppControl>();
-        AddSingleton<VirtualFileSystem>(() => _fileSystemBuilder.Create());
-
         AddSingleton<UpdateSystem>();
         AddSingleton<TimerSystem>();
 

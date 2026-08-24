@@ -11,69 +11,69 @@ namespace Pixely.Pencuil;
 
 public static class PencuilExtensions
 {
-    public static PixelyAppBuilder UsePencuil(
-        this PixelyAppBuilder builder,
+    public static ServiceCollection UsePencuil(
+        this ServiceCollection services,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
         return UsePencuil<DefaultRenderContext>(
-            builder,
+            services,
             default,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static PixelyAppBuilder UsePencuil(
-        this PixelyAppBuilder builder,
+    public static ServiceCollection UsePencuil(
+        this ServiceCollection services,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
         return UsePencuil<DefaultRenderContext>(
-            builder,
+            services,
             viewScope,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static PixelyAppBuilder UsePencuil<TRenderContext>(
-        this PixelyAppBuilder builder,
+    public static ServiceCollection UsePencuil<TRenderContext>(
+        this ServiceCollection services,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext
     {
         return UsePencuil<TRenderContext>(
-            builder,
+            services,
             default,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static PixelyAppBuilder UsePencuil<TRenderContext>(
-        this PixelyAppBuilder builder,
+    public static ServiceCollection UsePencuil<TRenderContext>(
+        this ServiceCollection services,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext
     {
-        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (!builder.IsRegistered<PencuilViewRegistry>())
+        if (!services.IsRegistered<PencuilViewRegistry>())
         {
-            builder.AddFileSystem(EmbeddedFileSystem.Create(typeof(PencuilExtensions).Assembly));
-            builder.AddSingleton(GuiStyles.Style);
-            builder.AddRegistry<Pencuil>();
-            PencuilViewRegistry.AddPencuilViewRegistry(builder);
+            services.AddFileSystem(EmbeddedFileSystem.Create(typeof(PencuilExtensions).Assembly));
+            services.AddSingleton(GuiStyles.Style);
+            services.AddRegistry<Pencuil>();
+            PencuilViewRegistry.AddPencuilViewRegistry(services);
         }
 
-        builder.AddSingleton<Pencuil>(provider =>
+        services.AddSingleton<Pencuil>(provider =>
             new Pencuil(
                 viewScope,
                 new Pencil(
@@ -81,7 +81,7 @@ public static class PencuilExtensions
                     provider.GetRequiredService<IClipboardService>(),
                     provider.GetRequiredService<GuiStyle>())));
 
-        builder.AddSingleton<IRenderer<TRenderContext>, PencuilRenderer<TRenderContext>>(provider =>
+        services.AddSingleton<IRenderer<TRenderContext>, PencuilRenderer<TRenderContext>>(provider =>
             new PencuilRenderer<TRenderContext>(
                 Pencuil.GetRequired(provider, viewScope),
                 order,
@@ -91,7 +91,7 @@ public static class PencuilExtensions
                 provider.GetRequiredService<ShaderLoader>(),
                 provider.GetRequiredService<GpuDevice>(),
                 provider.GetRequiredService<WindowRegistry>()));
-        builder.AddSingleton<PencilSystem>(provider =>
+        services.AddSingleton<PencilSystem>(provider =>
             new PencilSystem(
                 Pencuil.GetRequired(provider, viewScope),
                 inputOrder,
@@ -100,6 +100,6 @@ public static class PencuilExtensions
                 provider.GetRequiredService<IMouseService>(),
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
-        return builder;
+        return services;
     }
 }

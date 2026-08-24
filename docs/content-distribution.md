@@ -4,15 +4,16 @@ Pixely loads runtime content through a `VirtualFileSystem`. Content paths such a
 
 ## Runtime sources
 
-`PixelyAppBuilder` exposes the common content sources:
+The common content sources are `ServiceCollection` extensions, so they can be used by applications and packages through the same registration API. `PixelyAppBuilder` inherits `ServiceCollection`.
 
 - `AddContentFromDirectory` adds one physical directory.
 - `AddContentFromProjectDirectory` resolves a directory from the application output or project tree.
 - `AddContentFromDirectoryPattern` adds matching directories beside the application.
 - `AddContentFromZipPattern` adds matching ZIP files beside the application.
 - `AddFileSystem` adds a `VirtualFileSystem`, including one created by `EmbeddedFileSystem.Create`.
+- `AddFileSystemCache` caches the composed filesystem when the root provider is built.
 
-Patterns are resolved relative to `AppContext.BaseDirectory`. Matching directory names are sorted ordinally. When multiple sources contain the same virtual path, the source registered last wins.
+Patterns are resolved relative to `AppContext.BaseDirectory`. Matching directory names are sorted ordinally. When multiple sources contain the same virtual path, the source registered last wins. Content configuration is root-only because the composed `VirtualFileSystem` is owned by the root provider; adding sources or cache configuration to a child service collection throws `InvalidOperationException`.
 
 ## Build and publish policy
 

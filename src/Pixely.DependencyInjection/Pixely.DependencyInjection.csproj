@@ -8,6 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="Pixely" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
     </ItemGroup>
 

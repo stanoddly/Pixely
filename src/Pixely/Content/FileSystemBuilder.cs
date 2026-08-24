@@ -5,6 +5,8 @@ public class FileSystemBuilder
     private readonly List<VirtualFileSystem> _fileSystems = new();
     private bool _cached = false;
 
+    internal IReadOnlyList<VirtualFileSystem> FileSystems => _fileSystems;
+
     public FileSystemBuilder AddContentFromDirectory(string directory)
     {
         AddSourceFileSystem(new NativeFileSystem(directory));

@@ -7,7 +7,8 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
+        PixelyAppBuilder builder = new();
+        builder
             .AddContentFromProjectDirectory("Content")
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Stencil Buffer"));

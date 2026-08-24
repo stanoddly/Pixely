@@ -1,4 +1,6 @@
 using Pixely.App;
+using Pixely.Content;
+using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.Pencuil;
 using Pixely.RenderOrchestration;
@@ -10,11 +12,15 @@ public sealed class PencuilExtensionsTests
     [Test]
     public void UsePencuil_CustomRenderContext_RegistersRenderer()
     {
-        PixelyAppBuilder builder = new();
+        ServiceCollection services = new();
 
-        builder.UsePencuil<CustomRenderContext>(new ViewScope(1));
+        services.UsePencuil<CustomRenderContext>(new ViewScope(1));
 
-        Assert.That(builder.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(services.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
+            Assert.That(services.IsRegistered<VirtualFileSystem>(), Is.True);
+        });
     }
 
     private sealed class CustomRenderContext : IRenderContext

@@ -7,7 +7,8 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
+        PixelyAppBuilder builder = new();
+        builder
             //.AddContentFromZipPattern("data*.pak")
             .AddContentFromProjectDirectory("Content")
             .UseDefaultRendering(

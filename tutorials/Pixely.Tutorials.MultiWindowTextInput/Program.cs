@@ -13,7 +13,8 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultRendering(
                 LeftView,
                 new WindowConfig(Size: (520, 300), Title: "Left text input"))
