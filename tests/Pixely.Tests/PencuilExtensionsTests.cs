@@ -1,6 +1,5 @@
 using Pixely.App;
 using Pixely.Content;
-using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.Pencuil;
 using Pixely.RenderOrchestration;
@@ -12,7 +11,7 @@ public sealed class PencuilExtensionsTests
     [Test]
     public void UsePencuil_CustomRenderContext_RegistersRenderer()
     {
-        ServiceCollection services = new();
+        PixelyAppBuilder services = new();
 
         services.UsePencuil<CustomRenderContext>(new ViewScope(1));
 

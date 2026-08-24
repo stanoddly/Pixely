@@ -16,7 +16,6 @@ public static class ContentServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(fileSystem);
         EnsureRoot(services);
-        EnsureFileSystemRegistration(services);
         services.AddSingleton(new FileSystemSource(fileSystem));
         return services;
     }
@@ -43,23 +42,11 @@ public static class ContentServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         EnsureRoot(services);
-        EnsureFileSystemRegistration(services);
         if (!services.IsRegistered<FileSystemCacheConfiguration>())
         {
             services.AddSingleton(new FileSystemCacheConfiguration());
         }
         return services;
-    }
-
-    internal static void EnsureFileSystemRegistration(ServiceCollection services)
-    {
-        if (services.IsRegistered<FileSystemConfiguration>())
-        {
-            return;
-        }
-
-        services.AddSingleton(new FileSystemConfiguration());
-        services.AddSingleton<VirtualFileSystem>(CreateFileSystem);
     }
 
     private static ServiceCollection AddSources(ServiceCollection services, FileSystemBuilder builder)
@@ -75,10 +62,9 @@ public static class ContentServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         EnsureRoot(services);
-        EnsureFileSystemRegistration(services);
     }
 
-    private static VirtualFileSystem CreateFileSystem(ServiceProvider provider)
+    internal static VirtualFileSystem CreateFileSystem(ServiceProvider provider)
     {
         FileSystemBuilder builder = new();
         foreach (FileSystemSource source in provider.GetServices<FileSystemSource>())
@@ -103,10 +89,6 @@ public static class ContentServiceCollectionExtensions
     private sealed record FileSystemSource(VirtualFileSystem FileSystem);
 
     private sealed class FileSystemCacheConfiguration
-    {
-    }
-
-    private sealed class FileSystemConfiguration
     {
     }
 }

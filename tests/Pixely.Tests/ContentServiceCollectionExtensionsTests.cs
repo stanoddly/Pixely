@@ -19,7 +19,7 @@ public sealed class ContentServiceCollectionExtensionsTests
     [Test]
     public void AddFileSystem_WithSingleSource_RegistersSourceDirectly()
     {
-        ServiceCollection services = new();
+        PixelyAppBuilder services = new();
         TestFileSystem source = new("source");
         services.AddFileSystem(source);
         using ServiceProvider provider = services.BuildServiceProvider();
@@ -30,7 +30,7 @@ public sealed class ContentServiceCollectionExtensionsTests
     [Test]
     public void AddFileSystem_WithMultipleSources_PreservesLastSourcePrecedence()
     {
-        ServiceCollection services = new();
+        PixelyAppBuilder services = new();
         services.AddFileSystem(new TestFileSystem("first"));
         services.AddFileSystem(new TestFileSystem("last"));
         using ServiceProvider provider = services.BuildServiceProvider();
@@ -43,7 +43,7 @@ public sealed class ContentServiceCollectionExtensionsTests
     [Test]
     public void AddFileSystemCache_WrapsConfiguredSources()
     {
-        ServiceCollection services = new();
+        PixelyAppBuilder services = new();
         services.AddFileSystem(new TestFileSystem("source"));
         services.AddFileSystemCache();
         using ServiceProvider provider = services.BuildServiceProvider();
@@ -54,7 +54,7 @@ public sealed class ContentServiceCollectionExtensionsTests
     [Test]
     public void ProviderDisposal_DisposesSourceOnce()
     {
-        ServiceCollection services = new();
+        PixelyAppBuilder services = new();
         TestFileSystem source = new("source");
         services.AddFileSystem(source);
 
@@ -69,7 +69,7 @@ public sealed class ContentServiceCollectionExtensionsTests
     [Test]
     public void ChildServiceCollection_ContentConfiguration_Throws()
     {
-        ServiceCollection rootServices = new();
+        PixelyAppBuilder rootServices = new();
         rootServices.AddFileSystem(new TestFileSystem("root"));
         using ServiceProvider rootProvider = rootServices.BuildServiceProvider();
         ServiceCollection childServices = rootProvider.CreateServiceCollection();

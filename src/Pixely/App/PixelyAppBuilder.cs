@@ -12,7 +12,7 @@ public class PixelyAppBuilder : ServiceCollection
 {
     public PixelyAppBuilder()
     {
-        ContentServiceCollectionExtensions.EnsureFileSystemRegistration(this);
+        AddSingleton<VirtualFileSystem>(ContentServiceCollectionExtensions.CreateFileSystem);
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<DefaultRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
