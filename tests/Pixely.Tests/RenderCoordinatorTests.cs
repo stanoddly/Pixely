@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
@@ -24,6 +26,20 @@ public class RenderCoordinatorTests
         builder.UseDefaultRendering();
 
         Assert.That(builder.IsRegistered<Window>(), Is.True);
+    }
+
+    [Test]
+    public void AddWindow_RegistersWindowWithoutRenderCoordinator()
+    {
+        PixelyAppBuilder builder = new();
+
+        builder.AddWindow();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.IsRegistered<Window>(), Is.True);
+            Assert.That(builder.IsRegistered<IRenderCoordinator>(), Is.False);
+        });
     }
 
     [Test]
@@ -75,6 +91,54 @@ public class RenderCoordinatorTests
         renderCoordinator.Execute();
 
         Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void Execute_PassesManagedWindowToRenderContextProvider()
+    {
+        TestRenderContextSource renderContextSource = new();
+        PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
+        ServiceProvider provider = builder.BuildServiceProvider();
+
+        provider.GetRequiredService<IRenderCoordinator>().Execute();
+
+        Assert.That(renderContextSource.LastWindow, Is.SameAs(provider.GetRequiredService<Window>()));
+    }
+
+    [Test]
+    public void Execute_RendersOnlyMatchingViewScope()
+    {
+        ViewScope viewScope = new(7);
+        List<string> calls = new();
+        PixelyAppBuilder builder = CreateBuilder(calls, viewScope: viewScope);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("matching", calls, viewScope: viewScope));
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("other", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
+
+        provider.GetRequiredService<IRenderCoordinator>().Execute();
+
+        Assert.That(calls, Is.EqualTo(new[] { "matching" }));
+    }
+
+    [Test]
+    public void ChildProviderCoordinator_UsesChildWindow()
+    {
+        PixelyAppBuilder builder = new();
+        builder.AddSingleton(new GpuMemorySystem(null!));
+        ServiceProvider parent = builder.BuildServiceProvider();
+        ServiceCollection childCollection = parent.CreateServiceCollection();
+        ViewScope viewScope = new(7);
+        Window window = CreateWindow(viewScope, 42);
+        TestRenderContextSource renderContextSource = new();
+        childCollection.UseWindowRendering<TestRenderContext>(viewScope);
+        childCollection.AddSingleton(window);
+        childCollection.AddSingleton(renderContextSource);
+        childCollection.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
+        ServiceProvider child = childCollection.BuildServiceProvider();
+
+        child.GetRequiredService<IRenderCoordinator>().Execute();
+
+        Assert.That(renderContextSource.LastWindow, Is.SameAs(window));
     }
 
     [Test]
@@ -171,52 +235,52 @@ public class RenderCoordinatorTests
 
     private static PixelyAppBuilder CreateBuilder(
         List<string> calls,
-        TestRenderContextSource? renderContextSource = null)
+        TestRenderContextSource? renderContextSource = null,
+        ViewScope viewScope = default)
     {
         PixelyAppBuilder builder = new();
+        builder.UseWindowRendering<TestRenderContext>(viewScope);
+        builder.AddSingleton(CreateWindow(viewScope, 42));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
-        builder.UseRenderCoordinator<TestRenderContext>(
-            static (provider, renderers) => new TestRenderCoordinator(
-                provider.GetRequiredService<GpuMemorySystem>(),
-                renderers,
-                provider.GetRequiredService<TestRenderContextSource>()));
+        builder.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         builder.AddSingleton(new GpuMemorySystem(null!));
         builder.AddSingleton(calls);
         return builder;
     }
 
-    private sealed class TestRenderCoordinator : RenderCoordinator<TestRenderContext>
+    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
-        private readonly TestRenderContextSource _renderContextSource;
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+        SetBackingField(window, nameof(Window.ViewScope), viewScope);
+        SetBackingField(window, nameof(Window.SdlId), sdlId);
+        return window;
+    }
 
-        public TestRenderCoordinator(
-            GpuMemorySystem gpuMemorySystem,
-            ServiceRegistry<IRenderer<TestRenderContext>> renderers,
-            TestRenderContextSource renderContextSource)
-            : base(gpuMemorySystem, renderers)
-        {
-            _renderContextSource = renderContextSource;
-        }
+    private static void SetBackingField<T>(Window window, string propertyName, T value)
+    {
+        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        field.SetValue(window, value);
+    }
 
-        protected override bool TryCreateRenderContext(
-            [NotNullWhen(true)] out TestRenderContext? renderContext)
+    private sealed class TestRenderContextSource : IRenderContextProvider<TestRenderContext>
+    {
+        public bool CanCreate { get; init; } = true;
+        public TestRenderContext? LastRenderContext { get; private set; }
+        public Window? LastWindow { get; private set; }
+
+        public bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
         {
-            if (!_renderContextSource.CanCreate)
+            LastWindow = window;
+            if (!CanCreate)
             {
                 renderContext = null;
                 return false;
             }
 
             renderContext = new TestRenderContext();
-            _renderContextSource.LastRenderContext = renderContext;
+            LastRenderContext = renderContext;
             return true;
         }
-    }
-
-    private sealed class TestRenderContextSource
-    {
-        public bool CanCreate { get; init; } = true;
-        public TestRenderContext? LastRenderContext { get; set; }
     }
 
     private sealed class TestRenderContext : IRenderContext
@@ -238,16 +302,19 @@ public class RenderCoordinatorTests
         private readonly string _name;
         private readonly List<string> _calls;
 
-        public TestRenderer(string name, List<string> calls, int order = 0)
+        public TestRenderer(string name, List<string> calls, int order = 0, ViewScope viewScope = default)
         {
             _name = name;
             _calls = calls;
             Order = order;
+            ViewScope = viewScope;
         }
 
         protected List<string> Calls => _calls;
 
         public int Order { get; }
+
+        public ViewScope ViewScope { get; }
 
         public virtual void Render(TestRenderContext renderContext)
         {
