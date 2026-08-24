@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 
@@ -9,23 +8,29 @@ public interface IRenderCoordinator
     void Execute();
 }
 
-public abstract class RenderCoordinator<TRenderContext> : IRenderCoordinator
+public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     where TRenderContext : IRenderContext
 {
+    private readonly Window _window;
     private readonly GpuMemorySystem _gpuMemorySystem;
+    private readonly IRenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
 
-    protected RenderCoordinator(
+    public RenderCoordinator(
+        Window window,
         GpuMemorySystem gpuMemorySystem,
+        IRenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers)
     {
+        _window = window;
         _gpuMemorySystem = gpuMemorySystem;
+        _renderContextProvider = renderContextProvider;
         _renderers = renderers;
     }
 
     public void Execute()
     {
-        if (!TryCreateRenderContext(out TRenderContext? renderContext))
+        if (!_window.IsVisible || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
         {
             return;
         }
@@ -34,13 +39,13 @@ public abstract class RenderCoordinator<TRenderContext> : IRenderCoordinator
         {
             foreach (IRenderer<TRenderContext> renderer in _renderers)
             {
-                renderer.Render(renderContext);
+                if (renderer.ViewScope == _window.ViewScope)
+                {
+                    renderer.Render(renderContext);
+                }
             }
 
             _gpuMemorySystem.Submit();
         }
     }
-
-    protected abstract bool TryCreateRenderContext(
-        [NotNullWhen(true)] out TRenderContext? renderContext);
 }

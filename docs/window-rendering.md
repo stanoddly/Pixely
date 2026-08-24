@@ -49,9 +49,9 @@ bool containsMouse = mouseService.IsInWindow();
 
 ## Custom render contexts
 
-`AddWindow` creates a Pixely-managed window without registering a render coordinator. Combine it
-with `UseRenderCoordinator<T>` when the application needs a context with resources such as depth
-targets or cameras:
+`AddWindow` creates a Pixely-managed window without selecting a render context. Combine it with
+`UseWindowRendering<T>` when the application needs a context with resources such as depth targets
+or cameras:
 
 ```csharp
 PixelyAppBuilder builder = new PixelyAppBuilder()
@@ -59,47 +59,56 @@ PixelyAppBuilder builder = new PixelyAppBuilder()
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
             Title: "Game"))
-    .UseRenderCoordinator<GameRenderContext>(
-        static (provider, renderers) => new GameRenderCoordinator(
-            provider.GetWindow(),
-            provider.GetRequiredService<GpuDevice>(),
-            provider.GetRequiredService<GpuMemorySystem>(),
-            renderers));
+    .UseWindowRendering<GameRenderContext>();
+
+builder.AddSingleton<GameRenderContextProvider>(GameRenderContextProvider.Create);
+builder.AddAlias<IRenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
 ```
 
-`ServiceProvider.GetWindow` resolves the window belonging to that provider and its ancestors. It
-activates reachable window registrations before selecting by `ViewScope`, so registration order
-does not affect coordinator construction.
-
-The custom coordinator receives the managed `Window` directly and creates the application-specific
-context:
+The provider uses ordinary dependency injection, including static factory registration. It does not
+receive or resolve a window during construction:
 
 ```csharp
-protected override bool TryCreateRenderContext(out GameRenderContext? renderContext)
+public sealed class GameRenderContextProvider : IRenderContextProvider<GameRenderContext>
 {
-    if (!_window.IsVisible)
+    private readonly GpuDevice _gpuDevice;
+    private readonly DepthTarget _depthTarget;
+    private readonly Camera _camera;
+
+    private GameRenderContextProvider(GpuDevice gpuDevice, DepthTarget depthTarget, Camera camera)
     {
-        renderContext = null;
-        return false;
+        _gpuDevice = gpuDevice;
+        _depthTarget = depthTarget;
+        _camera = camera;
     }
 
-    CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-    if (!_window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+    public static GameRenderContextProvider Create(GpuDevice gpuDevice, DepthTarget depthTarget, Camera camera)
     {
-        commandBuffer.Dispose();
-        renderContext = null;
-        return false;
+        return new GameRenderContextProvider(gpuDevice, depthTarget, camera);
     }
 
-    renderContext = new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera);
-    return true;
+    public bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
+    {
+        CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+        {
+            commandBuffer.Dispose();
+            renderContext = null;
+            return false;
+        }
+
+        renderContext = new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera, window.RenderSizeInPixels);
+        return true;
+    }
 }
 ```
 
-`GameRenderContext` implements `IRenderContext` and submits its command buffer when disposed in the
-same way as other render contexts. Window registration, event routing and disposal remain managed by
-Pixely. A hidden window remains active but the custom coordinator should skip context creation as
-shown above.
+The framework coordinator passes its managed window to the provider for each frame, skips hidden
+windows, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
+order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
+registration. `GameRenderContext` implements `IRenderContext` and submits its command buffer when
+disposed in the same way as other render contexts. Window registration, event routing and disposal
+remain managed by Pixely.
 
 ## Multiple windows
 
