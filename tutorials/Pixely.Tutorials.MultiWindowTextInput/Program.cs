@@ -13,32 +13,32 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UsePencuil(LeftView, clearTarget: true)
+            .UsePencuil(RightView, clearTarget: true)
+            .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(
                 LeftView,
                 new WindowConfig(Size: (520, 300), Title: "Left text input"))
             .UseDefaultRendering(
                 RightView,
-                new WindowConfig(Size: (520, 300), Title: "Right text input"))
-            .UsePencuil(LeftView, clearTarget: true)
-            .UsePencuil(RightView, clearTarget: true)
-            .AddContentFromProjectDirectory("../Pixely.Tutorials.Hotbar/Content");
+                new WindowConfig(Size: (520, 300), Title: "Right text input"));
 
-        builder.AddSingleton<IPencuilView>(provider =>
+        appBuilder.AddSingleton<IPencuilView>(provider =>
             new TextInputView(
                 LeftView,
                 "Left View",
                 new TextInputViewModel("left"),
                 provider.GetRequiredService<IFontSystem>()));
-        builder.AddSingleton<IPencuilView>(provider =>
+        appBuilder.AddSingleton<IPencuilView>(provider =>
             new TextInputView(
                 RightView,
                 "Right View",
                 new TextInputViewModel("right"),
                 provider.GetRequiredService<IFontSystem>()));
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

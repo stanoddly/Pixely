@@ -1,19 +1,30 @@
 # Content distribution
 
-Pixely loads runtime content through a `VirtualFileSystem`. Content paths such as `shaders/terrain` do not identify a physical distribution format. A project can provide the same path from a directory, a ZIP archive, an assembly resource, or a composition of those sources.
+Pixely loads runtime content through a read-only `ContentSource`. Content paths such as `shaders/terrain` do not identify a physical distribution format. A project can provide the same path from a directory, a ZIP archive, an assembly resource, or a composition of those sources. Saved games and other writable application data use normal file access rather than `ContentSource`.
 
 ## Runtime sources
 
-The common content sources are `ServiceCollection` extensions, so they can be used by applications and packages through the same registration API. `PixelyAppBuilder` inherits `ServiceCollection`.
+`PixelyAppBuilder.ConfigureContent` configures the application-owned `ContentSourceBuilder`. Multiple calls append to the same builder in call order. The completed `ContentSource` is registered when the application service provider is built.
 
-- `AddContentFromDirectory` adds one physical directory.
-- `AddContentFromProjectDirectory` resolves a directory from the application output or project tree.
-- `AddContentFromDirectoryPattern` adds matching directories beside the application.
-- `AddContentFromZipPattern` adds matching ZIP files beside the application.
-- `AddFileSystem` adds a `VirtualFileSystem`, including one created by `EmbeddedFileSystem.Create`.
-- `AddFileSystemCache` caches the composed filesystem when the root provider is built.
+- `AddDirectory` adds one physical directory.
+- `AddProjectDirectory` resolves a directory from the application output or project tree.
+- `AddDirectoryPattern` adds matching directories beside the application.
+- `AddZip` adds one ZIP archive.
+- `AddZipPattern` adds matching ZIP files beside the application.
+- `AddSource` adds an existing `ContentSource`, including one created by `EmbeddedContentSource.Create`.
+- `WithCache` caches the composed source when the application service provider is built.
 
-Patterns are resolved relative to `AppContext.BaseDirectory`. Matching directory names are sorted ordinally. When multiple sources contain the same virtual path, the source registered last wins. Content configuration is root-only because the composed `VirtualFileSystem` is owned by the root provider; adding sources or cache configuration to a child service collection throws `InvalidOperationException`.
+```csharp
+PixelyAppBuilder appBuilder = new();
+appBuilder.ConfigureContent(contentSourceBuilder => contentSourceBuilder
+    .AddZipPattern("assets-*.pak")
+    .AddDirectoryPattern("assets-*")
+    .WithCache());
+```
+
+Patterns are resolved relative to `AppContext.BaseDirectory`. Matching directory names are sorted ordinally. When multiple sources contain the same content path, the source added last wins.
+
+`UseDefaultContent()` loads `Content.pk3` beside the application when present, then adds a loose `Content` directory so it takes precedence over the archive. When neither exists beside the application, it resolves the `Content` directory from the project tree for development.
 
 ## Build and publish policy
 

@@ -9,12 +9,12 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"));
 
-        builder.OnStart((IGamepadService gamepadService) =>
+        appBuilder.OnStart((IGamepadService gamepadService) =>
         {
             Console.WriteLine($"Gamepads connected at startup: {gamepadService.Gamepads.Count}");
             foreach (Pixely.Input.Gamepad gamepad in gamepadService.Gamepads)
@@ -72,7 +72,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

@@ -8,8 +8,8 @@ name scopes when they render more than one window.
 `UseDefaultRendering` creates a DI-owned window and render coordinator:
 
 ```csharp
-PixelyAppBuilder builder = new();
-builder
+PixelyAppBuilder appBuilder = new();
+appBuilder
     .UseDefaultRendering(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
@@ -33,7 +33,7 @@ public sealed class GameRenderer : IRenderer<DefaultRenderContext>
 Register renderers normally through DI:
 
 ```csharp
-builder.AddSingleton<IRenderer<DefaultRenderContext>, GameRenderer>(GameRenderer.Create);
+appBuilder.AddSingleton<IRenderer<DefaultRenderContext>, GameRenderer>(GameRenderer.Create);
 ```
 
 The default `IRenderer.ViewScope` implementation returns `default`, so single-window renderers do
@@ -55,16 +55,16 @@ bool containsMouse = mouseService.IsInWindow();
 or cameras:
 
 ```csharp
-PixelyAppBuilder builder = new();
-builder
+PixelyAppBuilder appBuilder = new();
+appBuilder
     .AddWindow(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
             Title: "Game"))
     .UseWindowRendering<GameRenderContext>();
 
-builder.AddSingleton<GameRenderContextProvider>(GameRenderContextProvider.Create);
-builder.AddAlias<IRenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
+appBuilder.AddSingleton<GameRenderContextProvider>(GameRenderContextProvider.Create);
+appBuilder.AddAlias<IRenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
 ```
 
 The provider uses ordinary dependency injection, including static factory registration. It does not
@@ -126,8 +126,8 @@ internal static class ViewScopes
 The implicit window remains `default(ViewScope)` while additional windows receive explicit scopes:
 
 ```csharp
-PixelyAppBuilder builder = new();
-builder
+PixelyAppBuilder appBuilder = new();
+appBuilder
     .UseDefaultRendering(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
@@ -168,7 +168,7 @@ Secondary windows can be created hidden and shown on request. A reusable window 
 close button is pressed instead of quitting the application:
 
 ```csharp
-builder.UseDefaultRendering(
+appBuilder.UseDefaultRendering(
     ViewScopes.Inventory,
     new WindowConfig(
         Size: new Size<uint>(480, 360),
@@ -209,13 +209,13 @@ Scoped overloads exist for keyboard, mouse, and text-input subscriptions.
 The common case requires no scope:
 
 ```csharp
-builder.UsePencuil();
+appBuilder.UsePencuil();
 ```
 
 Configure another Pencuil instance only for an additional window:
 
 ```csharp
-builder.UsePencuil(ViewScopes.Inventory);
+appBuilder.UsePencuil(ViewScopes.Inventory);
 ```
 
 Pencuil's MVVM contracts use explicit names: `IPencuilView`, `IPencuilViewModel`, and

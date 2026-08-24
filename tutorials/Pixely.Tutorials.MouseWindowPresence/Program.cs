@@ -8,12 +8,12 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"));
 
-        builder.OnStart((IMouseService mouseService) =>
+        appBuilder.OnStart((IMouseService mouseService) =>
         {
             Console.WriteLine($"Mouse starts in window: {mouseService.IsInWindow()}");
             Console.WriteLine("Move the mouse into and out of the window to see enter and leave events.");
@@ -29,7 +29,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

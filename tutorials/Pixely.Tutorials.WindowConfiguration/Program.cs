@@ -11,15 +11,15 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
             .UseDefaultRendering(
                 new WindowConfig(
                     Size: (800, 600),
                     Title: "Window Configuration Demo",
                     AlwaysOnTop: true));
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
+        appBuilder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
         {
             Window window = windowRegistry.GetWindow();
             using RawImage icon = CreateIcon(32, 32);
@@ -58,7 +58,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 

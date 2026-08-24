@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (800, 600), Title: "Texture Array Demo"));
 
-        builder.AddSingleton<TextureArrayRenderer>(TextureArrayRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, TextureArrayRenderer>();
+        appBuilder.AddSingleton<TextureArrayRenderer>(TextureArrayRenderer.Create);
+        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, TextureArrayRenderer>();
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

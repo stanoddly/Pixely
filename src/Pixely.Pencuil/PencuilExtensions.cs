@@ -11,69 +11,69 @@ namespace Pixely.Pencuil;
 
 public static class PencuilExtensions
 {
-    public static ServiceCollection UsePencuil(
-        this ServiceCollection services,
+    public static PixelyAppBuilder UsePencuil(
+        this PixelyAppBuilder appBuilder,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
         return UsePencuil<DefaultRenderContext>(
-            services,
+            appBuilder,
             default,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static ServiceCollection UsePencuil(
-        this ServiceCollection services,
+    public static PixelyAppBuilder UsePencuil(
+        this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
         return UsePencuil<DefaultRenderContext>(
-            services,
+            appBuilder,
             viewScope,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static ServiceCollection UsePencuil<TRenderContext>(
-        this ServiceCollection services,
+    public static PixelyAppBuilder UsePencuil<TRenderContext>(
+        this PixelyAppBuilder appBuilder,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext
     {
         return UsePencuil<TRenderContext>(
-            services,
+            appBuilder,
             default,
             order,
             inputOrder,
             clearTarget);
     }
 
-    public static ServiceCollection UsePencuil<TRenderContext>(
-        this ServiceCollection services,
+    public static PixelyAppBuilder UsePencuil<TRenderContext>(
+        this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext
     {
-        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(appBuilder);
 
-        if (!services.IsRegistered<PencuilViewRegistry>())
+        if (!appBuilder.IsRegistered<PencuilViewRegistry>())
         {
-            services.AddFileSystem(EmbeddedFileSystem.Create(typeof(PencuilExtensions).Assembly));
-            services.AddSingleton(GuiStyles.Style);
-            services.AddRegistry<Pencuil>();
-            PencuilViewRegistry.AddPencuilViewRegistry(services);
+            appBuilder.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddSource(EmbeddedContentSource.Create(typeof(PencuilExtensions).Assembly)));
+            appBuilder.AddSingleton(GuiStyles.Style);
+            appBuilder.AddRegistry<Pencuil>();
+            PencuilViewRegistry.AddPencuilViewRegistry(appBuilder);
         }
 
-        services.AddSingleton<Pencuil>(provider =>
+        appBuilder.AddSingleton<Pencuil>(provider =>
             new Pencuil(
                 viewScope,
                 new Pencil(
@@ -81,7 +81,7 @@ public static class PencuilExtensions
                     provider.GetRequiredService<IClipboardService>(),
                     provider.GetRequiredService<GuiStyle>())));
 
-        services.AddSingleton<IRenderer<TRenderContext>, PencuilRenderer<TRenderContext>>(provider =>
+        appBuilder.AddSingleton<IRenderer<TRenderContext>, PencuilRenderer<TRenderContext>>(provider =>
             new PencuilRenderer<TRenderContext>(
                 Pencuil.GetRequired(provider, viewScope),
                 order,
@@ -91,7 +91,7 @@ public static class PencuilExtensions
                 provider.GetRequiredService<ShaderLoader>(),
                 provider.GetRequiredService<GpuDevice>(),
                 provider.GetRequiredService<WindowRegistry>()));
-        services.AddSingleton<PencilSystem>(provider =>
+        appBuilder.AddSingleton<PencilSystem>(provider =>
             new PencilSystem(
                 Pencuil.GetRequired(provider, viewScope),
                 inputOrder,
@@ -100,6 +100,6 @@ public static class PencuilExtensions
                 provider.GetRequiredService<IMouseService>(),
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
-        return services;
+        return appBuilder;
     }
 }

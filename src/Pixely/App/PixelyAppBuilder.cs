@@ -10,9 +10,11 @@ namespace Pixely.App;
 
 public class PixelyAppBuilder : ServiceCollection
 {
+    private readonly ContentSourceBuilder _contentSourceBuilder = new();
+
     public PixelyAppBuilder()
     {
-        AddSingleton<VirtualFileSystem>(ContentServiceCollectionExtensions.CreateFileSystem);
+        AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<DefaultRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
@@ -22,6 +24,18 @@ public class PixelyAppBuilder : ServiceCollection
             int rightOrder = right is IOrderable rightOrderable ? rightOrderable.Order : 0;
             return leftOrder.CompareTo(rightOrder);
         });
+    }
+
+    public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(_contentSourceBuilder);
+        return this;
+    }
+
+    public PixelyAppBuilder UseDefaultContent(string contentDirectory = "Content")
+    {
+        return ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddDefaultContent(contentDirectory));
     }
 
     public IPixelyApp Build()

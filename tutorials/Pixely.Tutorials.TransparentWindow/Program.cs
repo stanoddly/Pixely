@@ -15,9 +15,9 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(
                     Size: (800, 600),
@@ -26,16 +26,16 @@ static class Program
                     Borderless: true));
         if (OperatingSystem.IsWindows())
         {
-            builder.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Vulkan));
+            appBuilder.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Vulkan));
         }
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(TransparentWindowRenderer.Create);
+        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(TransparentWindowRenderer.Create);
 
-        builder.OnStart((IMouseService mouseService, AppControl appControl) =>
+        appBuilder.OnStart((IMouseService mouseService, AppControl appControl) =>
         {
             mouseService.ButtonPress += eventArgs => appControl.Quit();
         });
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

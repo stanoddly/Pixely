@@ -13,9 +13,9 @@ public class EmbeddedShaderTests
     [TestCase("shaders/.generated/pencuil_texture.fragment.spv")]
     public void PencuilGeneratedShader_CanBeOpened(string path)
     {
-        using VirtualFileSystem fileSystem = EmbeddedFileSystem.Create(typeof(PencuilExtensions).Assembly);
+        using ContentSource contentSource = EmbeddedContentSource.Create(typeof(PencuilExtensions).Assembly);
 
-        using Stream stream = fileSystem.OpenStream(path);
+        using Stream stream = contentSource.OpenStream(path);
 
         Assert.That(stream.Length, Is.GreaterThan(0));
     }

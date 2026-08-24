@@ -6,16 +6,16 @@ namespace Pixely.Shaders;
 
 internal sealed class GraphicsShaderProgramMetadataLoader
 {
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
 
-    public GraphicsShaderProgramMetadataLoader(VirtualFileSystem fileSystem)
+    public GraphicsShaderProgramMetadataLoader(ContentSource contentSource)
     {
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
     }
 
     public GraphicsShaderProgramMetadata Load(ReadOnlySpan<char> path)
     {
-        string json = ReadJson(_fileSystem, path);
+        string json = ReadJson(_contentSource, path);
         ShaderMetadataHeaderDto header = DeserializeHeader(json, path);
         if (header.Kind != ShaderKindDto.Graphics)
         {
@@ -47,9 +47,9 @@ internal sealed class GraphicsShaderProgramMetadataLoader
         };
     }
 
-    private static string ReadJson(VirtualFileSystem fileSystem, ReadOnlySpan<char> path)
+    private static string ReadJson(ContentSource contentSource, ReadOnlySpan<char> path)
     {
-        using Stream stream = fileSystem.GetFile(path).Open();
+        using Stream stream = contentSource.GetFile(path).Open();
         using StreamReader reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }

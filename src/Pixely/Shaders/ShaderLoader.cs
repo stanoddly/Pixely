@@ -11,16 +11,16 @@ public class ShaderLoader : IShaderLoader
     private readonly GpuDevice _gpuDevice;
     private readonly GraphicsShaderProgramMetadataLoader _shaderMetadataLoader;
     private readonly ShaderFormats _shaderFormats;
-    private readonly VirtualFileSystem _virtualFileSystem;
+    private readonly ContentSource _contentSource;
 
     internal ShaderLoader(
         GpuDevice gpuDevice,
         GraphicsShaderProgramMetadataLoader shaderMetadataLoader,
-        VirtualFileSystem virtualFileSystem)
+        ContentSource contentSource)
     {
         _gpuDevice = gpuDevice;
         _shaderMetadataLoader = shaderMetadataLoader;
-        _virtualFileSystem = virtualFileSystem;
+        _contentSource = contentSource;
         _shaderFormats = _gpuDevice.GetSupportedShaderFormats();
     }
 
@@ -101,7 +101,7 @@ public class ShaderLoader : IShaderLoader
         SDL_GPUShaderStage stage)
     {
         string path = VirtualPath.Combine(directory, shaderInstance.Filename);
-        VirtualFile file = _virtualFileSystem.GetFile(path);
+        ContentFile file = _contentSource.GetFile(path);
         using Stream stream = file.Open();
         byte[] shaderCode = new byte[stream.Length];
         stream.ReadExactly(shaderCode);

@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (800, 600), Title: "Instancing Demo"));
 
-        builder.AddSingleton<InstancingRenderer>(InstancingRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, InstancingRenderer>();
+        appBuilder.AddSingleton<InstancingRenderer>(InstancingRenderer.Create);
+        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, InstancingRenderer>();
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

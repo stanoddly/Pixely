@@ -21,9 +21,6 @@ public class ServiceCollection
         _parent = parent;
     }
 
-    /// <summary>Returns <see langword="true"/> when this collection builds a root provider rather than a child provider.</summary>
-    public bool IsRoot => _parent == null;
-
     /// <summary>Registers <typeparamref name="T"/> as a singleton, constructing it via its single public constructor with dependencies resolved from the provider.</summary>
     /// <typeparam name="T">The concrete service type to register. Must be a named concrete type that does not contain type parameters from a generic calling scope.</typeparam>
     /// <remarks>This overload is intercepted by the source generator at each call site. Unsupported implementation types produce compile-time error <c>GK0001</c>.</remarks>

@@ -23,12 +23,12 @@ Console.WriteLine("Package consumer succeeded.");
 
 public static class ManagedWindowApiConsumer
 {
-    public static void ConfigureManagedWindow(PixelyAppBuilder builder)
+    public static void ConfigureManagedWindow(PixelyAppBuilder appBuilder)
     {
-        builder.AddWindow(new ViewScope(1), new WindowConfig(Title: "Package consumer"));
-        builder.AddSingleton<PackageRenderContextProvider>(PackageRenderContextProvider.Create);
-        builder.AddAlias<IRenderContextProvider<PackageRenderContext>, PackageRenderContextProvider>();
-        builder.UseWindowRendering<PackageRenderContext>(new ViewScope(1));
+        appBuilder.AddWindow(new ViewScope(1), new WindowConfig(Title: "Package consumer"));
+        appBuilder.AddSingleton<PackageRenderContextProvider>(PackageRenderContextProvider.Create);
+        appBuilder.AddAlias<IRenderContextProvider<PackageRenderContext>, PackageRenderContextProvider>();
+        appBuilder.UseWindowRendering<PackageRenderContext>(new ViewScope(1));
     }
 }
 

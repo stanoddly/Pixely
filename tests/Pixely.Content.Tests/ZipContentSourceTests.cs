@@ -3,7 +3,7 @@ using Assert = NUnit.Framework.Assert;
 
 namespace Pixely.Content.Tests;
 
-public sealed class ZipFileSystemTests
+public sealed class ZipContentSourceTests
 {
     private DirectoryInfo _temporaryDirectory = null!;
 
@@ -16,10 +16,10 @@ public sealed class ZipFileSystemTests
     [Test]
     public void GetDirectoriesFromLeafDirectoryReturnsEmpty()
     {
-        using ZipFileSystem fileSystem = CreateFileSystem(["sprites/terrain/ground.json"]);
+        using ZipContentSource contentSource = CreateContentSource(["sprites/terrain/ground.json"]);
 
-        ReadOnlySpan<VirtualFile> files = fileSystem.GetFiles("sprites/terrain");
-        ReadOnlySpan<string> directories = fileSystem.GetDirectories("sprites/terrain");
+        ReadOnlySpan<ContentFile> files = contentSource.GetFiles("sprites/terrain");
+        ReadOnlySpan<string> directories = contentSource.GetDirectories("sprites/terrain");
 
         Assert.That(files.ToArray().Select(file => file.Path),
             Is.EquivalentTo(new[] { "sprites/terrain/ground.json" }));
@@ -29,9 +29,9 @@ public sealed class ZipFileSystemTests
     [Test]
     public void GetDirectoriesFromNestedDirectoryReturnsRootRelativePaths()
     {
-        using ZipFileSystem fileSystem = CreateFileSystem(["sprites/terrain/ground.json"]);
+        using ZipContentSource contentSource = CreateContentSource(["sprites/terrain/ground.json"]);
 
-        ReadOnlySpan<string> directories = fileSystem.GetDirectories("sprites");
+        ReadOnlySpan<string> directories = contentSource.GetDirectories("sprites");
 
         Assert.That(directories.ToArray(), Is.EquivalentTo(new[] { "sprites/terrain" }));
     }
@@ -39,11 +39,11 @@ public sealed class ZipFileSystemTests
     [Test]
     public void GetDirectoriesIncludesExplicitEmptyDirectories()
     {
-        using ZipFileSystem fileSystem = CreateFileSystem([], ["sprites/empty/"]);
+        using ZipContentSource contentSource = CreateContentSource([], ["sprites/empty/"]);
 
-        ReadOnlySpan<string> directories = fileSystem.GetDirectories("sprites");
-        ReadOnlySpan<VirtualFile> files = fileSystem.GetFiles("sprites/empty");
-        ReadOnlySpan<string> emptyDirectoryChildren = fileSystem.GetDirectories("sprites/empty");
+        ReadOnlySpan<string> directories = contentSource.GetDirectories("sprites");
+        ReadOnlySpan<ContentFile> files = contentSource.GetFiles("sprites/empty");
+        ReadOnlySpan<string> emptyDirectoryChildren = contentSource.GetDirectories("sprites/empty");
 
         Assert.That(directories.ToArray(), Is.EquivalentTo(new[] { "sprites/empty" }));
         Assert.That(files.Length, Is.Zero);
@@ -56,7 +56,7 @@ public sealed class ZipFileSystemTests
         _temporaryDirectory.Delete(true);
     }
 
-    private ZipFileSystem CreateFileSystem(string[] filePaths, string[]? directoryPaths = null)
+    private ZipContentSource CreateContentSource(string[] filePaths, string[]? directoryPaths = null)
     {
         string archivePath = Path.Combine(_temporaryDirectory.FullName, "Content.pk3");
 
@@ -73,6 +73,6 @@ public sealed class ZipFileSystemTests
             }
         }
 
-        return ZipFileSystem.Create(archivePath);
+        return ZipContentSource.Create(archivePath);
     }
 }

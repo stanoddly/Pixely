@@ -8,13 +8,13 @@ namespace Pixely.Sprites;
 
 public sealed class SpriteAssetLoader : ISpriteAssetLoader
 {
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
     private readonly ITextureLoader _textureLoader;
     private readonly SpriteAssetStorage _storage;
 
-    public SpriteAssetLoader(ITextureLoader textureLoader, VirtualFileSystem fileSystem, SpriteAssetStorage storage)
+    public SpriteAssetLoader(ITextureLoader textureLoader, ContentSource contentSource, SpriteAssetStorage storage)
     {
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
         _textureLoader = textureLoader;
         _storage = storage;
     }
@@ -26,7 +26,7 @@ public sealed class SpriteAssetLoader : ISpriteAssetLoader
             return existingSprite;
         }
 
-        using Stream spritesJsonStream = _fileSystem.OpenStream(path);
+        using Stream spritesJsonStream = _contentSource.OpenStream(path);
 
         SpriteDto spriteDto = JsonSerializer.Deserialize(spritesJsonStream, SpriteDtosJsonContext.Default.SpriteDto)
                               ?? throw new JsonException("Deserialization returned null for SpriteDto.");

@@ -8,17 +8,17 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .UseDefaultRendering(
-                new WindowConfig(Size: (960, 540), Title: "File Dialogs"))
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
             .UsePencuil()
-            .AddContentFromProjectDirectory("../Pixely.Tutorials.Hotbar/Content");
+            .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
+            .UseDefaultRendering(
+                new WindowConfig(Size: (960, 540), Title: "File Dialogs"));
 
-        builder.AddSingleton(new FileDialogsViewModel());
-        builder.AddSingleton<IPencuilView, FileDialogsView>();
+        appBuilder.AddSingleton(new FileDialogsViewModel());
+        appBuilder.AddSingleton<IPencuilView, FileDialogsView>();
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

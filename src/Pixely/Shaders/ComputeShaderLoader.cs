@@ -9,13 +9,13 @@ public class ComputeShaderLoader : IComputeShaderLoader
     private const string GeneratedShaderDirectory = ".generated";
     private readonly ShaderFormats _shaderFormats;
     private readonly ComputeShaderMetadataLoader _shaderMetadataLoader;
-    private readonly VirtualFileSystem _virtualFileSystem;
+    private readonly ContentSource _contentSource;
 
-    internal ComputeShaderLoader(GpuDevice gpuDevice, ComputeShaderMetadataLoader shaderMetadataLoader, VirtualFileSystem virtualFileSystem)
+    internal ComputeShaderLoader(GpuDevice gpuDevice, ComputeShaderMetadataLoader shaderMetadataLoader, ContentSource contentSource)
     {
         _shaderFormats = gpuDevice.GetSupportedShaderFormats();
         _shaderMetadataLoader = shaderMetadataLoader;
-        _virtualFileSystem = virtualFileSystem;
+        _contentSource = contentSource;
     }
 
     public ComputeShader Load(ReadOnlySpan<char> path)
@@ -51,7 +51,7 @@ public class ComputeShaderLoader : IComputeShaderLoader
     private ComputeShader CreateComputeShader(string directory, ShaderInstance shaderInstance, ComputeShaderMetadata shaderMetadata)
     {
         string filePath = VirtualPath.Combine(directory, shaderInstance.Filename);
-        VirtualFile file = _virtualFileSystem.GetFile(filePath);
+        ContentFile file = _contentSource.GetFile(filePath);
         using Stream stream = file.Open();
 
         byte[] code = new byte[stream.Length];

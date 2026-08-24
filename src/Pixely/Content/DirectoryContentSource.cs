@@ -2,12 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Pixely.Content;
 
-public sealed class NativeFile: VirtualFile
+public sealed class NativeContentFile : ContentFile
 {
     private readonly string _filename;
     private readonly string _nativeFilename;
 
-    public NativeFile(string filename, string nativeFilename)
+    public NativeContentFile(string filename, string nativeFilename)
     {
         _filename = filename;
         _nativeFilename = nativeFilename;
@@ -22,12 +22,12 @@ public sealed class NativeFile: VirtualFile
     public long Length => new FileInfo(_nativeFilename).Length;
 }
 
-public sealed class NativeFileSystem: VirtualFileSystem
+public sealed class DirectoryContentSource : ContentSource
 {
     public static readonly bool NativeDirSeparatorIsSlash = Path.DirectorySeparatorChar == '/';
     public string RootPath { get; }
 
-    public NativeFileSystem(string rootPath)
+    public DirectoryContentSource(string rootPath)
     {
         RootPath = Path.GetFullPath(rootPath);
     }
@@ -39,7 +39,7 @@ public sealed class NativeFileSystem: VirtualFileSystem
         {
             relativePath = path.Replace(Path.DirectorySeparatorChar, '/');
         }
-        
+
         string almostReadAbsolutePath = Path.Combine(RootPath, relativePath);
         // if there was a dot it may lead to something like: a/./b
         return Path.GetFullPath(almostReadAbsolutePath);
@@ -55,11 +55,11 @@ public sealed class NativeFileSystem: VirtualFileSystem
 
         return path.Replace(Path.DirectorySeparatorChar, '/');
     }
-    
+
     private string FromAbsoluteToVirtualPath(string path)
     {
         string relativePath = Path.GetRelativePath(RootPath, path);
-        
+
         if (NativeDirSeparatorIsSlash)
         {
             return relativePath;
@@ -68,24 +68,24 @@ public sealed class NativeFileSystem: VirtualFileSystem
         return relativePath.Replace(Path.DirectorySeparatorChar, '/');
     }
 
-    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<VirtualFile> result)
+    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<ContentFile> result)
     {
         string nativePath = FromVirtualToNativePath(path.ToString());
 
         if (!Directory.Exists(nativePath))
         {
-            result = Array.Empty<VirtualFile>();
+            result = Array.Empty<ContentFile>();
             return false;
         }
 
         string[] filenames = Directory.GetFiles(nativePath);
-        VirtualFile[] files = new VirtualFile[filenames.Length];
+        ContentFile[] files = new ContentFile[filenames.Length];
 
         for (int i = 0; i < filenames.Length; i++)
         {
             string relativeFilename = Path.GetRelativePath(RootPath, filenames[i]);
             string virtualPath = FromRelativeToVirtualPath(relativeFilename);
-            files[i] = new NativeFile(virtualPath, filenames[i]);
+            files[i] = new NativeContentFile(virtualPath, filenames[i]);
         }
 
         result = files;
@@ -115,7 +115,7 @@ public sealed class NativeFileSystem: VirtualFileSystem
         return true;
     }
 
-    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out VirtualFile? file)
+    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out ContentFile? file)
     {
         string pathString = path.ToString();
         string nativePath = FromVirtualToNativePath(pathString);
@@ -126,7 +126,7 @@ public sealed class NativeFileSystem: VirtualFileSystem
             return false;
         }
 
-        file = new NativeFile(pathString, nativePath);
+        file = new NativeContentFile(pathString, nativePath);
         return true;
     }
 }

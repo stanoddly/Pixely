@@ -4,16 +4,16 @@ using System.Reflection;
 
 namespace Pixely.Content;
 
-public sealed class EmbeddedFile : VirtualFile
+public sealed class EmbeddedContentFile : ContentFile
 {
     private readonly Assembly _assembly;
-    public EmbeddedFile(Assembly assembly, string resourceName)
+    public EmbeddedContentFile(Assembly assembly, string resourceName)
     {
         Path = resourceName;
         _assembly = assembly;
     }
     public override string Path { get; }
-    
+
     public override Stream Open()
     {
         Stream? stream = _assembly.GetManifestResourceStream(Path);
@@ -27,21 +27,21 @@ public sealed class EmbeddedFile : VirtualFile
     }
 }
 
-public static class EmbeddedFileSystem
+public static class EmbeddedContentSource
 {
-    public static VirtualFileSystem Create(Assembly assembly)
+    public static ContentSource Create(Assembly assembly)
     {
         Dictionary<string, List<string>> directoryToDirectoriesLookup = new();
-        Dictionary<string, List<VirtualFile>> directoryToFilesLookup = new();
-        
-        foreach(var resourceName in assembly.GetManifestResourceNames())
+        Dictionary<string, List<ContentFile>> directoryToFilesLookup = new();
+
+        foreach (string resourceName in assembly.GetManifestResourceNames())
         {
             string? directory = VirtualPath.GetDirectoryName(resourceName);
-            
+
             string parentDirectory = directory ?? string.Empty;
 
-            List<VirtualFile> files = directoryToFilesLookup.GetValueOrNew(parentDirectory);
-            files.Add(new EmbeddedFile(assembly, resourceName));
+            List<ContentFile> files = directoryToFilesLookup.GetValueOrNew(parentDirectory);
+            files.Add(new EmbeddedContentFile(assembly, resourceName));
 
             if (directory == null)
             {
@@ -53,16 +53,18 @@ public static class EmbeddedFileSystem
                 string previous = directory;
                 directory = VirtualPath.GetDirectoryName(previous);
                 parentDirectory = directory ?? string.Empty;
-                
+
                 List<string> directories = directoryToDirectoriesLookup.GetValueOrNew(parentDirectory);
-                
+
                 directories.Add(previous);
             }
         }
-        
-        var frozenDirectories = directoryToDirectoriesLookup.Select(pair => new KeyValuePair<string, ImmutableArray<string>>(pair.Key, pair.Value.ToImmutableArray())).ToFrozenDictionary();
-        var frozenFiles = directoryToFilesLookup.Select(pair => new KeyValuePair<string, ImmutableArray<VirtualFile>>(pair.Key, pair.Value.ToImmutableArray())).ToFrozenDictionary();
 
-        return new DictFileSystem(frozenFiles, frozenDirectories);
+        FrozenDictionary<string, ImmutableArray<string>> frozenDirectories = directoryToDirectoriesLookup
+            .Select(pair => new KeyValuePair<string, ImmutableArray<string>>(pair.Key, pair.Value.ToImmutableArray())).ToFrozenDictionary();
+        FrozenDictionary<string, ImmutableArray<ContentFile>> frozenFiles = directoryToFilesLookup
+            .Select(pair => new KeyValuePair<string, ImmutableArray<ContentFile>>(pair.Key, pair.Value.ToImmutableArray())).ToFrozenDictionary();
+
+        return new DictionaryContentSource(frozenFiles, frozenDirectories);
     }
 }

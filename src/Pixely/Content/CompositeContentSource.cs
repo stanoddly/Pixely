@@ -2,23 +2,23 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Pixely.Content;
 
-public sealed class CompositeFileSystem: VirtualFileSystem
+public sealed class CompositeContentSource : ContentSource
 {
-    private readonly List<VirtualFileSystem> _fileSystems;
+    private readonly List<ContentSource> _sources;
 
-    public CompositeFileSystem(IEnumerable<VirtualFileSystem> fileSystems)
+    public CompositeContentSource(IEnumerable<ContentSource> sources)
     {
-        _fileSystems = fileSystems.ToList();
+        _sources = sources.ToList();
     }
 
-    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<VirtualFile> result)
+    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<ContentFile> result)
     {
-        Dictionary<string, VirtualFile> files = new();
+        Dictionary<string, ContentFile> files = new();
         bool foundFiles = false;
 
-        foreach (VirtualFileSystem fileSystem in _fileSystems)
+        foreach (ContentSource source in _sources)
         {
-            bool found = fileSystem.TryGetFiles(path, out ReadOnlySpan<VirtualFile> fileSystemFiles);
+            bool found = source.TryGetFiles(path, out ReadOnlySpan<ContentFile> sourceFiles);
 
             if (!found)
             {
@@ -27,15 +27,15 @@ public sealed class CompositeFileSystem: VirtualFileSystem
 
             foundFiles = true;
 
-            foreach (VirtualFile fileSystemFile in fileSystemFiles)
+            foreach (ContentFile sourceFile in sourceFiles)
             {
-                files[fileSystemFile.Path] = fileSystemFile;
+                files[sourceFile.Path] = sourceFile;
             }
         }
 
         if (!foundFiles)
         {
-            result = Array.Empty<VirtualFile>();
+            result = Array.Empty<ContentFile>();
             return false;
         }
 
@@ -47,9 +47,9 @@ public sealed class CompositeFileSystem: VirtualFileSystem
     {
         HashSet<string>? finalDirectories = null;
 
-        foreach (VirtualFileSystem fileSystem in _fileSystems)
+        foreach (ContentSource source in _sources)
         {
-            bool found = fileSystem.TryGetDirectories(path, out ReadOnlySpan<string> directories);
+            bool found = source.TryGetDirectories(path, out ReadOnlySpan<string> directories);
 
             if (found)
             {
@@ -71,11 +71,11 @@ public sealed class CompositeFileSystem: VirtualFileSystem
         return true;
     }
 
-    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out VirtualFile? file)
+    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out ContentFile? file)
     {
-        for (int i = (_fileSystems.Count - 1); i >= 0; i--)
+        for (int i = _sources.Count - 1; i >= 0; i--)
         {
-            if (_fileSystems[i].TryGetFile(path, out file))
+            if (_sources[i].TryGetFile(path, out file))
             {
                 return true;
             }
@@ -87,23 +87,23 @@ public sealed class CompositeFileSystem: VirtualFileSystem
 
     public override void Dispose()
     {
-        List<Exception> exceptions = new List<Exception>();
-    
-        foreach (VirtualFileSystem disposable in _fileSystems)
+        List<Exception> exceptions = new();
+
+        foreach (ContentSource source in _sources)
         {
             try
             {
-                disposable.Dispose();
+                source.Dispose();
             }
             catch (Exception ex)
             {
                 exceptions.Add(ex);
             }
         }
-    
+
         if (exceptions.Any())
         {
-            throw new AggregateException("Failed to dispose one or more filesystems", exceptions);
+            throw new AggregateException("Failed to dispose one or more content sources", exceptions);
         }
     }
 }

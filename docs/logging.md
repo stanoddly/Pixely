@@ -14,8 +14,8 @@ using Pixely.Logging;
 using Microsoft.Extensions.Logging;
 using ZLogger;
 
-PixelyAppBuilder builder = new();
-builder.AddZLogger(logging =>
+PixelyAppBuilder appBuilder = new();
+appBuilder.AddZLogger(logging =>
 {
     logging.SetMinimumLevel(LogLevel.Information);
     logging.AddZLoggerFileWithRetention(

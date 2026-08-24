@@ -7,15 +7,15 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Indexed Render Pass"));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(IndexedRenderPassRenderer.Create);
+        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(IndexedRenderPassRenderer.Create);
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }

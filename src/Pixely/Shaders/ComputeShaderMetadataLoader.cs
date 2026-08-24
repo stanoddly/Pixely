@@ -6,16 +6,16 @@ namespace Pixely.Shaders;
 
 public class ComputeShaderMetadataLoader
 {
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
 
-    public ComputeShaderMetadataLoader(VirtualFileSystem fileSystem)
+    public ComputeShaderMetadataLoader(ContentSource contentSource)
     {
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
     }
 
     public ComputeShaderMetadata Load(ReadOnlySpan<char> path)
     {
-        using Stream stream = _fileSystem.GetFile(path).Open();
+        using Stream stream = _contentSource.GetFile(path).Open();
         ComputeShaderMetadataDto? dto = JsonSerializer.Deserialize(stream, ShaderMetadataJsonContext.Default.ComputeShaderMetadataDto);
 
         if (dto == null)

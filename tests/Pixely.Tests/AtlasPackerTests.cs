@@ -46,11 +46,11 @@ public class AtlasPackerTests
     }
 
     private static (SpriteAssetStorage storage, SpriteAtlasBuilder builder) BuildAtlas(
-        Dictionary<string, ImmutableArray<VirtualFile>> files,
+        Dictionary<string, ImmutableArray<ContentFile>> files,
         Dictionary<string, ImmutableArray<string>> directories,
         Dictionary<string, RawImage>? images = null)
     {
-        DictFileSystem fs = new DictFileSystem(files.ToFrozenDictionary(), directories.ToFrozenDictionary());
+        DictionaryContentSource contentSource = new(files.ToFrozenDictionary(), directories.ToFrozenDictionary());
         SpriteAssetStorage storage = new SpriteAssetStorage();
         images ??= new Dictionary<string, RawImage>
         {
@@ -61,7 +61,7 @@ public class AtlasPackerTests
             new SpriteAtlasBuilderConfig(directories.Keys.ToArray()),
             new StubTextureLoader(),
             new StubImageLoader(images),
-            fs,
+            contentSource,
             storage);
         return (storage, builder);
     }
@@ -74,7 +74,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/hero.json", MakeSpriteJson(0, 0, 32, 32))
+                    new ByteContentFile("sprites/hero.json", MakeSpriteJson(0, 0, 32, 32))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -92,9 +92,9 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/a.json", MakeSpriteJson(0, 0, 64, 48)),
-                    new ByteVirtualFile("sprites/b.json", MakeSpriteJson(0, 0, 100, 80)),
-                    new ByteVirtualFile("sprites/c.json", MakeSpriteJson(0, 0, 16, 16)),
+                    new ByteContentFile("sprites/a.json", MakeSpriteJson(0, 0, 64, 48)),
+                    new ByteContentFile("sprites/b.json", MakeSpriteJson(0, 0, 100, 80)),
+                    new ByteContentFile("sprites/c.json", MakeSpriteJson(0, 0, 16, 16)),
                 ]
             },
             new() { ["sprites"] = [] });
@@ -119,11 +119,11 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/a.json", MakeSpriteJson(0, 0, 100, 80)),
-                    new ByteVirtualFile("sprites/b.json", MakeSpriteJson(0, 0, 60, 120)),
-                    new ByteVirtualFile("sprites/c.json", MakeSpriteJson(0, 0, 200, 50)),
-                    new ByteVirtualFile("sprites/d.json", MakeSpriteJson(0, 0, 90, 90)),
-                    new ByteVirtualFile("sprites/e.json", MakeSpriteJson(0, 0, 150, 70)),
+                    new ByteContentFile("sprites/a.json", MakeSpriteJson(0, 0, 100, 80)),
+                    new ByteContentFile("sprites/b.json", MakeSpriteJson(0, 0, 60, 120)),
+                    new ByteContentFile("sprites/c.json", MakeSpriteJson(0, 0, 200, 50)),
+                    new ByteContentFile("sprites/d.json", MakeSpriteJson(0, 0, 90, 90)),
+                    new ByteContentFile("sprites/e.json", MakeSpriteJson(0, 0, 150, 70)),
                 ]
             },
             new() { ["sprites"] = [] });
@@ -151,7 +151,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/sub.json", MakeSpriteJson(10, 20, 50, 40))
+                    new ByteContentFile("sprites/sub.json", MakeSpriteJson(10, 20, 50, 40))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -169,7 +169,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/mirror.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Horizontal))
+                    new ByteContentFile("sprites/mirror.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Horizontal))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -188,7 +188,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/flip.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Vertical))
+                    new ByteContentFile("sprites/flip.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Vertical))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -207,7 +207,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/both.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Both))
+                    new ByteContentFile("sprites/both.json", MakeSpriteJson(0, 0, 30, 40, SpriteFlip.Both))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -226,7 +226,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/normal.json", MakeSpriteJson(0, 0, 32, 32))
+                    new ByteContentFile("sprites/normal.json", MakeSpriteJson(0, 0, 32, 32))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -249,7 +249,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/walk.json", MakeAnimatedSpriteJson("img.png", 0.1, frames))
+                    new ByteContentFile("sprites/walk.json", MakeAnimatedSpriteJson("img.png", 0.1, frames))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -278,7 +278,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/run.json", MakeAnimatedSpriteJson("img.png", 0.05, frames))
+                    new ByteContentFile("sprites/run.json", MakeAnimatedSpriteJson("img.png", 0.05, frames))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -305,7 +305,7 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/anim.json", MakeAnimatedSpriteJson("img.png", 0.25, frames))
+                    new ByteContentFile("sprites/anim.json", MakeAnimatedSpriteJson("img.png", 0.25, frames))
                 ]
             },
             new() { ["sprites"] = [] });
@@ -322,11 +322,11 @@ public class AtlasPackerTests
             {
                 ["root"] =
                 [
-                    new ByteVirtualFile("root/a.json", MakeSpriteJson(0, 0, 32, 32))
+                    new ByteContentFile("root/a.json", MakeSpriteJson(0, 0, 32, 32))
                 ],
                 ["root/sub"] =
                 [
-                    new ByteVirtualFile("root/sub/b.json", MakeSpriteJson(0, 0, 64, 64))
+                    new ByteContentFile("root/sub/b.json", MakeSpriteJson(0, 0, 64, 64))
                 ]
             },
             new()
@@ -352,8 +352,8 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/hero.json", MakeSpriteJson(0, 0, 64, 64)),
-                    new ByteVirtualFile("sprites/walk.json", MakeAnimatedSpriteJson("img.png", 0.1, frames)),
+                    new ByteContentFile("sprites/hero.json", MakeSpriteJson(0, 0, 64, 64)),
+                    new ByteContentFile("sprites/walk.json", MakeAnimatedSpriteJson("img.png", 0.1, frames)),
                 ]
             },
             new() { ["sprites"] = [] });
@@ -378,13 +378,13 @@ public class AtlasPackerTests
     [Test]
     public void ManySprites_AllPackedWithNoOverlaps()
     {
-        var files = new ImmutableArray<VirtualFile>[1];
-        var sprites = new List<VirtualFile>();
+        var files = new ImmutableArray<ContentFile>[1];
+        var sprites = new List<ContentFile>();
         for (int i = 0; i < 30; i++)
         {
             ushort w = (ushort)(16 + i % 5 * 16);
             ushort h = (ushort)(16 + i % 7 * 16);
-            sprites.Add(new ByteVirtualFile($"sprites/s{i}.json", MakeSpriteJson(0, 0, w, h)));
+            sprites.Add(new ByteContentFile($"sprites/s{i}.json", MakeSpriteJson(0, 0, w, h)));
         }
 
         var (storage, _) = BuildAtlas(
@@ -414,8 +414,8 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/right.json", MakeSpriteJson(0, 0, 32, 32)),
-                    new ByteVirtualFile("sprites/left.json", MakeSpriteJson(0, 0, 32, 32, SpriteFlip.Horizontal)),
+                    new ByteContentFile("sprites/right.json", MakeSpriteJson(0, 0, 32, 32)),
+                    new ByteContentFile("sprites/left.json", MakeSpriteJson(0, 0, 32, 32, SpriteFlip.Horizontal)),
                 ]
             },
             new() { ["sprites"] = [] });
@@ -444,9 +444,9 @@ public class AtlasPackerTests
             {
                 ["sprites"] =
                 [
-                    new ByteVirtualFile("sprites/a.json",
+                    new ByteContentFile("sprites/a.json",
                         Encoding.UTF8.GetBytes("""{"texture":"tex1.png","textureRegion":[0,0,50,50]}""")),
-                    new ByteVirtualFile("sprites/b.json",
+                    new ByteContentFile("sprites/b.json",
                         Encoding.UTF8.GetBytes("""{"texture":"tex2.png","textureRegion":[0,0,30,30]}""")),
                 ]
             },

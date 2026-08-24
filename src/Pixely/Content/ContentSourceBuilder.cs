@@ -1,41 +1,66 @@
 namespace Pixely.Content;
 
-public class FileSystemBuilder
+public class ContentSourceBuilder
 {
-    private readonly List<VirtualFileSystem> _fileSystems = new();
+    private readonly List<ContentSource> _sources = new();
     private bool _cached = false;
 
-    internal IReadOnlyList<VirtualFileSystem> FileSystems => _fileSystems;
-
-    public FileSystemBuilder AddContentFromDirectory(string directory)
+    public ContentSourceBuilder AddDirectory(string directory)
     {
-        AddSourceFileSystem(new NativeFileSystem(directory));
+        AddSource(new DirectoryContentSource(directory));
         return this;
     }
 
-    public FileSystemBuilder AddSourceFileSystem(VirtualFileSystem virtualFileSystem)
+    public ContentSourceBuilder AddSource(ContentSource source)
     {
-        _fileSystems.Add(virtualFileSystem);
+        ArgumentNullException.ThrowIfNull(source);
+        _sources.Add(source);
         return this;
     }
 
-    public FileSystemBuilder AddContentFromProjectDirectory(string? subdirectory = null)
+    public ContentSourceBuilder AddProjectDirectory(string? subdirectory = null)
     {
         string contentDirectory = ResolveContentDirectory(AppContext.BaseDirectory, subdirectory);
 
-        AddContentFromDirectory(contentDirectory);
+        AddDirectory(contentDirectory);
 
         return this;
     }
 
-    public FileSystemBuilder AddContentFromDirectoryPattern(string pattern)
+    public ContentSourceBuilder AddDirectoryPattern(string pattern)
     {
         string[] directories = Directory.GetDirectories(AppContext.BaseDirectory, pattern);
         Array.Sort(directories, StringComparer.Ordinal);
 
         foreach (string directory in directories)
         {
-            AddContentFromDirectory(directory);
+            AddDirectory(directory);
+        }
+
+        return this;
+    }
+
+    public ContentSourceBuilder AddDefaultContent(string contentDirectory = "Content")
+    {
+        ArgumentException.ThrowIfNullOrEmpty(contentDirectory);
+
+        string appDirectory = Path.GetFullPath(AppContext.BaseDirectory);
+        string archivePath = Path.Combine(appDirectory, $"{contentDirectory}.pk3");
+        string directoryPath = Path.Combine(appDirectory, contentDirectory);
+        bool archiveExists = File.Exists(archivePath);
+
+        if (archiveExists)
+        {
+            AddZip(archivePath);
+        }
+
+        if (Directory.Exists(directoryPath))
+        {
+            AddDirectory(directoryPath);
+        }
+        else if (!archiveExists)
+        {
+            AddProjectDirectory(contentDirectory);
         }
 
         return this;
@@ -79,54 +104,54 @@ public class FileSystemBuilder
             $"Content directory not found. Checked '{appContentDirectory}' and no project directory was found.");
     }
 
-    public FileSystemBuilder AddContentFromZip(string filename)
+    public ContentSourceBuilder AddZip(string filename)
     {
-        ZipFileSystem fileSystem = ZipFileSystem.Create(filename); 
-        AddSourceFileSystem(fileSystem);
-        
+        ZipContentSource source = ZipContentSource.Create(filename);
+        AddSource(source);
+
         return this;
     }
 
-    public FileSystemBuilder AddContentFromZipPattern(string pattern)
+    public ContentSourceBuilder AddZipPattern(string pattern)
     {
         string[] filenames = Directory.GetFiles(AppContext.BaseDirectory, pattern);
         foreach (string filename in filenames)
         {
-            AddContentFromZip(filename);
+            AddZip(filename);
         }
 
         return this;
     }
 
-    public FileSystemBuilder WithCache()
+    public ContentSourceBuilder WithCache()
     {
         _cached = true;
         return this;
     }
 
-    public VirtualFileSystem Create()
+    public ContentSource Create()
     {
-        VirtualFileSystem finalVirtualFileSystem;
+        ContentSource finalContentSource;
 
-        if (_fileSystems.Count == 0)
+        if (_sources.Count == 0)
         {
-            return DictFileSystem.Empty;
+            return DictionaryContentSource.Empty;
         }
 
-        if (_fileSystems.Count == 1)
+        if (_sources.Count == 1)
         {
-            finalVirtualFileSystem = _fileSystems[0];
+            finalContentSource = _sources[0];
         }
         else
         {
-            finalVirtualFileSystem = new CompositeFileSystem(_fileSystems);
+            finalContentSource = new CompositeContentSource(_sources);
         }
 
         if (_cached)
         {
-            finalVirtualFileSystem = CachedFileSystem.Create(finalVirtualFileSystem);
+            finalContentSource = CachedContentSource.Create(finalContentSource);
         }
 
-        return finalVirtualFileSystem;
+        return finalContentSource;
     }
 }

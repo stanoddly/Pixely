@@ -18,7 +18,7 @@ dotnet publish tutorials/Pixely.Tutorials.ZipContent -o /tmp/pixely-zip-content
 /tmp/pixely-zip-content/Pixely.Tutorials.ZipContent
 ```
 
-`AddContentFromZipPattern` and `AddContentFromDirectoryPattern` both resolve beside the application. The directory source is registered last, so it overrides the archive when both contain the same virtual path.
+`AddZipPattern` and `AddDirectoryPattern` both resolve beside the application. The directory source is added last, so it overrides the archive when both contain the same content path.
 
 The build copy records its destinations in `@(FileWrites)`, allowing MSBuild's incremental cleanup to remove outputs whose source files were deleted. Publishing packages that tracked build content under `$(IntermediateOutputPath)` and registers `Content.pk3` through `@(ResolvedFileToPublish)`. The SDK then owns the final copy into `$(PublishDir)` and its incremental cleanup.
 

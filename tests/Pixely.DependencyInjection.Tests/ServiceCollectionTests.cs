@@ -1065,20 +1065,6 @@ public class ServiceCollectionTests
     // --- Subcontainers ---
 
     [Test]
-    public void IsRoot_IdentifiesRootAndChildCollections()
-    {
-        ServiceCollection rootCollection = new();
-        using ServiceProvider root = rootCollection.BuildServiceProvider();
-        ServiceCollection childCollection = root.CreateServiceCollection();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(rootCollection.IsRoot, Is.True);
-            Assert.That(childCollection.IsRoot, Is.False);
-        });
-    }
-
-    [Test]
     public void ChildContainer_ResolvesOwnServices()
     {
         ServiceCollection rootCollection = new();

@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new();
-        builder
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder appBuilder = new();
+        appBuilder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (800, 600), Title: "Depth-Only Pipeline Test"));
 
-        builder.AddSingleton<DepthOnlyRenderer>(DepthOnlyRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, DepthOnlyRenderer>();
+        appBuilder.AddSingleton<DepthOnlyRenderer>(DepthOnlyRenderer.Create);
+        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, DepthOnlyRenderer>();
 
-        using IPixelyApp pixelyApp = builder.Build();
+        using IPixelyApp pixelyApp = appBuilder.Build();
         return pixelyApp.Run();
     }
 }
