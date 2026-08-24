@@ -365,7 +365,8 @@ ServiceProvider child = childServices.BuildServiceProvider();
 ## Parent/Child Providers
 
 `ServiceProvider.CreateServiceCollection()` binds a new collection to its parent before registration
-begins. `IsRegistered<T>()` can therefore see inherited registrations while the child is configured.
+begins. `ServiceCollection.IsRoot` distinguishes root and child configuration, while
+`IsRegistered<T>()` can see inherited registrations while the child is configured.
 Building the collection creates a child provider, and disposing the child tears down only its services.
 
 ### Service resolution
