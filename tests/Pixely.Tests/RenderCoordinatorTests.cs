@@ -13,32 +13,32 @@ public class RenderCoordinatorTests
     [Test]
     public void Builder_DoesNotRegisterWindowWithoutWindowRendering()
     {
-        PixelyAppBuilder appBuilder = new();
+        PixelyAppBuilder builder = new();
 
-        Assert.That(appBuilder.IsRegistered<Window>(), Is.False);
+        Assert.That(builder.IsRegistered<Window>(), Is.False);
     }
 
     [Test]
     public void UseDefaultRendering_RegistersWindow()
     {
-        PixelyAppBuilder appBuilder = new();
+        PixelyAppBuilder builder = new();
 
-        appBuilder.UseDefaultRendering();
+        builder.UseDefaultRendering();
 
-        Assert.That(appBuilder.IsRegistered<Window>(), Is.True);
+        Assert.That(builder.IsRegistered<Window>(), Is.True);
     }
 
     [Test]
     public void AddWindow_RegistersWindowWithoutRenderCoordinator()
     {
-        PixelyAppBuilder appBuilder = new();
+        PixelyAppBuilder builder = new();
 
-        appBuilder.AddWindow();
+        builder.AddWindow();
 
         Assert.Multiple(() =>
         {
-            Assert.That(appBuilder.IsRegistered<Window>(), Is.True);
-            Assert.That(appBuilder.IsRegistered<IRenderCoordinator>(), Is.False);
+            Assert.That(builder.IsRegistered<Window>(), Is.True);
+            Assert.That(builder.IsRegistered<IRenderCoordinator>(), Is.False);
         });
     }
 
@@ -54,8 +54,8 @@ public class RenderCoordinatorTests
     [Test]
     public void Execute_WithNoRenderers_DoesNotThrow()
     {
-        PixelyAppBuilder appBuilder = CreateBuilder(new List<string>());
-        ServiceProvider provider = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(new List<string>());
+        ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
         Assert.DoesNotThrow(renderCoordinator.Execute);
@@ -66,9 +66,9 @@ public class RenderCoordinatorTests
     {
         List<string> calls = new();
         TestRenderContextSource renderContextSource = new() { CanCreate = false };
-        PixelyAppBuilder appBuilder = CreateBuilder(calls, renderContextSource);
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
-        ServiceProvider provider = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
         renderCoordinator.Execute();
@@ -84,8 +84,8 @@ public class RenderCoordinatorTests
     public void Execute_WithRenderContext_DisposesRenderContext()
     {
         TestRenderContextSource renderContextSource = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(new List<string>(), renderContextSource);
-        ServiceProvider provider = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
+        ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
         renderCoordinator.Execute();
@@ -97,8 +97,8 @@ public class RenderCoordinatorTests
     public void Execute_PassesManagedWindowToRenderContextProvider()
     {
         TestRenderContextSource renderContextSource = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(new List<string>(), renderContextSource);
-        ServiceProvider provider = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
+        ServiceProvider provider = builder.BuildServiceProvider();
 
         provider.GetRequiredService<IRenderCoordinator>().Execute();
 
@@ -110,10 +110,10 @@ public class RenderCoordinatorTests
     {
         ViewScope viewScope = new(7);
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls, viewScope: viewScope);
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("matching", calls, viewScope: viewScope));
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("other", calls));
-        ServiceProvider provider = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls, viewScope: viewScope);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("matching", calls, viewScope: viewScope));
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("other", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
 
         provider.GetRequiredService<IRenderCoordinator>().Execute();
 
@@ -123,9 +123,9 @@ public class RenderCoordinatorTests
     [Test]
     public void ChildProviderCoordinator_UsesChildWindow()
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder.AddSingleton(new GpuMemorySystem(null!));
-        ServiceProvider parent = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = new();
+        builder.AddSingleton(new GpuMemorySystem(null!));
+        ServiceProvider parent = builder.BuildServiceProvider();
         ServiceCollection childCollection = parent.CreateServiceCollection();
         ViewScope viewScope = new(7);
         Window window = CreateWindow(viewScope, 42);
@@ -145,8 +145,8 @@ public class RenderCoordinatorTests
     public void ChildProviderRenderer_IsRenderedAfterChildBuild()
     {
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls);
-        ServiceProvider parent = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls);
+        ServiceProvider parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
         ServiceCollection childCollection = parent.CreateServiceCollection();
@@ -162,8 +162,8 @@ public class RenderCoordinatorTests
     public void ChildProviderRenderer_IsRemovedWhenChildProviderIsDisposed()
     {
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls);
-        ServiceProvider parent = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls);
+        ServiceProvider parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
         ServiceCollection childCollection = parent.CreateServiceCollection();
@@ -180,9 +180,9 @@ public class RenderCoordinatorTests
     public void DynamicRenderers_AreRenderedInOrder()
     {
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls);
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls, 10));
-        ServiceProvider parent = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls, 10));
+        ServiceProvider parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
         ServiceCollection childCollection = parent.CreateServiceCollection();
@@ -198,9 +198,9 @@ public class RenderCoordinatorTests
     public void ChildProviderDisposeDuringRender_DoesNotSkipRemainingRootRenderers()
     {
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls);
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls, 10));
-        ServiceProvider parent = appBuilder.BuildServiceProvider();
+        PixelyAppBuilder builder = CreateBuilder(calls);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls, 10));
+        ServiceProvider parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
         ServiceProvider? child = null;
@@ -217,10 +217,10 @@ public class RenderCoordinatorTests
     public void ChildProviderBuildDuringRender_AddsRendererForNextFrame()
     {
         List<string> calls = new();
-        PixelyAppBuilder appBuilder = CreateBuilder(calls);
+        PixelyAppBuilder builder = CreateBuilder(calls);
         ServiceProvider? parent = null;
-        appBuilder.AddSingleton<IRenderer<TestRenderContext>>(new ChildProviderBuildingRenderer("root", calls, () => parent!, 0));
-        parent = appBuilder.BuildServiceProvider();
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new ChildProviderBuildingRenderer("root", calls, () => parent!, 0));
+        parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
         renderCoordinator.Execute();
@@ -238,14 +238,14 @@ public class RenderCoordinatorTests
         TestRenderContextSource? renderContextSource = null,
         ViewScope viewScope = default)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder.UseWindowRendering<TestRenderContext>(viewScope);
-        appBuilder.AddSingleton(CreateWindow(viewScope, 42));
-        appBuilder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
-        appBuilder.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
-        appBuilder.AddSingleton(new GpuMemorySystem(null!));
-        appBuilder.AddSingleton(calls);
-        return appBuilder;
+        PixelyAppBuilder builder = new();
+        builder.UseWindowRendering<TestRenderContext>(viewScope);
+        builder.AddSingleton(CreateWindow(viewScope, 42));
+        builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
+        builder.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
+        builder.AddSingleton(new GpuMemorySystem(null!));
+        builder.AddSingleton(calls);
+        return builder;
     }
 
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)

@@ -7,13 +7,13 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak").AddProjectDirectory("_Content"))
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Game"));
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

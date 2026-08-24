@@ -11,17 +11,17 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultRendering(
                 new WindowConfig(
                     Size: (400, 400),
                     Title: "Window Dragging",
                     Borderless: true));
 
-        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
+        builder.AddSingleton<IRenderer<DefaultRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
 
-        appBuilder.OnStart((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
+        builder.OnStart((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
 
@@ -100,7 +100,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

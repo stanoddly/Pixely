@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak"))
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Game"));
 
-        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(TriangleRenderer.Create);
+        builder.AddSingleton<IRenderer<DefaultRenderContext>>(TriangleRenderer.Create);
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

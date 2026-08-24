@@ -10,8 +10,8 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Main Window"))
@@ -23,10 +23,10 @@ static class Program
                     InitiallyVisible: false,
                     CloseBehavior: WindowCloseBehavior.HideWindow));
 
-        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(PrimaryRenderer.Create);
-        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(SecondaryWindowRenderer.Create);
+        builder.AddSingleton<IRenderer<DefaultRenderContext>>(PrimaryRenderer.Create);
+        builder.AddSingleton<IRenderer<DefaultRenderContext>>(SecondaryWindowRenderer.Create);
 
-        appBuilder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
+        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {
             Window secondaryWindow = windowRegistry.GetWindow(SecondaryView);
             Console.WriteLine("Press Space in the main window to show or hide the secondary window.");
@@ -51,7 +51,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

@@ -13,8 +13,8 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(
@@ -22,9 +22,9 @@ static class Program
                     Title: "Click Through",
                     Borderless: true));
 
-        appBuilder.AddSingleton<IRenderer<DefaultRenderContext>>(ClickThroughRenderer.Create);
+        builder.AddSingleton<IRenderer<DefaultRenderContext>>(ClickThroughRenderer.Create);
 
-        appBuilder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
             window.SetHitTest(point => InteractiveRegion.Intersects(point) ? HitTestResult.Normal : HitTestResult.Miss);
@@ -38,7 +38,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

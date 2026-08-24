@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (800, 600), Title: "Storage Buffer Demo"));
 
-        appBuilder.AddSingleton<StorageBufferRenderer>(StorageBufferRenderer.Create);
-        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, StorageBufferRenderer>();
+        builder.AddSingleton<StorageBufferRenderer>(StorageBufferRenderer.Create);
+        builder.AddAlias<IRenderer<DefaultRenderContext>, StorageBufferRenderer>();
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

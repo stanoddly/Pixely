@@ -10,12 +10,12 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Logging"));
 
-        appBuilder.AddZLogger(logging =>
+        builder.AddZLogger(logging =>
         {
 #if DEBUG
             logging.SetMinimumLevel(LogLevel.Debug);
@@ -37,8 +37,8 @@ static class Program
             });
 #endif
         });
-        appBuilder.AddSingleton<PlayerInputService>(PlayerInputService.Create);
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        builder.AddSingleton<PlayerInputService>(PlayerInputService.Create);
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

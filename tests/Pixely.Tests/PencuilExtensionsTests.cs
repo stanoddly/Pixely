@@ -10,14 +10,14 @@ public sealed class PencuilExtensionsTests
     [Test]
     public void UsePencuil_CustomRenderContext_RegistersRenderer()
     {
-        PixelyAppBuilder appBuilder = new();
+        PixelyAppBuilder builder = new();
 
-        PixelyAppBuilder result = appBuilder.UsePencuil<CustomRenderContext>(new ViewScope(1));
+        PixelyAppBuilder result = builder.UsePencuil<CustomRenderContext>(new ViewScope(1));
 
         Assert.Multiple(() =>
         {
-            Assert.That(result, Is.SameAs(appBuilder));
-            Assert.That(appBuilder.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
+            Assert.That(result, Is.SameAs(builder));
+            Assert.That(builder.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
         });
     }
 

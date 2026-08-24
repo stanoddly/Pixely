@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Stencil Buffer"));
 
-        appBuilder.AddSingleton<StencilBufferRenderer>(StencilBufferRenderer.Create);
-        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, StencilBufferRenderer>();
+        builder.AddSingleton<StencilBufferRenderer>(StencilBufferRenderer.Create);
+        builder.AddAlias<IRenderer<DefaultRenderContext>, StencilBufferRenderer>();
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

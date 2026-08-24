@@ -7,16 +7,16 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (800, 600), Title: "Compute Shader Demo"));
 
-        appBuilder.AddSingleton<ComputeRenderer>(ComputeRenderer.Create);
-        appBuilder.AddAlias<IRenderer<DefaultRenderContext>, ComputeRenderer>();
+        builder.AddSingleton<ComputeRenderer>(ComputeRenderer.Create);
+        builder.AddAlias<IRenderer<DefaultRenderContext>, ComputeRenderer>();
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

@@ -8,17 +8,17 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UsePencuil()
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
 
-        appBuilder.AddSingleton(new HotbarViewModel());
-        appBuilder.AddSingleton<IPencuilView, Hotbar>();
+        builder.AddSingleton(new HotbarViewModel());
+        builder.AddSingleton<IPencuilView, Hotbar>();
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 }

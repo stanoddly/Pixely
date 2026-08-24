@@ -15,14 +15,14 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder appBuilder = new();
-        appBuilder
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Audio Tutorial"))
             .RegisterAudio();
 
-        appBuilder.OnStart((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnStart((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
         {
             DefaultAudioGroups groups = DefaultAudioGroups.Create(audioSystem);
             AudioBuffer beep = audioSystem.LoadBuffer(BeepPath);
@@ -115,7 +115,7 @@ static class Program
             };
         });
 
-        using IPixelyApp pixelyApp = appBuilder.Build();
+        using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
     }
 
