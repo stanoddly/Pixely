@@ -6,6 +6,8 @@
         <LangVersion>14</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- PackageIntegrationTests passes PixelyPackageVersion when restoring and building this fixture, which intentionally stays outside repository-wide central package management. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     </PropertyGroup>
 
     <ItemGroup>

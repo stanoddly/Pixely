@@ -10,7 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ppy.SDL3_mixer-CS" Version="2026.722.0" />
+        <PackageReference Include="ppy.SDL3_mixer-CS" />
     </ItemGroup>
 
     <ItemGroup>
