@@ -61,4 +61,16 @@ public sealed class PackageRenderContext : IRenderContext
     }
 }
 
+public sealed class PackageBasicRenderContext : BasicRenderContext
+{
+    public PackageBasicRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer) : base(swapchainTexture, commandBuffer)
+    {
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+    }
+}
+
 public sealed class GeneratedService;

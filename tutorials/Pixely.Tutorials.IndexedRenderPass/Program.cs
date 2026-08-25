@@ -13,7 +13,7 @@ static class Program
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Indexed Render Pass"));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(IndexedRenderPassRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(IndexedRenderPassRenderer.Create);
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

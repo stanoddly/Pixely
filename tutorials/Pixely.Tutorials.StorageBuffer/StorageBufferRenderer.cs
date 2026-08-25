@@ -6,7 +6,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.StorageBuffer;
 
-public class StorageBufferRenderer : IRenderer<DefaultRenderContext>
+public class StorageBufferRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quadVertexBuffer;
@@ -26,7 +26,7 @@ public class StorageBufferRenderer : IRenderer<DefaultRenderContext>
         _colorCount = colorCount;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         _time += 0.016f; // Approximate 60fps timestep
 

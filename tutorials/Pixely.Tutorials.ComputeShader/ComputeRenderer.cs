@@ -4,7 +4,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.ComputeShader;
 
-public class ComputeRenderer : IRenderer<DefaultRenderContext>
+public class ComputeRenderer : IRenderer<BasicRenderContext>
 {
     private readonly ComputePipeline _computePipeline;
     private readonly Texture _outputTexture;
@@ -16,7 +16,7 @@ public class ComputeRenderer : IRenderer<DefaultRenderContext>
         _outputTexture = outputTexture;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         _time += 0.016f;
 

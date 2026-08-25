@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (1280, 720), Title: "Stencil Buffer"));
 
         builder.AddSingleton<StencilBufferRenderer>(StencilBufferRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, StencilBufferRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, StencilBufferRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

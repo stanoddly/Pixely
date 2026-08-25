@@ -18,12 +18,12 @@ builder
 
 Omitting `UseDefaultRendering` creates no window.
 
-Window renderers use the ordinary `IRenderer<DefaultRenderContext>` contract:
+Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
 
 ```csharp
-public sealed class GameRenderer : IRenderer<DefaultRenderContext>
+public sealed class GameRenderer : IRenderer<BasicRenderContext>
 {
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         // Record rendering commands.
     }
@@ -33,7 +33,7 @@ public sealed class GameRenderer : IRenderer<DefaultRenderContext>
 Register renderers normally through DI:
 
 ```csharp
-builder.AddSingleton<IRenderer<DefaultRenderContext>, GameRenderer>(GameRenderer.Create);
+builder.AddSingleton<IRenderer<BasicRenderContext>, GameRenderer>(GameRenderer.Create);
 ```
 
 The default `IRenderer.ViewScope` implementation returns `default`, so single-window renderers do
@@ -105,12 +105,31 @@ public sealed class GameRenderContextProvider : IRenderContextProvider<GameRende
 }
 ```
 
+Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state:
+
+```csharp
+public sealed class GameRenderContext : BasicRenderContext
+{
+    public DepthTarget DepthTarget { get; }
+    public Camera Camera { get; }
+    public Size<uint> RenderSizeInPixels { get; }
+
+    public GameRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer, DepthTarget depthTarget, Camera camera, Size<uint> renderSizeInPixels)
+        : base(swapchainTexture, commandBuffer)
+    {
+        DepthTarget = depthTarget;
+        Camera = camera;
+        RenderSizeInPixels = renderSizeInPixels;
+    }
+}
+```
+
 The framework coordinator passes its managed window to the provider for each frame, skips hidden
 windows, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
-registration. `GameRenderContext` implements `IRenderContext` and submits its command buffer when
-disposed in the same way as other render contexts. Window registration, event routing and disposal
-remain managed by Pixely.
+registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
+and call the base implementation to submit its command buffer. Window registration, event routing
+and disposal remain managed by Pixely.
 
 ## Multiple windows
 
@@ -142,11 +161,11 @@ builder
 A renderer for an additional window overrides the scope explicitly:
 
 ```csharp
-public sealed class InventoryRenderer : IRenderer<DefaultRenderContext>
+public sealed class InventoryRenderer : IRenderer<BasicRenderContext>
 {
-    ViewScope IRenderer<DefaultRenderContext>.ViewScope => ViewScopes.Inventory;
+    ViewScope IRenderer<BasicRenderContext>.ViewScope => ViewScopes.Inventory;
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         // Render the inventory window.
     }

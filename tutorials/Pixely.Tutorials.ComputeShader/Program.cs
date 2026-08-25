@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (800, 600), Title: "Compute Shader Demo"));
 
         builder.AddSingleton<ComputeRenderer>(ComputeRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, ComputeRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, ComputeRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

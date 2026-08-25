@@ -28,7 +28,7 @@ static class Program
         {
             builder.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Vulkan));
         }
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(TransparentWindowRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(TransparentWindowRenderer.Create);
 
         builder.OnStart((IMouseService mouseService, AppControl appControl) =>
         {
