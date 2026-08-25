@@ -28,7 +28,7 @@ public interface IIndexedPathHeuristic<TIndex, TCost>
 /// Calls on the same instance must not overlap. Graph and heuristic struct constraints let the JIT specialize each search and inline constrained interface calls.
 /// </remarks>
 /// <typeparam name="TIndex">An integer type that can represent the graph's dense node indices. Its maximum value is reserved as the missing-predecessor sentinel.</typeparam>
-/// <typeparam name="TCost">A fixed-size numeric type that can represent every accumulated path and estimated cost.</typeparam>
+/// <typeparam name="TCost">A fixed-size numeric type used for accumulated path and estimated costs. Paths whose costs exceed its range are ignored.</typeparam>
 public sealed class IndexedPathSearch<TIndex, TCost>
     where TIndex : unmanaged, IBinaryInteger<TIndex>, IMinMaxValue<TIndex>
     where TCost : unmanaged, INumber<TCost>, IMinMaxValue<TCost>
@@ -45,7 +45,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// <remarks>
     /// Both buffers must have at least <see cref="IIndexedPathGraph{TIndex, TCost}.NodeCount"/> entries and are overwritten. Unreachable nodes receive <see cref="IMinMaxValue{TCost}.MaxValue"/> and predecessors receive <see cref="IMinMaxValue{TIndex}.MaxValue"/>.
     /// A reachable path whose cost equals <see cref="IMinMaxValue{TCost}.MaxValue"/> is distinguished by its predecessor.
-    /// The search throws if accumulated path costs exceed the range of <typeparamref name="TCost"/>.
+    /// The start node's predecessor is itself. Paths whose accumulated costs exceed the range of <typeparamref name="TCost"/> are ignored.
     /// </remarks>
     public void ExpandTree<TGraph>(TGraph graph, TIndex start, Span<TCost> costs, Span<TIndex> predecessors) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
@@ -58,25 +58,25 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// <remarks>
     /// Both buffers must have at least <see cref="IIndexedPathGraph{TIndex, TCost}.NodeCount"/> entries and are overwritten. Unreachable nodes receive <see cref="IMinMaxValue{TCost}.MaxValue"/> and predecessors receive <see cref="IMinMaxValue{TIndex}.MaxValue"/>.
     /// A reachable path whose cost equals <see cref="IMinMaxValue{TCost}.MaxValue"/> is distinguished by its predecessor.
-    /// The search throws if accumulated path costs exceed the range of <typeparamref name="TCost"/>.
+    /// The start node's predecessor is itself. Paths whose accumulated costs exceed the range of <typeparamref name="TCost"/> are ignored.
     /// </remarks>
     public void ExpandTree<TGraph>(TGraph graph, TIndex start, Span<TCost> costs, Span<TIndex> predecessors, TCost maxCost) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
-        EnsureCapacity(graph);
-        int startOffset = ValidateNode(graph, start, nameof(start));
+        (int nodeCount, int maximumDegree, TIndex indexCount) = EnsureGraphCapacity(graph);
+        int startOffset = ValidateNode(start, indexCount, nameof(start));
         ValidateMaximumCost(maxCost);
-        if (costs.Length < graph.NodeCount)
+        if (costs.Length < nodeCount)
         {
             throw new ArgumentException("The cost buffer must contain an entry for every graph node.", nameof(costs));
         }
 
-        if (predecessors.Length < graph.NodeCount)
+        if (predecessors.Length < nodeCount)
         {
             throw new ArgumentException("The predecessor buffer must contain an entry for every graph node.", nameof(predecessors));
         }
 
-        costs = costs[..graph.NodeCount];
-        predecessors = predecessors[..graph.NodeCount];
+        costs = costs[..nodeCount];
+        predecessors = predecessors[..nodeCount];
         costs.Fill(TCost.MaxValue);
         predecessors.Fill(MissingPredecessor);
         _open.Clear();
@@ -92,11 +92,15 @@ public sealed class IndexedPathSearch<TIndex, TCost>
                 continue;
             }
 
-            int edgeCount = GetEdges(graph, current.Index);
+            int edgeCount = GetEdges(graph, current.Index, maximumDegree, indexCount);
             for (int index = 0; index < edgeCount; index++)
             {
                 PathEdge<TIndex, TCost> edge = _edges[index];
-                TCost cost = AddCosts(current.Cost, edge.Cost);
+                if (!TryAddCosts(current.Cost, edge.Cost, out TCost cost))
+                {
+                    continue;
+                }
+
                 int destinationOffset = ToOffset(edge.Destination);
                 if (cost > maxCost || (predecessors[destinationOffset] != MissingPredecessor && cost >= costs[destinationOffset]))
                 {
@@ -113,7 +117,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// <summary>
     /// Uses Dijkstra search to find a least-cost path to one destination.
     /// </summary>
-    /// <remarks>The result is overwritten and contains each node after the start through the destination. The search throws if accumulated path costs exceed the range of <typeparamref name="TCost"/>.</remarks>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination. Paths whose accumulated costs exceed the range of <typeparamref name="TCost"/> are ignored.</remarks>
     public PathResult FindPath<TGraph>(TGraph graph, TIndex start, TIndex destination, List<TIndex> result) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
         return FindPath(graph, start, destination, result, new ZeroHeuristic());
@@ -122,7 +126,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// <summary>
     /// Uses A* to find a least-cost path to one destination with an admissible heuristic.
     /// </summary>
-    /// <remarks>The result is overwritten and contains each node after the start through the destination. The search throws if accumulated path or estimated costs exceed the range of <typeparamref name="TCost"/>.</remarks>
+    /// <remarks>The result is overwritten and contains each node after the start through the destination. Paths whose accumulated costs exceed the range of <typeparamref name="TCost"/> are ignored, while unrepresentable estimated costs receive the lowest priority.</remarks>
     /// <typeparam name="TGraph">A value-type adapter that exposes the indexed graph.</typeparam>
     /// <typeparam name="THeuristic">A value-type heuristic whose estimates do not exceed the cheapest remaining path cost.</typeparam>
     public PathResult FindPath<TGraph, THeuristic>(TGraph graph, TIndex start, TIndex destination, List<TIndex> result, THeuristic heuristic)
@@ -130,12 +134,13 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         where THeuristic : struct, IIndexedPathHeuristic<TIndex, TCost>
     {
         ArgumentNullException.ThrowIfNull(result);
-        EnsureCapacity(graph);
-        int startOffset = ValidateNode(graph, start, nameof(start));
-        ValidateNode(graph, destination, nameof(destination));
+        (int nodeCount, int maximumDegree, TIndex indexCount) = EnsureGraphCapacity(graph);
+        EnsurePathCapacity(nodeCount);
+        int startOffset = ValidateNode(start, indexCount, nameof(start));
+        ValidateNode(destination, indexCount, nameof(destination));
         result.Clear();
-        Array.Fill(_pathCosts, TCost.MaxValue, 0, graph.NodeCount);
-        Array.Fill(_pathPredecessors, MissingPredecessor, 0, graph.NodeCount);
+        Array.Fill(_pathCosts, TCost.MaxValue, 0, nodeCount);
+        Array.Fill(_pathPredecessors, MissingPredecessor, 0, nodeCount);
         _open.Clear();
         _pathCosts[startOffset] = TCost.Zero;
         _pathPredecessors[startOffset] = start;
@@ -151,15 +156,19 @@ public sealed class IndexedPathSearch<TIndex, TCost>
 
             if (current.Index == destination)
             {
-                ReconstructPath(start, destination, _pathPredecessors.AsSpan(0, graph.NodeCount), result);
+                ReconstructPath(start, destination, nodeCount, _pathPredecessors, result);
                 return PathResult.Found;
             }
 
-            int edgeCount = GetEdges(graph, current.Index);
+            int edgeCount = GetEdges(graph, current.Index, maximumDegree, indexCount);
             for (int index = 0; index < edgeCount; index++)
             {
                 PathEdge<TIndex, TCost> edge = _edges[index];
-                TCost cost = AddCosts(current.Cost, edge.Cost);
+                if (!TryAddCosts(current.Cost, edge.Cost, out TCost cost))
+                {
+                    continue;
+                }
+
                 int destinationOffset = ToOffset(edge.Destination);
                 if (_pathPredecessors[destinationOffset] != MissingPredecessor && cost >= _pathCosts[destinationOffset])
                 {
@@ -168,7 +177,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
 
                 _pathCosts[destinationOffset] = cost;
                 _pathPredecessors[destinationOffset] = current.Index;
-                TCost estimatedCost = AddCosts(cost, EstimateCost(heuristic, edge.Destination, destination));
+                TCost estimatedCost = TryAddCosts(cost, EstimateCost(heuristic, edge.Destination, destination), out TCost sum) ? sum : TCost.MaxValue;
                 _open.Enqueue(new OpenNode(edge.Destination, cost), estimatedCost);
             }
         }
@@ -179,22 +188,32 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// <summary>
     /// Reconstructs one path from a predecessor tree produced by <see cref="ExpandTree{TGraph}(TGraph, TIndex, Span{TCost}, Span{TIndex})"/>.
     /// </summary>
-    /// <remarks>The result is overwritten and contains each node after the start through the destination.</remarks>
-    public static PathResult ReconstructPath(TIndex start, TIndex destination, ReadOnlySpan<TIndex> predecessors, List<TIndex> result)
+    /// <remarks>
+    /// The result is overwritten and contains each node after the start through the destination. Only the first <paramref name="nodeCount"/> predecessor entries belong to the tree.
+    /// A self-predecessor marks a tree root; reaching a root other than <paramref name="start"/> returns <see cref="PathResult.NotFound"/>. Longer predecessor cycles are invalid.
+    /// </remarks>
+    public static PathResult ReconstructPath(TIndex start, TIndex destination, int nodeCount, ReadOnlySpan<TIndex> predecessors, List<TIndex> result)
     {
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(nodeCount);
+        if (predecessors.Length < nodeCount)
+        {
+            throw new ArgumentException("The predecessor buffer must contain an entry for every graph node.", nameof(predecessors));
+        }
+
         TIndex predecessorCount;
         try
         {
-            predecessorCount = TIndex.CreateChecked(predecessors.Length);
+            predecessorCount = TIndex.CreateChecked(nodeCount);
         }
         catch (OverflowException)
         {
-            throw new ArgumentException($"The predecessor buffer must leave {TIndex.MaxValue} available as the missing-predecessor sentinel.", nameof(predecessors));
+            throw new ArgumentOutOfRangeException(nameof(nodeCount), nodeCount, $"The node count must leave {TIndex.MaxValue} available as the missing-predecessor sentinel.");
         }
 
         ValidateBufferIndex(start, predecessorCount, nameof(start));
         ValidateBufferIndex(destination, predecessorCount, nameof(destination));
+        predecessors = predecessors[..nodeCount];
         result.Clear();
         if (start == destination)
         {
@@ -205,7 +224,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         for (int count = 0; count < predecessors.Length; count++)
         {
             TIndex predecessor = predecessors[ToOffset(current)];
-            if (predecessor == MissingPredecessor || TIndex.IsNegative(predecessor) || predecessor >= predecessorCount)
+            if (predecessor == MissingPredecessor || predecessor == current || TIndex.IsNegative(predecessor) || predecessor >= predecessorCount)
             {
                 result.Clear();
                 return PathResult.NotFound;
@@ -224,44 +243,59 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         throw new ArgumentException("The predecessor buffer contains a cycle.", nameof(predecessors));
     }
 
-    private void EnsureCapacity<TGraph>(TGraph graph) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
+    private (int NodeCount, int MaximumDegree, TIndex IndexCount) EnsureGraphCapacity<TGraph>(TGraph graph) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(graph.NodeCount);
-        ArgumentOutOfRangeException.ThrowIfNegative(graph.MaximumDegree);
+        int nodeCount = graph.NodeCount;
+        int maximumDegree = graph.MaximumDegree;
+        if (nodeCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(graph), nodeCount, "The graph node count must be positive.");
+        }
+
+        if (maximumDegree < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(graph), maximumDegree, "The graph maximum degree must be non-negative.");
+        }
+
+        TIndex indexCount;
         try
         {
-            TIndex.CreateChecked(graph.NodeCount);
+            indexCount = TIndex.CreateChecked(nodeCount);
         }
         catch (OverflowException)
         {
-            throw new ArgumentOutOfRangeException(nameof(graph.NodeCount), graph.NodeCount, $"The graph node count must leave {TIndex.MaxValue} available as the missing-predecessor sentinel.");
+            throw new ArgumentOutOfRangeException(nameof(graph), nodeCount, $"The graph node count must leave {TIndex.MaxValue} available as the missing-predecessor sentinel.");
         }
 
-        if (_edges.Length < graph.MaximumDegree)
+        if (_edges.Length < maximumDegree)
         {
-            _edges = new PathEdge<TIndex, TCost>[graph.MaximumDegree];
+            _edges = new PathEdge<TIndex, TCost>[maximumDegree];
         }
 
-        if (_pathCosts.Length < graph.NodeCount)
+        return (nodeCount, maximumDegree, indexCount);
+    }
+
+    private void EnsurePathCapacity(int nodeCount)
+    {
+        if (_pathCosts.Length < nodeCount)
         {
-            _pathCosts = new TCost[graph.NodeCount];
-            _pathPredecessors = new TIndex[graph.NodeCount];
+            _pathCosts = new TCost[nodeCount];
+            _pathPredecessors = new TIndex[nodeCount];
         }
     }
 
-    private int GetEdges<TGraph>(TGraph graph, TIndex origin) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
+    private int GetEdges<TGraph>(TGraph graph, TIndex origin, int maximumDegree, TIndex indexCount) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
-        int edgeCount = graph.GetEdges(origin, _edges.AsSpan(0, graph.MaximumDegree));
-        if (edgeCount < 0 || edgeCount > graph.MaximumDegree)
+        int edgeCount = graph.GetEdges(origin, _edges.AsSpan(0, maximumDegree));
+        if (edgeCount < 0 || edgeCount > maximumDegree)
         {
             throw new InvalidOperationException("The graph returned an invalid edge count.");
         }
 
-        TIndex nodeCount = TIndex.CreateChecked(graph.NodeCount);
         for (int index = 0; index < edgeCount; index++)
         {
             PathEdge<TIndex, TCost> edge = _edges[index];
-            if (TIndex.IsNegative(edge.Destination) || edge.Destination >= nodeCount)
+            if (TIndex.IsNegative(edge.Destination) || edge.Destination >= indexCount)
             {
                 throw new InvalidOperationException("The graph returned an edge outside its node range.");
             }
@@ -286,22 +320,22 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         return cost;
     }
 
-    private static TCost AddCosts(TCost left, TCost right)
+    private static bool TryAddCosts(TCost left, TCost right, out TCost result)
     {
-        try
+        if (right > TCost.MaxValue - left)
         {
-            TCost cost = checked(left + right);
-            if (!TCost.IsFinite(cost) || TCost.IsNegative(cost))
-            {
-                throw new InvalidOperationException("The accumulated path cost is outside the selected cost type's finite non-negative range.");
-            }
+            result = TCost.MaxValue;
+            return false;
+        }
 
-            return cost;
-        }
-        catch (OverflowException exception)
+        result = left + right;
+        if (!TCost.IsFinite(result) || TCost.IsNegative(result))
         {
-            throw new InvalidOperationException("The accumulated path cost exceeds the selected cost type's range.", exception);
+            result = TCost.MaxValue;
+            return false;
         }
+
+        return true;
     }
 
     private static void ValidateMaximumCost(TCost maxCost)
@@ -312,9 +346,9 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         }
     }
 
-    private static int ValidateNode<TGraph>(TGraph graph, TIndex node, string parameterName) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
+    private static int ValidateNode(TIndex node, TIndex indexCount, string parameterName)
     {
-        if (TIndex.IsNegative(node) || node >= TIndex.CreateChecked(graph.NodeCount))
+        if (TIndex.IsNegative(node) || node >= indexCount)
         {
             throw new ArgumentOutOfRangeException(parameterName, node, "The node is outside the graph.");
         }
