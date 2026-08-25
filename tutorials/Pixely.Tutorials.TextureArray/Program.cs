@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (800, 600), Title: "Texture Array Demo"));
 
         builder.AddSingleton<TextureArrayRenderer>(TextureArrayRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, TextureArrayRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, TextureArrayRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

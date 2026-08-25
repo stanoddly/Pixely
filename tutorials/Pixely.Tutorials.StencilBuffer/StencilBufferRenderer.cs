@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.StencilBuffer;
 
-public class StencilBufferRenderer : IRenderer<DefaultRenderContext>
+public class StencilBufferRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _maskPipeline;
     private readonly GraphicsPipeline _drawPipeline;
@@ -27,7 +27,7 @@ public class StencilBufferRenderer : IRenderer<DefaultRenderContext>
         _depthStencilTexture = depthStencilTexture;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings

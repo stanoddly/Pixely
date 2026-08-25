@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.TransparentWindow;
 
-public class TransparentWindowRenderer : IRenderer<DefaultRenderContext>
+public class TransparentWindowRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _topLeftQuad;
@@ -18,7 +18,7 @@ public class TransparentWindowRenderer : IRenderer<DefaultRenderContext>
         _bottomRightQuad = bottomRightQuad;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

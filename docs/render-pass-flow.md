@@ -19,7 +19,7 @@ Active rendering context. Created from CommandBuffer. Used for:
 ### Pattern 1: Create Own RenderPass
 
 ```csharp
-public void Render(DefaultRenderContext renderContext)
+public void Render(BasicRenderContext renderContext)
 {
     // 1. BEFORE RenderPass: Push uniforms that need to be outside the pass
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);

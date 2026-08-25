@@ -13,7 +13,7 @@ static class Program
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Index Buffer"));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(IndexBufferRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(IndexBufferRenderer.Create);
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

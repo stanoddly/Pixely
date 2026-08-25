@@ -3,7 +3,7 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.DepthOnly;
 
-public class DepthOnlyRenderer : IRenderer<DefaultRenderContext>
+public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _depthOnlyPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _vertexBuffer;
@@ -19,7 +19,7 @@ public class DepthOnlyRenderer : IRenderer<DefaultRenderContext>
         _depthTexture = depthTexture;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         // First pass: Render to depth-only (no color target)
         using (IRenderPass depthPass = new RenderPassBuilder(renderContext.CommandBuffer)

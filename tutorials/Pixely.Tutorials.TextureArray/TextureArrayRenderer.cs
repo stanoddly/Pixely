@@ -6,7 +6,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.TextureArray;
 
-public class TextureArrayRenderer : IRenderer<DefaultRenderContext>
+public class TextureArrayRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionTextureVertex> _quadVertexBuffer;
@@ -26,7 +26,7 @@ public class TextureArrayRenderer : IRenderer<DefaultRenderContext>
         _sampler = sampler;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         _time += 0.16f; // Approximate 60fps timestep
 

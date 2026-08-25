@@ -23,8 +23,8 @@ static class Program
                     InitiallyVisible: false,
                     CloseBehavior: WindowCloseBehavior.HideWindow));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(PrimaryRenderer.Create);
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(SecondaryWindowRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(PrimaryRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(SecondaryWindowRenderer.Create);
 
         builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {

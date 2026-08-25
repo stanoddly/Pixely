@@ -22,12 +22,12 @@ public static class RenderingExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddWindow(viewScope, config);
-        if (!services.IsRegistered<IRenderContextProvider<DefaultRenderContext>>())
+        if (!services.IsRegistered<IRenderContextProvider<BasicRenderContext>>())
         {
-            services.AddSingleton<IRenderContextProvider<DefaultRenderContext>, DefaultRenderContextProvider>(provider =>
-                new DefaultRenderContextProvider(provider.GetRequiredService<GpuDevice>()));
+            services.AddSingleton<IRenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(provider =>
+                new BasicRenderContextProvider(provider.GetRequiredService<GpuDevice>()));
         }
-        ConfigureWindowRendering<DefaultRenderContext>(services, viewScope);
+        ConfigureWindowRendering<BasicRenderContext>(services, viewScope);
         return services;
     }
 

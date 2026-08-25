@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.Triangle;
 
-public class TriangleRenderer : IRenderer<DefaultRenderContext>
+public class TriangleRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quadVertexBuffer;
@@ -16,7 +16,7 @@ public class TriangleRenderer : IRenderer<DefaultRenderContext>
         _quadVertexBuffer = quadVertexBuffer;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)

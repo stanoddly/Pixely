@@ -14,7 +14,7 @@ static class Program
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Game"));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(TriangleRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

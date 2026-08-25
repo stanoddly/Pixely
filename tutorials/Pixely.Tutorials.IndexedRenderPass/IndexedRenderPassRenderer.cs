@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.IndexedRenderPass;
 
-public class IndexedRenderPassRenderer : IRenderer<DefaultRenderContext>
+public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _indexedPipeline;
     private readonly GraphicsPipeline _instancedPipeline;
@@ -30,7 +30,7 @@ public class IndexedRenderPassRenderer : IRenderer<DefaultRenderContext>
         _instanceTints = instanceTints;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

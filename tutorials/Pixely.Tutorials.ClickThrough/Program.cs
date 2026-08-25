@@ -22,7 +22,7 @@ static class Program
                     Title: "Click Through",
                     Borderless: true));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(ClickThroughRenderer.Create);
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(ClickThroughRenderer.Create);
 
         builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
         {

@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.ClickThrough;
 
-public class ClickThroughRenderer : IRenderer<DefaultRenderContext>
+public class ClickThroughRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quad;
@@ -16,7 +16,7 @@ public class ClickThroughRenderer : IRenderer<DefaultRenderContext>
         _quad = quad;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

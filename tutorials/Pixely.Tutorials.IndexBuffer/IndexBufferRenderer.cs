@@ -5,7 +5,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.IndexBuffer;
 
-public class IndexBufferRenderer : IRenderer<DefaultRenderContext>
+public class IndexBufferRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionColorVertex> _vertexBuffer;
@@ -21,7 +21,7 @@ public class IndexBufferRenderer : IRenderer<DefaultRenderContext>
         _indexBuffer = indexBuffer;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

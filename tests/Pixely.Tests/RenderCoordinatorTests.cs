@@ -19,13 +19,17 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void UseDefaultRendering_RegistersWindow()
+    public void UseDefaultRendering_RegistersWindowAndBasicRenderContextProvider()
     {
         PixelyAppBuilder builder = new();
 
         builder.UseDefaultRendering();
 
-        Assert.That(builder.IsRegistered<Window>(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.IsRegistered<Window>(), Is.True);
+            Assert.That(builder.IsRegistered<IRenderContextProvider<BasicRenderContext>>(), Is.True);
+        });
     }
 
     [Test]

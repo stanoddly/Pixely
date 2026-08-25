@@ -19,7 +19,7 @@ static class Program
                     Title: "Window Dragging",
                     Borderless: true));
 
-        builder.AddSingleton<IRenderer<DefaultRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
 
         builder.OnStart((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
@@ -105,7 +105,7 @@ static class Program
     }
 }
 
-internal sealed class ClearRenderer : IRenderer<DefaultRenderContext>
+internal sealed class ClearRenderer : IRenderer<BasicRenderContext>
 {
     private readonly FColor _color;
 
@@ -115,7 +115,7 @@ internal sealed class ClearRenderer : IRenderer<DefaultRenderContext>
         _color = color;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

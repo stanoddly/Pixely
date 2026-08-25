@@ -4,7 +4,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.ImageLoading;
 
-public class ImageLoadingRenderer : IRenderer<DefaultRenderContext>
+public class ImageLoadingRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionTextureVertex> _quadVertexBuffer;
@@ -23,7 +23,7 @@ public class ImageLoadingRenderer : IRenderer<DefaultRenderContext>
         _sampler = sampler;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)

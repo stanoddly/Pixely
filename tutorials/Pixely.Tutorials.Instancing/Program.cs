@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (800, 600), Title: "Instancing Demo"));
 
         builder.AddSingleton<InstancingRenderer>(InstancingRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, InstancingRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, InstancingRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (800, 600), Title: "Storage Buffer Demo"));
 
         builder.AddSingleton<StorageBufferRenderer>(StorageBufferRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, StorageBufferRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, StorageBufferRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

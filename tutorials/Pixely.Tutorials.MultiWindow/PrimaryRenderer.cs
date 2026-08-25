@@ -4,7 +4,7 @@ using Pixely.Shaders;
 
 namespace Pixely.Tutorials.MultiWindow;
 
-public class PrimaryRenderer : IRenderer<DefaultRenderContext>
+public class PrimaryRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _vertexBuffer;
@@ -15,7 +15,7 @@ public class PrimaryRenderer : IRenderer<DefaultRenderContext>
         _vertexBuffer = vertexBuffer;
     }
 
-    public void Render(DefaultRenderContext renderContext)
+    public void Render(BasicRenderContext renderContext)
     {
         renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.SkyBlue);
         using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)

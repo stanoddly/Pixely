@@ -17,7 +17,7 @@ public static class PencuilExtensions
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
-        return UsePencuil<DefaultRenderContext>(
+        return UsePencuil<BasicRenderContext>(
             appBuilder,
             default,
             order,
@@ -32,7 +32,7 @@ public static class PencuilExtensions
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
-        return UsePencuil<DefaultRenderContext>(
+        return UsePencuil<BasicRenderContext>(
             appBuilder,
             viewScope,
             order,

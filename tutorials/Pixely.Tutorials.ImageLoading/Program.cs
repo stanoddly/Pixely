@@ -14,7 +14,7 @@ static class Program
                 new WindowConfig(Size: (443, 410), Title: "Image Loading Demo"));
 
         builder.AddSingleton<ImageLoadingRenderer>(ImageLoadingRenderer.Create);
-        builder.AddAlias<IRenderer<DefaultRenderContext>, ImageLoadingRenderer>();
+        builder.AddAlias<IRenderer<BasicRenderContext>, ImageLoadingRenderer>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();
