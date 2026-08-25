@@ -4,18 +4,18 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Pixely.Content;
 
-public class ByteVirtualFile: VirtualFile
+public class ByteContentFile : ContentFile
 {
     private readonly byte[] _content;
     public override string Path { get; }
 
-    public ByteVirtualFile(string path, byte[] content)
+    public ByteContentFile(string path, byte[] content)
     {
         Path = path;
         _content = content;
     }
 
-    public ByteVirtualFile(string path, ReadOnlySpan<byte> content)
+    public ByteContentFile(string path, ReadOnlySpan<byte> content)
     {
         Path = path;
         _content = content.ToArray();
@@ -28,16 +28,16 @@ public class ByteVirtualFile: VirtualFile
     }
 }
 
-public class DictFileSystem : VirtualFileSystem
+public class DictionaryContentSource : ContentSource
 {
-    private readonly FrozenDictionary<string, ImmutableArray<VirtualFile>> _files;
+    private readonly FrozenDictionary<string, ImmutableArray<ContentFile>> _files;
     private readonly FrozenDictionary<string, ImmutableArray<string>> _directories;
-    private readonly FrozenDictionary<string, VirtualFile> _directFilesLookup;
-    private readonly FrozenDictionary<string, ImmutableArray<VirtualFile>>.AlternateLookup<ReadOnlySpan<char>> _filesLookup;
+    private readonly FrozenDictionary<string, ContentFile> _directFilesLookup;
+    private readonly FrozenDictionary<string, ImmutableArray<ContentFile>>.AlternateLookup<ReadOnlySpan<char>> _filesLookup;
     private readonly FrozenDictionary<string, ImmutableArray<string>>.AlternateLookup<ReadOnlySpan<char>> _directoriesLookup;
-    private readonly FrozenDictionary<string, VirtualFile>.AlternateLookup<ReadOnlySpan<char>> _directFilesSpanLookup;
+    private readonly FrozenDictionary<string, ContentFile>.AlternateLookup<ReadOnlySpan<char>> _directFilesSpanLookup;
 
-    public DictFileSystem(FrozenDictionary<string, ImmutableArray<VirtualFile>> files,
+    public DictionaryContentSource(FrozenDictionary<string, ImmutableArray<ContentFile>> files,
         FrozenDictionary<string, ImmutableArray<string>> directories)
     {
         _files = files;
@@ -48,9 +48,9 @@ public class DictFileSystem : VirtualFileSystem
         _directFilesSpanLookup = _directFilesLookup.GetAlternateLookup<ReadOnlySpan<char>>();
     }
 
-    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<VirtualFile> result)
+    public override bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<ContentFile> result)
     {
-        if (_filesLookup.TryGetValue(path, out ImmutableArray<VirtualFile> files))
+        if (_filesLookup.TryGetValue(path, out ImmutableArray<ContentFile> files))
         {
             result = files.AsSpan();
             return true;
@@ -58,11 +58,11 @@ public class DictFileSystem : VirtualFileSystem
 
         if (_directoriesLookup.ContainsKey(path))
         {
-            result = Array.Empty<VirtualFile>();
+            result = Array.Empty<ContentFile>();
             return true;
         }
 
-        result = Array.Empty<VirtualFile>();
+        result = Array.Empty<ContentFile>();
         return false;
     }
 
@@ -78,12 +78,12 @@ public class DictFileSystem : VirtualFileSystem
         return false;
     }
 
-    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out VirtualFile? file)
+    public override bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out ContentFile? file)
     {
         return _directFilesSpanLookup.TryGetValue(path, out file);
     }
 
-    public static readonly DictFileSystem Empty = new(
-        FrozenDictionary<string, ImmutableArray<VirtualFile>>.Empty,
+    public static readonly DictionaryContentSource Empty = new(
+        FrozenDictionary<string, ImmutableArray<ContentFile>>.Empty,
         FrozenDictionary<string, ImmutableArray<string>>.Empty);
 }

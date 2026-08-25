@@ -117,7 +117,7 @@ public class GraphicsPipelineBuilder
     private PipelineBuilderInfo _info = new();
 
     /// <summary>
-    /// Gets the shader loader for loading shaders from the virtual file system.
+    /// Gets the shader loader for loading shaders from the content source.
     /// </summary>
     public IShaderLoader ShaderLoader => _shaderLoader;
 

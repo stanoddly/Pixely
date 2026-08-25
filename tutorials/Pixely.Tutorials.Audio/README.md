@@ -1,6 +1,6 @@
 # Audio Tutorial
 
-Uses `Pixely.Audio` to play the same Ogg asset two ways: as a reusable `AudioBuffer` for short sound effects, and as an `AudioStream` for on-demand playback from the virtual file system.
+Uses `Pixely.Audio` to play the same Ogg asset two ways: as a reusable `AudioBuffer` for short sound effects, and as an `AudioStream` for on-demand playback from the content source.
 
 ## Asset
 

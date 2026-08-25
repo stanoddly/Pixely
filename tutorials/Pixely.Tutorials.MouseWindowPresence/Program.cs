@@ -8,7 +8,8 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
+        PixelyAppBuilder builder = new();
+        builder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"));
 

@@ -8,11 +8,12 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (640, 500), Title: "Text Input"))
+        PixelyAppBuilder builder = new();
+        builder
             .UsePencuil()
-            .AddContentFromProjectDirectory("../Pixely.Tutorials.Hotbar/Content");
+            .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
+            .UseDefaultRendering(
+                new WindowConfig(Size: (640, 500), Title: "Text Input"));
 
         builder.AddSingleton<TextInputViewModel>();
         builder.AddSingleton<IPencuilView, TextInputView>();

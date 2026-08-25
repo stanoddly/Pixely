@@ -2,83 +2,83 @@ using System.IO.Compression;
 
 namespace Pixely.Content.Tests;
 
-public class FileSystemBuilderTests
+public class ContentSourceBuilderTests
 {
     [Test]
-    public void CreateReturnsNativeFileSystemDirectly()
+    public void CreateReturnsDirectoryContentSourceDirectly()
     {
         // arrange
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromDirectory("Content")
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddDirectory("Content")
             .Create();
-        
+
         // assert
-        Assert.That(fileSystem is NativeFileSystem);
-    }
-    
-    [Test]
-    public void CreateReturnsCompositeFileSystem()
-    {
-        // arrange
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromDirectory("ContentPart1")
-            .AddContentFromDirectory("ContentPart2")
-            .Create();
-        
-        // assert
-        Assert.That(fileSystem is CompositeFileSystem);
-    }
-    
-    [Test]
-    public void CreateReturnsCachedFileSystem()
-    {
-        // arrange
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromDirectory("Content")
-            .WithCache()
-            .Create();
-        
-        // assert
-        Assert.That(fileSystem is CachedFileSystem);
-    }
-    
-    [Test]
-    public void CreateReturnsNativeFileSystemFromProjectsDirectory()
-    {
-        // arrange
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromProjectDirectory("ContentInDevRoot")
-            .Create();
-        
-        // assert
-        Assert.That(fileSystem is NativeFileSystem);
-        NativeFileSystem nativeFileSystem = (NativeFileSystem)fileSystem;
-        var expectedPath = Path.Join(typeof(FileSystemBuilderTests).Namespace, "ContentInDevRoot");
-        Assert.That(nativeFileSystem.RootPath.EndsWith(expectedPath));
+        Assert.That(contentSource is DirectoryContentSource);
     }
 
     [Test]
-    public void AddContentFromProjectDirectoryPrefersAppBaseDirectoryWhenContentExists()
+    public void CreateReturnsCompositeContentSource()
+    {
+        // arrange
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddDirectory("ContentPart1")
+            .AddDirectory("ContentPart2")
+            .Create();
+
+        // assert
+        Assert.That(contentSource is CompositeContentSource);
+    }
+
+    [Test]
+    public void CreateReturnsCachedContentSource()
+    {
+        // arrange
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddDirectory("Content")
+            .WithCache()
+            .Create();
+
+        // assert
+        Assert.That(contentSource is CachedContentSource);
+    }
+
+    [Test]
+    public void CreateReturnsDirectoryContentSourceFromProjectsDirectory()
+    {
+        // arrange
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddProjectDirectory("ContentInDevRoot")
+            .Create();
+
+        // assert
+        Assert.That(contentSource is DirectoryContentSource);
+        DirectoryContentSource directoryContentSource = (DirectoryContentSource)contentSource;
+        string expectedPath = Path.Join(typeof(ContentSourceBuilderTests).Namespace, "ContentInDevRoot");
+        Assert.That(directoryContentSource.RootPath.EndsWith(expectedPath));
+    }
+
+    [Test]
+    public void AddProjectDirectoryPrefersAppBaseDirectoryWhenContentExists()
     {
         // arrange
         string expectedPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Content"));
         // This test exercises the app-base-directory branch, which only applies when the
         // directory actually exists next to the test assembly (copied at build time).
         Assert.That(Directory.Exists(expectedPath), $"Expected '{expectedPath}' to exist next to the test assembly.");
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromProjectDirectory("Content")
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddProjectDirectory("Content")
             .Create();
 
         // assert
-        Assert.That(fileSystem is NativeFileSystem);
-        NativeFileSystem nativeFileSystem = (NativeFileSystem)fileSystem;
-        Assert.That(nativeFileSystem.RootPath, Is.EqualTo(expectedPath));
+        Assert.That(contentSource is DirectoryContentSource);
+        DirectoryContentSource directoryContentSource = (DirectoryContentSource)contentSource;
+        Assert.That(directoryContentSource.RootPath, Is.EqualTo(expectedPath));
     }
 
     [Test]
     // Directory.SetCurrentDirectory affects the entire test process, so this test cannot run in parallel.
     [NonParallelizable]
-    public void AddContentFromZipPatternResolvesPatternRelativeToAppBaseDirectory()
+    public void AddZipPatternResolvesPatternRelativeToAppBaseDirectory()
     {
         string originalWorkingDirectory = Directory.GetCurrentDirectory();
         string archiveFilename = $"content-{Guid.NewGuid():N}.pk3";
@@ -96,10 +96,10 @@ public class FileSystemBuilderTests
 
             Directory.SetCurrentDirectory(temporaryWorkingDirectory.FullName);
 
-            using VirtualFileSystem fileSystem = new FileSystemBuilder()
-                .AddContentFromZipPattern(archiveFilename)
+            using ContentSource contentSource = new ContentSourceBuilder()
+                .AddZipPattern(archiveFilename)
                 .Create();
-            using StreamReader reader = new(fileSystem.OpenStream("marker.txt"));
+            using StreamReader reader = new(contentSource.OpenStream("marker.txt"));
 
             Assert.That(reader.ReadToEnd(), Is.EqualTo("from app directory"));
         }
@@ -117,7 +117,7 @@ public class FileSystemBuilderTests
     [Test]
     // Directory.SetCurrentDirectory affects the entire test process, so this test cannot run in parallel.
     [NonParallelizable]
-    public void AddContentFromDirectoryPatternResolvesPatternRelativeToAppBaseDirectory()
+    public void AddDirectoryPatternResolvesPatternRelativeToAppBaseDirectory()
     {
         string originalWorkingDirectory = Directory.GetCurrentDirectory();
         string contentDirectoryName = $"content-{Guid.NewGuid():N}";
@@ -130,10 +130,10 @@ public class FileSystemBuilderTests
             File.WriteAllText(Path.Combine(contentDirectoryPath, "marker.txt"), "from app directory");
             Directory.SetCurrentDirectory(temporaryWorkingDirectory.FullName);
 
-            using VirtualFileSystem fileSystem = new FileSystemBuilder()
-                .AddContentFromDirectoryPattern(contentDirectoryName)
+            using ContentSource contentSource = new ContentSourceBuilder()
+                .AddDirectoryPattern(contentDirectoryName)
                 .Create();
-            using StreamReader reader = new(fileSystem.OpenStream("marker.txt"));
+            using StreamReader reader = new(contentSource.OpenStream("marker.txt"));
 
             Assert.That(reader.ReadToEnd(), Is.EqualTo("from app directory"));
         }
@@ -152,19 +152,19 @@ public class FileSystemBuilderTests
     }
 
     [Test]
-    public void AddContentFromDirectoryPatternAcceptsZeroMatches()
+    public void AddDirectoryPatternAcceptsZeroMatches()
     {
         string pattern = $"missing-{Guid.NewGuid():N}-*";
 
-        VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromDirectoryPattern(pattern)
+        ContentSource contentSource = new ContentSourceBuilder()
+            .AddDirectoryPattern(pattern)
             .Create();
 
-        Assert.That(fileSystem, Is.SameAs(DictFileSystem.Empty));
+        Assert.That(contentSource, Is.SameAs(DictionaryContentSource.Empty));
     }
 
     [Test]
-    public void AddContentFromDirectoryPatternAddsMatchesInOrdinalOrder()
+    public void AddDirectoryPatternAddsMatchesInOrdinalOrder()
     {
         string prefix = $"content-{Guid.NewGuid():N}";
         string firstDirectoryPath = Path.Combine(AppContext.BaseDirectory, $"{prefix}-a");
@@ -177,10 +177,10 @@ public class FileSystemBuilderTests
             Directory.CreateDirectory(firstDirectoryPath);
             File.WriteAllText(Path.Combine(firstDirectoryPath, "marker.txt"), "first");
 
-            using VirtualFileSystem fileSystem = new FileSystemBuilder()
-                .AddContentFromDirectoryPattern($"{prefix}-*")
+            using ContentSource contentSource = new ContentSourceBuilder()
+                .AddDirectoryPattern($"{prefix}-*")
                 .Create();
-            using StreamReader reader = new(fileSystem.OpenStream("marker.txt"));
+            using StreamReader reader = new(contentSource.OpenStream("marker.txt"));
 
             Assert.That(reader.ReadToEnd(), Is.EqualTo("last"));
         }
@@ -193,6 +193,39 @@ public class FileSystemBuilderTests
             if (Directory.Exists(lastDirectoryPath))
             {
                 Directory.Delete(lastDirectoryPath, true);
+            }
+        }
+    }
+
+    [Test]
+    public void AddDefaultContent_WithArchiveAndDirectory_PreservesDirectoryPrecedence()
+    {
+        string contentName = $"content-{Guid.NewGuid():N}";
+        string archivePath = Path.Combine(AppContext.BaseDirectory, $"{contentName}.pk3");
+        string directoryPath = Path.Combine(AppContext.BaseDirectory, contentName);
+
+        try
+        {
+            using (ZipArchive archive = System.IO.Compression.ZipFile.Open(archivePath, ZipArchiveMode.Create))
+            {
+                ZipArchiveEntry entry = archive.CreateEntry("marker.txt");
+                using StreamWriter writer = new(entry.Open());
+                writer.Write("archive");
+            }
+            Directory.CreateDirectory(directoryPath);
+            File.WriteAllText(Path.Combine(directoryPath, "marker.txt"), "directory");
+
+            using ContentSource source = new ContentSourceBuilder().AddDefaultContent(contentName).Create();
+            using StreamReader reader = new(source.OpenStream("marker.txt"));
+
+            Assert.That(reader.ReadToEnd(), Is.EqualTo("directory"));
+        }
+        finally
+        {
+            File.Delete(archivePath);
+            if (Directory.Exists(directoryPath))
+            {
+                Directory.Delete(directoryPath, true);
             }
         }
     }

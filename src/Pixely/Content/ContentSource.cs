@@ -2,21 +2,21 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Pixely.Content;
 
-public abstract class VirtualFile
+public abstract class ContentFile
 {
     public abstract string Path { get; }
     public abstract Stream Open();
 }
 
-public abstract class VirtualFileSystem: IDisposable
+public abstract class ContentSource : IDisposable
 {
-    public abstract bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<VirtualFile> result);
+    public abstract bool TryGetFiles(ReadOnlySpan<char> path, out ReadOnlySpan<ContentFile> result);
     public abstract bool TryGetDirectories(ReadOnlySpan<char> path, out ReadOnlySpan<string> result);
-    public abstract bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out VirtualFile? file);
+    public abstract bool TryGetFile(ReadOnlySpan<char> path, [NotNullWhen(true)] out ContentFile? file);
 
-    public ReadOnlySpan<VirtualFile> GetFiles(ReadOnlySpan<char> path)
+    public ReadOnlySpan<ContentFile> GetFiles(ReadOnlySpan<char> path)
     {
-        if (TryGetFiles(path, out ReadOnlySpan<VirtualFile> files))
+        if (TryGetFiles(path, out ReadOnlySpan<ContentFile> files))
         {
             return files;
         }
@@ -34,9 +34,9 @@ public abstract class VirtualFileSystem: IDisposable
         throw new DirectoryNotFoundException(path.ToString());
     }
 
-    public VirtualFile GetFile(ReadOnlySpan<char> path)
+    public ContentFile GetFile(ReadOnlySpan<char> path)
     {
-        if (TryGetFile(path, out VirtualFile? contentFile))
+        if (TryGetFile(path, out ContentFile? contentFile))
         {
             return contentFile;
         }

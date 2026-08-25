@@ -9,14 +9,14 @@ namespace Pixely.Sprites;
 
 public sealed class AnimatedSpriteAssetLoader : IAnimatedSpriteAssetLoader
 {
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
     private readonly ITextureLoader _textureLoader;
     private readonly SpriteAssetStorage _storage;
 
-    public AnimatedSpriteAssetLoader(ITextureLoader textureLoader, VirtualFileSystem fileSystem, SpriteAssetStorage storage)
+    public AnimatedSpriteAssetLoader(ITextureLoader textureLoader, ContentSource contentSource, SpriteAssetStorage storage)
     {
         _textureLoader = textureLoader;
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
         _storage = storage;
     }
 
@@ -39,7 +39,7 @@ public sealed class AnimatedSpriteAssetLoader : IAnimatedSpriteAssetLoader
         {
             return existingAnimation;
         }
-        using Stream stream = _fileSystem.OpenStream(path);
+        using Stream stream = _contentSource.OpenStream(path);
         AnimatedSpriteDto animatedSpriteDto = JsonSerializer.Deserialize(stream, SpriteDtosJsonContext.Default.AnimatedSpriteDto)
                                         ?? throw new JsonException("Deserialization returned null for AnimatedSpriteDto.");
         AnimatedSpriteAsset animatedSpriteAsset = CreateAnimation(animatedSpriteDto);

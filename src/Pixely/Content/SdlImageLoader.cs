@@ -49,16 +49,16 @@ internal class SdlImage : Image
 
 internal class SdlImageLoader : IImageLoader
 {
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
 
-    public SdlImageLoader(VirtualFileSystem fileSystem)
+    public SdlImageLoader(ContentSource contentSource)
     {
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
     }
 
     public unsafe Image Load(ReadOnlySpan<char> path)
     {
-        using Stream fileStream = _fileSystem.GetFile(path).Open();
+        using Stream fileStream = _contentSource.GetFile(path).Open();
         byte[] fileData = new byte[fileStream.Length];
         fileStream.ReadExactly(fileData);
 

@@ -13,7 +13,7 @@ internal unsafe sealed class AudioFactory
         _sdlLifetime = sdlLifetime;
     }
 
-    public AudioSystem CreateAudioSystem(VirtualFileSystem fileSystem)
+    public AudioSystem CreateAudioSystem(ContentSource contentSource)
     {
         bool sdlAudioInitialized = false;
         bool mixerInitialized = false;
@@ -34,7 +34,7 @@ internal unsafe sealed class AudioFactory
             mixer = SDL3_mixer.MIX_CreateMixerDevice(SDL3.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
             SdlError.ThrowOnNull(mixer, nameof(SDL3_mixer.MIX_CreateMixerDevice));
 
-            return new AudioSystem(_sdlLifetime, fileSystem, mixer, sdlAudioInitialized, mixerInitialized);
+            return new AudioSystem(_sdlLifetime, contentSource, mixer, sdlAudioInitialized, mixerInitialized);
         }
         catch
         {

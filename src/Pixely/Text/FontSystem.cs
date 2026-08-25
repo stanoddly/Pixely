@@ -12,25 +12,25 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly record struct CachedTextSprite(WeakReference<TextSpriteAsset> TextSprite, WeakReference<BorrowedTexture> BorrowedTexture, Texture BackingTexture);
 
     private readonly GpuMemorySystem _gpuMemorySystem;
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
     private readonly List<Font> _fonts = new();
     private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode), Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
-    private FontSystem(GpuMemorySystem gpuMemorySystem, VirtualFileSystem fileSystem)
+    private FontSystem(GpuMemorySystem gpuMemorySystem, ContentSource contentSource)
     {
         _gpuMemorySystem = gpuMemorySystem;
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
     }
 
-    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, VirtualFileSystem fileSystem)
+    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, ContentSource contentSource)
     {
         if (!SDL3_ttf.TTF_Init())
         {
             SdlError.Throw(nameof(SDL3_ttf.TTF_Init));
         }
 
-        return new FontSystem(gpuMemorySystem, fileSystem);
+        return new FontSystem(gpuMemorySystem, contentSource);
     }
 
     public Font Load(
@@ -46,7 +46,7 @@ internal class FontSystem: IFontSystem, IUpdatable
             return cachedFont;
         }
 
-        VirtualFile fontFile = _fileSystem.GetFile(path);
+        ContentFile fontFile = _contentSource.GetFile(path);
 
         using Stream stream = fontFile.Open();
         int fontDataLength = (int)stream.Length;

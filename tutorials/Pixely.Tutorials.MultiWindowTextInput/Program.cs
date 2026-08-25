@@ -13,16 +13,17 @@ static class Program
 
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
+        PixelyAppBuilder builder = new();
+        builder
+            .UsePencuil(LeftView, clearTarget: true)
+            .UsePencuil(RightView, clearTarget: true)
+            .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(
                 LeftView,
                 new WindowConfig(Size: (520, 300), Title: "Left text input"))
             .UseDefaultRendering(
                 RightView,
-                new WindowConfig(Size: (520, 300), Title: "Right text input"))
-            .UsePencuil(LeftView, clearTarget: true)
-            .UsePencuil(RightView, clearTarget: true)
-            .AddContentFromProjectDirectory("../Pixely.Tutorials.Hotbar/Content");
+                new WindowConfig(Size: (520, 300), Title: "Right text input"));
 
         builder.AddSingleton<IPencuilView>(provider =>
             new TextInputView(

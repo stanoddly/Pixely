@@ -8,11 +8,11 @@ static class Program
 
     static int Main()
     {
-        using VirtualFileSystem fileSystem = new FileSystemBuilder()
-            .AddContentFromZipPattern("Content.pk3")
-            .AddContentFromDirectoryPattern("Content")
+        using ContentSource contentSource = new ContentSourceBuilder()
+            .AddZipPattern("Content.pk3")
+            .AddDirectoryPattern("Content")
             .Create();
-        using Stream shaderStream = fileSystem.OpenStream(ShaderPath);
+        using Stream shaderStream = contentSource.OpenStream(ShaderPath);
 
         Console.WriteLine($"Loaded distributed shader '{ShaderPath}' ({shaderStream.Length} bytes).");
         return 0;

@@ -12,9 +12,13 @@ public sealed class PencuilExtensionsTests
     {
         PixelyAppBuilder builder = new();
 
-        builder.UsePencuil<CustomRenderContext>(new ViewScope(1));
+        PixelyAppBuilder result = builder.UsePencuil<CustomRenderContext>(new ViewScope(1));
 
-        Assert.That(builder.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.SameAs(builder));
+            Assert.That(builder.IsRegistered<IRenderer<CustomRenderContext>>(), Is.True);
+        });
     }
 
     private sealed class CustomRenderContext : IRenderContext

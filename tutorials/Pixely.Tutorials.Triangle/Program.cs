@@ -7,9 +7,10 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
-            //.AddContentFromZipPattern("data*.pak")
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder builder = new();
+        builder
+            //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak"))
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (1280, 720), Title: "Game"));
 

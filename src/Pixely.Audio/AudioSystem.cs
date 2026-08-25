@@ -7,7 +7,7 @@ namespace Pixely.Audio;
 public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 {
     private readonly PixelyFactory _sdlLifetime;
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
     private readonly LockedSet<AudioSource> _sources = new();
     private readonly LockedSet<AudioBuffer> _buffers = new();
     private readonly LockedSet<AudioStream> _streams = new();
@@ -20,13 +20,13 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 
     internal AudioSystem(
         PixelyFactory sdlLifetime,
-        VirtualFileSystem fileSystem,
+        ContentSource contentSource,
         Pointer<MIX_Mixer> mixer,
         bool sdlAudioInitialized,
         bool mixerInitialized)
     {
         _sdlLifetime = sdlLifetime;
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
         _mixer = mixer;
         _sdlAudioInitialized = sdlAudioInitialized;
         _mixerInitialized = mixerInitialized;
@@ -57,7 +57,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
     {
         ThrowIfDisposed();
 
-        using Stream fileStream = _fileSystem.OpenStream(path);
+        using Stream fileStream = _contentSource.OpenStream(path);
         using MemoryStream memoryStream = new();
         fileStream.CopyTo(memoryStream);
         byte[] fileData = memoryStream.ToArray();
@@ -80,7 +80,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
     {
         ThrowIfDisposed();
 
-        Stream fileStream = _fileSystem.OpenStream(path);
+        Stream fileStream = _contentSource.OpenStream(path);
 
         try
         {

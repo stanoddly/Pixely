@@ -8,8 +8,8 @@ static class Program
 
     static int Main()
     {
-        using VirtualFileSystem fileSystem = EmbeddedFileSystem.Create(typeof(Program).Assembly);
-        using Stream shaderStream = fileSystem.OpenStream(ShaderPath);
+        using ContentSource contentSource = EmbeddedContentSource.Create(typeof(Program).Assembly);
+        using Stream shaderStream = contentSource.OpenStream(ShaderPath);
 
         Console.WriteLine($"Loaded embedded shader '{ShaderPath}' ({shaderStream.Length} bytes).");
         return 0;

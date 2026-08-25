@@ -8,7 +8,8 @@ name scopes when they render more than one window.
 `UseDefaultRendering` creates a DI-owned window and render coordinator:
 
 ```csharp
-PixelyAppBuilder builder = new PixelyAppBuilder()
+PixelyAppBuilder builder = new();
+builder
     .UseDefaultRendering(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
@@ -54,7 +55,8 @@ bool containsMouse = mouseService.IsInWindow();
 or cameras:
 
 ```csharp
-PixelyAppBuilder builder = new PixelyAppBuilder()
+PixelyAppBuilder builder = new();
+builder
     .AddWindow(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),
@@ -124,7 +126,8 @@ internal static class ViewScopes
 The implicit window remains `default(ViewScope)` while additional windows receive explicit scopes:
 
 ```csharp
-PixelyAppBuilder builder = new PixelyAppBuilder()
+PixelyAppBuilder builder = new();
+builder
     .UseDefaultRendering(
         new WindowConfig(
             Size: new Size<uint>(1280, 720),

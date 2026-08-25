@@ -10,10 +10,11 @@ namespace Pixely.App;
 
 public class PixelyAppBuilder : ServiceCollection
 {
-    private readonly FileSystemBuilder _fileSystemBuilder = new();
+    private readonly ContentSourceBuilder _contentSourceBuilder = new();
 
     public PixelyAppBuilder()
     {
+        AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<DefaultRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
@@ -25,40 +26,16 @@ public class PixelyAppBuilder : ServiceCollection
         });
     }
 
-    public PixelyAppBuilder AddContentFromDirectory(string directory)
+    public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)
     {
-        _fileSystemBuilder.AddContentFromDirectory(directory);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(_contentSourceBuilder);
         return this;
     }
 
-    public PixelyAppBuilder AddFileSystem(VirtualFileSystem fileSystem)
+    public PixelyAppBuilder UseDefaultContent(string contentDirectory = "Content")
     {
-        _fileSystemBuilder.AddSourceFileSystem(fileSystem);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromProjectDirectory(string directory)
-    {
-        _fileSystemBuilder.AddContentFromProjectDirectory(directory);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromDirectoryPattern(string pattern)
-    {
-        _fileSystemBuilder.AddContentFromDirectoryPattern(pattern);
-        return this;
-    }
-
-    public PixelyAppBuilder AddContentFromZipPattern(string pattern)
-    {
-        _fileSystemBuilder.AddContentFromZipPattern(pattern);
-        return this;
-    }
-
-    public PixelyAppBuilder AddFileSystemCache()
-    {
-        _fileSystemBuilder.WithCache();
-        return this;
+        return ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddDefaultContent(contentDirectory));
     }
 
     public IPixelyApp Build()
@@ -115,8 +92,6 @@ public class PixelyAppBuilder : ServiceCollection
         AddAlias<IFontSystem, FontSystem>();
 
         AddSingleton<AppControl>();
-        AddSingleton<VirtualFileSystem>(() => _fileSystemBuilder.Create());
-
         AddSingleton<UpdateSystem>();
         AddSingleton<TimerSystem>();
 

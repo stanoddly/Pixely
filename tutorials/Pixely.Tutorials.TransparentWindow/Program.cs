@@ -15,8 +15,9 @@ static class Program
 {
     static int Main(string[] args)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder()
-            .AddContentFromProjectDirectory("Content")
+        PixelyAppBuilder builder = new();
+        builder
+            .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(
                     Size: (800, 600),

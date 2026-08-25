@@ -13,7 +13,7 @@ public sealed class SpriteAtlasBuilder
 
     private readonly record struct PackedRectangle(ShortRectangle Rectangle, int ImageIndex);
 
-    private readonly VirtualFileSystem _fileSystem;
+    private readonly ContentSource _contentSource;
     private readonly ITextureLoader _textureLoader;
     private readonly IImageLoader _imageLoader;
     private readonly SpriteAssetStorage _storage;
@@ -22,19 +22,19 @@ public sealed class SpriteAtlasBuilder
         SpriteAtlasBuilderConfig spriteAtlasBuilderConfig,
         ITextureLoader textureLoader,
         IImageLoader contentLoader,
-        VirtualFileSystem fileSystem,
+        ContentSource contentSource,
         SpriteAssetStorage storage)
     {
-        SpriteAtlasBuilder spriteAtlasBuilder = new(textureLoader, contentLoader, fileSystem, storage);
+        SpriteAtlasBuilder spriteAtlasBuilder = new(textureLoader, contentLoader, contentSource, storage);
         spriteAtlasBuilder.BuildSprites(spriteAtlasBuilderConfig.Directories);
         return spriteAtlasBuilder;
     }
 
-    internal SpriteAtlasBuilder(ITextureLoader textureLoader, IImageLoader imageLoader, VirtualFileSystem fileSystem, SpriteAssetStorage storage)
+    internal SpriteAtlasBuilder(ITextureLoader textureLoader, IImageLoader imageLoader, ContentSource contentSource, SpriteAssetStorage storage)
     {
         _textureLoader = textureLoader;
         _imageLoader = imageLoader;
-        _fileSystem = fileSystem;
+        _contentSource = contentSource;
         _storage = storage;
     }
 
@@ -164,8 +164,8 @@ public sealed class SpriteAtlasBuilder
             int frameIndex, int totalFrames)> entries,
         Dictionary<string, (double frameDuration, SpriteFlip flip, List<int> frameIndices)> animatedSpriteInfos)
     {
-        ReadOnlySpan<VirtualFile> files = _fileSystem.GetFiles(directory);
-        foreach (VirtualFile file in files)
+        ReadOnlySpan<ContentFile> files = _contentSource.GetFiles(directory);
+        foreach (ContentFile file in files)
         {
             if (file.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {
@@ -195,7 +195,7 @@ public sealed class SpriteAtlasBuilder
                 }
             }
         }
-        ReadOnlySpan<string> subdirectories = _fileSystem.GetDirectories(directory);
+        ReadOnlySpan<string> subdirectories = _contentSource.GetDirectories(directory);
         foreach (string subdirectory in subdirectories)
         {
             CollectSpritesRecursively(subdirectory, entries, animatedSpriteInfos);
