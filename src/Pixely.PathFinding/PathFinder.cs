@@ -51,7 +51,7 @@ public interface IPathFinder<TPoint> where TPoint : struct
 /// Choose this type when nodes do not have stable dense integer indices, or when the convenience of point-based results is more important than search allocation.
 /// It uses hash-based collections for graph state and asks an <see cref="IPathFinderMap{TPoint}"/> to expand each node.
 /// <see cref="FindPath"/> uses A*, while <see cref="ExpandArea"/> uses bounded Dijkstra search and reports the edges leaving the reachable area.
-/// For repeated searches over nodes indexed from zero to a fixed node count, prefer <see cref="IndexedPathSearch{TGraph}"/>.
+/// For repeated searches over nodes indexed from zero to a fixed node count, prefer <see cref="IndexedPathSearch{TIndex, TCost}"/>.
 /// </remarks>
 /// <typeparam name="TPoint">The value type used to identify graph nodes.</typeparam>
 public class PathFinder<TPoint> : IPathFinder<TPoint> where TPoint : struct
