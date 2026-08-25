@@ -15,9 +15,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="ppy.SDL3-CS" Version="2026.722.0" />
-      <PackageReference Include="ppy.SDL3_image-CS" Version="2026.722.0" />
-      <PackageReference Include="ppy.SDL3_ttf-CS" Version="2026.722.0" />
+      <PackageReference Include="ppy.SDL3-CS" />
+      <PackageReference Include="ppy.SDL3_image-CS" />
+      <PackageReference Include="ppy.SDL3_ttf-CS" />
     </ItemGroup>
 
     <ItemGroup>

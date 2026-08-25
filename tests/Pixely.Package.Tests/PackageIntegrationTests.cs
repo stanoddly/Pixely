@@ -368,6 +368,17 @@ public class PackageIntegrationTests
     private string[] GetPackageDependencies()
     {
         List<string> dependencies = [];
+        string centralPackageVersionsPath = Path.Combine(_repositoryDirectory, "Directory.Packages.props");
+        Dictionary<string, string> centralPackageVersions = XDocument.Load(centralPackageVersionsPath)
+            .Descendants()
+            .Where(element => element.Name.LocalName == "PackageVersion")
+            .ToDictionary(
+                element => (string?)element.Attribute("Include")
+                    ?? throw new InvalidOperationException($"{centralPackageVersionsPath} contains a PackageVersion without Include."),
+                element => (string?)element.Attribute("Version")
+                    ?? element.Elements().SingleOrDefault(version => version.Name.LocalName == "Version")?.Value
+                    ?? throw new InvalidOperationException($"{centralPackageVersionsPath} contains a PackageVersion without Version."),
+                StringComparer.OrdinalIgnoreCase);
         string projectPath = Path.Combine(
             _repositoryDirectory,
             "packaging",
@@ -387,10 +398,14 @@ public class PackageIntegrationTests
 
             string packageId = (string?)packageReference.Attribute("Include")
                 ?? throw new InvalidOperationException($"{projectPath} contains a PackageReference without Include.");
-            string packageVersion = (string?)packageReference.Attribute("Version")
+            string packageVersion = (string?)packageReference.Attribute("VersionOverride")
+                ?? packageReference.Elements().SingleOrDefault(
+                    element => element.Name.LocalName == "VersionOverride")?.Value
+                ?? (string?)packageReference.Attribute("Version")
                 ?? packageReference.Elements().SingleOrDefault(
                     element => element.Name.LocalName == "Version")?.Value
-                ?? throw new InvalidOperationException($"{projectPath} contains a PackageReference without Version.");
+                ?? centralPackageVersions.GetValueOrDefault(packageId)
+                ?? throw new InvalidOperationException($"{projectPath} contains a PackageReference without a project or central version.");
             dependencies.Add($"{packageId}:{packageVersion}");
         }
 

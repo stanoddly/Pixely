@@ -20,6 +20,8 @@
 
     <!-- ProjectReference does not expose the toolchain's buildTransitive property to source projects importing these assets. -->
     <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.csproj')">
-        <PackageReference Include="SlangDxcBundle.Toolchain" Version="[$(SlangVersion)]" />
+        <PackageReference Include="SlangDxcBundle.Toolchain">
+            <Version Condition="'$(ManagePackageVersionsCentrally)' != 'true'">[$(SlangVersion)]</Version>
+        </PackageReference>
     </ItemGroup>
 </Project>
