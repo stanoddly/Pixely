@@ -37,6 +37,6 @@ public class StageView : IPencuilView, IDisposable
         int y = pencil.Center.Y - panelHeight / 2 + 40;
 
         pencil.MoveTo(x, y);
-        pencil.Panel(panelWidth, panelHeight, _color);
+        pencil.Rectangle(panelWidth, panelHeight, _color);
     }
 }

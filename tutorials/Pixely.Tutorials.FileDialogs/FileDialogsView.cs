@@ -53,9 +53,8 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
     private const int ValueGap = 16;
 
     private static readonly Color BackgroundColor = new(28, 30, 34, 255);
-    private static readonly Color ButtonColor = new(62, 87, 121, 255);
-    private static readonly Color ButtonHoverColor = new(78, 112, 156, 255);
     private static readonly Color TextColor = new(235, 238, 242, 255);
+    private static readonly ButtonStyle FileButtonStyle = new(new Color(62, 87, 121, 255), new Color(78, 112, 156, 255), TextColor);
     private readonly Window _window;
     private readonly Font _font;
 
@@ -72,7 +71,7 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
     public override void Build(Pencil pencil)
     {
         pencil.MoveTo(0, 0);
-        pencil.Panel(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
+        pencil.Rectangle(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
 
         int startX = pencil.Center.X - ButtonWidth / 2;
         int startY = pencil.Center.Y - ButtonHeight - ButtonGap / 2;
@@ -83,7 +82,8 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
 
     private void BuildOpenColumn(Pencil pencil, int x, int y)
     {
-        CursorState state = DrawButton(pencil, x, y, "Open file");
+        pencil.MoveTo(x, y);
+        CursorState state = pencil.Button("Open file", _font, ButtonWidth, ButtonHeight, FileButtonStyle);
         if (state == CursorState.Clicked)
         {
             FileDialogResult result = _window.ShowModalOpenFileDialog();
@@ -107,7 +107,8 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
 
     private void BuildSaveColumn(Pencil pencil, int x, int y)
     {
-        CursorState state = DrawButton(pencil, x, y, "Save file");
+        pencil.MoveTo(x, y);
+        CursorState state = pencil.Button("Save file", _font, ButtonWidth, ButtonHeight, FileButtonStyle);
         if (state == CursorState.Clicked)
         {
             FileDialogResult result = _window.ShowModalSaveFileDialog();
@@ -127,23 +128,6 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
         }
 
         DrawValue(pencil, y + ButtonHeight + ValueGap, ViewModel.SavedFilename);
-    }
-
-    private CursorState DrawButton(Pencil pencil, int x, int y, string text)
-    {
-        Rectangle area = new Rectangle(x, y, ButtonWidth, ButtonHeight);
-        Color color = area.Intersects(pencil.CursorPosition) ? ButtonHoverColor : ButtonColor;
-
-        pencil.MoveTo(x, y);
-        CursorState state = pencil.Panel(ButtonWidth, ButtonHeight, color);
-
-        Vector2Int textSize = pencil.MeasureText(text, _font);
-        pencil.MoveTo(
-            x + (ButtonWidth - textSize.X) / 2,
-            y + (ButtonHeight - textSize.Y) / 2);
-        pencil.Text(text, _font, TextColor);
-
-        return state;
     }
 
     private void DrawValue(Pencil pencil, int y, string text)
