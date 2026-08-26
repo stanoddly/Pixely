@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Pixely.PathFinding;
 
@@ -37,7 +38,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     private PathEdge<TIndex, TCost>[] _edges = [];
     private TCost[] _pathCosts = [];
     private TIndex[] _pathPredecessors = [];
-    private readonly PriorityQueue<OpenNode, TCost> _open = new PriorityQueue<OpenNode, TCost>();
+    private readonly IndexedPriorityQueue<TIndex, TCost> _open = new IndexedPriorityQueue<TIndex, TCost>();
 
     /// <summary>
     /// Uses Dijkstra search to write the cheapest cost and predecessor for every node reachable without exceeding the numeric cost range.
@@ -62,8 +63,8 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     /// </remarks>
     public void ExpandTree<TGraph>(TGraph graph, TIndex start, Span<TCost> costs, Span<TIndex> predecessors, TCost maxCost) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
-        (int nodeCount, int maximumDegree, TIndex indexCount) = EnsureGraphCapacity(graph);
-        int startOffset = ValidateNode(start, indexCount, nameof(start));
+        (int nodeCount, int maximumDegree) = EnsureGraphCapacity(graph);
+        int startOffset = ValidateNode(start, nodeCount, nameof(start));
         ValidateMaximumCost(maxCost);
         if (costs.Length < nodeCount)
         {
@@ -82,34 +83,30 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         _open.Clear();
         costs[startOffset] = TCost.Zero;
         predecessors[startOffset] = start;
-        _open.Enqueue(new OpenNode(start, TCost.Zero), TCost.Zero);
+        _open.EnqueueOrUpdate(startOffset, TCost.Zero);
 
-        while (_open.TryDequeue(out OpenNode current, out TCost _))
+        while (_open.TryDequeue(out int currentOffset))
         {
-            int currentOffset = ToOffset(current.Index);
-            if (current.Cost > costs[currentOffset])
-            {
-                continue;
-            }
-
-            int edgeCount = GetEdges(graph, current.Index, maximumDegree, indexCount);
+            TIndex current = TIndex.CreateChecked(currentOffset);
+            TCost currentCost = costs[currentOffset];
+            int edgeCount = GetEdges(graph, current, maximumDegree);
             for (int index = 0; index < edgeCount; index++)
             {
                 PathEdge<TIndex, TCost> edge = _edges[index];
-                if (!TryAddCosts(current.Cost, edge.Cost, out TCost cost))
+                int destinationOffset = ValidateEdge(edge, nodeCount);
+                if (!TryAddCosts(currentCost, edge.Cost, out TCost cost))
                 {
                     continue;
                 }
 
-                int destinationOffset = ToOffset(edge.Destination);
-                if (cost > maxCost || (predecessors[destinationOffset] != MissingPredecessor && cost >= costs[destinationOffset]))
+                if (cost > maxCost || (cost >= costs[destinationOffset] && (cost != TCost.MaxValue || predecessors[destinationOffset] != MissingPredecessor)))
                 {
                     continue;
                 }
 
                 costs[destinationOffset] = cost;
-                predecessors[destinationOffset] = current.Index;
-                _open.Enqueue(new OpenNode(edge.Destination, cost), cost);
+                predecessors[destinationOffset] = current;
+                _open.EnqueueOrUpdate(destinationOffset, cost);
             }
         }
     }
@@ -134,51 +131,47 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         where THeuristic : struct, IIndexedPathHeuristic<TIndex, TCost>
     {
         ArgumentNullException.ThrowIfNull(result);
-        (int nodeCount, int maximumDegree, TIndex indexCount) = EnsureGraphCapacity(graph);
+        (int nodeCount, int maximumDegree) = EnsureGraphCapacity(graph);
         EnsurePathCapacity(nodeCount);
-        int startOffset = ValidateNode(start, indexCount, nameof(start));
-        ValidateNode(destination, indexCount, nameof(destination));
+        int startOffset = ValidateNode(start, nodeCount, nameof(start));
+        ValidateNode(destination, nodeCount, nameof(destination));
         result.Clear();
         Array.Fill(_pathCosts, TCost.MaxValue, 0, nodeCount);
         Array.Fill(_pathPredecessors, MissingPredecessor, 0, nodeCount);
         _open.Clear();
         _pathCosts[startOffset] = TCost.Zero;
         _pathPredecessors[startOffset] = start;
-        _open.Enqueue(new OpenNode(start, TCost.Zero), EstimateCost(heuristic, start, destination));
+        _open.EnqueueOrUpdate(startOffset, EstimateCost(heuristic, start, destination));
 
-        while (_open.TryDequeue(out OpenNode current, out TCost _))
+        while (_open.TryDequeue(out int currentOffset))
         {
-            int currentOffset = ToOffset(current.Index);
-            if (current.Cost > _pathCosts[currentOffset])
-            {
-                continue;
-            }
-
-            if (current.Index == destination)
+            TIndex current = TIndex.CreateChecked(currentOffset);
+            if (current == destination)
             {
                 ReconstructPath(start, destination, nodeCount, _pathPredecessors, result);
                 return PathResult.Found;
             }
 
-            int edgeCount = GetEdges(graph, current.Index, maximumDegree, indexCount);
+            TCost currentCost = _pathCosts[currentOffset];
+            int edgeCount = GetEdges(graph, current, maximumDegree);
             for (int index = 0; index < edgeCount; index++)
             {
                 PathEdge<TIndex, TCost> edge = _edges[index];
-                if (!TryAddCosts(current.Cost, edge.Cost, out TCost cost))
+                int destinationOffset = ValidateEdge(edge, nodeCount);
+                if (!TryAddCosts(currentCost, edge.Cost, out TCost cost))
                 {
                     continue;
                 }
 
-                int destinationOffset = ToOffset(edge.Destination);
-                if (_pathPredecessors[destinationOffset] != MissingPredecessor && cost >= _pathCosts[destinationOffset])
+                if (cost >= _pathCosts[destinationOffset] && (cost != TCost.MaxValue || _pathPredecessors[destinationOffset] != MissingPredecessor))
                 {
                     continue;
                 }
 
                 _pathCosts[destinationOffset] = cost;
-                _pathPredecessors[destinationOffset] = current.Index;
+                _pathPredecessors[destinationOffset] = current;
                 TCost estimatedCost = TryAddCosts(cost, EstimateCost(heuristic, edge.Destination, destination), out TCost sum) ? sum : TCost.MaxValue;
-                _open.Enqueue(new OpenNode(edge.Destination, cost), estimatedCost);
+                _open.EnqueueOrUpdate(destinationOffset, estimatedCost);
             }
         }
 
@@ -243,7 +236,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         throw new ArgumentException("The predecessor buffer contains a cycle.", nameof(predecessors));
     }
 
-    private (int NodeCount, int MaximumDegree, TIndex IndexCount) EnsureGraphCapacity<TGraph>(TGraph graph) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
+    private (int NodeCount, int MaximumDegree) EnsureGraphCapacity<TGraph>(TGraph graph) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
         int nodeCount = graph.NodeCount;
         int maximumDegree = graph.MaximumDegree;
@@ -257,10 +250,9 @@ public sealed class IndexedPathSearch<TIndex, TCost>
             throw new ArgumentOutOfRangeException(nameof(graph), maximumDegree, "The graph maximum degree must be non-negative.");
         }
 
-        TIndex indexCount;
         try
         {
-            indexCount = TIndex.CreateChecked(nodeCount);
+            TIndex.CreateChecked(nodeCount);
         }
         catch (OverflowException)
         {
@@ -272,7 +264,9 @@ public sealed class IndexedPathSearch<TIndex, TCost>
             _edges = new PathEdge<TIndex, TCost>[maximumDegree];
         }
 
-        return (nodeCount, maximumDegree, indexCount);
+        _open.EnsureNodeCapacity(nodeCount);
+
+        return (nodeCount, maximumDegree);
     }
 
     private void EnsurePathCapacity(int nodeCount)
@@ -284,7 +278,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         }
     }
 
-    private int GetEdges<TGraph>(TGraph graph, TIndex origin, int maximumDegree, TIndex indexCount) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
+    private int GetEdges<TGraph>(TGraph graph, TIndex origin, int maximumDegree) where TGraph : struct, IIndexedPathGraph<TIndex, TCost>
     {
         int edgeCount = graph.GetEdges(origin, _edges.AsSpan(0, maximumDegree));
         if (edgeCount < 0 || edgeCount > maximumDegree)
@@ -292,21 +286,23 @@ public sealed class IndexedPathSearch<TIndex, TCost>
             throw new InvalidOperationException("The graph returned an invalid edge count.");
         }
 
-        for (int index = 0; index < edgeCount; index++)
-        {
-            PathEdge<TIndex, TCost> edge = _edges[index];
-            if (TIndex.IsNegative(edge.Destination) || edge.Destination >= indexCount)
-            {
-                throw new InvalidOperationException("The graph returned an edge outside its node range.");
-            }
+        return edgeCount;
+    }
 
-            if (!TCost.IsFinite(edge.Cost) || TCost.IsNegative(edge.Cost))
-            {
-                throw new InvalidOperationException("The graph returned a non-finite or negative edge cost.");
-            }
+    private static int ValidateEdge(PathEdge<TIndex, TCost> edge, int nodeCount)
+    {
+        int destinationOffset = int.CreateSaturating(edge.Destination);
+        if ((uint)destinationOffset >= (uint)nodeCount)
+        {
+            throw new InvalidOperationException("The graph returned an edge outside its node range.");
         }
 
-        return edgeCount;
+        if (!TCost.IsFinite(edge.Cost) || TCost.IsNegative(edge.Cost))
+        {
+            throw new InvalidOperationException("The graph returned a non-finite or negative edge cost.");
+        }
+
+        return destinationOffset;
     }
 
     private static TCost EstimateCost<THeuristic>(THeuristic heuristic, TIndex origin, TIndex destination) where THeuristic : struct, IIndexedPathHeuristic<TIndex, TCost>
@@ -320,8 +316,21 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         return cost;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryAddCosts(TCost left, TCost right, out TCost result)
     {
+        if (TCost.IsInfinity(TCost.CreateSaturating(double.PositiveInfinity)))
+        {
+            result = left + right;
+            if (!TCost.IsFinite(result))
+            {
+                result = TCost.MaxValue;
+                return false;
+            }
+
+            return true;
+        }
+
         if (right > TCost.MaxValue - left)
         {
             result = TCost.MaxValue;
@@ -329,7 +338,7 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         }
 
         result = left + right;
-        if (!TCost.IsFinite(result) || TCost.IsNegative(result))
+        if (!TCost.IsFinite(result))
         {
             result = TCost.MaxValue;
             return false;
@@ -346,14 +355,15 @@ public sealed class IndexedPathSearch<TIndex, TCost>
         }
     }
 
-    private static int ValidateNode(TIndex node, TIndex indexCount, string parameterName)
+    private static int ValidateNode(TIndex node, int nodeCount, string parameterName)
     {
-        if (TIndex.IsNegative(node) || node >= indexCount)
+        int nodeOffset = int.CreateSaturating(node);
+        if ((uint)nodeOffset >= (uint)nodeCount)
         {
             throw new ArgumentOutOfRangeException(parameterName, node, "The node is outside the graph.");
         }
 
-        return ToOffset(node);
+        return nodeOffset;
     }
 
     private static void ValidateBufferIndex(TIndex index, TIndex count, string parameterName)
@@ -368,8 +378,6 @@ public sealed class IndexedPathSearch<TIndex, TCost>
     {
         return int.CreateChecked(index);
     }
-
-    private readonly record struct OpenNode(TIndex Index, TCost Cost);
 
     private readonly struct ZeroHeuristic : IIndexedPathHeuristic<TIndex, TCost>
     {
