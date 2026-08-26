@@ -108,25 +108,25 @@ public sealed class PencilControlTests
     }
 
     [Test]
-    public void Button_FixedSizeWithCustomStyle_UsesHoverPresentation()
+    public void Button_FixedSize_UsesHoverPresentation()
     {
         Pencil pencil = CreatePencil();
         pencil.MoveTo(10, 20);
         pencil.CursorPosition = new Vector2Int(15, 25);
-        ButtonStyle style = new ButtonStyle(Colors.Red, Colors.Blue, Colors.White);
 
-        CursorState state = pencil.Button("OK", null!, 80, 30, style);
+        CursorState state = pencil.Button("OK", null!, 80, 30);
 
         Assert.Multiple(() =>
         {
             Assert.That(state, Is.EqualTo(CursorState.Hovered));
             Assert.That(pencil._coloredRectangleInstructions, Is.EqualTo(new[]
             {
-                new ColoredRectangleInstruction(0, new Rectangle(10, 20, 80, 30), Colors.Blue)
+                new ColoredRectangleInstruction(0, new Rectangle(10, 20, 80, 30), GuiStyles.Style.InactiveColor),
+                new ColoredRectangleInstruction(1, new Rectangle(12, 22, 76, 26), GuiStyles.Style.ActiveColor)
             }));
             Assert.That(pencil._textureRegionInstructions.Select(instruction => (instruction.Area, instruction.Tint)), Is.EqualTo(new[]
             {
-                (new Rectangle(42, 30, 16, 10), (FColor)Colors.White)
+                (new Rectangle(42, 30, 16, 10), (FColor)GuiStyles.Style.ActiveTextColor)
             }));
             Assert.That(pencil.CurrentSize, Is.EqualTo(new Vector2Int(80, 30)));
             Assert.That(pencil.CurrentPosition, Is.EqualTo(new Vector2Int(10, 50)));

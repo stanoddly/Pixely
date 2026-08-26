@@ -657,50 +657,40 @@ public static class PencilExtensions
 
     public static CursorState Button(this Pencil pencil, string text, Font font)
     {
-        return Button(pencil, text, font, new ButtonStyle(pencil.Style));
+        return Button(pencil, text, font, enabled: true);
     }
 
     public static CursorState Button(this Pencil pencil, string text, Font font, bool enabled)
     {
-        return Button(pencil, text, font, new ButtonStyle(pencil.Style), enabled);
-    }
-
-    public static CursorState Button(this Pencil pencil, string text, Font font, ButtonStyle style, bool enabled = true)
-    {
         Vector2Int textSize = pencil.MeasureText(text, font);
         int width = textSize.X + pencil.Style.TextPadding * 2;
         int height = textSize.Y + pencil.Style.TextPadding * 2;
-        return Button(pencil, text, font, width, height, style, enabled);
+        return Button(pencil, text, font, width, height, enabled);
     }
 
     public static CursorState Button(this Pencil pencil, string text, Font font, int width, int height, bool enabled = true)
     {
-        return Button(pencil, text, font, width, height, new ButtonStyle(pencil.Style), enabled);
-    }
-
-    public static CursorState Button(this Pencil pencil, string text, Font font, int width, int height, ButtonStyle style, bool enabled = true)
-    {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-        ArgumentOutOfRangeException.ThrowIfNegative(style.BorderThickness);
 
+        GuiStyle style = pencil.Style;
         Rectangle area = PlaceElement(pencil, width, height);
         CursorState state = HitArea(pencil, area, enabled);
         bool active = state != CursorState.None;
         Color backgroundColor = !enabled
-            ? style.DisabledBackgroundColor
+            ? style.Background
             : active
-                ? style.HoverBackgroundColor
-                : style.BackgroundColor;
+                ? style.ActiveColor
+                : style.Background;
         Color textColor = !enabled
-            ? style.DisabledTextColor
+            ? style.InactiveColor
             : active
-                ? style.HoverTextColor
+                ? style.ActiveTextColor
                 : style.TextColor;
 
         if (style.BorderThickness > 0)
         {
-            pencil.AddRectangle(area, style.BorderColor);
+            pencil.AddRectangle(area, style.InactiveColor);
             int innerWidth = area.Width - style.BorderThickness * 2;
             int innerHeight = area.Height - style.BorderThickness * 2;
             if (innerWidth > 0 && innerHeight > 0)
