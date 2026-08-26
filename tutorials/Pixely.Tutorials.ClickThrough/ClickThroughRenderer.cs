@@ -22,7 +22,7 @@ public class ClickThroughRenderer : IRenderer<BasicRenderContext>
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(new ColorTargetSettings
             {
-                ClearColorValue = FColors.Black,
+                ClearColorValue = FColors.Transparent,
                 LoadOperation = LoadOperation.Clear
             })
             .Build();
