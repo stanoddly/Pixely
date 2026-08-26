@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Pixely.PathFinding.Benchmarks/Pixely.PathFinding.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/packaging/">
     <Project Path="packaging/Pixely/Pixely.Package.csproj" />
   </Folder>

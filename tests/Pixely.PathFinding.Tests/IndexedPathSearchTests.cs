@@ -121,6 +121,24 @@ public sealed class IndexedPathSearchTests
     }
 
     [Test]
+    public void FindPath_ClearsQueuedNodesAfterEarlyExit()
+    {
+        TestGraph<int, float> graph = new TestGraph<int, float>([[(1, 1f), (2, 1f)], [], []]);
+        IndexedPathSearch<int, float> search = new IndexedPathSearch<int, float>();
+        List<int> path = new List<int>();
+
+        PathResult firstResult = search.FindPath(graph, 0, 1, path, new TestHeuristic<int, float>([0f, 0f, 10f]));
+        PathResult secondResult = search.FindPath(graph, 0, 2, path);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstResult, Is.EqualTo(PathResult.Found));
+            Assert.That(secondResult, Is.EqualTo(PathResult.Found));
+            Assert.That(path, Is.EqualTo(new[] { 2 }));
+        });
+    }
+
+    [Test]
     public void FindPath_AcceptsMaximumRepresentableCost()
     {
         TestGraph<byte, byte> graph = new TestGraph<byte, byte>([[(1, byte.MaxValue)], []]);
@@ -218,6 +236,25 @@ public sealed class IndexedPathSearchTests
             Assert.That(costs[2], Is.EqualTo(5));
             Assert.That(costs[3], Is.EqualTo(byte.MaxValue));
             Assert.That(predecessors[3], Is.EqualTo(byte.MaxValue));
+        });
+    }
+
+    [Test]
+    public void ExpandTree_IgnoresFloatingPointOverflow()
+    {
+        TestGraph<int, float> graph = new TestGraph<int, float>([[(1, float.MaxValue)], [(2, float.MaxValue)], []]);
+        IndexedPathSearch<int, float> search = new IndexedPathSearch<int, float>();
+        float[] costs = new float[graph.NodeCount];
+        int[] predecessors = new int[graph.NodeCount];
+
+        search.ExpandTree(graph, 0, costs, predecessors);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(costs[1], Is.EqualTo(float.MaxValue));
+            Assert.That(predecessors[1], Is.Zero);
+            Assert.That(costs[2], Is.EqualTo(float.MaxValue));
+            Assert.That(predecessors[2], Is.EqualTo(int.MaxValue));
         });
     }
 
@@ -331,6 +368,16 @@ public sealed class IndexedPathSearchTests
         TestGraph<int, float> graph = new TestGraph<int, float>([[(-1, 1f)], []]);
         IndexedPathSearch<int, float> search = new IndexedPathSearch<int, float>();
         List<int> path = new List<int>();
+
+        Assert.That(() => search.FindPath(graph, 0, 1, path), Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public void Search_RejectsOversizedEdgeDestination()
+    {
+        TestGraph<long, float> graph = new TestGraph<long, float>([[(long.MaxValue, 1f)], []]);
+        IndexedPathSearch<long, float> search = new IndexedPathSearch<long, float>();
+        List<long> path = new List<long>();
 
         Assert.That(() => search.FindPath(graph, 0, 1, path), Throws.InvalidOperationException);
     }
