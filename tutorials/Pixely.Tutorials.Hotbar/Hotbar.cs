@@ -90,7 +90,8 @@ public class Hotbar : PencuilView<HotbarViewModel>
                     : i == _hoveredSlot ? HoverColor
                     : SlotColor;
 
-                CursorState state = pencil.Panel(SlotSize, SlotSize, color);
+                pencil.Rectangle(SlotSize, SlotSize, color);
+                CursorState state = pencil.HitArea(new Rectangle(slotPos, new Vector2Int(SlotSize)));
 
                 // Draw icon centered in slot (32x32 icon in 48x48 slot = 8px padding)
                 Vector2Int nextPos = pencil.CurrentPosition;

@@ -96,7 +96,7 @@ public class TextInputView : PencuilView<TextInputViewModel>
     public override void Build(Pencil pencil)
     {
         pencil.MoveTo(0, 0);
-        pencil.Panel(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
+        pencil.Rectangle(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
 
         int startX = pencil.Center.X - 120;
         int startY = 80;

@@ -617,12 +617,30 @@ public static class PencilExtensions
 
     public static CursorState Panel(this Pencil pencil, int width, int height, Color color)
     {
-        Vector2Int size = new Vector2Int(width, height);
-        Vector2Int position = pencil.CurrentPosition;
-        Rectangle area = new Rectangle(position, size);
+        Rectangle area = PlaceElement(pencil, width, height);
         pencil.AddRectangle(area, color);
-        pencil.CurrentSize = size;
-        pencil.CurrentPosition = pencil.DetermineNextPosition(size);
+
+        return HitArea(pencil, area);
+    }
+
+    public static void Rectangle(this Pencil pencil, int width, int height, Color color)
+    {
+        Rectangle area = PlaceElement(pencil, width, height);
+        pencil.AddRectangle(area, color);
+    }
+
+    public static CursorState HitArea(this Pencil pencil, int width, int height, bool enabled = true)
+    {
+        Rectangle area = PlaceElement(pencil, width, height);
+        return HitArea(pencil, area, enabled);
+    }
+
+    public static CursorState HitArea(this Pencil pencil, Rectangle area, bool enabled = true)
+    {
+        if (!enabled)
+        {
+            return CursorState.None;
+        }
 
         pencil.AddHoverTest(area);
         pencil.AddHoverInTest(area);
@@ -639,31 +657,70 @@ public static class PencilExtensions
 
     public static CursorState Button(this Pencil pencil, string text, Font font)
     {
+        return Button(pencil, text, font, enabled: true);
+    }
+
+    public static CursorState Button(this Pencil pencil, string text, Font font, bool enabled)
+    {
+        Vector2Int textSize = pencil.MeasureText(text, font);
+        int width = textSize.X + pencil.Style.TextPadding * 2;
+        int height = textSize.Y + pencil.Style.TextPadding * 2;
+        return Button(pencil, text, font, width, height, enabled);
+    }
+
+    public static CursorState Button(this Pencil pencil, string text, Font font, int width, int height, bool enabled = true)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
         GuiStyle style = pencil.Style;
+        Rectangle area = PlaceElement(pencil, width, height);
+        CursorState state = HitArea(pencil, area, enabled);
+        bool active = state != CursorState.None;
+        Color backgroundColor = !enabled
+            ? style.Background
+            : active
+                ? style.ActiveColor
+                : style.Background;
+        Color textColor = !enabled
+            ? style.InactiveColor
+            : active
+                ? style.ActiveTextColor
+                : style.TextColor;
 
-        Vector2Int size = pencil.MeasureText(text, font);
-        Vector2Int padding = new Vector2Int(pencil.Style.TextPadding);
-
-        Vector2Int fullSize = size + padding + padding;
-        Vector2Int startPosition = pencil.DetermineNextPosition(fullSize);
-
-        Vector2Int thickness = new Vector2Int(style.BorderThickness);
-        Color innerColor = style.Background;
-
-        Rectangle area = new Rectangle(startPosition, fullSize);
-
-        pencil.AddHoverTest(area);
-        pencil.AddHoverInTest(area);
-        pencil.AddHoverOutTest(area);
-        pencil.AddClickTest(area);
-
-        if (!area.Intersects(pencil.CursorPosition))
+        if (style.BorderThickness > 0)
         {
-            return CursorState.None;
+            pencil.AddRectangle(area, style.InactiveColor);
+            int innerWidth = area.Width - style.BorderThickness * 2;
+            int innerHeight = area.Height - style.BorderThickness * 2;
+            if (innerWidth > 0 && innerHeight > 0)
+            {
+                pencil.AddRectangle(new Rectangle(area.X + style.BorderThickness, area.Y + style.BorderThickness, innerWidth, innerHeight), backgroundColor);
+            }
+        }
+        else
+        {
+            pencil.AddRectangle(area, backgroundColor);
         }
 
-        innerColor = style.ActiveColor;
-        return pencil.CursorJustReleased ? CursorState.Clicked : CursorState.Hovered;
+        Vector2Int textSize = pencil.MeasureText(text, font);
+        Vector2Int nextPosition = pencil.CurrentPosition;
+        Vector2Int nextSize = pencil.CurrentSize;
+        pencil.MoveTo(area.X + (area.Width - textSize.X) / 2, area.Y + (area.Height - textSize.Y) / 2);
+        pencil.Text(text, font, textColor);
+        pencil.CurrentPosition = nextPosition;
+        pencil.CurrentSize = nextSize;
+
+        return state;
+    }
+
+    private static Rectangle PlaceElement(Pencil pencil, int width, int height)
+    {
+        Vector2Int size = new Vector2Int(width, height);
+        Rectangle area = new Rectangle(pencil.CurrentPosition, size);
+        pencil.CurrentSize = size;
+        pencil.CurrentPosition = pencil.DetermineNextPosition(size);
+        return area;
     }
 
     public static bool TextField(this Pencil pencil, int id, ref string value, Font font, int width)

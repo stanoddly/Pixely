@@ -41,7 +41,7 @@ public class MenuView : IPencuilView
     public void Build(Pencil pencil)
     {
         pencil.MoveTo(0, 0);
-        pencil.Panel(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
+        pencil.Rectangle(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
 
         int totalWidth = ButtonWidth * 2 + ButtonGap;
         int startX = pencil.Center.X - totalWidth / 2;
@@ -68,27 +68,21 @@ public class MenuView : IPencuilView
         }
     }
 
-    private CursorState DrawButton(Pencil pencil, int x, int y, string text, Color color, Color hoverColor)
+    private bool DrawStageButton(Pencil pencil, int x, int y, string text, bool active)
     {
         Rectangle area = new Rectangle(x, y, ButtonWidth, ButtonHeight);
+        Color color = active ? ActiveButtonColor : ButtonColor;
+        Color hoverColor = active ? ActiveButtonHoverColor : ButtonHoverColor;
         Color actualColor = area.Intersects(pencil.CursorPosition) ? hoverColor : color;
 
         pencil.MoveTo(x, y);
-        CursorState state = pencil.Panel(ButtonWidth, ButtonHeight, actualColor);
+        pencil.Rectangle(ButtonWidth, ButtonHeight, actualColor);
+        CursorState state = pencil.HitArea(area);
 
         Vector2Int textSize = pencil.MeasureText(text, _font);
-        pencil.MoveTo(
-            x + (ButtonWidth - textSize.X) / 2,
-            y + (ButtonHeight - textSize.Y) / 2);
+        pencil.MoveTo(x + (ButtonWidth - textSize.X) / 2, y + (ButtonHeight - textSize.Y) / 2);
         pencil.Text(text, _font, TextColor);
 
-        return state;
-    }
-
-    private bool DrawStageButton(Pencil pencil, int x, int y, string text, bool active)
-    {
-        Color color = active ? ActiveButtonColor : ButtonColor;
-        Color hoverColor = active ? ActiveButtonHoverColor : ButtonHoverColor;
-        return DrawButton(pencil, x, y, text, color, hoverColor) == CursorState.Clicked;
+        return state == CursorState.Clicked;
     }
 }
