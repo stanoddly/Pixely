@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "name": "pixely",
+      "type": "s3",
+      "path": "https://pixely.s3.eu-central-003.backblazeb2.com/",
+      "baseURI": "https://pixely.s3.eu-central-003.backblazeb2.com/",
+      "bucketName": "pixely",
+      "serviceURL": "https://s3.eu-central-003.backblazeb2.com",
+      "accessKeyId": "$B2_KEY_ID$",
+      "secretAccessKey": "$B2_APPLICATION_KEY$"
+    }
+  ]
+}
