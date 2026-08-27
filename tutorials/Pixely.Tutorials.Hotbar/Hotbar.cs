@@ -46,7 +46,6 @@ public class Hotbar : PencuilView<HotbarViewModel>
 
     private readonly Font _font;
     private readonly SpriteAsset[] _slotSprites;
-    private int _hoveredSlot = -1;
 
     public Hotbar(HotbarViewModel viewModel, IKeyboardService keyboardService, IFontSystem fontSystem, ITextureLoader textureLoader)
         : base(viewModel)
@@ -85,13 +84,15 @@ public class Hotbar : PencuilView<HotbarViewModel>
             for (int i = 0; i < SlotCount; i++)
             {
                 Vector2Int slotPos = pencil.CurrentPosition;
+                Rectangle area = new Rectangle(slotPos, new Vector2Int(SlotSize));
+                bool clicked = pencil.ClickArea(area);
+                bool hovered = pencil.HoverArea(area);
 
                 Color color = i == ViewModel.SelectedSlot ? SelectedColor
-                    : i == _hoveredSlot ? HoverColor
+                    : hovered ? HoverColor
                     : SlotColor;
 
                 pencil.Rectangle(SlotSize, SlotSize, color);
-                CursorState state = pencil.HitArea(new Rectangle(slotPos, new Vector2Int(SlotSize)));
 
                 // Draw icon centered in slot (32x32 icon in 48x48 slot = 8px padding)
                 Vector2Int nextPos = pencil.CurrentPosition;
@@ -102,11 +103,11 @@ public class Hotbar : PencuilView<HotbarViewModel>
                 pencil.CurrentPosition = nextPos;
                 pencil.CurrentSize = nextSize;
 
-                if (state == CursorState.Clicked)
+                if (clicked)
                 {
                     ViewModel.SelectedSlot = i;
                 }
-                if (state >= CursorState.Hovered)
+                if (hovered)
                 {
                     hoveredSlot = i;
                     hoveredPos = slotPos;
@@ -123,7 +124,5 @@ public class Hotbar : PencuilView<HotbarViewModel>
                 hoveredPos.Y - textSize.Y - LabelGap);
             pencil.Text(label, _font, Colors.White);
         }
-
-        _hoveredSlot = hoveredSlot;
     }
 }

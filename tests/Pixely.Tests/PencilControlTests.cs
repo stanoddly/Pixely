@@ -14,7 +14,7 @@ public sealed class PencilControlTests
     {
         Pencil pencil = CreatePencil();
         pencil.MoveTo(10, 20);
-        pencil.CursorPosition = new Vector2Int(15, 25);
+        pencil.UpdateCursor(new Vector2Int(15, 25));
 
         pencil.Rectangle(30, 40, Colors.Red);
 
@@ -31,17 +31,17 @@ public sealed class PencilControlTests
     }
 
     [Test]
-    public void HitArea_RegistersInteractionWithoutDrawing()
+    public void ClickArea_RegistersClickWithoutDrawingOrHoverDependency()
     {
         Pencil pencil = CreatePencil();
         pencil.MoveTo(10, 20);
-        pencil.CursorPosition = new Vector2Int(15, 25);
+        pencil.UpdateCursor(new Vector2Int(15, 25));
 
-        CursorState state = pencil.HitArea(30, 40);
+        bool clicked = pencil.ClickArea(30, 40);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.Hovered));
+            Assert.That(clicked, Is.False);
             Assert.That(pencil._coloredRectangleInstructions, Is.Empty);
             Assert.That(pencil._textureRegionInstructions, Is.Empty);
             Assert.That(pencil.IsOverInteractiveArea(pencil.CursorPosition), Is.True);
@@ -51,34 +51,50 @@ public sealed class PencilControlTests
     }
 
     [Test]
-    public void HitArea_Disabled_DoesNotRegisterInteraction()
+    public void ClickArea_Disabled_DoesNotRegisterInteraction()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
         pencil.CursorJustReleased = true;
 
-        CursorState state = pencil.HitArea(10, 10, enabled: false);
+        bool clicked = pencil.ClickArea(10, 10, enabled: false);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.None));
+            Assert.That(clicked, Is.False);
             Assert.That(pencil.IsOverInteractiveArea(pencil.CursorPosition), Is.False);
         });
     }
 
     [Test]
-    public void Panel_DrawsAndRegistersInteraction()
+    public void HoverArea_ReportsHoverWithoutRegisteringClickInteraction()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
 
-        CursorState state = pencil.Panel(10, 10, Colors.Red);
+        bool hovered = pencil.HoverArea(new Rectangle(0, 0, 10, 10));
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.Hovered));
-            Assert.That(pencil._coloredRectangleInstructions, Has.Count.EqualTo(1));
-            Assert.That(pencil.IsOverInteractiveArea(pencil.CursorPosition), Is.True);
+            Assert.That(hovered, Is.True);
+            Assert.That(pencil.IsOverInteractiveArea(pencil.CursorPosition), Is.False);
+        });
+    }
+
+    [Test]
+    public void HoverRectangle_DrawsHoverBoundColorWithoutRegisteringInteraction()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.MoveTo(10, 20);
+
+        pencil.HoverRectangle(30, 40, Colors.Red, Colors.Blue);
+
+        ColoredRectangleInstruction instruction = pencil._coloredRectangleInstructions.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.Color, Is.EqualTo(Colors.Red));
+            Assert.That(pencil.IsOverInteractiveArea(new Vector2Int(15, 25)), Is.False);
+            Assert.That(pencil.CurrentPosition, Is.EqualTo(new Vector2Int(10, 60)));
         });
     }
 
@@ -88,11 +104,11 @@ public sealed class PencilControlTests
         Pencil pencil = CreatePencil();
         pencil.MoveTo(10, 20);
 
-        CursorState state = pencil.Button("OK", null!);
+        bool clicked = pencil.Button("OK", null!);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.None));
+            Assert.That(clicked, Is.False);
             Assert.That(pencil._coloredRectangleInstructions, Is.EqualTo(new[]
             {
                 new ColoredRectangleInstruction(0, new Rectangle(10, 20, 26, 20), GuiStyles.Style.InactiveColor),
@@ -115,11 +131,11 @@ public sealed class PencilControlTests
         TextSpriteAsset text = new TextSpriteAsset(texture, new ShortRectangle(0, 0, 16, 10));
         pencil.MoveTo(10, 20);
 
-        CursorState state = pencil.Button(text);
+        bool clicked = pencil.Button(text);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.None));
+            Assert.That(clicked, Is.False);
             Assert.That(pencil._textureRegionInstructions.Single().Texture, Is.SameAs(texture));
             Assert.That(pencil._textureRegionInstructions.Single().Area, Is.EqualTo(new Rectangle(15, 25, 16, 10)));
             Assert.That(pencil.CurrentSize, Is.EqualTo(new Vector2Int(26, 20)));
@@ -132,22 +148,15 @@ public sealed class PencilControlTests
     {
         Pencil pencil = CreatePencil();
         pencil.MoveTo(10, 20);
-        pencil.CursorPosition = new Vector2Int(15, 25);
+        pencil.UpdateCursor(new Vector2Int(15, 25));
 
-        CursorState state = pencil.Button("OK", null!, 80, 30);
+        bool clicked = pencil.Button("OK", null!, 80, 30);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.Hovered));
-            Assert.That(pencil._coloredRectangleInstructions, Is.EqualTo(new[]
-            {
-                new ColoredRectangleInstruction(0, new Rectangle(10, 20, 80, 30), GuiStyles.Style.InactiveColor),
-                new ColoredRectangleInstruction(1, new Rectangle(12, 22, 76, 26), GuiStyles.Style.ActiveColor)
-            }));
-            Assert.That(pencil._textureRegionInstructions.Select(instruction => (instruction.Area, instruction.Tint)), Is.EqualTo(new[]
-            {
-                (new Rectangle(42, 30, 16, 10), (FColor)GuiStyles.Style.ActiveTextColor)
-            }));
+            Assert.That(clicked, Is.False);
+            Assert.That(pencil._coloredRectangleInstructions[^1].Color, Is.EqualTo(GuiStyles.Style.ActiveColor));
+            Assert.That(pencil._textureRegionInstructions.Single().Tint, Is.EqualTo((FColor)GuiStyles.Style.ActiveTextColor));
             Assert.That(pencil.CurrentSize, Is.EqualTo(new Vector2Int(80, 30)));
             Assert.That(pencil.CurrentPosition, Is.EqualTo(new Vector2Int(10, 50)));
         });
@@ -157,14 +166,14 @@ public sealed class PencilControlTests
     public void Button_Disabled_DrawsDisabledPresentationWithoutRegisteringInteraction()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
         pencil.CursorJustReleased = true;
 
-        CursorState state = pencil.Button("OK", null!, enabled: false);
+        bool clicked = pencil.Button("OK", null!, enabled: false);
 
         Assert.Multiple(() =>
         {
-            Assert.That(state, Is.EqualTo(CursorState.None));
+            Assert.That(clicked, Is.False);
             Assert.That(pencil.IsOverInteractiveArea(pencil.CursorPosition), Is.False);
             Assert.That(pencil._coloredRectangleInstructions[^1].Color, Is.EqualTo(GuiStyles.Style.Background));
             Assert.That(pencil._textureRegionInstructions.Single().Tint, Is.EqualTo((FColor)GuiStyles.Style.InactiveColor));
@@ -175,23 +184,23 @@ public sealed class PencilControlTests
     public void Button_ReleasedOverArea_ReturnsClicked()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
         pencil.CursorJustReleased = true;
 
-        CursorState state = pencil.Button("OK", null!);
+        bool clicked = pencil.Button("OK", null!);
 
-        Assert.That(state, Is.EqualTo(CursorState.Clicked));
+        Assert.That(clicked, Is.True);
     }
 
     [Test]
-    public void UpdateCursor_MotionOutsideHitAreas_DoesNotInvalidate()
+    public void UpdateCursor_MotionOutsideHoverAreas_DoesNotInvalidate()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(-20, -20);
-        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(-20, -20));
+        pencil.HoverArea(new Rectangle(0, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(-10, -10), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
 
         Assert.Multiple(() =>
         {
@@ -201,92 +210,151 @@ public sealed class PencilControlTests
     }
 
     [Test]
-    public void UpdateCursor_EnteringHitArea_Invalidates()
+    public void UpdateCursor_EnteringHoverArea_Invalidates()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(-10, -10);
-        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.HoverArea(new Rectangle(0, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
 
         Assert.That(pencil.NeedsUpdate, Is.True);
     }
 
     [Test]
-    public void UpdateCursor_MotionWithinHitArea_DoesNotInvalidate()
+    public void UpdateCursor_MotionWithinHoverArea_DoesNotInvalidate()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(2, 2);
-        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(2, 2));
+        pencil.HoverArea(new Rectangle(0, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
 
         Assert.That(pencil.NeedsUpdate, Is.False);
     }
 
     [Test]
-    public void UpdateCursor_LeavingHitArea_Invalidates()
+    public void UpdateCursor_LeavingHoverArea_Invalidates()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
-        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+        pencil.HoverArea(new Rectangle(0, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(20, 20), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(20, 20));
 
         Assert.That(pencil.NeedsUpdate, Is.True);
     }
 
     [Test]
-    public void UpdateCursor_MovingBetweenHitAreas_Invalidates()
+    public void UpdateCursor_MovingBetweenHoverAreas_Invalidates()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
-        pencil.HitArea(new Rectangle(0, 0, 10, 10));
-        pencil.HitArea(new Rectangle(20, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+        pencil.HoverArea(new Rectangle(0, 0, 10, 10));
+        pencil.HoverArea(new Rectangle(20, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(25, 5), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(25, 5));
 
         Assert.That(pencil.NeedsUpdate, Is.True);
     }
 
     [Test]
-    public void UpdateCursor_ContinuousHoverTest_InvalidatesMotionWithinAndOutOfArea()
+    public void UpdateCursor_EnteringClickArea_DoesNotInvalidate()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(2, 2);
-        pencil.AddHoverTest(new Rectangle(0, 0, 10, 10));
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.ClickArea(new Rectangle(0, 0, 10, 10));
         pencil.NeedsUpdate = false;
 
-        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
-        bool invalidatedWithinArea = pencil.NeedsUpdate;
-        pencil.NeedsUpdate = false;
-        pencil.UpdateCursor(new Vector2Int(20, 20), pressed: false);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
 
         Assert.Multiple(() =>
         {
-            Assert.That(invalidatedWithinArea, Is.True);
-            Assert.That(pencil.NeedsUpdate, Is.True);
+            Assert.That(pencil.CursorPosition, Is.EqualTo(new Vector2Int(5, 5)));
+            Assert.That(pencil.NeedsUpdate, Is.False);
         });
     }
 
     [Test]
-    public void UpdateCursor_PressedStateChange_Invalidates()
+    public void UpdateCursor_HoverRectangleChangesOnlyRenderInstructionsOnTransitions()
     {
         Pencil pencil = CreatePencil();
-        pencil.CursorPosition = new Vector2Int(5, 5);
-        pencil.NeedsUpdate = false;
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.HoverRectangle(10, 10, Colors.Red, Colors.Blue);
+        CompleteInstructions(pencil);
 
-        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: true);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+        bool changedOnEnter = pencil.InstructionsChanged;
+        Color enteredColor = pencil.CompletedColoredRectangleInstructions.Single().Color;
+        pencil.InstructionsChanged = false;
+        pencil.UpdateCursor(new Vector2Int(7, 7));
+        bool changedWithinArea = pencil.InstructionsChanged;
+        pencil.UpdateCursor(new Vector2Int(20, 20));
 
         Assert.Multiple(() =>
         {
-            Assert.That(pencil.CursorPressed, Is.True);
-            Assert.That(pencil.NeedsUpdate, Is.True);
+            Assert.That(pencil.NeedsUpdate, Is.False);
+            Assert.That(changedOnEnter, Is.True);
+            Assert.That(enteredColor, Is.EqualTo(Colors.Blue));
+            Assert.That(changedWithinArea, Is.False);
+            Assert.That(pencil.InstructionsChanged, Is.True);
+            Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.Red));
         });
+    }
+
+    [Test]
+    public void UpdateCursor_ButtonHoverChangesColorAndTextTintWithoutRebuild()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.Button("OK", null!, 80, 30);
+        CompleteInstructions(pencil);
+
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.NeedsUpdate, Is.False);
+            Assert.That(pencil.InstructionsChanged, Is.True);
+            Assert.That(pencil.CompletedColoredRectangleInstructions[^1].Color, Is.EqualTo(GuiStyles.Style.ActiveColor));
+            Assert.That(pencil.CompletedTextureRegionInstructions.Single().Tint, Is.EqualTo((FColor)GuiStyles.Style.ActiveTextColor));
+        });
+    }
+
+    [Test]
+    public void ResetInteractionData_RemovesHoverInstructionPatches()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.HoverRectangle(10, 10, Colors.Red, Colors.Blue);
+        CompleteInstructions(pencil);
+
+        pencil.ResetInteractionData();
+        pencil.MoveTo(0, 0);
+        pencil.Rectangle(10, 10, Colors.White);
+        pencil.MarkInstructionsCompleted();
+        pencil.CycleInstructions();
+        pencil.InstructionsChanged = false;
+
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.InstructionsChanged, Is.False);
+            Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.White));
+        });
+    }
+
+    private static void CompleteInstructions(Pencil pencil)
+    {
+        pencil.MarkInstructionsCompleted();
+        pencil.CycleInstructions();
+        pencil.NeedsUpdate = false;
+        pencil.InstructionsChanged = false;
     }
 
     private static Pencil CreatePencil()

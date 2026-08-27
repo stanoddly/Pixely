@@ -251,6 +251,25 @@ pencil.Text(applyText, Colors.White);
 pencil.Button(applyText, width: 120, height: 32);
 ```
 
+Buttons return `true` when clicked. Use `ClickArea` when view logic depends only on clicks and
+`HoverArea` when view logic must rebuild as the pointer enters or leaves an area:
+
+```csharp
+if (pencil.ClickArea(area))
+{
+    Apply();
+}
+
+bool hovered = pencil.HoverArea(area);
+```
+
+`HoverRectangle` changes color by patching its retained render instruction. Pointer transitions
+redraw Pencuil without rebuilding its views:
+
+```csharp
+pencil.HoverRectangle(width, height, normalColor, hoverColor);
+```
+
 Text sprite assets do not own their cached backing textures and are not disposable. The font
 system keeps a backing texture alive while its borrowed texture is referenced. After garbage
 collection observes that the borrowed texture is unreachable, the next font-system update

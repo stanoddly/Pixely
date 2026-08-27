@@ -12,7 +12,8 @@ public enum LayoutDirection
     None, Bottom, Top, Left, Right
 }
 
-public enum CursorState : byte { None, Hovered, Clicked }
+internal readonly record struct HoverRectanglePatch(Rectangle Area, int InstructionIndex, Color Color, Color HoverColor);
+internal readonly record struct HoverTexturePatch(Rectangle Area, int InstructionIndex, FColor Tint, FColor HoverTint);
 
 public readonly struct DirectionDisposer : IDisposable
 {
@@ -71,20 +72,20 @@ public class Pencil
     internal List<ColoredRectangleInstruction> CompletedColoredRectangleInstructions => _previousColoredRectangleInstructions;
     internal List<TextureRegionInstruction> CompletedTextureRegionInstructions => _previousTextureRegionInstructions;
 
-    private readonly List<Rectangle> _hoverTests = new();
-    private readonly List<Rectangle> _hoverInTests = new();
-    private readonly List<Rectangle> _hoverOutTests = new();
+    private readonly List<Rectangle> _hoverAreas = new();
     private readonly List<Rectangle> _clickTests = new();
+    private readonly List<HoverRectanglePatch> _hoverRectanglePatches = new();
+    private readonly List<HoverTexturePatch> _hoverTexturePatches = new();
 
     internal int _viewportWidth;
     internal int _viewportHeight;
 
-    public bool NeedsUpdate { get; set; } = true;
+    public bool NeedsUpdate { get; internal set; } = true;
     public void Invalidate() => NeedsUpdate = true;
 
     // Set by the update phase when a build pass produces different instructions than the
     // previous frame; read and cleared by the render phase to decide whether to re-render.
-    public bool InstructionsChanged { get; set; }
+    internal bool InstructionsChanged { get; set; }
 
     internal ShortSize ViewportSize => new ShortSize((ushort)_viewportWidth, (ushort)_viewportHeight);
     internal ShortSize CompletedInstructionViewportSize { get; private set; }
@@ -101,64 +102,58 @@ public class Pencil
         Invalidate();
     }
 
-    public void UpdateCursor(Vector2Int position, bool pressed)
+    internal void UpdateCursor(Vector2Int position)
     {
-        bool cursorMoved = position != CursorPosition;
-        bool interactionChanged = pressed != CursorPressed;
-
-        if (cursorMoved)
+        if (position != CursorPosition)
         {
-            foreach (Rectangle area in _hoverTests)
+            foreach (Rectangle area in _hoverAreas)
             {
-                if (area.Intersects(CursorPosition) || area.Intersects(position))
+                if (area.Intersects(CursorPosition) != area.Intersects(position))
                 {
-                    interactionChanged = true;
+                    Invalidate();
                     break;
                 }
             }
 
-            if (!interactionChanged)
+            foreach (HoverRectanglePatch patch in _hoverRectanglePatches)
             {
-                foreach (Rectangle area in _hoverInTests)
+                bool hovered = patch.Area.Intersects(position);
+                if (patch.Area.Intersects(CursorPosition) != hovered)
                 {
-                    if (!area.Intersects(CursorPosition) && area.Intersects(position))
+                    ColoredRectangleInstruction instruction = _previousColoredRectangleInstructions[patch.InstructionIndex];
+                    _previousColoredRectangleInstructions[patch.InstructionIndex] = instruction with
                     {
-                        interactionChanged = true;
-                        break;
-                    }
+                        Color = hovered ? patch.HoverColor : patch.Color
+                    };
+                    InstructionsChanged = true;
                 }
             }
 
-            if (!interactionChanged)
+            foreach (HoverTexturePatch patch in _hoverTexturePatches)
             {
-                foreach (Rectangle area in _hoverOutTests)
+                bool hovered = patch.Area.Intersects(position);
+                if (patch.Area.Intersects(CursorPosition) != hovered)
                 {
-                    if (area.Intersects(CursorPosition) && !area.Intersects(position))
+                    TextureRegionInstruction instruction = _previousTextureRegionInstructions[patch.InstructionIndex];
+                    _previousTextureRegionInstructions[patch.InstructionIndex] = instruction with
                     {
-                        interactionChanged = true;
-                        break;
-                    }
+                        Tint = hovered ? patch.HoverTint : patch.Tint
+                    };
+                    InstructionsChanged = true;
                 }
             }
         }
 
         CursorPosition = position;
-        CursorPressed = pressed;
-
-        if (interactionChanged)
-        {
-            Invalidate();
-        }
     }
 
     public LayoutDirection CurrentDirection { get; set; } = LayoutDirection.Bottom;
     public Vector2Int CurrentPosition { get; set; }
     public Vector2Int CurrentSize { get; set; }
-    public Vector2Int CursorPosition { get; set; }
+    public Vector2Int CursorPosition { get; private set; } = new Vector2Int(-1, -1);
     public int CurrentGap { get; set; }
 
-    public bool CursorJustReleased { get; set; }
-    public bool CursorPressed { get; set; }
+    internal bool CursorJustReleased { get; set; }
 
     public int? FocusedControlId { get; private set; }
     public bool HasFocus => FocusedControlId != null;
@@ -177,27 +172,17 @@ public class Pencil
         Style = guiStyle;
     }
 
-    public void AddHoverTest(Rectangle test)
+    internal void AddHoverArea(Rectangle area)
     {
-        _hoverTests.Add(test);
+        _hoverAreas.Add(area);
     }
 
-    public void AddHoverInTest(Rectangle test)
-    {
-        _hoverInTests.Add(test);
-    }
-
-    public void AddHoverOutTest(Rectangle test)
-    {
-        _hoverOutTests.Add(test);
-    }
-
-    public void AddClickTest(Rectangle test)
+    internal void AddClickTest(Rectangle test)
     {
         _clickTests.Add(test);
     }
 
-    public bool IsOverInteractiveArea(Vector2Int position)
+    internal bool IsOverInteractiveArea(Vector2Int position)
     {
         foreach (Rectangle area in _clickTests)
         {
@@ -215,9 +200,31 @@ public class Pencil
         _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, rectangle, color));
     }
 
+    internal void AddHoverRectangle(Rectangle rectangle, Color color, Rectangle hoverArea, Color hoverColor)
+    {
+        int instructionIndex = _coloredRectangleInstructions.Count;
+        Color resolvedColor = hoverArea.Intersects(CursorPosition) ? hoverColor : color;
+        _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, rectangle, resolvedColor));
+        if (color != hoverColor)
+        {
+            _hoverRectanglePatches.Add(new HoverRectanglePatch(hoverArea, instructionIndex, color, hoverColor));
+        }
+    }
+
     public void AddTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint)
     {
         _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, area, uvs, tint));
+    }
+
+    internal void AddHoverTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint, Rectangle hoverArea, FColor hoverTint)
+    {
+        int instructionIndex = _textureRegionInstructions.Count;
+        FColor resolvedTint = hoverArea.Intersects(CursorPosition) ? hoverTint : tint;
+        _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, area, uvs, resolvedTint));
+        if (tint != hoverTint)
+        {
+            _hoverTexturePatches.Add(new HoverTexturePatch(hoverArea, instructionIndex, tint, hoverTint));
+        }
     }
 
     public Vector2Int DetermineNextPosition(Vector2Int size)
@@ -613,15 +620,14 @@ public class Pencil
             !CollectionsMarshal.AsSpan(_textureRegionInstructions).SequenceEqual(CollectionsMarshal.AsSpan(_previousTextureRegionInstructions));
     }
 
-    // Interaction-test rectangles are populated during a build pass and read by input
-    // handlers until the next build, so they must be cleared at the start of each build
-    // rather than in CycleInstructions, which runs after the build completes
-    internal void ResetInteractionTests()
+    // Interaction data is populated during a build pass and read by input handlers until
+    // the next build, so it must be cleared before new instructions are produced
+    internal void ResetInteractionData()
     {
-        _hoverTests.Clear();
-        _hoverInTests.Clear();
-        _hoverOutTests.Clear();
+        _hoverAreas.Clear();
         _clickTests.Clear();
+        _hoverRectanglePatches.Clear();
+        _hoverTexturePatches.Clear();
     }
 
     internal void MarkInstructionsCompleted()
@@ -664,51 +670,58 @@ public static class PencilExtensions
         pencil.CurrentPosition = pencil.DetermineNextPosition(size);
     }
 
-    public static CursorState Panel(this Pencil pencil, int width, int height, Color color)
-    {
-        Rectangle area = PlaceElement(pencil, width, height);
-        pencil.AddRectangle(area, color);
-
-        return HitArea(pencil, area);
-    }
-
     public static void Rectangle(this Pencil pencil, int width, int height, Color color)
     {
         Rectangle area = PlaceElement(pencil, width, height);
         pencil.AddRectangle(area, color);
     }
 
-    public static CursorState HitArea(this Pencil pencil, int width, int height, bool enabled = true)
+    public static void HoverRectangle(this Pencil pencil, int width, int height, Color color, Color hoverColor)
     {
         Rectangle area = PlaceElement(pencil, width, height);
-        return HitArea(pencil, area, enabled);
+        pencil.AddHoverRectangle(area, color, area, hoverColor);
     }
 
-    public static CursorState HitArea(this Pencil pencil, Rectangle area, bool enabled = true)
+    public static bool ClickArea(this Pencil pencil, int width, int height, bool enabled = true)
+    {
+        Rectangle area = PlaceElement(pencil, width, height);
+        return ClickArea(pencil, area, enabled);
+    }
+
+    public static bool ClickArea(this Pencil pencil, Rectangle area, bool enabled = true)
     {
         if (!enabled)
         {
-            return CursorState.None;
+            return false;
         }
 
-        pencil.AddHoverInTest(area);
-        pencil.AddHoverOutTest(area);
         pencil.AddClickTest(area);
-
-        if (!area.Intersects(pencil.CursorPosition))
-        {
-            return CursorState.None;
-        }
-
-        return pencil.CursorJustReleased ? CursorState.Clicked : CursorState.Hovered;
+        return pencil.CursorJustReleased && area.Intersects(pencil.CursorPosition);
     }
 
-    public static CursorState Button(this Pencil pencil, string text, Font font)
+    public static bool HoverArea(this Pencil pencil, int width, int height, bool enabled = true)
+    {
+        Rectangle area = PlaceElement(pencil, width, height);
+        return HoverArea(pencil, area, enabled);
+    }
+
+    public static bool HoverArea(this Pencil pencil, Rectangle area, bool enabled = true)
+    {
+        if (!enabled)
+        {
+            return false;
+        }
+
+        pencil.AddHoverArea(area);
+        return area.Intersects(pencil.CursorPosition);
+    }
+
+    public static bool Button(this Pencil pencil, string text, Font font)
     {
         return Button(pencil, text, font, enabled: true);
     }
 
-    public static CursorState Button(this Pencil pencil, string text, Font font, bool enabled)
+    public static bool Button(this Pencil pencil, string text, Font font, bool enabled)
     {
         TextSpriteAsset? textSprite = text.Length == 0 ? null : pencil.CreateTextSprite(text, font);
         Vector2Int textSize = GetTextSize(textSprite);
@@ -717,18 +730,18 @@ public static class PencilExtensions
         return ButtonCore(pencil, textSprite, width, height, enabled);
     }
 
-    public static CursorState Button(this Pencil pencil, string text, Font font, int width, int height, bool enabled = true)
+    public static bool Button(this Pencil pencil, string text, Font font, int width, int height, bool enabled = true)
     {
         TextSpriteAsset? textSprite = text.Length == 0 ? null : pencil.CreateTextSprite(text, font);
         return ButtonCore(pencil, textSprite, width, height, enabled);
     }
 
-    public static CursorState Button(this Pencil pencil, TextSpriteAsset textSprite)
+    public static bool Button(this Pencil pencil, TextSpriteAsset textSprite)
     {
         return Button(pencil, textSprite, enabled: true);
     }
 
-    public static CursorState Button(this Pencil pencil, TextSpriteAsset textSprite, bool enabled)
+    public static bool Button(this Pencil pencil, TextSpriteAsset textSprite, bool enabled)
     {
         ArgumentNullException.ThrowIfNull(textSprite);
 
@@ -738,31 +751,22 @@ public static class PencilExtensions
         return Button(pencil, textSprite, width, height, enabled);
     }
 
-    public static CursorState Button(this Pencil pencil, TextSpriteAsset textSprite, int width, int height, bool enabled = true)
+    public static bool Button(this Pencil pencil, TextSpriteAsset textSprite, int width, int height, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(textSprite);
         return ButtonCore(pencil, textSprite, width, height, enabled);
     }
 
-    private static CursorState ButtonCore(Pencil pencil, TextSpriteAsset? textSprite, int width, int height, bool enabled)
+    private static bool ButtonCore(Pencil pencil, TextSpriteAsset? textSprite, int width, int height, bool enabled)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
         GuiStyle style = pencil.Style;
         Rectangle area = PlaceElement(pencil, width, height);
-        CursorState state = HitArea(pencil, area, enabled);
-        bool active = state != CursorState.None;
-        Color backgroundColor = !enabled
-            ? style.Background
-            : active
-                ? style.ActiveColor
-                : style.Background;
-        Color textColor = !enabled
-            ? style.InactiveColor
-            : active
-                ? style.ActiveTextColor
-                : style.TextColor;
+        bool clicked = ClickArea(pencil, area, enabled);
+        Color backgroundColor = style.Background;
+        Color textColor = enabled ? style.TextColor : style.InactiveColor;
 
         if (style.BorderThickness > 0)
         {
@@ -771,8 +775,20 @@ public static class PencilExtensions
             int innerHeight = area.Height - style.BorderThickness * 2;
             if (innerWidth > 0 && innerHeight > 0)
             {
-                pencil.AddRectangle(new Rectangle(area.X + style.BorderThickness, area.Y + style.BorderThickness, innerWidth, innerHeight), backgroundColor);
+                Rectangle backgroundArea = new Rectangle(area.X + style.BorderThickness, area.Y + style.BorderThickness, innerWidth, innerHeight);
+                if (enabled)
+                {
+                    pencil.AddHoverRectangle(backgroundArea, backgroundColor, area, style.ActiveColor);
+                }
+                else
+                {
+                    pencil.AddRectangle(backgroundArea, backgroundColor);
+                }
             }
+        }
+        else if (enabled)
+        {
+            pencil.AddHoverRectangle(area, backgroundColor, area, style.ActiveColor);
         }
         else
         {
@@ -782,15 +798,18 @@ public static class PencilExtensions
         if (textSprite != null)
         {
             Vector2Int textSize = GetTextSize(textSprite);
-            Vector2Int nextPosition = pencil.CurrentPosition;
-            Vector2Int nextSize = pencil.CurrentSize;
-            pencil.MoveTo(area.X + (area.Width - textSize.X) / 2, area.Y + (area.Height - textSize.Y) / 2);
-            pencil.Text(textSprite, textColor);
-            pencil.CurrentPosition = nextPosition;
-            pencil.CurrentSize = nextSize;
+            Rectangle textArea = new Rectangle(area.X + (area.Width - textSize.X) / 2, area.Y + (area.Height - textSize.Y) / 2, textSize.X, textSize.Y);
+            if (enabled)
+            {
+                pencil.AddHoverTexture(textSprite.Texture, textArea, textSprite.CalculateTextureRegionUVs(), (FColor)textColor, area, (FColor)style.ActiveTextColor);
+            }
+            else
+            {
+                pencil.AddTexture(textSprite.Texture, textArea, textSprite.CalculateTextureRegionUVs(), (FColor)textColor);
+            }
         }
 
-        return state;
+        return clicked;
     }
 
     private static Vector2Int GetTextSize(TextSpriteAsset? textSprite) => textSprite == null ? default : new Vector2Int(textSprite.Size.X, textSprite.Size.Y);
@@ -873,6 +892,7 @@ public static class PencilExtensions
         Vector2Int size = new Vector2Int(width, height);
         Vector2Int position = pencil.CurrentPosition;
         Rectangle area = new Rectangle(position, size);
+        bool clicked = ClickArea(pencil, area);
 
         bool isFocused = pencil.IsFocused(id);
         bool committed = false;
@@ -911,7 +931,7 @@ public static class PencilExtensions
             }
         }
 
-        if (pencil.CursorJustReleased && area.Intersects(pencil.CursorPosition))
+        if (clicked)
         {
             if (!isFocused)
             {
@@ -973,8 +993,6 @@ public static class PencilExtensions
             Rectangle cursorRect = new Rectangle(cursorX, position.Y + padding, 1, textSize.Y);
             pencil.AddRectangle(cursorRect, style.TextColor);
         }
-
-        pencil.AddClickTest(area);
 
         pencil.CurrentSize = size;
         pencil.CurrentPosition = pencil.DetermineNextPosition(size);
