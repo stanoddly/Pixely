@@ -1,15 +1,15 @@
-name: Promote Pixely prerelease
+name: Publish to nuget.org
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Development package version to promote
+        description: Development package version to publish
         required: true
         type: string
 
 concurrency:
-  group: promote-pixely-prerelease
+  group: publish-pixely-nuget
   queue: max
 
 permissions:
@@ -21,7 +21,7 @@ env:
   PIXELY_VERSION_BASE_NUMBER: 8
 
 jobs:
-  promote:
+  publish:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -36,13 +36,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Download promotion artifacts
+      - name: Download publication artifacts
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ ! "$PIXELY_VERSION" =~ ^0\.0\.([1-9][0-9]*)-alpha$ ]]; then
-            echo "Expected a version in the form 0.0.N-alpha."
+          if [[ ! "$PIXELY_VERSION" =~ ^0\.0\.([1-9][0-9]*)$ ]]; then
+            echo "Expected a version in the form 0.0.N."
             exit 1
           fi
 
@@ -54,8 +54,8 @@ jobs:
           curl --fail --silent --show-error "$package_url" --output "$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
           curl --fail --silent --show-error "$promotion_url/Pixely.$PIXELY_VERSION.snupkg" --output "$promotion_directory/Pixely.$PIXELY_VERSION.snupkg"
 
-      - name: Verify promotion artifacts
-        id: promotion
+      - name: Verify publication artifacts
+        id: publication
         shell: bash
         run: |
           set -euo pipefail
@@ -75,18 +75,18 @@ jobs:
 
           repository_commit="$(jq --raw-output '.repositoryCommit' "$manifest")"
           if [[ ! "$repository_commit" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "The promotion manifest does not contain a full Git commit."
+            echo "The publication manifest does not contain a full Git commit."
             exit 1
           fi
 
           expected_nupkg_sha256="$(jq --raw-output '.nupkg.sha256' "$manifest")"
           expected_snupkg_sha256="$(jq --raw-output '.snupkg.sha256' "$manifest")"
           if [[ "$(sha256sum "$nupkg" | cut -d ' ' -f 1)" != "$expected_nupkg_sha256" ]]; then
-            echo "The NuGet package checksum does not match its promotion manifest."
+            echo "The NuGet package checksum does not match its publication manifest."
             exit 1
           fi
           if [[ "$(sha256sum "$snupkg" | cut -d ' ' -f 1)" != "$expected_snupkg_sha256" ]]; then
-            echo "The symbol package checksum does not match its promotion manifest."
+            echo "The symbol package checksum does not match its publication manifest."
             exit 1
           fi
 
@@ -103,7 +103,7 @@ jobs:
       - name: Verify source and version
         shell: bash
         env:
-          REPOSITORY_COMMIT: ${{ steps.promotion.outputs.repository_commit }}
+          REPOSITORY_COMMIT: ${{ steps.publication.outputs.repository_commit }}
         run: |
           set -euo pipefail
 
@@ -112,8 +112,13 @@ jobs:
             exit 1
           fi
 
+          if ! git merge-base --is-ancestor "$PIXELY_VERSION_BASE_COMMIT" "$REPOSITORY_COMMIT"; then
+            echo "$PIXELY_VERSION_BASE_COMMIT is not an ancestor of $REPOSITORY_COMMIT."
+            exit 1
+          fi
+
           distance="$(git rev-list --first-parent --count "$PIXELY_VERSION_BASE_COMMIT..$REPOSITORY_COMMIT")"
-          expected_version="0.0.$((PIXELY_VERSION_BASE_NUMBER + distance))-alpha"
+          expected_version="0.0.$((PIXELY_VERSION_BASE_NUMBER + distance))"
           if [[ "$PIXELY_VERSION" != "$expected_version" ]]; then
             echo "$REPOSITORY_COMMIT maps to $expected_version, not $PIXELY_VERSION."
             exit 1
@@ -125,16 +130,15 @@ jobs:
           set -euo pipefail
 
           selected_number="${PIXELY_VERSION#0.0.}"
-          selected_number="${selected_number%-alpha}"
           versions="$(curl --fail --silent --show-error https://api.nuget.org/v3-flatcontainer/pixely/index.json)"
           if jq --exit-status --arg version "$PIXELY_VERSION" '.versions | index($version) != null' <<< "$versions" >/dev/null; then
             echo "Pixely $PIXELY_VERSION is already on nuget.org; continuing recovery."
             exit 0
           fi
 
-          latest_number="$(jq --raw-output '[.versions[] | capture("^0\\.0\\.(?<number>[1-9][0-9]*)-alpha$")? | select(. != null) | .number | tonumber] | max // 0' <<< "$versions")"
+          latest_number="$(jq --raw-output '[.versions[] | capture("^0\\.0\\.(?<number>[1-9][0-9]*)(?:-alpha)?$")? | select(. != null) | .number | tonumber] | max // 0' <<< "$versions")"
           if (( selected_number <= latest_number )); then
-            echo "Pixely $PIXELY_VERSION does not advance the nuget.org sequence beyond 0.0.$latest_number-alpha."
+            echo "Pixely $PIXELY_VERSION does not advance the nuget.org sequence beyond 0.0.$latest_number."
             exit 1
           fi
 
@@ -164,7 +168,7 @@ jobs:
       - name: Create version tag
         shell: bash
         env:
-          REPOSITORY_COMMIT: ${{ steps.promotion.outputs.repository_commit }}
+          REPOSITORY_COMMIT: ${{ steps.publication.outputs.repository_commit }}
         run: |
           set -euo pipefail
 
@@ -175,7 +179,7 @@ jobs:
               echo "$tag already points to $tagged_commit instead of $REPOSITORY_COMMIT."
               exit 1
             fi
-            echo "$tag already points to the promoted commit."
+            echo "$tag already points to the published commit."
             exit 0
           fi
 
@@ -184,7 +188,7 @@ jobs:
           git tag --annotate "$tag" "$REPOSITORY_COMMIT" --message "Pixely $PIXELY_VERSION"
           git push origin "refs/tags/$tag"
 
-      - name: Create GitHub prerelease
+      - name: Create GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -193,12 +197,11 @@ jobs:
 
           tag="v$PIXELY_VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "GitHub prerelease $tag already exists."
+            echo "GitHub release $tag already exists."
             exit 0
           fi
 
           gh release create "$tag" \
             --verify-tag \
-            --prerelease \
             --generate-notes \
             --title "Pixely $PIXELY_VERSION"
