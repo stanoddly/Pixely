@@ -8,8 +8,7 @@ permissions:
   contents: read
 
 env:
-  PIXELY_VERSION_BASE_COMMIT: d5e9babf3149d0cbdc75d74b5cea33bc5461739e
-  PIXELY_VERSION_BASE_NUMBER: 8
+  PIXELY_VERSION_HEIGHT_OFFSET: '-281'
 
 jobs:
   platform-validation:
@@ -32,28 +31,10 @@ jobs:
         with:
           lfs: true
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - name: Validate platform
+        uses: ./.github/actions/validate-platform
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Build solution
-        run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
-
-      - name: Run tests
-        run: dotnet test Pixely.slnx --no-build -p:TreatWarningsAsErrors=true
-
-      - name: Stop build servers
-        run: dotnet build-server shutdown
-
-      - name: Run shader build integration tests
-        run: dotnet test tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj --no-build --filter 'TestCategory=BuildIntegration' -p:TreatWarningsAsErrors=true
-
-      - name: Verify conditional logging in Release
-        run: dotnet test tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj --configuration Release -p:TreatWarningsAsErrors=true
-
-      - name: Publish logging consumer with NativeAOT
-        run: dotnet publish tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj --configuration Release --runtime ${{ matrix.runtime }} -p:TreatWarningsAsErrors=true
+          runtime: ${{ matrix.runtime }}
 
   package:
     needs: platform-validation
@@ -79,13 +60,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! git merge-base --is-ancestor "$PIXELY_VERSION_BASE_COMMIT" "$GITHUB_SHA"; then
-            echo "$PIXELY_VERSION_BASE_COMMIT is not an ancestor of $GITHUB_SHA."
-            exit 1
-          fi
-
-          distance="$(git rev-list --first-parent --count "$PIXELY_VERSION_BASE_COMMIT..$GITHUB_SHA")"
-          version="0.0.$((PIXELY_VERSION_BASE_NUMBER + distance))"
+          height="$(git rev-list --first-parent --count "$GITHUB_SHA")"
+          version="0.0.$((height + PIXELY_VERSION_HEIGHT_OFFSET))"
           artifact="Pixely-$version"
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"

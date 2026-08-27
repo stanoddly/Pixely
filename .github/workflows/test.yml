@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  linux-arm64:
+  pull-request-validation:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
@@ -22,28 +22,8 @@ jobs:
         with:
           lfs: true
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - name: Validate platform
+        uses: ./.github/actions/validate-platform
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Build solution
-        run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
-
-      - name: Run tests
-        run: dotnet test Pixely.slnx --no-build -p:TreatWarningsAsErrors=true
-
-      - name: Stop build servers
-        run: dotnet build-server shutdown
-
-      - name: Run shader build integration tests
-        run: dotnet test tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj --no-build --filter 'TestCategory=BuildIntegration' -p:TreatWarningsAsErrors=true
-
-      - name: Verify conditional logging in Release
-        run: dotnet test tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj --configuration Release -p:TreatWarningsAsErrors=true
-
-      - name: Publish logging consumer with NativeAOT
-        run: dotnet publish tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj --configuration Release --runtime linux-arm64 -p:TreatWarningsAsErrors=true
-
-      - name: Run package integration tests
-        run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
+          runtime: linux-arm64
+          package-integration: 'true'

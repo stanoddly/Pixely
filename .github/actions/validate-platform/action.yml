@@ -1,0 +1,50 @@
+name: Validate platform
+description: Build and validate Pixely on one supported platform
+
+inputs:
+  runtime:
+    description: Runtime identifier used for NativeAOT publication
+    required: true
+  package-integration:
+    description: Whether to run package integration tests against the repository build
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Build solution
+      shell: bash
+      run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
+
+    - name: Run tests
+      shell: bash
+      run: dotnet test Pixely.slnx --no-build -p:TreatWarningsAsErrors=true
+
+    - name: Stop build servers
+      shell: bash
+      run: dotnet build-server shutdown
+
+    - name: Run shader build integration tests
+      shell: bash
+      run: dotnet test tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj --no-build --filter 'TestCategory=BuildIntegration' -p:TreatWarningsAsErrors=true
+
+    - name: Verify conditional logging in Release
+      shell: bash
+      run: dotnet test tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj --configuration Release -p:TreatWarningsAsErrors=true
+
+    - name: Publish logging consumer with NativeAOT
+      shell: bash
+      run: dotnet publish tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj --configuration Release --runtime "$INPUT_RUNTIME" -p:TreatWarningsAsErrors=true
+      env:
+        INPUT_RUNTIME: ${{ inputs.runtime }}
+
+    - name: Run package integration tests
+      if: inputs['package-integration'] == 'true'
+      shell: bash
+      run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true

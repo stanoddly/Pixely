@@ -17,8 +17,7 @@ permissions:
   id-token: write
 
 env:
-  PIXELY_VERSION_BASE_COMMIT: d5e9babf3149d0cbdc75d74b5cea33bc5461739e
-  PIXELY_VERSION_BASE_NUMBER: 8
+  PIXELY_VERSION_HEIGHT_OFFSET: '-281'
 
 jobs:
   publish:
@@ -112,13 +111,8 @@ jobs:
             exit 1
           fi
 
-          if ! git merge-base --is-ancestor "$PIXELY_VERSION_BASE_COMMIT" "$REPOSITORY_COMMIT"; then
-            echo "$PIXELY_VERSION_BASE_COMMIT is not an ancestor of $REPOSITORY_COMMIT."
-            exit 1
-          fi
-
-          distance="$(git rev-list --first-parent --count "$PIXELY_VERSION_BASE_COMMIT..$REPOSITORY_COMMIT")"
-          expected_version="0.0.$((PIXELY_VERSION_BASE_NUMBER + distance))"
+          height="$(git rev-list --first-parent --count "$REPOSITORY_COMMIT")"
+          expected_version="0.0.$((height + PIXELY_VERSION_HEIGHT_OFFSET))"
           if [[ "$PIXELY_VERSION" != "$expected_version" ]]; then
             echo "$REPOSITORY_COMMIT maps to $expected_version, not $PIXELY_VERSION."
             exit 1
