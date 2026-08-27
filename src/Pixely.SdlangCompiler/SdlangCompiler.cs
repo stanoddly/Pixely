@@ -627,19 +627,19 @@ public class SdlangCompiler
 
     private static string ResolvePhysicalPath(FileSystemInfo fileSystemInfo)
     {
-        FileSystemInfo? target = fileSystemInfo.ResolveLinkTarget(returnFinalTarget: true);
-        if (target is not null)
-        {
-            return ResolvePhysicalPath(target);
-        }
-
         DirectoryInfo? parent = fileSystemInfo switch
         {
             FileInfo file => file.Directory,
             DirectoryInfo directory => directory.Parent,
             _ => throw new ArgumentException($"Unsupported file system entry: {fileSystemInfo.GetType().FullName}", nameof(fileSystemInfo))
         };
-        return parent is null ? fileSystemInfo.FullName : Path.Combine(ResolvePhysicalPath(parent), fileSystemInfo.Name);
+        if (parent is null)
+        {
+            return fileSystemInfo.FullName;
+        }
+
+        FileSystemInfo? target = fileSystemInfo.ResolveLinkTarget(returnFinalTarget: true);
+        return target is not null ? ResolvePhysicalPath(target) : Path.Combine(ResolvePhysicalPath(parent), fileSystemInfo.Name);
     }
 
     private static int FindDependencySeparator(string statement)
