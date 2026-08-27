@@ -205,27 +205,6 @@ internal class FontSystem: IFontSystem, IUpdatable
         }
     }
 
-    public void ReleaseTextSprite(TextSpriteAsset textSprite)
-    {
-        (string text, Font font)? keyToRemove = null;
-        foreach (KeyValuePair<(string text, Font font), CachedTextSprite> cacheEntry in _textSpriteCache)
-        {
-            if (cacheEntry.Value.BorrowedTexture.TryGetTarget(out BorrowedTexture? borrowedTexture) && ReferenceEquals(borrowedTexture, textSprite.Texture))
-            {
-                keyToRemove = cacheEntry.Key;
-                break;
-            }
-        }
-
-        if (keyToRemove is (string text, Font font) key && _textSpriteCache.TryGetValue(key, out CachedTextSprite cached))
-        {
-            ReleaseCachedTextSprite(key, cached);
-            return;
-        }
-
-        textSprite.Dispose();
-    }
-
     public void Update()
     {
         List<(string text, Font font)> keysToRemove = new();
@@ -249,10 +228,9 @@ internal class FontSystem: IFontSystem, IUpdatable
     private void ReleaseCachedTextSprite((string text, Font font) key, CachedTextSprite cached)
     {
         _textSpriteCache.Remove(key);
-        // Invalidate a surviving borrowed handle before releasing the native texture it refers to.
         if (cached.BorrowedTexture.TryGetTarget(out BorrowedTexture? borrowedTexture))
         {
-            borrowedTexture.Dispose();
+            borrowedTexture.Invalidate();
         }
         cached.BackingTexture.Dispose();
     }
@@ -276,7 +254,7 @@ internal class FontSystem: IFontSystem, IUpdatable
         {
             if (cached.BorrowedTexture.TryGetTarget(out BorrowedTexture? borrowedTexture))
             {
-                borrowedTexture.Dispose();
+                borrowedTexture.Invalidate();
             }
             cached.BackingTexture.Dispose();
         }

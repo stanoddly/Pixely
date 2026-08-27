@@ -241,5 +241,19 @@ Pencuil's MVVM contracts use explicit names: `IPencuilView`, `IPencuilViewModel`
 `PencuilView<TViewModel>`. Their default scope is implicit; views belonging to another window
 override `IPencuilView.ViewScope` or pass a scope to the Pencuil view base class.
 
+Create and retain a `TextSpriteAsset` when stable text is drawn repeatedly. Pencuil can use the
+asset directly for text or button content without measuring or resolving the text again:
+
+```csharp
+TextSpriteAsset applyText = fontSystem.CreateTextSprite("Apply", font);
+
+pencil.Text(applyText, Colors.White);
+pencil.Button(applyText, width: 120, height: 32);
+```
+
+Text sprite assets do not own their cached backing textures and are not disposable. The font
+system keeps a backing texture alive while its borrowed texture is referenced and releases it
+after the final reference becomes unreachable.
+
 See `Pixely.Tutorials.MultiWindow` for two independently rendered windows and
 `Pixely.Tutorials.MultiWindowTextInput` for independent Pencuil focus and text input.

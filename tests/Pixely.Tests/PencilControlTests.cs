@@ -108,6 +108,26 @@ public sealed class PencilControlTests
     }
 
     [Test]
+    public void Button_TextSpriteAsset_ReusesProvidedTextureAndSize()
+    {
+        Pencil pencil = CreatePencil();
+        TestTexture texture = new TestTexture();
+        TextSpriteAsset text = new TextSpriteAsset(texture, new ShortRectangle(0, 0, 16, 10));
+        pencil.MoveTo(10, 20);
+
+        CursorState state = pencil.Button(text);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state, Is.EqualTo(CursorState.None));
+            Assert.That(pencil._textureRegionInstructions.Single().Texture, Is.SameAs(texture));
+            Assert.That(pencil._textureRegionInstructions.Single().Area, Is.EqualTo(new Rectangle(15, 25, 16, 10)));
+            Assert.That(pencil.CurrentSize, Is.EqualTo(new Vector2Int(26, 20)));
+            Assert.That(pencil.CurrentPosition, Is.EqualTo(new Vector2Int(10, 40)));
+        });
+    }
+
+    [Test]
     public void Button_FixedSize_UsesHoverPresentation()
     {
         Pencil pencil = CreatePencil();
@@ -179,13 +199,12 @@ public sealed class PencilControlTests
 
         public TextSpriteAsset CreateTextSprite(string text, Font font)
         {
-            ShortSize size = MeasureTextSprite(text, font);
-            return new TextSpriteAsset(_texture, new ShortRectangle(0, 0, size.Width, size.Height));
+            return new TextSpriteAsset(_texture, new ShortRectangle(0, 0, (ushort)(text.Length * 8), 10));
         }
 
         public ShortSize MeasureTextSprite(string text, Font font)
         {
-            return new ShortSize((ushort)(text.Length * 8), 10);
+            throw new AssertionException("Buttons should use the created text sprite size.");
         }
 
         public void ReleaseFont(Font font)

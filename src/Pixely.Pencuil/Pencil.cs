@@ -250,7 +250,13 @@ public class Pencil
             return;
         }
 
-        TextSpriteAsset sprite = _fontSystem.CreateTextSprite(text, font);
+        Text(_fontSystem.CreateTextSprite(text, font), color);
+    }
+
+    public void Text(TextSpriteAsset sprite, Color color)
+    {
+        ArgumentNullException.ThrowIfNull(sprite);
+
         Vector4 uvs = sprite.CalculateTextureRegionUVs();
         Vector2Int size = new Vector2Int(sprite.Size.X, sprite.Size.Y);
         Vector2Int position = CurrentPosition;
@@ -272,6 +278,8 @@ public class Pencil
         ShortSize size = _fontSystem.MeasureTextSprite(text, font);
         return new Vector2Int(size.Width, size.Height);
     }
+
+    internal TextSpriteAsset CreateTextSprite(string text, Font font) => _fontSystem.CreateTextSprite(text, font);
 
     public bool IsFocused(int id) => FocusedControlId == id;
 
@@ -662,13 +670,41 @@ public static class PencilExtensions
 
     public static CursorState Button(this Pencil pencil, string text, Font font, bool enabled)
     {
-        Vector2Int textSize = pencil.MeasureText(text, font);
+        TextSpriteAsset? textSprite = text.Length == 0 ? null : pencil.CreateTextSprite(text, font);
+        Vector2Int textSize = GetTextSize(textSprite);
         int width = textSize.X + pencil.Style.TextPadding * 2;
         int height = textSize.Y + pencil.Style.TextPadding * 2;
-        return Button(pencil, text, font, width, height, enabled);
+        return ButtonCore(pencil, textSprite, width, height, enabled);
     }
 
     public static CursorState Button(this Pencil pencil, string text, Font font, int width, int height, bool enabled = true)
+    {
+        TextSpriteAsset? textSprite = text.Length == 0 ? null : pencil.CreateTextSprite(text, font);
+        return ButtonCore(pencil, textSprite, width, height, enabled);
+    }
+
+    public static CursorState Button(this Pencil pencil, TextSpriteAsset text)
+    {
+        return Button(pencil, text, enabled: true);
+    }
+
+    public static CursorState Button(this Pencil pencil, TextSpriteAsset text, bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        Vector2Int textSize = GetTextSize(text);
+        int width = textSize.X + pencil.Style.TextPadding * 2;
+        int height = textSize.Y + pencil.Style.TextPadding * 2;
+        return Button(pencil, text, width, height, enabled);
+    }
+
+    public static CursorState Button(this Pencil pencil, TextSpriteAsset text, int width, int height, bool enabled = true)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return ButtonCore(pencil, text, width, height, enabled);
+    }
+
+    private static CursorState ButtonCore(Pencil pencil, TextSpriteAsset? text, int width, int height, bool enabled)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -703,16 +739,21 @@ public static class PencilExtensions
             pencil.AddRectangle(area, backgroundColor);
         }
 
-        Vector2Int textSize = pencil.MeasureText(text, font);
-        Vector2Int nextPosition = pencil.CurrentPosition;
-        Vector2Int nextSize = pencil.CurrentSize;
-        pencil.MoveTo(area.X + (area.Width - textSize.X) / 2, area.Y + (area.Height - textSize.Y) / 2);
-        pencil.Text(text, font, textColor);
-        pencil.CurrentPosition = nextPosition;
-        pencil.CurrentSize = nextSize;
+        if (text != null)
+        {
+            Vector2Int textSize = GetTextSize(text);
+            Vector2Int nextPosition = pencil.CurrentPosition;
+            Vector2Int nextSize = pencil.CurrentSize;
+            pencil.MoveTo(area.X + (area.Width - textSize.X) / 2, area.Y + (area.Height - textSize.Y) / 2);
+            pencil.Text(text, textColor);
+            pencil.CurrentPosition = nextPosition;
+            pencil.CurrentSize = nextSize;
+        }
 
         return state;
     }
+
+    private static Vector2Int GetTextSize(TextSpriteAsset? text) => text == null ? default : new Vector2Int(text.Size.X, text.Size.Y);
 
     private static Rectangle PlaceElement(Pencil pencil, int width, int height)
     {
