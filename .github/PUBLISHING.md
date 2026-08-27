@@ -4,7 +4,7 @@ Pixely is packed once for every validated `main` commit. The resulting package i
 
 ## Development feed
 
-The **Publish to development feed** workflow runs after every push to `main`. It performs the full build and test suite, validates the package through isolated consumers on all supported hosts, publishes the `.nupkg` through Sleet, and stores the matching `.snupkg` and checksum manifest under `promotion/pixely/<version>/` in B2. Publication attempts are serialized, reruns reuse the first stored files, and existing content is never overwritten.
+Pull requests run the complete build, test, integration, NativeAOT, and package-consumer slice on Linux ARM64. After merge, the **Publish to development feed** workflow runs the full validation on Linux x64, Windows x64, macOS x64, and macOS ARM64, then validates the canonical package through isolated consumers on those four platforms. It publishes the `.nupkg` through Sleet and stores the matching `.snupkg` and checksum manifest under `promotion/pixely/<version>/` in B2. Publication attempts are serialized, reruns reuse the first stored files, and existing content is never overwritten.
 
 Versions use the form `0.0.N`. Commit `d5e9babf3149d0cbdc75d74b5cea33bc5461739e`, the last `main` commit before automatic development publication, and version number `8` are the fixed baselines; every later first-parent commit on `main` increments `N`. The package repository metadata records the complete source commit.
 
