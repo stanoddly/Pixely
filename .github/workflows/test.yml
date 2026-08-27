@@ -26,4 +26,4 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Run unit tests
-        run: dotnet test tests/Pixely.UnitTests.slnx -p:TreatWarningsAsErrors=true
+        run: dotnet test tests/Pixely.UnitTests.slnf -p:TreatWarningsAsErrors=true
