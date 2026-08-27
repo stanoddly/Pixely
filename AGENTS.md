@@ -15,4 +15,8 @@
 - `docs/architecture-concept.md` - MVP + CQS + Events: layer responsibilities, boundary contract vs. internal representation, per-genre decision framework
 - `docs/architecture-library.md` - Pixely.Architecture API: command/query handlers, dispatcher, domain event stream/cursor, pump, post-dispatch hooks, registration extensions
 - `docs/architecture-testing.md` - Pixely.Architecture.Testing: CqsConventions and ModelBoundary checks that enforce the architecture-concept.md boundary claims as unit tests
-- `docs/package-publication.md` - One-time trusted-publishing setup and the manual prerelease workflow
+- `docs/development-packages.md` - Consuming packages from the public development feed
+
+## Maintenance
+
+- `.github/PUBLISHING.md` - Development-feed and nuget.org publication setup, workflows, and recovery

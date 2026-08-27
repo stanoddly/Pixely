@@ -1,0 +1,201 @@
+name: Publish to nuget.org
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Development package version to publish
+        required: true
+        type: string
+
+concurrency:
+  group: publish-pixely-nuget
+  queue: max
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  PIXELY_VERSION_HEIGHT_OFFSET: '-281'
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PIXELY_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download publication artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$PIXELY_VERSION" =~ ^0\.0\.([1-9][0-9]*)$ ]]; then
+            echo "Expected a version in the form 0.0.N."
+            exit 1
+          fi
+
+          promotion_directory="artifacts/promotion"
+          promotion_url="https://pixely.s3.eu-central-003.backblazeb2.com/promotion/pixely/$PIXELY_VERSION"
+          package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          mkdir -p "$promotion_directory"
+          curl --fail --silent --show-error "$promotion_url/manifest.json" --output "$promotion_directory/manifest.json"
+          curl --fail --silent --show-error "$package_url" --output "$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
+          curl --fail --silent --show-error "$promotion_url/Pixely.$PIXELY_VERSION.snupkg" --output "$promotion_directory/Pixely.$PIXELY_VERSION.snupkg"
+
+      - name: Verify publication artifacts
+        id: publication
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          promotion_directory="artifacts/promotion"
+          manifest="$promotion_directory/manifest.json"
+          nupkg="$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
+          snupkg="$promotion_directory/Pixely.$PIXELY_VERSION.snupkg"
+          expected_nupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          expected_snupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/promotion/pixely/$PIXELY_VERSION/Pixely.$PIXELY_VERSION.snupkg"
+          jq --exit-status \
+            --arg packageVersion "$PIXELY_VERSION" \
+            --arg nupkgUrl "$expected_nupkg_url" \
+            --arg snupkgUrl "$expected_snupkg_url" \
+            '.schemaVersion == 1 and .packageId == "Pixely" and .packageVersion == $packageVersion and .nupkg.url == $nupkgUrl and .snupkg.url == $snupkgUrl' \
+            "$manifest" >/dev/null
+
+          repository_commit="$(jq --raw-output '.repositoryCommit' "$manifest")"
+          if [[ ! "$repository_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "The publication manifest does not contain a full Git commit."
+            exit 1
+          fi
+
+          expected_nupkg_sha256="$(jq --raw-output '.nupkg.sha256' "$manifest")"
+          expected_snupkg_sha256="$(jq --raw-output '.snupkg.sha256' "$manifest")"
+          if [[ "$(sha256sum "$nupkg" | cut -d ' ' -f 1)" != "$expected_nupkg_sha256" ]]; then
+            echo "The NuGet package checksum does not match its publication manifest."
+            exit 1
+          fi
+          if [[ "$(sha256sum "$snupkg" | cut -d ' ' -f 1)" != "$expected_snupkg_sha256" ]]; then
+            echo "The symbol package checksum does not match its publication manifest."
+            exit 1
+          fi
+
+          unzip -t "$nupkg" >/dev/null
+          unzip -t "$snupkg" >/dev/null
+          unzip -p "$nupkg" '*.nuspec' > "$promotion_directory/Pixely.nuspec"
+          if ! grep -Fq "<version>$PIXELY_VERSION</version>" "$promotion_directory/Pixely.nuspec" || ! grep -Fq "commit=\"$repository_commit\"" "$promotion_directory/Pixely.nuspec"; then
+            echo "The package metadata does not match its version and source commit."
+            exit 1
+          fi
+
+          echo "repository_commit=$repository_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Verify source and version
+        shell: bash
+        env:
+          REPOSITORY_COMMIT: ${{ steps.publication.outputs.repository_commit }}
+        run: |
+          set -euo pipefail
+
+          if ! git rev-list --first-parent origin/main | awk -v commit="$REPOSITORY_COMMIT" '$0 == commit { found = 1 } END { exit !found }'; then
+            echo "$REPOSITORY_COMMIT is not on the first-parent history of main."
+            exit 1
+          fi
+
+          height="$(git rev-list --first-parent --count "$REPOSITORY_COMMIT")"
+          expected_version="0.0.$((height + PIXELY_VERSION_HEIGHT_OFFSET))"
+          if [[ "$PIXELY_VERSION" != "$expected_version" ]]; then
+            echo "$REPOSITORY_COMMIT maps to $expected_version, not $PIXELY_VERSION."
+            exit 1
+          fi
+
+      - name: Verify publication order
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          selected_number="${PIXELY_VERSION#0.0.}"
+          versions="$(curl --fail --silent --show-error https://api.nuget.org/v3-flatcontainer/pixely/index.json)"
+          if jq --exit-status --arg version "$PIXELY_VERSION" '.versions | index($version) != null' <<< "$versions" >/dev/null; then
+            echo "Pixely $PIXELY_VERSION is already on nuget.org; continuing recovery."
+            exit 0
+          fi
+
+          latest_number="$(jq --raw-output '[.versions[] | capture("^0\\.0\\.(?<number>[1-9][0-9]*)(?:-alpha)?$")? | select(. != null) | .number | tonumber] | max // 0' <<< "$versions")"
+          if (( selected_number <= latest_number )); then
+            echo "Pixely $PIXELY_VERSION does not advance the nuget.org sequence beyond 0.0.$latest_number."
+            exit 1
+          fi
+
+      - name: Request temporary NuGet credential
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: stanoddly
+
+      - name: Publish package and symbols
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          dotnet nuget push "artifacts/promotion/Pixely.$PIXELY_VERSION.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --no-symbols \
+            --skip-duplicate
+          dotnet nuget push "artifacts/promotion/Pixely.$PIXELY_VERSION.snupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Create version tag
+        shell: bash
+        env:
+          REPOSITORY_COMMIT: ${{ steps.publication.outputs.repository_commit }}
+        run: |
+          set -euo pipefail
+
+          tag="v$PIXELY_VERSION"
+          if git rev-parse --verify --quiet "$tag^{}" >/dev/null; then
+            tagged_commit="$(git rev-parse "$tag^{}")"
+            if [[ "$tagged_commit" != "$REPOSITORY_COMMIT" ]]; then
+              echo "$tag already points to $tagged_commit instead of $REPOSITORY_COMMIT."
+              exit 1
+            fi
+            echo "$tag already points to the published commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$tag" "$REPOSITORY_COMMIT" --message "Pixely $PIXELY_VERSION"
+          git push origin "refs/tags/$tag"
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="v$PIXELY_VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub release $tag already exists."
+            exit 0
+          fi
+
+          gh release create "$tag" \
+            --verify-tag \
+            --generate-notes \
+            --title "Pixely $PIXELY_VERSION"

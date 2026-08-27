@@ -25,7 +25,7 @@ Reference the `Pixely` package and declare the shaders to compile:
 
 ```xml
 <ItemGroup>
-    <PackageReference Include="Pixely" Version="0.0.N-alpha" />
+    <PackageReference Include="Pixely" Version="0.0.N" />
     <SdlangShader Include="Content\shaders\*.slang" />
 </ItemGroup>
 ```

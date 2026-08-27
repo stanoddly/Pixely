@@ -1,137 +1,29 @@
-name: Test
+name: Pull request
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 
-env:
-  PIXELY_PACKAGE_VERSION: 0.0.0-alpha.package-tests
-  PIXELY_PACKAGE_ARTIFACT: Pixely-0.0.0-alpha.package-tests
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  pull-request-validation:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
-    strategy:
-      matrix:
-        os: [ubuntu-24.04-arm, windows-latest]
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
         with:
           lfs: true
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - name: Validate platform
+        uses: ./.github/actions/validate-platform
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Build solution
-        run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
-
-      - name: Run tests
-        run: dotnet test Pixely.slnx --no-build -p:TreatWarningsAsErrors=true
-
-      - name: Stop build servers
-        run: dotnet build-server shutdown
-
-      - name: Run shader build integration tests
-        run: dotnet test tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj --no-build --filter 'TestCategory=BuildIntegration' -p:TreatWarningsAsErrors=true
-
-      - name: Verify conditional logging in Release
-        run: dotnet test tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj --configuration Release -p:TreatWarningsAsErrors=true
-
-      - name: Publish logging consumer with NativeAOT
-        if: runner.os == 'Linux'
-        run: dotnet publish tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj --configuration Release --runtime linux-arm64 -p:TreatWarningsAsErrors=true
-
-  package:
-    needs: test
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Pack validated commit
-        env:
-          REPOSITORY_COMMIT: ${{ github.sha }}
-          REPOSITORY_BRANCH: ${{ github.ref }}
-        run: >-
-          dotnet pack packaging/Pixely/Pixely.Package.csproj
-          --configuration Release
-          --output artifacts/packages
-          --property:PackageVersion=$PIXELY_PACKAGE_VERSION
-          --property:Version=$PIXELY_PACKAGE_VERSION
-          --property:RepositoryCommit=$REPOSITORY_COMMIT
-          --property:RepositoryBranch=$REPOSITORY_BRANCH
-          --property:ContinuousIntegrationBuild=true
-          -p:TreatWarningsAsErrors=true
-
-      - name: Upload package artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PIXELY_PACKAGE_ARTIFACT }}
-          path: |
-            artifacts/packages/Pixely.${{ env.PIXELY_PACKAGE_VERSION }}.nupkg
-            artifacts/packages/Pixely.${{ env.PIXELY_PACKAGE_VERSION }}.snupkg
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 1
-
-  package-consumer:
-    needs: package
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        os:
-          - ubuntu-24.04
-          - ubuntu-24.04-arm
-          - windows-latest
-          - macos-15-intel
-          - macos-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Download package artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.PIXELY_PACKAGE_ARTIFACT }}
-          path: artifacts/package-under-test
-
-      - name: Build package integration tests
-        run: dotnet build tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj -p:TreatWarningsAsErrors=true
-
-      - name: Test local package consumers
-        env:
-          PIXELY_PACKAGE_DIRECTORY: ${{ github.workspace }}/artifacts/package-under-test
-        run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
-
-  package-validation:
-    needs: package-consumer
-    if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Verify package consumers
-        env:
-          PACKAGE_CONSUMER_RESULT: ${{ needs.package-consumer.result }}
-        shell: bash
-        run: |
-          if [[ "$PACKAGE_CONSUMER_RESULT" != "success" ]]; then
-            echo "Package consumer validation did not succeed."
-            exit 1
-          fi
+          runtime: linux-arm64
+          package-integration: 'true'
