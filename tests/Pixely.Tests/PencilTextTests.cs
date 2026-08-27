@@ -35,6 +35,21 @@ public class PencilTextTests
     }
 
     [Test]
+    public void MeasureText_WithText_ReturnsFontSystemMeasurement()
+    {
+        MeasuringFontSystem fontSystem = new MeasuringFontSystem();
+        Pencil pencil = CreatePencil(fontSystem);
+
+        Vector2Int size = pencil.MeasureText("abc", null!);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(size, Is.EqualTo(new Vector2Int(24, 10)));
+            Assert.That(fontSystem.MeasureCallCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void Text_WithTextSpriteAsset_DrawsWithoutCallingFontSystem()
     {
         Pencil pencil = CreatePencil();
@@ -54,10 +69,32 @@ public class PencilTextTests
         });
     }
 
+    [Test]
+    public void Text_WithEmptyTextSpriteAsset_DoesNotChangeLayoutState()
+    {
+        Pencil pencil = CreatePencil();
+        TextSpriteAsset text = new TextSpriteAsset(new TestTexture(), default);
+        pencil.MoveTo(10, 20);
+        pencil.CurrentSize = new Vector2Int(30, 40);
+        pencil.CurrentGap = 5;
+
+        pencil.Text(text, Colors.White);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil._textureRegionInstructions, Is.Empty);
+            Assert.That(pencil.CurrentPosition, Is.EqualTo(new Vector2Int(10, 20)));
+            Assert.That(pencil.CurrentSize, Is.EqualTo(new Vector2Int(30, 40)));
+            Assert.That(pencil.CurrentGap, Is.EqualTo(5));
+        });
+    }
+
     private static Pencil CreatePencil()
     {
-        return new Pencil(new ThrowingFontSystem(), new TestClipboardService(), GuiStyles.Style);
+        return CreatePencil(new ThrowingFontSystem());
     }
+
+    private static Pencil CreatePencil(IFontSystem fontSystem) => new Pencil(fontSystem, new TestClipboardService(), GuiStyles.Style);
 
     private sealed class ThrowingFontSystem : IFontSystem
     {
@@ -73,6 +110,35 @@ public class PencilTextTests
         public ShortSize MeasureTextSprite(string text, Font font) => throw new AssertionException("Font system should not be called.");
 
         public void ReleaseFont(Font font) => throw new AssertionException("Font system should not be called.");
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class MeasuringFontSystem : IFontSystem
+    {
+        internal int MeasureCallCount { get; private set; }
+
+        public Font Load(string path, ushort size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal)
+        {
+            throw new AssertionException("Font loading is not expected.");
+        }
+
+        public TextSpriteAsset CreateTextSprite(string text, Font font)
+        {
+            throw new AssertionException("Text sprite creation is not expected.");
+        }
+
+        public ShortSize MeasureTextSprite(string text, Font font)
+        {
+            MeasureCallCount++;
+            return new ShortSize((ushort)(text.Length * 8), 10);
+        }
+
+        public void ReleaseFont(Font font)
+        {
+        }
 
         public void Dispose()
         {

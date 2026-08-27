@@ -228,10 +228,6 @@ internal class FontSystem: IFontSystem, IUpdatable
     private void ReleaseCachedTextSprite((string text, Font font) key, CachedTextSprite cached)
     {
         _textSpriteCache.Remove(key);
-        if (cached.BorrowedTexture.TryGetTarget(out BorrowedTexture? borrowedTexture))
-        {
-            borrowedTexture.Invalidate();
-        }
         cached.BackingTexture.Dispose();
     }
 
