@@ -595,6 +595,7 @@ public class SdlangCompiler
     private static List<string> ReadSourceDependencies(FileInfo filePath, FileInfo dependencyFile)
     {
         HashSet<string> sourceDependencies = new HashSet<string>(StringComparer.Ordinal);
+        string sourceDirectoryPath = ResolvePhysicalPath(filePath.Directory!);
 
         foreach (string statement in File.ReadLines(dependencyFile.FullName))
         {
@@ -606,14 +607,14 @@ public class SdlangCompiler
 
             foreach (string dependency in ParseDependencyPaths(statement.AsSpan(separatorIndex + 1)))
             {
-                string absolutePath = Path.GetFullPath(dependency);
-                string relativePath = Path.GetRelativePath(filePath.Directory!.FullName, absolutePath);
+                string absolutePath = ResolvePhysicalPath(new FileInfo(Path.GetFullPath(dependency)));
+                string relativePath = Path.GetRelativePath(sourceDirectoryPath, absolutePath);
                 string normalizedPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
                 sourceDependencies.Add(normalizedPath);
             }
         }
 
-        string normalizedInputPath = Path.GetRelativePath(filePath.Directory!.FullName, filePath.FullName)
+        string normalizedInputPath = Path.GetRelativePath(sourceDirectoryPath, ResolvePhysicalPath(filePath))
             .Replace(Path.DirectorySeparatorChar, '/');
         if (!sourceDependencies.Contains(normalizedInputPath))
         {
@@ -622,6 +623,23 @@ public class SdlangCompiler
         }
 
         return sourceDependencies.Order(StringComparer.Ordinal).ToList();
+    }
+
+    private static string ResolvePhysicalPath(FileSystemInfo fileSystemInfo)
+    {
+        FileSystemInfo? target = fileSystemInfo.ResolveLinkTarget(returnFinalTarget: true);
+        if (target is not null)
+        {
+            return ResolvePhysicalPath(target);
+        }
+
+        DirectoryInfo? parent = fileSystemInfo switch
+        {
+            FileInfo file => file.Directory,
+            DirectoryInfo directory => directory.Parent,
+            _ => throw new ArgumentException($"Unsupported file system entry: {fileSystemInfo.GetType().FullName}", nameof(fileSystemInfo))
+        };
+        return parent is null ? fileSystemInfo.FullName : Path.Combine(ResolvePhysicalPath(parent), fileSystemInfo.Name);
     }
 
     private static int FindDependencySeparator(string statement)

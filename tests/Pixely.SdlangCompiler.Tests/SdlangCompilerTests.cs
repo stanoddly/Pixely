@@ -426,6 +426,25 @@ public class SdlangCompilerTests
     }
 
     [Test]
+    [Platform(Exclude = "Win")]
+    public void CompileShader_SymbolicLinkInShaderPath_UsesRelativeSourceDependency()
+    {
+        string shaderDirectory = Path.Combine(_testDir, "shaders");
+        string shaderDirectoryLink = Path.Combine(_testDir, "linked-shaders");
+        Directory.CreateDirectory(shaderDirectory);
+        Directory.CreateSymbolicLink(shaderDirectoryLink, shaderDirectory);
+        string shaderPath = Path.Combine(shaderDirectoryLink, "test_shader.slang");
+        File.WriteAllText(shaderPath, ShaderContent);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string metadataPath = Path.Combine(shaderDirectoryLink, ".generated", "test_shader.metadata.json");
+        GraphicsShaderProgramMetadataDto metadata = ReadGraphicsMetadata(metadataPath);
+        Assert.That(metadata.SourceDependencies, Is.EqualTo(new[] { "test_shader.slang" }));
+    }
+
+    [Test]
     public void CompileShader_ObsoleteGeneratedFiles_RemovesThem()
     {
         string shaderPath = Path.Combine(_testDir, "current.slang");
