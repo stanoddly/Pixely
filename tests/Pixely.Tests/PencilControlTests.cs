@@ -183,6 +183,112 @@ public sealed class PencilControlTests
         Assert.That(state, Is.EqualTo(CursorState.Clicked));
     }
 
+    [Test]
+    public void UpdateCursor_MotionOutsideHitAreas_DoesNotInvalidate()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(-20, -20);
+        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(-10, -10), pressed: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.CursorPosition, Is.EqualTo(new Vector2Int(-10, -10)));
+            Assert.That(pencil.NeedsUpdate, Is.False);
+        });
+    }
+
+    [Test]
+    public void UpdateCursor_EnteringHitArea_Invalidates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(-10, -10);
+        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
+
+        Assert.That(pencil.NeedsUpdate, Is.True);
+    }
+
+    [Test]
+    public void UpdateCursor_MotionWithinHitArea_DoesNotInvalidate()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(2, 2);
+        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
+
+        Assert.That(pencil.NeedsUpdate, Is.False);
+    }
+
+    [Test]
+    public void UpdateCursor_LeavingHitArea_Invalidates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(20, 20), pressed: false);
+
+        Assert.That(pencil.NeedsUpdate, Is.True);
+    }
+
+    [Test]
+    public void UpdateCursor_MovingBetweenHitAreas_Invalidates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.HitArea(new Rectangle(0, 0, 10, 10));
+        pencil.HitArea(new Rectangle(20, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(25, 5), pressed: false);
+
+        Assert.That(pencil.NeedsUpdate, Is.True);
+    }
+
+    [Test]
+    public void UpdateCursor_ContinuousHoverTest_InvalidatesMotionWithinAndOutOfArea()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(2, 2);
+        pencil.AddHoverTest(new Rectangle(0, 0, 10, 10));
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: false);
+        bool invalidatedWithinArea = pencil.NeedsUpdate;
+        pencil.NeedsUpdate = false;
+        pencil.UpdateCursor(new Vector2Int(20, 20), pressed: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(invalidatedWithinArea, Is.True);
+            Assert.That(pencil.NeedsUpdate, Is.True);
+        });
+    }
+
+    [Test]
+    public void UpdateCursor_PressedStateChange_Invalidates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.CursorPosition = new Vector2Int(5, 5);
+        pencil.NeedsUpdate = false;
+
+        pencil.UpdateCursor(new Vector2Int(5, 5), pressed: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.CursorPressed, Is.True);
+            Assert.That(pencil.NeedsUpdate, Is.True);
+        });
+    }
+
     private static Pencil CreatePencil()
     {
         return new Pencil(new TestFontSystem(), new TestClipboardService(), GuiStyles.Style);

@@ -30,20 +30,20 @@ internal sealed class PencilSystem : IUpdatable
 
         mouseService.SubscribeMotion(_viewScope, inputOrder, args =>
         {
-            pencil.CursorPosition = (Vector2Int)args.Position;
-            pencil.Invalidate();
+            pencil.UpdateCursor((Vector2Int)args.Position, args.Mouse.IsPressed(MouseButton.Left));
         });
 
         mouseService.SubscribeWindowLeave(_viewScope, inputOrder, _ =>
         {
-            pencil.CursorPosition = new Vector2Int(-1, -1);
-            pencil.Invalidate();
+            pencil.UpdateCursor(new Vector2Int(-1, -1), pencil.CursorPressed);
         });
 
         mouseService.SubscribeButtonPress(_viewScope, inputOrder, args =>
         {
             if (args.Button == MouseButton.Left)
             {
+                pencil.UpdateCursor((Vector2Int)args.Position, pressed: true);
+
                 if (pencil.IsOverInteractiveArea((Vector2Int)args.Position))
                 {
                     args.Consume();
@@ -55,6 +55,7 @@ internal sealed class PencilSystem : IUpdatable
         {
             if (args.Button == MouseButton.Left)
             {
+                pencil.UpdateCursor((Vector2Int)args.Position, pressed: false);
                 pencil.CursorJustReleased = true;
                 pencil.Invalidate();
 

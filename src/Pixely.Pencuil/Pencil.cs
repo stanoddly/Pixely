@@ -103,7 +103,52 @@ public class Pencil
 
     public void UpdateCursor(Vector2Int position, bool pressed)
     {
+        bool cursorMoved = position != CursorPosition;
+        bool interactionChanged = pressed != CursorPressed;
 
+        if (cursorMoved)
+        {
+            foreach (Rectangle area in _hoverTests)
+            {
+                if (area.Intersects(CursorPosition) || area.Intersects(position))
+                {
+                    interactionChanged = true;
+                    break;
+                }
+            }
+
+            if (!interactionChanged)
+            {
+                foreach (Rectangle area in _hoverInTests)
+                {
+                    if (!area.Intersects(CursorPosition) && area.Intersects(position))
+                    {
+                        interactionChanged = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!interactionChanged)
+            {
+                foreach (Rectangle area in _hoverOutTests)
+                {
+                    if (area.Intersects(CursorPosition) && !area.Intersects(position))
+                    {
+                        interactionChanged = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        CursorPosition = position;
+        CursorPressed = pressed;
+
+        if (interactionChanged)
+        {
+            Invalidate();
+        }
     }
 
     public LayoutDirection CurrentDirection { get; set; } = LayoutDirection.Bottom;
@@ -646,7 +691,6 @@ public static class PencilExtensions
             return CursorState.None;
         }
 
-        pencil.AddHoverTest(area);
         pencil.AddHoverInTest(area);
         pencil.AddHoverOutTest(area);
         pencil.AddClickTest(area);
