@@ -13,7 +13,7 @@ public sealed record PlatformInfo(string? SdlVideoDriver)
         get { return SdlVideoDriver != "wayland"; }
     }
 
-    public bool SupportsClickThrough
+    public bool SupportsWindowShape
     {
         get { return SdlVideoDriver != "wayland"; }
     }
