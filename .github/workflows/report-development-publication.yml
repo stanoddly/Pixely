@@ -6,6 +6,7 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   pull-requests: write
 
 jobs:
@@ -20,6 +21,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         shell: bash
         run: |
@@ -29,7 +31,10 @@ jobs:
 
           case "$RUN_CONCLUSION" in
             success)
-              message="✅ Development package published successfully."
+              artifact_name="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].name')"
+              version="${artifact_name#Pixely-}"
+              package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$version/pixely.$version.nupkg"
+              message="$(printf '✅ Development package [`Pixely %s`](%s) published successfully.' "$version" "$package_url")"
               ;;
             failure)
               message="❌ Development publication failed."
