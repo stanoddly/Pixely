@@ -30,20 +30,20 @@ internal sealed class PencilSystem : IUpdatable
 
         mouseService.SubscribeMotion(_viewScope, inputOrder, args =>
         {
-            pencil.CursorPosition = (Vector2Int)args.Position;
-            pencil.Invalidate();
+            pencil.UpdateCursor((Vector2Int)args.Position);
         });
 
         mouseService.SubscribeWindowLeave(_viewScope, inputOrder, _ =>
         {
-            pencil.CursorPosition = new Vector2Int(-1, -1);
-            pencil.Invalidate();
+            pencil.UpdateCursor(new Vector2Int(-1, -1));
         });
 
         mouseService.SubscribeButtonPress(_viewScope, inputOrder, args =>
         {
             if (args.Button == MouseButton.Left)
             {
+                pencil.UpdateCursor((Vector2Int)args.Position);
+
                 if (pencil.IsOverInteractiveArea((Vector2Int)args.Position))
                 {
                     args.Consume();
@@ -55,6 +55,7 @@ internal sealed class PencilSystem : IUpdatable
         {
             if (args.Button == MouseButton.Left)
             {
+                pencil.UpdateCursor((Vector2Int)args.Position);
                 pencil.CursorJustReleased = true;
                 pencil.Invalidate();
 
@@ -105,7 +106,7 @@ internal sealed class PencilSystem : IUpdatable
         {
             _pencil.FocusedControlSeenThisFrame = false;
             _pencil.NeedsUpdate = false;
-            _pencil.ResetInteractionTests();
+            _pencil.ResetInteractionData();
 
             foreach (IPencuilView view in _views)
             {
@@ -113,7 +114,7 @@ internal sealed class PencilSystem : IUpdatable
             }
 
             _pencil.FinishBuild();
-            _pencil.InstructionsChanged = _pencil.HaveInstructionsChanged();
+            _pencil.InstructionsChanged |= _pencil.HaveInstructionsChanged();
             _pencil.MarkInstructionsCompleted();
             _pencil.CycleInstructions();
         }

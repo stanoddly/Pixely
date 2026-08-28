@@ -81,11 +81,10 @@ internal sealed class BorrowedTexture : Texture
     {
     }
 
-    public override void Dispose()
-    {
-        // Invalidate only this borrowed handle; the backing texture remains responsible for native disposal.
-        SdlGpuTexture = Pointer<SDL_GPUTexture>.Null;
-    }
+    // A borrowed handle never owns or invalidates the shared native texture.
+    public override void Dispose() { }
+
+    internal void Invalidate() => SdlGpuTexture = Pointer<SDL_GPUTexture>.Null;
 }
 
 public class SwapchainTexture : Texture

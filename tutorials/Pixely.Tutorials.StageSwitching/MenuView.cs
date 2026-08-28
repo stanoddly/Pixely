@@ -73,16 +73,14 @@ public class MenuView : IPencuilView
         Rectangle area = new Rectangle(x, y, ButtonWidth, ButtonHeight);
         Color color = active ? ActiveButtonColor : ButtonColor;
         Color hoverColor = active ? ActiveButtonHoverColor : ButtonHoverColor;
-        Color actualColor = area.Intersects(pencil.CursorPosition) ? hoverColor : color;
 
         pencil.MoveTo(x, y);
-        pencil.Rectangle(ButtonWidth, ButtonHeight, actualColor);
-        CursorState state = pencil.HitArea(area);
+        pencil.HoverRectangle(ButtonWidth, ButtonHeight, color, hoverColor);
 
         Vector2Int textSize = pencil.MeasureText(text, _font);
         pencil.MoveTo(x + (ButtonWidth - textSize.X) / 2, y + (ButtonHeight - textSize.Y) / 2);
         pencil.Text(text, _font, TextColor);
 
-        return state == CursorState.Clicked;
+        return pencil.ClickArea(area);
     }
 }

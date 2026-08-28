@@ -82,8 +82,7 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
     private void BuildOpenColumn(Pencil pencil, int x, int y)
     {
         pencil.MoveTo(x, y);
-        CursorState state = pencil.Button("Open file", _font, ButtonWidth, ButtonHeight);
-        if (state == CursorState.Clicked)
+        if (pencil.Button("Open file", _font, ButtonWidth, ButtonHeight))
         {
             FileDialogResult result = _window.ShowModalOpenFileDialog();
 
@@ -107,8 +106,7 @@ public class FileDialogsView : PencuilView<FileDialogsViewModel>
     private void BuildSaveColumn(Pencil pencil, int x, int y)
     {
         pencil.MoveTo(x, y);
-        CursorState state = pencil.Button("Save file", _font, ButtonWidth, ButtonHeight);
-        if (state == CursorState.Clicked)
+        if (pencil.Button("Save file", _font, ButtonWidth, ButtonHeight))
         {
             FileDialogResult result = _window.ShowModalSaveFileDialog();
 
