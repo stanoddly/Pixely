@@ -6,7 +6,7 @@ Pixely is packed once for every validated `main` commit. The resulting package i
 
 Pull requests run the complete build, test, integration, NativeAOT, and package-consumer slice on Linux ARM64. After merge, the **Publish to development feed** workflow runs the full validation on Linux x64, Windows x64, macOS x64, and macOS ARM64, then validates the canonical package through isolated consumers on those four platforms. It publishes the `.nupkg` through Sleet and stores the matching `.snupkg` and checksum manifest under `promotion/pixely/<version>/` in B2. Publication attempts are serialized, reruns reuse the first stored files, and existing content is never overwritten.
 
-When a development publication attempt completes, the **Report development publication** workflow posts its result and a link to the run on the merged pull request. Each rerun is reported separately. The reporting workflow uses the temporary repository-scoped `GITHUB_TOKEN`; it requires no additional secrets.
+When a development publication attempt completes, the **Report development publication** workflow posts its result and a link to the run on the merged pull request. Successful publication comments include the version and a direct package download link. Each rerun is reported separately. The reporting workflow uses the temporary repository-scoped `GITHUB_TOKEN`; it requires no additional secrets.
 
 Versions use the form `0.0.N`. The source commit's absolute first-parent height plus the fixed migration offset `-281` determines `N`, making the first automatically published `main` commit version `0.0.9`; every later first-parent commit increments `N`. The package repository metadata records the complete source commit.
 
