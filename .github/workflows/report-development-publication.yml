@@ -1,0 +1,47 @@
+name: Report development publication
+
+on:
+  workflow_run:
+    workflows: [Publish to development feed]
+    types: [completed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report publication result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pull_request_number="$(gh api "repos/$REPOSITORY/commits/$HEAD_SHA/pulls" --jq '.[0].number')"
+
+          case "$RUN_CONCLUSION" in
+            success)
+              message="✅ Development package published successfully."
+              ;;
+            failure)
+              message="❌ Development publication failed."
+              ;;
+            cancelled)
+              message="⚪ Development publication was cancelled."
+              ;;
+            *)
+              message="$(printf 'ℹ️ Development publication completed with conclusion `%s`.' "$RUN_CONCLUSION")"
+              ;;
+          esac
+
+          body="$(printf '%s\n\n[Workflow run (attempt %s)](%s)' "$message" "$RUN_ATTEMPT" "$RUN_URL")"
+          gh api --method POST "repos/$REPOSITORY/issues/$pull_request_number/comments" --field body="$body" >/dev/null
