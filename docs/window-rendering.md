@@ -263,6 +263,9 @@ if (pencil.ClickArea(area))
 bool hovered = pencil.HoverArea(area);
 ```
 
+`CursorPosition` retains the last known window-relative position. Check `IsCursorInWindow` when
+view behavior distinguishes a cursor outside the window from that last position.
+
 `HoverRectangle` changes color by patching its retained render instruction. Pointer transitions
 redraw Pencuil without rebuilding its views:
 

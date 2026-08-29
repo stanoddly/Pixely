@@ -288,11 +288,11 @@ public sealed class PencilControlTests
         CompleteInstructions(pencil);
 
         pencil.UpdateCursor(new Vector2Int(5, 5));
-        bool changedOnEnter = pencil.InstructionsChanged;
+        bool changedOnEnter = pencil.RenderDirty;
         Color enteredColor = pencil.CompletedColoredRectangleInstructions.Single().Color;
-        pencil.InstructionsChanged = false;
+        pencil.RenderDirty = false;
         pencil.UpdateCursor(new Vector2Int(7, 7));
-        bool changedWithinArea = pencil.InstructionsChanged;
+        bool changedWithinArea = pencil.RenderDirty;
         pencil.UpdateCursor(new Vector2Int(20, 20));
 
         Assert.Multiple(() =>
@@ -301,7 +301,7 @@ public sealed class PencilControlTests
             Assert.That(changedOnEnter, Is.True);
             Assert.That(enteredColor, Is.EqualTo(Colors.Blue));
             Assert.That(changedWithinArea, Is.False);
-            Assert.That(pencil.InstructionsChanged, Is.True);
+            Assert.That(pencil.RenderDirty, Is.True);
             Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.Red));
         });
     }
@@ -319,9 +319,93 @@ public sealed class PencilControlTests
         Assert.Multiple(() =>
         {
             Assert.That(pencil.NeedsUpdate, Is.False);
-            Assert.That(pencil.InstructionsChanged, Is.True);
+            Assert.That(pencil.RenderDirty, Is.True);
             Assert.That(pencil.CompletedColoredRectangleInstructions[^1].Color, Is.EqualTo(GuiStyles.Style.ActiveColor));
             Assert.That(pencil.CompletedTextureRegionInstructions.Single().Tint, Is.EqualTo((FColor)GuiStyles.Style.ActiveTextColor));
+        });
+    }
+
+    [Test]
+    public void UpdateCursor_LeavingWindowClearsHoverAtNegativeCoordinates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(-1, -1));
+        pencil.MoveTo(-5, -5);
+        pencil.HoverRectangle(10, 10, Colors.Red, Colors.Blue);
+        CompleteInstructions(pencil);
+
+        pencil.UpdateCursor(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.IsCursorInWindow, Is.False);
+            Assert.That(pencil.NeedsUpdate, Is.False);
+            Assert.That(pencil.RenderDirty, Is.True);
+            Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.Red));
+        });
+    }
+
+    [Test]
+    public void UpdateCursor_LeavingButtonRestoresColorAndTextTintWithoutRebuild()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+        pencil.Button("OK", null!, 80, 30);
+        CompleteInstructions(pencil);
+
+        pencil.UpdateCursor(new Vector2Int(100, 100));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.NeedsUpdate, Is.False);
+            Assert.That(pencil.RenderDirty, Is.True);
+            Assert.That(pencil.CompletedColoredRectangleInstructions[^1].Color, Is.EqualTo(GuiStyles.Style.Background));
+            Assert.That(pencil.CompletedTextureRegionInstructions.Single().Tint, Is.EqualTo((FColor)GuiStyles.Style.TextColor));
+        });
+    }
+
+    [Test]
+    public void UpdateCursor_MultipleButtonPatchesTargetTheirOwnInstructions()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.Button("First", null!, 80, 30);
+        pencil.Button("Second", null!, 80, 30);
+        CompleteInstructions(pencil);
+
+        pencil.UpdateCursor(new Vector2Int(5, 35));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.CompletedColoredRectangleInstructions[1].Color, Is.EqualTo(GuiStyles.Style.Background));
+            Assert.That(pencil.CompletedColoredRectangleInstructions[3].Color, Is.EqualTo(GuiStyles.Style.ActiveColor));
+            Assert.That(pencil.CompletedTextureRegionInstructions[0].Tint, Is.EqualTo((FColor)GuiStyles.Style.TextColor));
+            Assert.That(pencil.CompletedTextureRegionInstructions[1].Tint, Is.EqualTo((FColor)GuiStyles.Style.ActiveTextColor));
+        });
+    }
+
+    [Test]
+    public void Rebuild_PreservesPendingRenderDirtyStateWhenInstructionsMatchPatchedPresentation()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.UpdateCursor(new Vector2Int(-10, -10));
+        pencil.HoverRectangle(10, 10, Colors.Red, Colors.Blue);
+        CompleteInstructions(pencil);
+        pencil.UpdateCursor(new Vector2Int(5, 5));
+
+        pencil.ResetInteractionData();
+        pencil.MoveTo(0, 0);
+        pencil.HoverRectangle(10, 10, Colors.Red, Colors.Blue);
+        bool instructionsChanged = pencil.HaveInstructionsChanged();
+        pencil.RenderDirty |= instructionsChanged;
+        pencil.MarkInstructionsCompleted();
+        pencil.CycleInstructions();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(instructionsChanged, Is.False);
+            Assert.That(pencil.RenderDirty, Is.True);
+            Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.Blue));
         });
     }
 
@@ -338,13 +422,13 @@ public sealed class PencilControlTests
         pencil.Rectangle(10, 10, Colors.White);
         pencil.MarkInstructionsCompleted();
         pencil.CycleInstructions();
-        pencil.InstructionsChanged = false;
+        pencil.RenderDirty = false;
 
         pencil.UpdateCursor(new Vector2Int(5, 5));
 
         Assert.Multiple(() =>
         {
-            Assert.That(pencil.InstructionsChanged, Is.False);
+            Assert.That(pencil.RenderDirty, Is.False);
             Assert.That(pencil.CompletedColoredRectangleInstructions.Single().Color, Is.EqualTo(Colors.White));
         });
     }
@@ -354,7 +438,7 @@ public sealed class PencilControlTests
         pencil.MarkInstructionsCompleted();
         pencil.CycleInstructions();
         pencil.NeedsUpdate = false;
-        pencil.InstructionsChanged = false;
+        pencil.RenderDirty = false;
     }
 
     private static Pencil CreatePencil()

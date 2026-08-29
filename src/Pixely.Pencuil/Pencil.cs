@@ -74,6 +74,8 @@ public class Pencil
 
     private readonly List<Rectangle> _hoverAreas = new();
     private readonly List<Rectangle> _clickTests = new();
+    // Patch indices address their corresponding completed instruction buffer after CycleInstructions;
+    // reset and rebuild the patches whenever the instruction buffers are rebuilt.
     private readonly List<HoverRectanglePatch> _hoverRectanglePatches = new();
     private readonly List<HoverTexturePatch> _hoverTexturePatches = new();
 
@@ -83,9 +85,9 @@ public class Pencil
     public bool NeedsUpdate { get; internal set; } = true;
     public void Invalidate() => NeedsUpdate = true;
 
-    // Set by the update phase when a build pass produces different instructions than the
-    // previous frame; read and cleared by the render phase to decide whether to re-render.
-    internal bool InstructionsChanged { get; set; }
+    // Set when completed instructions or their patched presentation changes; read and
+    // cleared by the render phase to decide whether to redraw the retained texture.
+    internal bool RenderDirty { get; set; }
 
     internal ShortSize ViewportSize => new ShortSize((ushort)_viewportWidth, (ushort)_viewportHeight);
     internal ShortSize CompletedInstructionViewportSize { get; private set; }
@@ -102,13 +104,17 @@ public class Pencil
         Invalidate();
     }
 
-    internal void UpdateCursor(Vector2Int position)
+    internal void UpdateCursor(Vector2Int? position)
     {
-        if (position != CursorPosition)
+        bool cursorInWindow = position.HasValue;
+        Vector2Int nextPosition = position.GetValueOrDefault();
+        if (cursorInWindow != IsCursorInWindow || (cursorInWindow && nextPosition != CursorPosition))
         {
             foreach (Rectangle area in _hoverAreas)
             {
-                if (area.Intersects(CursorPosition) != area.Intersects(position))
+                bool wasHovered = IsCursorInWindow && area.Intersects(CursorPosition);
+                bool hovered = cursorInWindow && area.Intersects(nextPosition);
+                if (wasHovered != hovered)
                 {
                     Invalidate();
                     break;
@@ -117,40 +123,47 @@ public class Pencil
 
             foreach (HoverRectanglePatch patch in _hoverRectanglePatches)
             {
-                bool hovered = patch.Area.Intersects(position);
-                if (patch.Area.Intersects(CursorPosition) != hovered)
+                bool wasHovered = IsCursorInWindow && patch.Area.Intersects(CursorPosition);
+                bool hovered = cursorInWindow && patch.Area.Intersects(nextPosition);
+                if (wasHovered != hovered)
                 {
                     ColoredRectangleInstruction instruction = _previousColoredRectangleInstructions[patch.InstructionIndex];
                     _previousColoredRectangleInstructions[patch.InstructionIndex] = instruction with
                     {
                         Color = hovered ? patch.HoverColor : patch.Color
                     };
-                    InstructionsChanged = true;
+                    RenderDirty = true;
                 }
             }
 
             foreach (HoverTexturePatch patch in _hoverTexturePatches)
             {
-                bool hovered = patch.Area.Intersects(position);
-                if (patch.Area.Intersects(CursorPosition) != hovered)
+                bool wasHovered = IsCursorInWindow && patch.Area.Intersects(CursorPosition);
+                bool hovered = cursorInWindow && patch.Area.Intersects(nextPosition);
+                if (wasHovered != hovered)
                 {
                     TextureRegionInstruction instruction = _previousTextureRegionInstructions[patch.InstructionIndex];
                     _previousTextureRegionInstructions[patch.InstructionIndex] = instruction with
                     {
                         Tint = hovered ? patch.HoverTint : patch.Tint
                     };
-                    InstructionsChanged = true;
+                    RenderDirty = true;
                 }
             }
         }
 
-        CursorPosition = position;
+        IsCursorInWindow = cursorInWindow;
+        if (cursorInWindow)
+        {
+            CursorPosition = nextPosition;
+        }
     }
 
     public LayoutDirection CurrentDirection { get; set; } = LayoutDirection.Bottom;
     public Vector2Int CurrentPosition { get; set; }
     public Vector2Int CurrentSize { get; set; }
-    public Vector2Int CursorPosition { get; private set; } = new Vector2Int(-1, -1);
+    public Vector2Int CursorPosition { get; private set; }
+    public bool IsCursorInWindow { get; private set; }
     public int CurrentGap { get; set; }
 
     internal bool CursorJustReleased { get; set; }
@@ -203,7 +216,7 @@ public class Pencil
     internal void AddHoverRectangle(Rectangle rectangle, Color color, Rectangle hoverArea, Color hoverColor)
     {
         int instructionIndex = _coloredRectangleInstructions.Count;
-        Color resolvedColor = hoverArea.Intersects(CursorPosition) ? hoverColor : color;
+        Color resolvedColor = IsCursorInWindow && hoverArea.Intersects(CursorPosition) ? hoverColor : color;
         _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, rectangle, resolvedColor));
         if (color != hoverColor)
         {
@@ -219,7 +232,7 @@ public class Pencil
     internal void AddHoverTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint, Rectangle hoverArea, FColor hoverTint)
     {
         int instructionIndex = _textureRegionInstructions.Count;
-        FColor resolvedTint = hoverArea.Intersects(CursorPosition) ? hoverTint : tint;
+        FColor resolvedTint = IsCursorInWindow && hoverArea.Intersects(CursorPosition) ? hoverTint : tint;
         _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, area, uvs, resolvedTint));
         if (tint != hoverTint)
         {
@@ -696,7 +709,7 @@ public static class PencilExtensions
         }
 
         pencil.AddClickTest(area);
-        return pencil.CursorJustReleased && area.Intersects(pencil.CursorPosition);
+        return pencil.CursorJustReleased && pencil.IsCursorInWindow && area.Intersects(pencil.CursorPosition);
     }
 
     public static bool HoverArea(this Pencil pencil, int width, int height, bool enabled = true)
@@ -713,7 +726,7 @@ public static class PencilExtensions
         }
 
         pencil.AddHoverArea(area);
-        return area.Intersects(pencil.CursorPosition);
+        return pencil.IsCursorInWindow && area.Intersects(pencil.CursorPosition);
     }
 
     public static bool Button(this Pencil pencil, string text, Font font)
@@ -903,7 +916,7 @@ public static class PencilExtensions
             pencil.FocusedControlSeenThisFrame = true;
             bool focusLost =
                 pencil.HasPendingFocus ||
-                (pencil.CursorJustReleased && !area.Intersects(pencil.CursorPosition));
+                (pencil.CursorJustReleased && (!pencil.IsCursorInWindow || !area.Intersects(pencil.CursorPosition)));
 
             if (pencil.EditingState.Canceled)
             {
