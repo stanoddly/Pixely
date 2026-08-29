@@ -35,7 +35,7 @@ internal sealed class PencilSystem : IUpdatable
 
         mouseService.SubscribeWindowLeave(_viewScope, inputOrder, _ =>
         {
-            pencil.UpdateCursor(new Vector2Int(-1, -1));
+            pencil.UpdateCursor(null);
         });
 
         mouseService.SubscribeButtonPress(_viewScope, inputOrder, args =>
@@ -114,7 +114,7 @@ internal sealed class PencilSystem : IUpdatable
             }
 
             _pencil.FinishBuild();
-            _pencil.InstructionsChanged |= _pencil.HaveInstructionsChanged();
+            _pencil.RenderDirty |= _pencil.HaveInstructionsChanged();
             _pencil.MarkInstructionsCompleted();
             _pencil.CycleInstructions();
         }

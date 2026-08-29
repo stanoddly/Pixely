@@ -125,10 +125,10 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
 
         // Retained texture dirtiness forces a redraw even when instruction content is
         // unchanged, since the retained texture itself was just resized.
-        if (_pencil.InstructionsChanged || _retainedTextureDirty)
+        if (_pencil.RenderDirty || _retainedTextureDirty)
         {
             RenderPencil(renderContext.CommandBuffer);
-            _pencil.InstructionsChanged = false;
+            _pencil.RenderDirty = false;
             _retainedTextureDirty = false;
         }
 
