@@ -241,6 +241,42 @@ Pencuil's MVVM contracts use explicit names: `IPencuilView`, `IPencuilViewModel`
 `PencuilView<TViewModel>`. Their default scope is implicit; views belonging to another window
 override `IPencuilView.ViewScope` or pass a scope to the Pencuil view base class.
 
+Use `ModelView<TValue>` when a view's model is an unmanaged value. The `Value` property copies the
+value and marks the model dirty only when an assignment changes it:
+
+```csharp
+public readonly record struct CounterModel(int Count);
+
+public sealed class CounterView : PencuilView<ModelView<CounterModel>>
+{
+    public CounterView(ModelView<CounterModel> modelView)
+        : base(modelView)
+    {
+    }
+
+    public override void Build(Pencil pencil)
+    {
+        CounterModel model = ViewModel.Value;
+
+        if (pencil.Button("Increment", font))
+        {
+            ViewModel.Value = model with { Count = model.Count + 1 };
+        }
+    }
+}
+```
+
+Register the model view as the state instance injected into the UI view:
+
+```csharp
+builder.AddSingleton(new ModelView<CounterModel>(new CounterModel(0)));
+builder.AddSingleton<IPencuilView, CounterView>();
+```
+
+For values where copying is undesirable, `GetValue()` returns a readonly reference and
+`SetValue(in TValue)` replaces the value through a readonly reference. `SetValue` always marks the
+model dirty, including when the replacement compares equal to the current value.
+
 Create and retain a `TextSpriteAsset` when stable text is drawn repeatedly. Pencuil can use the
 asset directly for text or button content without another cache lookup or text measurement:
 
