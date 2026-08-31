@@ -60,13 +60,8 @@ public class KeyboardService : IKeyboardService
         _appControl = appControl;
     }
 
-    internal void OnKeyEvent(ViewScope viewScope, in SDL_KeyboardEvent keyboardEvent)
+    internal void OnKeyEvent(ViewScope viewScope, SDL_KeyboardID keyboardId, Scancode scancode, VirtualKey virtualKey, bool isPressed, ulong timestamp)
     {
-        Scancode scancode = (Scancode)keyboardEvent.scancode;
-        ulong timestamp = keyboardEvent.timestamp;
-        SDL_KeyboardID keyboardId = keyboardEvent.which;
-        VirtualKey virtualKey = (VirtualKey)keyboardEvent.key;
-
         ref Keyboard? keyboard = ref CollectionsMarshal.GetValueRefOrAddDefault(_keyboards, keyboardId, out bool exists);
 
         if (!exists || keyboard == null)
@@ -78,7 +73,7 @@ public class KeyboardService : IKeyboardService
         _keyEventArgs.Scancode = scancode;
         _keyEventArgs.Key = virtualKey;
         _keyEventArgs.Timestamp = timestamp;
-        if (keyboardEvent.down)
+        if (isPressed)
         {
             if (keyboard.Set(scancode))
             {

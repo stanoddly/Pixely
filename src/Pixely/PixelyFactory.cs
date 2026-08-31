@@ -307,6 +307,11 @@ public class PixelyFactory: IDisposable
         return new TextInputService(windowRegistry);
     }
 
+    internal InputAutomation CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService)
+    {
+        return new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService);
+    }
+
     internal EventService CreateEventService(
         KeyboardService keyboardService,
         GamepadService gamepadService,
