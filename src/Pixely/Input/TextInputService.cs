@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using SDL;
 
 namespace Pixely.Input;
@@ -90,35 +89,19 @@ public class TextInputService : ITextInputService
         _windowRegistry = windowRegistry;
     }
 
-    internal void OnTextInputEvent(
-        ViewScope viewScope,
-        in SDL_TextInputEvent textInputEvent)
+    internal void OnTextInputEvent(ViewScope viewScope, string text, ulong timestamp)
     {
-        string text;
-        unsafe
-        {
-            text = Marshal.PtrToStringUTF8((IntPtr)textInputEvent.text) ?? string.Empty;
-        }
-
         _textInputEventArgs.Text = text;
-        _textInputEventArgs.Timestamp = textInputEvent.timestamp;
+        _textInputEventArgs.Timestamp = timestamp;
         _textInputHandlers.Invoke(viewScope, _textInputEventArgs);
     }
 
-    internal void OnTextEditingEvent(
-        ViewScope viewScope,
-        in SDL_TextEditingEvent textEditingEvent)
+    internal void OnTextEditingEvent(ViewScope viewScope, string text, int start, int length, ulong timestamp)
     {
-        string text;
-        unsafe
-        {
-            text = Marshal.PtrToStringUTF8((IntPtr)textEditingEvent.text) ?? string.Empty;
-        }
-
         _textEditingEventArgs.Text = text;
-        _textEditingEventArgs.Start = textEditingEvent.start;
-        _textEditingEventArgs.Length = textEditingEvent.length;
-        _textEditingEventArgs.Timestamp = textEditingEvent.timestamp;
+        _textEditingEventArgs.Start = start;
+        _textEditingEventArgs.Length = length;
+        _textEditingEventArgs.Timestamp = timestamp;
         _textEditingHandlers.Invoke(viewScope, _textEditingEventArgs);
     }
 }
