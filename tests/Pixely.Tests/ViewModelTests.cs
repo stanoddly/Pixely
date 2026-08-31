@@ -2,65 +2,65 @@ using Pixely.Pencuil;
 
 namespace Pixely.Tests;
 
-public sealed class ModelViewTests
+public sealed class ViewModelTests
 {
     [Test]
     public void Value_InitiallyContainsConstructorValue()
     {
         TestValue value = new(4, 2.5f);
 
-        ModelView<TestValue> modelView = new(value);
+        ViewModel<TestValue> viewModel = new(value);
 
         Assert.Multiple(() =>
         {
-            Assert.That(modelView.Value, Is.EqualTo(value));
-            Assert.That(modelView.Dirty, Is.False);
+            Assert.That(viewModel.Value, Is.EqualTo(value));
+            Assert.That(viewModel.Dirty, Is.False);
         });
     }
 
     [Test]
     public void Value_SetToDifferentValue_MarksDirty()
     {
-        ModelView<int> modelView = new(1);
+        ViewModel<int> viewModel = new(1);
 
-        modelView.Value = 2;
+        viewModel.Value = 2;
 
         Assert.Multiple(() =>
         {
-            Assert.That(modelView.Value, Is.EqualTo(2));
-            Assert.That(modelView.Dirty, Is.True);
+            Assert.That(viewModel.Value, Is.EqualTo(2));
+            Assert.That(viewModel.Dirty, Is.True);
         });
     }
 
     [Test]
     public void Value_SetToEqualValue_RemainsClean()
     {
-        ModelView<int> modelView = new(1);
+        ViewModel<int> viewModel = new(1);
 
-        modelView.Value = 1;
+        viewModel.Value = 1;
 
-        Assert.That(modelView.Dirty, Is.False);
+        Assert.That(viewModel.Dirty, Is.False);
     }
 
     [Test]
     public void SetValue_SetToEqualValue_MarksDirty()
     {
         TestValue value = new(4, 2.5f);
-        ModelView<TestValue> modelView = new(value);
+        ViewModel<TestValue> viewModel = new(value);
 
-        modelView.SetValue(in value);
+        viewModel.SetValue(in value);
 
-        Assert.That(modelView.Dirty, Is.True);
+        Assert.That(viewModel.Dirty, Is.True);
     }
 
     [Test]
     public void GetValue_ReturnsReferenceToStoredValue()
     {
-        ModelView<TestValue> modelView = new(new TestValue(4, 2.5f));
-        ref readonly TestValue value = ref modelView.GetValue();
+        ViewModel<TestValue> viewModel = new(new TestValue(4, 2.5f));
+        ref readonly TestValue value = ref viewModel.GetValue();
         TestValue replacement = new(8, 5f);
 
-        modelView.SetValue(in replacement);
+        viewModel.SetValue(in replacement);
 
         Assert.That(value, Is.EqualTo(replacement));
     }
@@ -68,26 +68,26 @@ public sealed class ModelViewTests
     [Test]
     public void PencuilView_ConsumesDirtyState()
     {
-        ModelView<int> modelView = new(1);
-        TestView view = new(modelView);
-        modelView.Value = 2;
+        ViewModel<int> viewModel = new(1);
+        TestView view = new(viewModel);
+        viewModel.Value = 2;
 
         bool dirty = view.ConsumeDirty();
 
         Assert.Multiple(() =>
         {
             Assert.That(dirty, Is.True);
-            Assert.That(modelView.Dirty, Is.False);
+            Assert.That(viewModel.Dirty, Is.False);
             Assert.That(view.ConsumeDirty(), Is.False);
         });
     }
 
     private readonly record struct TestValue(int Count, float Scale);
 
-    private sealed class TestView : PencuilView<ModelView<int>>
+    private sealed class TestView : PencuilView<int>
     {
-        internal TestView(ModelView<int> modelView)
-            : base(modelView)
+        internal TestView(ViewModel<int> viewModel)
+            : base(viewModel)
         {
         }
 

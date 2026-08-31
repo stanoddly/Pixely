@@ -27,7 +27,7 @@ public class HotbarViewModel : IPencuilViewModel
     }
 }
 
-public class Hotbar : PencuilView<HotbarViewModel>
+public class Hotbar : PencuilViewBase<HotbarViewModel>
 {
     private const int SlotCount = 9;
     private const int SlotSize = 48;

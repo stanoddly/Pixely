@@ -1,6 +1,6 @@
 namespace Pixely.Pencuil;
 
-public class ModelView<TValue> : IPencuilViewModel where TValue : unmanaged
+public class ViewModel<TValue> : IPencuilViewModel where TValue : unmanaged
 {
     private TValue _value;
 
@@ -27,11 +27,11 @@ public class ModelView<TValue> : IPencuilViewModel where TValue : unmanaged
         set => Dirty = value;
     }
 
-    public ModelView()
+    public ViewModel()
     {
     }
 
-    public ModelView(TValue value)
+    public ViewModel(TValue value)
     {
         _value = value;
     }

@@ -237,20 +237,22 @@ Configure another Pencuil instance only for an additional window:
 builder.UsePencuil(ViewScopes.Inventory);
 ```
 
-Pencuil's MVVM contracts use explicit names: `IPencuilView`, `IPencuilViewModel`, and
-`PencuilView<TViewModel>`. Their default scope is implicit; views belonging to another window
-override `IPencuilView.ViewScope` or pass a scope to the Pencuil view base class.
+Pencuil's MVVM contracts use explicit names: `IPencuilView`, `IPencuilViewModel`,
+`PencuilViewBase<TViewModel>`, and `PencuilView<TValue>`. Their default scope is implicit; views
+belonging to another window override `IPencuilView.ViewScope` or pass a scope to the Pencuil view
+base class.
 
-Use `ModelView<TValue>` when a view's model is an unmanaged value. The `Value` property copies the
-value and marks the model dirty only when an assignment changes it:
+Use `PencuilView<TValue>` with its required `ViewModel<TValue>` dependency when a view's model is an
+unmanaged value. The `Value` property copies the value and marks the view model dirty only when an
+assignment changes it:
 
 ```csharp
 public readonly record struct CounterModel(int Count);
 
-public sealed class CounterView : PencuilView<ModelView<CounterModel>>
+public sealed class CounterView : PencuilView<CounterModel>
 {
-    public CounterView(ModelView<CounterModel> modelView)
-        : base(modelView)
+    public CounterView(ViewModel<CounterModel> viewModel)
+        : base(viewModel)
     {
     }
 
@@ -266,12 +268,15 @@ public sealed class CounterView : PencuilView<ModelView<CounterModel>>
 }
 ```
 
-Register the model view as the state instance injected into the UI view:
+Register the view model as the state instance injected into the UI view:
 
 ```csharp
-builder.AddSingleton(new ModelView<CounterModel>(new CounterModel(0)));
+builder.AddSingleton(new ViewModel<CounterModel>(new CounterModel(0)));
 builder.AddSingleton<IPencuilView, CounterView>();
 ```
+
+Derive from `PencuilViewBase<TViewModel>` when a view uses a custom `IPencuilViewModel`
+implementation.
 
 For values where copying is undesirable, `GetValue()` returns a readonly reference and
 `SetValue(in TValue)` replaces the value through a readonly reference. `SetValue` always marks the

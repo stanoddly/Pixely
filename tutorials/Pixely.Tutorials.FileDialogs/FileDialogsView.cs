@@ -44,7 +44,7 @@ public class FileDialogsViewModel : IPencuilViewModel
     }
 }
 
-public class FileDialogsView : PencuilView<FileDialogsViewModel>
+public class FileDialogsView : PencuilViewBase<FileDialogsViewModel>
 {
     private const int ButtonWidth = 180;
     private const int ButtonHeight = 48;
