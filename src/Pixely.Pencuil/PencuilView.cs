@@ -1,35 +1,14 @@
 namespace Pixely.Pencuil;
 
-public abstract class PencuilView<TViewModel> : IPencuilView
-    where TViewModel : IPencuilViewModel
+public abstract class PencuilView<TValue> : PencuilViewBase<ViewModel<TValue>> where TValue : unmanaged
 {
-    private readonly ViewScope _viewScope;
-
-    protected TViewModel ViewModel { get; }
-
-    ViewScope IPencuilView.ViewScope => _viewScope;
-
-    protected PencuilView(TViewModel viewModel)
-        : this(default, viewModel)
+    protected PencuilView(ViewModel<TValue> viewModel)
+        : base(viewModel)
     {
     }
 
-    protected PencuilView(ViewScope viewScope, TViewModel viewModel)
+    protected PencuilView(ViewScope viewScope, ViewModel<TValue> viewModel)
+        : base(viewScope, viewModel)
     {
-        _viewScope = viewScope;
-        ViewModel = viewModel;
     }
-
-    public bool ConsumeDirty()
-    {
-        if (!ViewModel.IsDirty)
-        {
-            return false;
-        }
-
-        ViewModel.IsDirty = false;
-        return true;
-    }
-
-    public abstract void Build(Pencil pencil);
 }

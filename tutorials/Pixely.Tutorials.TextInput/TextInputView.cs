@@ -77,7 +77,7 @@ public class TextInputViewModel : IPencuilViewModel
     public string ClipboardText => _clipboardService.HasText ? (_clipboardService.GetText() ?? "") : "";
 }
 
-public class TextInputView : PencuilView<TextInputViewModel>
+public class TextInputView : PencuilViewBase<TextInputViewModel>
 {
     private static readonly Color BackgroundColor = new(28, 30, 34, 255);
     private static readonly Color LabelColor = new(180, 180, 180, 255);

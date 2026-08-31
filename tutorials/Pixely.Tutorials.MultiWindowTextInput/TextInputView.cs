@@ -29,7 +29,7 @@ public sealed class TextInputViewModel : IPencuilViewModel
     }
 }
 
-public sealed class TextInputView : PencuilView<TextInputViewModel>
+public sealed class TextInputView : PencuilViewBase<TextInputViewModel>
 {
     private static readonly Color _backgroundColor = new(28, 30, 34, 255);
     private static readonly Color _labelColor = new(180, 180, 180, 255);
