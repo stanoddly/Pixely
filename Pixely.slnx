@@ -55,6 +55,7 @@
     <Project Path="tutorials/Pixely.Tutorials.IndexBuffer/Pixely.Tutorials.IndexBuffer.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.IndexedRenderPass/Pixely.Tutorials.IndexedRenderPass.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.FileDialogs/Pixely.Tutorials.FileDialogs.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.MessageBoxes/Pixely.Tutorials.MessageBoxes.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.TextInput/Pixely.Tutorials.TextInput.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.WindowConfiguration/Pixely.Tutorials.WindowConfiguration.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.TransparentWindow/Pixely.Tutorials.TransparentWindow.csproj" />

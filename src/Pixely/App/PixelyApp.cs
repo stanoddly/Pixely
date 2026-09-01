@@ -20,6 +20,19 @@ public class PixelyApp : IPixelyApp
 
     public int Run()
     {
+        try
+        {
+            return RunLoop();
+        }
+        catch (Exception exception)
+        {
+            ReportFatalError(exception);
+            throw;
+        }
+    }
+
+    private int RunLoop()
+    {
         PixelyFrameContext frameContext = ServiceProvider.GetRequiredService<PixelyFrameContext>();
         EventService eventService = ServiceProvider.GetRequiredService<EventService>();
         AppControl appControl = ServiceProvider.GetRequiredService<AppControl>();
@@ -51,6 +64,21 @@ public class PixelyApp : IPixelyApp
     public void Dispose()
     {
         ServiceProvider.Dispose();
+    }
+
+    private static void ReportFatalError(Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+
+        try
+        {
+            MessageBox.Show(MessageBoxSeverity.Error, "Fatal error", exception.Message);
+        }
+        catch (Exception messageBoxException)
+        {
+            // presenting the failure must never replace the failure being reported
+            Console.Error.WriteLine(messageBoxException);
+        }
     }
 
     private static void Update(ServiceRegistry<IUpdatable> updatables)
