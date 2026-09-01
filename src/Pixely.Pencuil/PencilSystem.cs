@@ -16,7 +16,7 @@ internal sealed class PencilSystem : IUpdatable
         Pencuil pencuil,
         int inputOrder,
         PencuilViewRegistry viewRegistry,
-        WindowRegistry windowRegistry,
+        Window window,
         IMouseService mouseService,
         IKeyboardService keyboardService,
         ITextInputService textInputService)
@@ -25,7 +25,7 @@ internal sealed class PencilSystem : IUpdatable
         _pencil = pencil;
         _viewRegistry = viewRegistry;
         _viewScope = pencuil.ViewScope;
-        _window = windowRegistry.GetWindow(_viewScope);
+        _window = window;
         _textInputService = textInputService;
 
         mouseService.SubscribeMotion(_viewScope, inputOrder, args =>

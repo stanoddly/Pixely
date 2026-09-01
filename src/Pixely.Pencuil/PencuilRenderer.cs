@@ -45,7 +45,7 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
         GpuMemorySystem gpuMemorySystem,
         ShaderLoader shaderLoader,
         GpuDevice gpuDevice,
-        WindowRegistry windowRegistry)
+        Window window)
     {
         Pencil pencil = pencuil.Pencil;
         ViewScope = pencuil.ViewScope;
@@ -63,7 +63,6 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
         GraphicsShaderProgram tintedTextureShaderProgram = shaderLoader.LoadGraphicsShaderProgram("shaders/pencuil_tinted_texture");
         GraphicsShaderProgram textureShaderProgram = shaderLoader.LoadGraphicsShaderProgram("shaders/pencuil_texture");
 
-        Window window = windowRegistry.GetWindow(ViewScope);
         TextureFormat colorTargetFormat = window.ColorTargetFormat;
         ShortSize renderSize = window.RenderSizeInPixels;
 

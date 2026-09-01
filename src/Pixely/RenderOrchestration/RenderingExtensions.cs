@@ -36,22 +36,9 @@ public static class RenderingExtensions
     {
         services.AddRegistry<IRenderer<TRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
         services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(
-            GetWindow(provider, viewScope),
+            provider.GetWindow(viewScope),
             provider.GetRequiredService<GpuMemorySystem>(),
             provider.GetRequiredService<IRenderContextProvider<TRenderContext>>(),
             provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>()));
-    }
-
-    private static Window GetWindow(ServiceProvider provider, ViewScope viewScope)
-    {
-        foreach (Window window in provider.GetServices<Window>())
-        {
-            if (window.ViewScope == viewScope)
-            {
-                return window;
-            }
-        }
-
-        throw new InvalidOperationException($"No window is registered for ViewScope {viewScope.Value}.");
     }
 }
