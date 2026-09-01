@@ -20,19 +20,6 @@ public class PixelyApp : IPixelyApp
 
     public int Run()
     {
-        try
-        {
-            return RunLoop();
-        }
-        catch (Exception exception)
-        {
-            FatalError.Report(exception);
-            throw;
-        }
-    }
-
-    private int RunLoop()
-    {
         PixelyFrameContext frameContext = ServiceProvider.GetRequiredService<PixelyFrameContext>();
         EventService eventService = ServiceProvider.GetRequiredService<EventService>();
         AppControl appControl = ServiceProvider.GetRequiredService<AppControl>();

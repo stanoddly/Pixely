@@ -64,7 +64,7 @@ public class MessageBoxView : IPencuilView
 
         y += ButtonHeight + ButtonGap * 2;
 
-        // throwing here leaves the frame loop, so PixelyApp.Run reports it and rethrows
+        // throwing here escapes Run and is caught by the handler in Program.Main
         pencil.MoveTo(x, y);
         if (pencil.Button("Throw a fatal error", _font, ButtonWidth, ButtonHeight))
         {
