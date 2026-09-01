@@ -452,6 +452,19 @@ public class Window : IDisposable
         }
     }
 
+    public unsafe void ShowModalMessageBox(MessageBoxSeverity severity, string title, string message)
+    {
+        _frameContext.Pause();
+        try
+        {
+            MessageBox.Show(severity, title, message, SdlWindow);
+        }
+        finally
+        {
+            _frameContext.Resume();
+        }
+    }
+
     public FileDialogResult ShowModalOpenFileDialog(IReadOnlyList<FileDialogFilter>? filters = null, string? defaultLocation = null, bool allowMany = false)
     {
         _frameContext.Pause();

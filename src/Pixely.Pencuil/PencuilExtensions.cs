@@ -90,13 +90,13 @@ public static class PencuilExtensions
                 provider.GetRequiredService<GpuMemorySystem>(),
                 provider.GetRequiredService<ShaderLoader>(),
                 provider.GetRequiredService<GpuDevice>(),
-                provider.GetRequiredService<WindowRegistry>()));
+                provider.GetWindow(viewScope)));
         appBuilder.AddSingleton<PencilSystem>(provider =>
             new PencilSystem(
                 Pencuil.GetRequired(provider, viewScope),
                 inputOrder,
                 provider.GetRequiredService<PencuilViewRegistry>(),
-                provider.GetRequiredService<WindowRegistry>(),
+                provider.GetWindow(viewScope),
                 provider.GetRequiredService<IMouseService>(),
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
