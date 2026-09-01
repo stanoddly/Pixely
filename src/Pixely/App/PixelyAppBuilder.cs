@@ -40,6 +40,19 @@ public class PixelyAppBuilder : ServiceCollection
 
     public IPixelyApp Build()
     {
+        try
+        {
+            return BuildApp();
+        }
+        catch (Exception exception)
+        {
+            FatalError.Report(exception);
+            throw;
+        }
+    }
+
+    private IPixelyApp BuildApp()
+    {
         if (!IsRegistered<PixelyConfig>())
         {
             AddSingleton(new PixelyConfig());

@@ -26,7 +26,7 @@ public class PixelyApp : IPixelyApp
         }
         catch (Exception exception)
         {
-            ReportFatalError(exception);
+            FatalError.Report(exception);
             throw;
         }
     }
@@ -64,21 +64,6 @@ public class PixelyApp : IPixelyApp
     public void Dispose()
     {
         ServiceProvider.Dispose();
-    }
-
-    private static void ReportFatalError(Exception exception)
-    {
-        Console.Error.WriteLine(exception);
-
-        try
-        {
-            MessageBox.Show(MessageBoxSeverity.Error, "Fatal error", exception.Message);
-        }
-        catch (Exception messageBoxException)
-        {
-            // presenting the failure must never replace the failure being reported
-            Console.Error.WriteLine(messageBoxException);
-        }
     }
 
     private static void Update(ServiceRegistry<IUpdatable> updatables)
