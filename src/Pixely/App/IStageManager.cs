@@ -26,4 +26,16 @@ public interface IStageManager
     /// provider and the services owned by it before building the new stage.
     /// </remarks>
     void Load(Action<ServiceCollection> configure);
+
+    /// <summary>
+    /// Schedules the active stage to be rebuilt at the next stage transition point.
+    /// </summary>
+    /// <remarks>
+    /// This method invokes the configuration used to build the active stage again with a new service
+    /// collection. The active stage provider and its services are disposed before the replacement is
+    /// built. Calling this method repeatedly before the next transition point still rebuilds the stage
+    /// only once. A pending load supersedes an earlier reload, and a reload supersedes an earlier load.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">No stage has reached the stage transition point.</exception>
+    void Reload();
 }

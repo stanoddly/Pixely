@@ -64,6 +64,140 @@ public class StageManagerTests
     }
 
     [Test]
+    public void Reload_BeforePendingLoadIsApplied_Throws()
+    {
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        StageManager stageManager = new(root);
+
+        stageManager.Load(services =>
+        {
+            services.AddSingleton<IPencuilView>(new TestView("stage"));
+        });
+
+        Assert.Throws<InvalidOperationException>(() => stageManager.Reload());
+
+        stageManager.ApplyPendingTransition();
+        Assert.That(ViewNames(viewRegistry), Is.EqualTo(new[] { "stage" }));
+    }
+
+    [Test]
+    public void Reload_RebuildsLastAppliedStageAtPendingTransition()
+    {
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        StageManager stageManager = new(root);
+        List<TestView> createdViews = new();
+
+        stageManager.Load(services =>
+        {
+            TestView view = new("stage");
+            createdViews.Add(view);
+            services.AddSingleton<IPencuilView>(view);
+        });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Reload();
+
+        Assert.That(createdViews, Has.Count.EqualTo(1));
+        Assert.That(viewRegistry.Single(), Is.SameAs(createdViews[0]));
+
+        stageManager.ApplyPendingTransition();
+
+        Assert.That(createdViews, Has.Count.EqualTo(2));
+        Assert.That(createdViews[1], Is.Not.SameAs(createdViews[0]));
+        Assert.That(viewRegistry.Single(), Is.SameAs(createdViews[1]));
+    }
+
+    [Test]
+    public void Reload_MultipleBeforePendingTransition_RebuildsOnce()
+    {
+        ServiceProvider root = BuildRootProvider(out _);
+        StageManager stageManager = new(root);
+        int configureCount = 0;
+
+        stageManager.Load(services =>
+        {
+            configureCount++;
+        });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Reload();
+        stageManager.Reload();
+        stageManager.ApplyPendingTransition();
+
+        Assert.That(configureCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Reload_AfterPendingLoad_ReplacesItWithActiveStage()
+    {
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        StageManager stageManager = new(root);
+
+        stageManager.Load(services =>
+        {
+            services.AddSingleton<IPencuilView>(new TestView("active"));
+        });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Load(services =>
+        {
+            services.AddSingleton<IPencuilView>(new TestView("pending"));
+        });
+        stageManager.Reload();
+        stageManager.ApplyPendingTransition();
+
+        Assert.That(ViewNames(viewRegistry), Is.EqualTo(new[] { "active" }));
+    }
+
+    [Test]
+    public void Load_AfterPendingReload_ReplacesItWithLoadedStage()
+    {
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        StageManager stageManager = new(root);
+
+        stageManager.Load(services =>
+        {
+            services.AddSingleton<IPencuilView>(new TestView("active"));
+        });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Reload();
+        stageManager.Load(services =>
+        {
+            services.AddSingleton<IPencuilView>(new TestView("loaded"));
+        });
+        stageManager.ApplyPendingTransition();
+
+        Assert.That(ViewNames(viewRegistry), Is.EqualTo(new[] { "loaded" }));
+    }
+
+    [Test]
+    public void Reload_DisposesPreviousStageBeforeConfiguringReplacement()
+    {
+        ServiceProvider root = BuildRootProvider(out _);
+        StageManager stageManager = new(root);
+        DisposableService? previous = null;
+        List<DisposableService> createdServices = new();
+
+        stageManager.Load(services =>
+        {
+            Assert.That(previous == null || previous.IsDisposed, Is.True);
+            DisposableService current = new();
+            previous = current;
+            createdServices.Add(current);
+            services.AddSingleton(current);
+        });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Reload();
+        stageManager.ApplyPendingTransition();
+
+        Assert.That(createdServices, Has.Count.EqualTo(2));
+        Assert.That(createdServices[0].IsDisposed, Is.True);
+        Assert.That(createdServices[1].IsDisposed, Is.False);
+    }
+
+    [Test]
     public void Load_DisposesPreviousStageOnPendingTransition()
     {
         ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
@@ -133,6 +267,20 @@ public class StageManagerTests
         stageManager.ApplyPendingTransition();
 
         Assert.That(ViewNames(viewRegistry), Is.Empty);
+    }
+
+    [Test]
+    public void Dispose_ClearsLastStageConfiguration()
+    {
+        ServiceProvider root = BuildRootProvider(out _);
+        StageManager stageManager = new(root);
+
+        stageManager.Load(static _ => { });
+        stageManager.ApplyPendingTransition();
+
+        stageManager.Dispose();
+
+        Assert.Throws<InvalidOperationException>(() => stageManager.Reload());
     }
 
     [Test]
