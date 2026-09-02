@@ -242,13 +242,10 @@ public class MouseService : IMouseService
         _windowLeaveHandlers.Add(viewScope, priority, handler);
     }
 
-    internal void OnMouseWindowPresenceEvent(
-        ViewScope viewScope,
-        in SDL_WindowEvent windowEvent,
-        bool isInWindow)
+    internal void OnMouseWindowPresenceEvent(ViewScope viewScope, bool isInWindow, ulong timestamp)
     {
         _windowPresenceEventArgs.IsInWindow = isInWindow;
-        _windowPresenceEventArgs.Timestamp = windowEvent.timestamp;
+        _windowPresenceEventArgs.Timestamp = timestamp;
 
         ViewScopedPriorityEventHandlers<MouseWindowPresenceEventArgs> handlers = isInWindow
             ? _windowEnterHandlers
@@ -257,21 +254,9 @@ public class MouseService : IMouseService
         handlers.Invoke(viewScope, _windowPresenceEventArgs);
     }
 
-    internal void OnMouseButtonEvent(
-        ViewScope viewScope,
-        in SDL_MouseButtonEvent mouseButtonEvent)
+    internal void OnMouseButtonEvent(ViewScope viewScope, SDL_MouseID mouseId, MouseButton button, Vector2 position, bool isPressed, ulong timestamp)
     {
-        SDL_MouseID mouseId = mouseButtonEvent.which;
-        MouseButton button = (MouseButton)mouseButtonEvent.button;
-        Vector2 position = new(mouseButtonEvent.x, mouseButtonEvent.y);
-        ulong timestamp = mouseButtonEvent.timestamp;
-
-        ref Mouse? mouse = ref CollectionsMarshal.GetValueRefOrAddDefault(_mice, mouseId, out bool exists);
-
-        if (!exists || mouse == null)
-        {
-            mouse = new Mouse(mouseId);
-        }
+        Mouse mouse = GetOrCreateMouse(mouseId);
 
         mouse.Position = position;
 
@@ -279,7 +264,7 @@ public class MouseService : IMouseService
         _buttonEventArgs.Button = button;
         _buttonEventArgs.Position = position;
         _buttonEventArgs.Timestamp = timestamp;
-        if (mouseButtonEvent.down)
+        if (isPressed)
         {
             if (mouse.Set(button))
             {
@@ -294,21 +279,9 @@ public class MouseService : IMouseService
         }
     }
 
-    internal void OnMouseMotionEvent(
-        ViewScope viewScope,
-        in SDL_MouseMotionEvent mouseMotionEvent)
+    internal void OnMouseMotionEvent(ViewScope viewScope, SDL_MouseID mouseId, Vector2 position, Vector2 relativeMotion, ulong timestamp)
     {
-        SDL_MouseID mouseId = mouseMotionEvent.which;
-        Vector2 position = new(mouseMotionEvent.x, mouseMotionEvent.y);
-        Vector2 relativeMotion = new(mouseMotionEvent.xrel, mouseMotionEvent.yrel);
-        ulong timestamp = mouseMotionEvent.timestamp;
-
-        ref Mouse? mouse = ref CollectionsMarshal.GetValueRefOrAddDefault(_mice, mouseId, out bool exists);
-
-        if (!exists || mouse == null)
-        {
-            mouse = new Mouse(mouseId);
-        }
+        Mouse mouse = GetOrCreateMouse(mouseId);
 
         mouse.Position = position;
 
@@ -319,21 +292,21 @@ public class MouseService : IMouseService
         _motionHandlers.Invoke(viewScope, _motionEventArgs);
     }
 
-    internal void OnMouseWheelEvent(
-        ViewScope viewScope,
-        in SDL_MouseWheelEvent mouseWheelEvent)
+    internal void OnMouseMoveTo(ViewScope viewScope, SDL_MouseID mouseId, Vector2 position, ulong timestamp)
     {
-        SDL_MouseID mouseId = mouseWheelEvent.which;
-        Vector2 delta = new(mouseWheelEvent.x, mouseWheelEvent.y);
-        Vector2 position = new(mouseWheelEvent.mouse_x, mouseWheelEvent.mouse_y);
-        ulong timestamp = mouseWheelEvent.timestamp;
+        Mouse mouse = GetOrCreateMouse(mouseId);
+        OnMouseMotionEvent(viewScope, mouseId, position, position - mouse.Position, timestamp);
+    }
 
-        ref Mouse? mouse = ref CollectionsMarshal.GetValueRefOrAddDefault(_mice, mouseId, out bool exists);
+    internal void OnMouseMoveBy(ViewScope viewScope, SDL_MouseID mouseId, Vector2 relativeMotion, ulong timestamp)
+    {
+        Mouse mouse = GetOrCreateMouse(mouseId);
+        OnMouseMotionEvent(viewScope, mouseId, mouse.Position + relativeMotion, relativeMotion, timestamp);
+    }
 
-        if (!exists || mouse == null)
-        {
-            mouse = new Mouse(mouseId);
-        }
+    internal void OnMouseWheelEvent(ViewScope viewScope, SDL_MouseID mouseId, Vector2 delta, Vector2 position, ulong timestamp)
+    {
+        Mouse mouse = GetOrCreateMouse(mouseId);
 
         mouse.Position = position;
 
@@ -342,5 +315,17 @@ public class MouseService : IMouseService
         _wheelEventArgs.Position = position;
         _wheelEventArgs.Timestamp = timestamp;
         _wheelHandlers.Invoke(viewScope, _wheelEventArgs);
+    }
+
+    private Mouse GetOrCreateMouse(SDL_MouseID mouseId)
+    {
+        ref Mouse? mouse = ref CollectionsMarshal.GetValueRefOrAddDefault(_mice, mouseId, out bool exists);
+
+        if (!exists || mouse == null)
+        {
+            mouse = new Mouse(mouseId);
+        }
+
+        return mouse;
     }
 }

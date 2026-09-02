@@ -4,6 +4,7 @@
 
 - `docs/class-registration.md` - ServiceCollection/ServiceProvider API: registration overloads, source generator requirements, lifecycle, aliases, multi-registration, parent/child provider callback merging and scoped lifecycles
 - `docs/events.md` - Pixely.Events EventBus, event handlers, publishing, and DI auto-subscription
+- `docs/input-automation.md` - Synchronous synthetic mouse, keyboard, and text input, coordinate semantics, view targeting, and physical-input boundaries
 - `docs/static-factory-methods.md` - Static Create() method pattern
 - `docs/componentize.md` - Pixely.Componentize setup and usage
 - `docs/components.md` - GameWorld, GameObject, GameComponent lifecycle, Services<T>, UpdateSystem

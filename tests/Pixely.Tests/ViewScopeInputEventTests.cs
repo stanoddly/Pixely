@@ -23,9 +23,7 @@ public sealed class ViewScopeInputEventTests
             eventKeyboard = eventArgs.Keyboard;
         });
         keyboardService.SubscribeKeyDown(_secondView, 0, _ => secondCalls++);
-        SDL_KeyboardEvent keyboardEvent = new() { down = true, timestamp = 42 };
-
-        keyboardService.OnKeyEvent(_firstView, keyboardEvent);
+        keyboardService.OnKeyEvent(_firstView, (SDL_KeyboardID)1, Scancode.A, VirtualKey.A, true, 42);
 
         Assert.Multiple(() =>
         {
@@ -51,10 +49,8 @@ public sealed class ViewScopeInputEventTests
             eventMouse = eventArgs.Mouse;
         });
         mouseService.SubscribeMotion(_secondView, 0, _ => secondCalls++);
-        SDL_MouseMotionEvent mouseMotionEvent = new() { timestamp = 42 };
-
-        mouseService.OnMouseMotionEvent(_firstView, mouseMotionEvent);
-        mouseService.OnMouseMotionEvent(default, mouseMotionEvent);
+        mouseService.OnMouseMotionEvent(_firstView, (SDL_MouseID)1, default, default, 42);
+        mouseService.OnMouseMotionEvent(default, (SDL_MouseID)1, default, default, 42);
 
         Assert.Multiple(() =>
         {
@@ -75,10 +71,8 @@ public sealed class ViewScopeInputEventTests
         textInputService.TextInput += _ => defaultCalls++;
         textInputService.SubscribeTextInput(_firstView, 0, _ => firstCalls++);
         textInputService.SubscribeTextInput(_secondView, 0, _ => secondCalls++);
-        SDL_TextInputEvent textInputEvent = new() { timestamp = 42 };
-
-        textInputService.OnTextInputEvent(_firstView, textInputEvent);
-        textInputService.OnTextInputEvent(default, textInputEvent);
+        textInputService.OnTextInputEvent(_firstView, string.Empty, 42);
+        textInputService.OnTextInputEvent(default, string.Empty, 42);
 
         Assert.Multiple(() =>
         {
