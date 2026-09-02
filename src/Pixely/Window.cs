@@ -193,25 +193,27 @@ public class Window : IDisposable
         }
     }
 
-    public void Show()
+    public bool Show()
     {
         unsafe
         {
-            if (SDL3.SDL_ShowWindow(SdlWindow) == false)
-            {
-                throw new PixelyException($"SDL_ShowWindow failed: {SDL3.SDL_GetError()}");
-            }
+            return SDL3.SDL_ShowWindow(SdlWindow);
         }
     }
 
-    public void Hide()
+    public bool Hide()
     {
         unsafe
         {
-            if (SDL3.SDL_HideWindow(SdlWindow) == false)
-            {
-                throw new PixelyException($"SDL_HideWindow failed: {SDL3.SDL_GetError()}");
-            }
+            return SDL3.SDL_HideWindow(SdlWindow);
+        }
+    }
+
+    public bool Raise()
+    {
+        unsafe
+        {
+            return SDL3.SDL_RaiseWindow(SdlWindow);
         }
     }
 

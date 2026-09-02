@@ -29,25 +29,30 @@ static class Program
         builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {
             Window secondaryWindow = windowRegistry.GetWindow(SecondaryView);
-            Console.WriteLine("Press Space in the main window to show or hide the secondary window.");
+            Console.WriteLine("Press Space in the main window to show or raise the secondary window. Press H to hide it.");
 
             keyboardService.KeyUp += eventArgs =>
             {
-                if (eventArgs.Key != VirtualKey.Space)
+                if (eventArgs.Key == VirtualKey.Space)
                 {
+                    if (secondaryWindow.IsVisible)
+                    {
+                        secondaryWindow.Raise();
+                    }
+                    else
+                    {
+                        secondaryWindow.Show();
+                    }
+
+                    eventArgs.Consume();
                     return;
                 }
 
-                if (secondaryWindow.IsVisible)
+                if (eventArgs.Key == VirtualKey.H)
                 {
                     secondaryWindow.Hide();
+                    eventArgs.Consume();
                 }
-                else
-                {
-                    secondaryWindow.Show();
-                }
-
-                eventArgs.Consume();
             };
         });
 
