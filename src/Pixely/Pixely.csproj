@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Pixely.Tests" />
+        <InternalsVisibleTo Include="Pixely.Audio" />
     </ItemGroup>
 
     <ItemGroup>

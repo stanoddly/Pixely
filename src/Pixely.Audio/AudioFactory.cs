@@ -21,6 +21,7 @@ internal unsafe sealed class AudioFactory
 
         try
         {
+            _sdlLifetime.EnsureApplicationIdentifierConfigured();
             SdlError.ThrowOnFalse(
                 SDL3.SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO),
                 nameof(SDL3.SDL_InitSubSystem));

@@ -12,10 +12,14 @@ public enum GpuBackend
 public sealed record PixelyConfig(
     bool EnableSdlLogging = true,
     bool EnableGpuValidation = true,
-    GpuBackend GpuBackend = GpuBackend.Automatic);
+    GpuBackend GpuBackend = GpuBackend.Automatic,
+    string? ApplicationIdentifier = null,
+    string? TaskbarIconPath = null);
 #else
 public sealed record PixelyConfig(
     bool EnableSdlLogging = false,
     bool EnableGpuValidation = false,
-    GpuBackend GpuBackend = GpuBackend.Automatic);
+    GpuBackend GpuBackend = GpuBackend.Automatic,
+    string? ApplicationIdentifier = null,
+    string? TaskbarIconPath = null);
 #endif

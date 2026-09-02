@@ -1,3 +1,4 @@
+using Pixely.Content;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 
@@ -19,7 +20,8 @@ public static class WindowServiceCollectionExtensions
                 provider.GetRequiredService<GpuDevice>(),
                 provider.GetRequiredService<PixelyFrameContext>(),
                 config ?? new WindowConfig(),
-                provider.GetRequiredService<PlatformInfo>()));
+                provider.GetRequiredService<PlatformInfo>(),
+                provider.GetRequiredService<IImageLoader>()));
         return services;
     }
 }

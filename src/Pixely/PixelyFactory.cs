@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.Utilities;
@@ -12,6 +13,8 @@ public class PixelyFactory: IDisposable
     internal const string GpuBackendEnvironmentVariable = "PIXELY_GRAPHICS";
 
     private readonly PixelyConfig _config;
+    private Image? _taskbarIcon;
+    private bool _applicationIdentifierConfigured;
     private bool _initialized;
 
     public PixelyFactory(PixelyConfig config)
@@ -25,6 +28,8 @@ public class PixelyFactory: IDisposable
         {
             return;
         }
+
+        EnsureApplicationIdentifierConfigured();
 
         //SDL3.SDL_SetHint(SDL3.SDL_HINT_EVENT_LOGGING, "2");
         //SDL3.SDL_SetHint(SDL3.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -44,6 +49,22 @@ public class PixelyFactory: IDisposable
         _initialized = true;
     }
 
+    internal void EnsureApplicationIdentifierConfigured()
+    {
+        if (_applicationIdentifierConfigured)
+        {
+            return;
+        }
+
+        if (_config.ApplicationIdentifier != null &&
+            !SDL3.SDL_SetAppMetadataProperty(SDL3.SDL_PROP_APP_METADATA_IDENTIFIER_STRING, _config.ApplicationIdentifier))
+        {
+            throw new PixelyInitializationException($"SDL_SetAppMetadataProperty failed for the application identifier: {SDL3.SDL_GetError()}");
+        }
+
+        _applicationIdentifierConfigured = true;
+    }
+
     private static unsafe string? GetCurrentVideoDriver()
     {
         byte* videoDriver = SDL3.Unsafe_SDL_GetCurrentVideoDriver();
@@ -61,9 +82,10 @@ public class PixelyFactory: IDisposable
         GpuDevice gpuDevice,
         PixelyFrameContext frameContext,
         WindowConfig config,
-        PlatformInfo platformInfo)
+        PlatformInfo platformInfo,
+        IImageLoader imageLoader)
     {
-        return CreateWindow(
+        Window window = CreateWindow(
             viewScope,
             gpuDevice,
             frameContext,
@@ -77,6 +99,22 @@ public class PixelyFactory: IDisposable
             config.AlwaysOnTop,
             config.InitiallyVisible,
             config.CloseBehavior);
+
+        if (_config.TaskbarIconPath != null)
+        {
+            try
+            {
+                _taskbarIcon ??= imageLoader.Load(_config.TaskbarIconPath);
+                window.SetIcon(_taskbarIcon);
+            }
+            catch
+            {
+                window.Dispose();
+                throw;
+            }
+        }
+
+        return window;
     }
 
     private Window CreateWindow(
@@ -333,6 +371,9 @@ public class PixelyFactory: IDisposable
 
     public void Dispose()
     {
+        _taskbarIcon?.Dispose();
+        _taskbarIcon = null;
+
         if (!_initialized)
         {
             return;

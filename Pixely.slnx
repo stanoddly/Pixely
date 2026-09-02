@@ -40,6 +40,7 @@
     <Project Path="tests/Pixely.Tests/Pixely.Tests.csproj" />
   </Folder>
   <Folder Name="/tutorials/">
+    <Project Path="tutorials/Pixely.Tutorials.TaskbarIcon/Pixely.Tutorials.TaskbarIcon.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.EmbeddedContent/Pixely.Tutorials.EmbeddedContent.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.DepthOnly/Pixely.Tutorials.DepthOnly.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj" />
