@@ -16,6 +16,7 @@
 - `docs/architecture-library.md` - Pixely.Architecture API: command/query handlers, dispatcher, domain event stream/cursor, pump, post-dispatch hooks, registration extensions
 - `docs/architecture-testing.md` - Pixely.Architecture.Testing: CqsConventions and ModelBoundary checks that enforce the architecture-concept.md boundary claims as unit tests
 - `docs/development-packages.md` - Consuming packages from the public development feed
+- `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
 
 ## Maintenance
 

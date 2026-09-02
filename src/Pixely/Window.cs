@@ -414,7 +414,7 @@ public class Window : IDisposable
         }
     }
 
-    public void SetIcon(Image icon)
+    public bool SetIcon(Image icon)
     {
         ReadOnlySpan<byte> pixelData = icon.Data;
         int width = icon.Size.Width;
@@ -434,15 +434,12 @@ public class Window : IDisposable
 
                 if (surface.IsNull)
                 {
-                    throw new PixelyException($"SDL_CreateSurfaceFrom failed: {SDL3.SDL_GetError()}");
+                    return false;
                 }
 
                 try
                 {
-                    if (!SDL3.SDL_SetWindowIcon(SdlWindow, surface))
-                    {
-                        throw new PixelyException($"SDL_SetWindowIcon failed: {SDL3.SDL_GetError()}");
-                    }
+                    return SDL3.SDL_SetWindowIcon(SdlWindow, surface);
                 }
                 finally
                 {
