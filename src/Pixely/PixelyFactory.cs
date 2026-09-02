@@ -89,16 +89,8 @@ public class PixelyFactory: IDisposable
 
         if (_config.TaskbarIconPath != null)
         {
-            try
-            {
-                _taskbarIcon ??= imageLoader.Load(_config.TaskbarIconPath);
-                window.SetIcon(_taskbarIcon);
-            }
-            catch
-            {
-                window.Dispose();
-                throw;
-            }
+            _taskbarIcon ??= imageLoader.Load(_config.TaskbarIconPath);
+            _ = window.SetIcon(_taskbarIcon);
         }
 
         return window;

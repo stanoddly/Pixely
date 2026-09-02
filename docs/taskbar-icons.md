@@ -14,7 +14,7 @@ The path is resolved through the configured `IImageLoader`, so the image can com
 
 `ApplicationIdentifier` is optional. When specified, Pixely supplies it to SDL before initialization so desktop compositors can group the application's windows consistently.
 
-`Window.SetIcon(Image)` remains available as a per-window override.
+`Window.SetIcon(Image)` remains available as a per-window override and returns whether the active SDL video backend accepted the icon.
 
 ## Platform behavior
 

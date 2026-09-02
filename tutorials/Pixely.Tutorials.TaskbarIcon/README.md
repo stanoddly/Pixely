@@ -31,4 +31,4 @@ Run from the repository root:
 dotnet run --project tutorials/Pixely.Tutorials.TaskbarIcon
 ```
 
-`Window.SetIcon(Image)` remains available when a specific window needs to override the shared icon.
+`Window.SetIcon(Image)` remains available when a specific window needs to override the shared icon and returns whether the active SDL video backend accepted it.
