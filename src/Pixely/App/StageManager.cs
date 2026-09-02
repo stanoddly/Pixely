@@ -23,12 +23,7 @@ internal sealed class StageManager : IStageManager, IDisposable
 
     public void Reload()
     {
-        if (_lastConfigure == null)
-        {
-            throw new InvalidOperationException("No stage has been loaded.");
-        }
-
-        _pendingLoad = _lastConfigure;
+        _pendingLoad = _lastConfigure ?? throw new InvalidOperationException("No stage has been loaded.");
     }
 
     internal void ApplyPendingTransition()
