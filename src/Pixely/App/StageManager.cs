@@ -6,6 +6,7 @@ internal sealed class StageManager : IStageManager, IDisposable
 {
     private readonly ServiceProvider _rootProvider;
     private ServiceProvider? _stageProvider;
+    private Action<ServiceCollection>? _lastConfigure;
     private Action<ServiceCollection>? _pendingLoad;
 
     public StageManager(ServiceProvider rootProvider)
@@ -20,11 +21,17 @@ internal sealed class StageManager : IStageManager, IDisposable
         _pendingLoad = configure;
     }
 
+    public void Reload()
+    {
+        _pendingLoad = _lastConfigure ?? throw new InvalidOperationException("No stage has been loaded.");
+    }
+
     internal void ApplyPendingTransition()
     {
         if (_pendingLoad != null)
         {
             Action<ServiceCollection> configure = _pendingLoad;
+            _lastConfigure = configure;
             _pendingLoad = null;
             ReplaceStage(configure);
         }
@@ -32,6 +39,7 @@ internal sealed class StageManager : IStageManager, IDisposable
 
     public void Dispose()
     {
+        _lastConfigure = null;
         _pendingLoad = null;
         UnloadActiveStage();
     }
