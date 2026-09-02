@@ -29,7 +29,7 @@ static class Program
         builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {
             Window secondaryWindow = windowRegistry.GetWindow(SecondaryView);
-            Console.WriteLine("Press Space in the main window to show or hide the secondary window.");
+            Console.WriteLine("Press Space in the main window to show or raise the secondary window. Close the secondary window to hide it.");
 
             keyboardService.KeyUp += eventArgs =>
             {
@@ -40,7 +40,7 @@ static class Program
 
                 if (secondaryWindow.IsVisible)
                 {
-                    secondaryWindow.Hide();
+                    secondaryWindow.Raise();
                 }
                 else
                 {

@@ -196,9 +196,12 @@ builder.UseDefaultRendering(
         CloseBehavior: WindowCloseBehavior.HideWindow));
 
 Window inventoryWindow = windowRegistry.GetWindow(ViewScopes.Inventory);
-inventoryWindow.Show();
-inventoryWindow.Hide();
+bool shown = inventoryWindow.Show();
+bool raised = inventoryWindow.Raise();
+bool hidden = inventoryWindow.Hide();
 ```
+
+`Show()`, `Raise()`, and `Hide()` return whether the native window operation succeeded. Raising a window requests input focus, subject to the operating system's window-management policy.
 
 Hidden windows remain registered and retain their renderer and GPU resources, but their render
 coordinators do not acquire a swapchain texture or invoke renderers. They are disposed with the
