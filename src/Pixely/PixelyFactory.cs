@@ -14,7 +14,6 @@ public class PixelyFactory: IDisposable
 
     private readonly PixelyConfig _config;
     private Image? _taskbarIcon;
-    private bool _applicationIdentifierConfigured;
     private bool _initialized;
 
     public PixelyFactory(PixelyConfig config)
@@ -29,7 +28,11 @@ public class PixelyFactory: IDisposable
             return;
         }
 
-        EnsureApplicationIdentifierConfigured();
+        if (_config.ApplicationIdentifier != null &&
+            !SDL3.SDL_SetAppMetadataProperty(SDL3.SDL_PROP_APP_METADATA_IDENTIFIER_STRING, _config.ApplicationIdentifier))
+        {
+            throw new PixelyInitializationException($"SDL_SetAppMetadataProperty failed for the application identifier: {SDL3.SDL_GetError()}");
+        }
 
         //SDL3.SDL_SetHint(SDL3.SDL_HINT_EVENT_LOGGING, "2");
         //SDL3.SDL_SetHint(SDL3.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -47,22 +50,6 @@ public class PixelyFactory: IDisposable
         }
 
         _initialized = true;
-    }
-
-    internal void EnsureApplicationIdentifierConfigured()
-    {
-        if (_applicationIdentifierConfigured)
-        {
-            return;
-        }
-
-        if (_config.ApplicationIdentifier != null &&
-            !SDL3.SDL_SetAppMetadataProperty(SDL3.SDL_PROP_APP_METADATA_IDENTIFIER_STRING, _config.ApplicationIdentifier))
-        {
-            throw new PixelyInitializationException($"SDL_SetAppMetadataProperty failed for the application identifier: {SDL3.SDL_GetError()}");
-        }
-
-        _applicationIdentifierConfigured = true;
     }
 
     private static unsafe string? GetCurrentVideoDriver()
