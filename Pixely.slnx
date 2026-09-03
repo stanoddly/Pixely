@@ -68,5 +68,6 @@
     <Project Path="tutorials/Pixely.Tutorials.MultiWindowTextInput/Pixely.Tutorials.MultiWindowTextInput.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Audio/Pixely.Tutorials.Audio.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.ZipContent/Pixely.Tutorials.ZipContent.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.ScrollList/Pixely.Tutorials.ScrollList.csproj" />
   </Folder>
 </Solution>

@@ -43,6 +43,9 @@ internal sealed class PencilSystem : IUpdatable
             if (args.Button == MouseButton.Left)
             {
                 pencil.UpdateCursor((Vector2Int)args.Position);
+                pencil.SetCursorPressed(true);
+                pencil.CursorJustPressed = true;
+                pencil.Invalidate();
 
                 if (pencil.IsOverInteractiveArea((Vector2Int)args.Position))
                 {
@@ -55,14 +58,28 @@ internal sealed class PencilSystem : IUpdatable
         {
             if (args.Button == MouseButton.Left)
             {
+                bool hadCapture = pencil.HasCapture;
                 pencil.UpdateCursor((Vector2Int)args.Position);
+                pencil.SetCursorPressed(false);
                 pencil.CursorJustReleased = true;
                 pencil.Invalidate();
 
-                if (pencil.IsOverInteractiveArea((Vector2Int)args.Position))
+                if (hadCapture || pencil.IsOverInteractiveArea((Vector2Int)args.Position))
                 {
                     args.Consume();
                 }
+            }
+        });
+
+        mouseService.SubscribeWheel(_viewScope, inputOrder, args =>
+        {
+            Vector2Int position = (Vector2Int)args.Position;
+            pencil.UpdateCursor(position);
+
+            if (pencil.IsOverScrollArea(position))
+            {
+                pencil.AddWheelDelta(args.Delta);
+                args.Consume();
             }
         });
 
@@ -105,6 +122,7 @@ internal sealed class PencilSystem : IUpdatable
         if (needsBuild)
         {
             _pencil.FocusedControlSeenThisFrame = false;
+            _pencil.CapturedControlSeenThisFrame = false;
             _pencil.NeedsUpdate = false;
             _pencil.ResetInteractionData();
 
@@ -134,5 +152,7 @@ internal sealed class PencilSystem : IUpdatable
         }
 
         _pencil.CursorJustReleased = false;
+        _pencil.CursorJustPressed = false;
+        _pencil.ClearWheelDelta();
     }
 }

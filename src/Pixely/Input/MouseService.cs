@@ -324,7 +324,9 @@ public class MouseService : IMouseService
         in SDL_MouseWheelEvent mouseWheelEvent)
     {
         SDL_MouseID mouseId = mouseWheelEvent.which;
-        Vector2 delta = new(mouseWheelEvent.x, mouseWheelEvent.y);
+        // SDL reports inverted values for natural scrolling and expects the application to undo it
+        float directionSign = mouseWheelEvent.direction == SDL_MouseWheelDirection.SDL_MOUSEWHEEL_FLIPPED ? -1.0f : 1.0f;
+        Vector2 delta = new(mouseWheelEvent.x * directionSign, mouseWheelEvent.y * directionSign);
         Vector2 position = new(mouseWheelEvent.mouse_x, mouseWheelEvent.mouse_y);
         ulong timestamp = mouseWheelEvent.timestamp;
 
