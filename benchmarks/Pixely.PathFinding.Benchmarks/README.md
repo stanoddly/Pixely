@@ -14,6 +14,7 @@ Useful filters:
 - `*PracticalIndexTypeBenchmarks*` compares `ushort`, `int`, and `long` indices on a 255×255 grid.
 - `*CostTypeBenchmarks*` compares integer and floating-point cost representations on a 64×64 grid.
 - `*WorkloadBenchmarks*` compares open, weighted, and unreachable searches.
+- `*GridBenchmarks*` measures the `Pixely.PathFinding.Grids` layer: a warmed A* search for a size-one and a size-three agent over one clearance grid, and a clearance rebuild.
 - `*LargeIndexTypeBenchmarks*` compares `int` and `long` indices on a 1024×1024 grid and requires substantially more time and memory.
 
 Use repeated launches for the focused `ExpandTree` regression comparison:

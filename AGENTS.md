@@ -15,6 +15,7 @@
 - `docs/architecture-concept.md` - MVP + CQS + Events: layer responsibilities, boundary contract vs. internal representation, per-genre decision framework
 - `docs/architecture-library.md` - Pixely.Architecture API: command/query handlers, dispatcher, domain event stream/cursor, pump, post-dispatch hooks, registration extensions
 - `docs/architecture-testing.md` - Pixely.Architecture.Testing: CqsConventions and ModelBoundary checks that enforce the architecture-concept.md boundary claims as unit tests
+- `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic
 - `docs/development-packages.md` - Consuming packages from the public development feed
 - `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
 
