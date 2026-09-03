@@ -56,6 +56,20 @@ public readonly struct GapDisposer : IDisposable
     public void Dispose() => _context.CurrentGap = _previousGap;
 }
 
+public readonly struct ClipDisposer : IDisposable
+{
+    private readonly Pencil _context;
+    private readonly Rectangle? _previousClip;
+
+    internal ClipDisposer(Pencil context, Rectangle? previousClip)
+    {
+        _context = context;
+        _previousClip = previousClip;
+    }
+
+    public void Dispose() => _context.CurrentClip = _previousClip;
+}
+
 public class Pencil
 {
     private readonly IFontSystem _fontSystem;
@@ -74,6 +88,7 @@ public class Pencil
 
     private readonly List<Rectangle> _hoverAreas = new();
     private readonly List<Rectangle> _clickTests = new();
+    private readonly List<Rectangle> _scrollAreas = new();
     // Patch indices address their corresponding completed instruction buffer after CycleInstructions;
     // reset and rebuild the patches whenever the instruction buffers are rebuilt.
     private readonly List<HoverRectanglePatch> _hoverRectanglePatches = new();
@@ -106,6 +121,20 @@ public class Pencil
 
     internal void UpdateCursor(Vector2Int? position)
     {
+        // A captured control tracks the pointer until the button is released, so a drag that
+        // wanders out of the window keeps running instead of losing the cursor mid-gesture.
+        if (HasCapture)
+        {
+            if (position.HasValue)
+            {
+                CursorPosition = position.Value;
+                IsCursorInWindow = true;
+            }
+
+            Invalidate();
+            return;
+        }
+
         bool cursorInWindow = position.HasValue;
         Vector2Int nextPosition = position.GetValueOrDefault();
         if (cursorInWindow != IsCursorInWindow || (cursorInWindow && nextPosition != CursorPosition))
@@ -165,8 +194,53 @@ public class Pencil
     public Vector2Int CursorPosition { get; private set; }
     public bool IsCursorInWindow { get; private set; }
     public int CurrentGap { get; set; }
+    public Rectangle? CurrentClip { get; set; }
 
     internal bool CursorJustReleased { get; set; }
+    internal bool CursorJustPressed { get; set; }
+    public bool CursorPressed { get; private set; }
+    internal Vector2 PendingWheelDelta { get; private set; }
+
+    // Pointer capture is deliberately separate from keyboard focus: dragging a scrollbar
+    // must not blur the text field the user was editing.
+    public int? CapturedControlId { get; private set; }
+    public bool HasCapture => CapturedControlId != null;
+    public bool IsCapturedBy(int id) => CapturedControlId == id;
+    internal bool CapturedControlSeenThisFrame;
+
+    // Distance from the grabbed thumb's start to the cursor, kept so a drag does not snap
+    internal int CaptureGrabOffset { get; set; }
+
+    internal void Capture(int id, int grabOffset)
+    {
+        CapturedControlId = id;
+        CaptureGrabOffset = grabOffset;
+        CapturedControlSeenThisFrame = true;
+        Invalidate();
+    }
+
+    internal void ReleaseCapture()
+    {
+        CapturedControlId = null;
+        Invalidate();
+    }
+
+    internal void SetCursorPressed(bool pressed)
+    {
+        CursorPressed = pressed;
+        if (!pressed)
+        {
+            CapturedControlId = null;
+        }
+    }
+
+    internal void AddWheelDelta(Vector2 delta)
+    {
+        PendingWheelDelta += delta;
+        Invalidate();
+    }
+
+    internal void ClearWheelDelta() => PendingWheelDelta = default;
 
     public int? FocusedControlId { get; private set; }
     public bool HasFocus => FocusedControlId != null;
@@ -185,14 +259,59 @@ public class Pencil
         Style = guiStyle;
     }
 
+    public ClipDisposer WithClip(Rectangle area)
+    {
+        ClipDisposer disposer = new ClipDisposer(this, CurrentClip);
+        CurrentClip = CurrentClip == null ? area : CurrentClip.Value.Intersect(area);
+        return disposer;
+    }
+
+    internal Rectangle Clip(Rectangle area) => CurrentClip == null ? area : area.Intersect(CurrentClip.Value);
+
+    // UVs map linearly onto the area, so a clipped area takes the matching sub-range. The
+    // scale stays signed to preserve flipped sprites, whose u0/v0 are the larger coordinate.
+    private static Vector4 ClipUvs(Vector4 uvs, Rectangle area, Rectangle clipped)
+    {
+        if (area == clipped)
+        {
+            return uvs;
+        }
+
+        float horizontalScale = (uvs.Z - uvs.X) / area.Width;
+        float verticalScale = (uvs.W - uvs.Y) / area.Height;
+
+        return new Vector4(
+            uvs.X + (clipped.X - area.X) * horizontalScale,
+            uvs.Y + (clipped.Y - area.Y) * verticalScale,
+            uvs.Z - (area.X + area.Width - clipped.X - clipped.Width) * horizontalScale,
+            uvs.W - (area.Y + area.Height - clipped.Y - clipped.Height) * verticalScale);
+    }
+
     internal void AddHoverArea(Rectangle area)
     {
-        _hoverAreas.Add(area);
+        Rectangle clipped = Clip(area);
+        if (!clipped.IsEmpty)
+        {
+            _hoverAreas.Add(clipped);
+        }
     }
 
     internal void AddClickTest(Rectangle test)
     {
-        _clickTests.Add(test);
+        Rectangle clipped = Clip(test);
+        if (!clipped.IsEmpty)
+        {
+            _clickTests.Add(clipped);
+        }
+    }
+
+    internal void AddScrollArea(Rectangle area)
+    {
+        Rectangle clipped = Clip(area);
+        if (!clipped.IsEmpty)
+        {
+            _scrollAreas.Add(clipped);
+        }
     }
 
     internal bool IsOverInteractiveArea(Vector2Int position)
@@ -208,35 +327,74 @@ public class Pencil
         return false;
     }
 
+    internal bool IsOverScrollArea(Vector2Int position)
+    {
+        foreach (Rectangle area in _scrollAreas)
+        {
+            if (area.Intersects(position))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void AddRectangle(Rectangle rectangle, Color color)
     {
-        _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, rectangle, color));
+        Rectangle clipped = Clip(rectangle);
+        if (clipped.IsEmpty)
+        {
+            return;
+        }
+
+        _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, clipped, color));
     }
 
     internal void AddHoverRectangle(Rectangle rectangle, Color color, Rectangle hoverArea, Color hoverColor)
     {
-        int instructionIndex = _coloredRectangleInstructions.Count;
-        Color resolvedColor = IsCursorInWindow && hoverArea.Intersects(CursorPosition) ? hoverColor : color;
-        _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, rectangle, resolvedColor));
-        if (color != hoverColor)
+        Rectangle clipped = Clip(rectangle);
+        Rectangle clippedHoverArea = Clip(hoverArea);
+        if (clipped.IsEmpty)
         {
-            _hoverRectanglePatches.Add(new HoverRectanglePatch(hoverArea, instructionIndex, color, hoverColor));
+            return;
+        }
+
+        int instructionIndex = _coloredRectangleInstructions.Count;
+        Color resolvedColor = IsCursorInWindow && clippedHoverArea.Intersects(CursorPosition) ? hoverColor : color;
+        _coloredRectangleInstructions.Add(new ColoredRectangleInstruction(_depth++, clipped, resolvedColor));
+        if (color != hoverColor && !clippedHoverArea.IsEmpty)
+        {
+            _hoverRectanglePatches.Add(new HoverRectanglePatch(clippedHoverArea, instructionIndex, color, hoverColor));
         }
     }
 
     public void AddTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint)
     {
-        _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, area, uvs, tint));
+        Rectangle clipped = Clip(area);
+        if (clipped.IsEmpty)
+        {
+            return;
+        }
+
+        _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, clipped, ClipUvs(uvs, area, clipped), tint));
     }
 
     internal void AddHoverTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint, Rectangle hoverArea, FColor hoverTint)
     {
-        int instructionIndex = _textureRegionInstructions.Count;
-        FColor resolvedTint = IsCursorInWindow && hoverArea.Intersects(CursorPosition) ? hoverTint : tint;
-        _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, area, uvs, resolvedTint));
-        if (tint != hoverTint)
+        Rectangle clipped = Clip(area);
+        Rectangle clippedHoverArea = Clip(hoverArea);
+        if (clipped.IsEmpty)
         {
-            _hoverTexturePatches.Add(new HoverTexturePatch(hoverArea, instructionIndex, tint, hoverTint));
+            return;
+        }
+
+        int instructionIndex = _textureRegionInstructions.Count;
+        FColor resolvedTint = IsCursorInWindow && clippedHoverArea.Intersects(CursorPosition) ? hoverTint : tint;
+        _textureRegionInstructions.Add(new TextureRegionInstruction(_depth++, texture, clipped, ClipUvs(uvs, area, clipped), resolvedTint));
+        if (tint != hoverTint && !clippedHoverArea.IsEmpty)
+        {
+            _hoverTexturePatches.Add(new HoverTexturePatch(clippedHoverArea, instructionIndex, tint, hoverTint));
         }
     }
 
@@ -404,6 +562,12 @@ public class Pencil
         if (HasFocus && !FocusedControlSeenThisFrame)
         {
             Blur();
+        }
+
+        // A capturing control that stopped being built cannot release the pointer itself
+        if (HasCapture && !CapturedControlSeenThisFrame)
+        {
+            CapturedControlId = null;
         }
     }
 
@@ -639,8 +803,10 @@ public class Pencil
     {
         _hoverAreas.Clear();
         _clickTests.Clear();
+        _scrollAreas.Clear();
         _hoverRectanglePatches.Clear();
         _hoverTexturePatches.Clear();
+        CurrentClip = null;
     }
 
     internal void MarkInstructionsCompleted()
@@ -708,8 +874,14 @@ public static class PencilExtensions
             return false;
         }
 
-        pencil.AddClickTest(area);
-        return pencil.CursorJustReleased && pencil.IsCursorInWindow && area.Intersects(pencil.CursorPosition);
+        Rectangle clipped = pencil.Clip(area);
+        if (clipped.IsEmpty)
+        {
+            return false;
+        }
+
+        pencil.AddClickTest(clipped);
+        return pencil.CursorJustReleased && pencil.IsCursorInWindow && clipped.Intersects(pencil.CursorPosition);
     }
 
     public static bool HoverArea(this Pencil pencil, int width, int height, bool enabled = true)
@@ -725,8 +897,14 @@ public static class PencilExtensions
             return false;
         }
 
-        pencil.AddHoverArea(area);
-        return pencil.IsCursorInWindow && area.Intersects(pencil.CursorPosition);
+        Rectangle clipped = pencil.Clip(area);
+        if (clipped.IsEmpty)
+        {
+            return false;
+        }
+
+        pencil.AddHoverArea(clipped);
+        return pencil.IsCursorInWindow && clipped.Intersects(pencil.CursorPosition);
     }
 
     public static bool Button(this Pencil pencil, string text, Font font)

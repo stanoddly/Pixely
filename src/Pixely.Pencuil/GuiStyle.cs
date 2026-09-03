@@ -3,7 +3,8 @@ using Pixely.Gpu;
 namespace Pixely.Pencuil;
 
 public record GuiStyle(
-    short TextPadding, Color ActiveColor, Color InactiveColor, Color Background, short BorderThickness, ushort TextSize, Color TextColor, Color ActiveTextColor, Color SelectionColor
+    short TextPadding, Color ActiveColor, Color InactiveColor, Color Background, short BorderThickness, ushort TextSize, Color TextColor, Color ActiveTextColor, Color SelectionColor,
+    short ScrollBarThickness = 10, short ScrollStep = 48, short MinimumThumbLength = 16
 );
 
 public static class GuiStyles
