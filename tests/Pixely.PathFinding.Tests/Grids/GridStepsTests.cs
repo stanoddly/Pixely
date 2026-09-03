@@ -79,6 +79,50 @@ public sealed class GridStepsTests
     }
 
     [Test]
+    public void Enumerate_AppliesTheCornerRuleToIntermediatesThatOnlyALargerAgentOverflows()
+    {
+        // The destination anchor (2, 2) fits a size-two agent, but the intermediate anchor (2, 1) covers the blocked tile.
+        GridSteps<NoGridOverlay> cutting = CreateSteps(5, 5, GridConnectivity.EightWay, [(3, 1)]);
+        GridSteps<NoGridOverlay> notCutting = CreateSteps(5, 5, GridConnectivity.EightWayNoCornerCutting, [(3, 1)]);
+        GridStep[] buffer = new GridStep[8];
+
+        int cuttingCount = cutting.Enumerate(cutting.Geometry.GetIndex(1, 1), 2, buffer);
+        List<(int X, int Y)> cuttingPositions = Positions(cutting, buffer, cuttingCount);
+        int notCuttingCount = notCutting.Enumerate(notCutting.Geometry.GetIndex(1, 1), 2, buffer);
+        List<(int X, int Y)> notCuttingPositions = Positions(notCutting, buffer, notCuttingCount);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cuttingPositions, Does.Contain((2, 2)));
+            Assert.That(cuttingPositions, Does.Not.Contain((2, 1)));
+            Assert.That(notCuttingPositions, Does.Not.Contain((2, 2)));
+            Assert.That(notCuttingPositions, Does.Contain((1, 2)).And.Contain((0, 2)));
+        });
+    }
+
+    [Test]
+    public void Enumerate_AppliesTheCornerRuleToLargerAgentsBlockedOnlyByTheOverlay()
+    {
+        GridGeometry geometry = new GridGeometry(5, 5);
+        ClearanceGrid clearance = new ClearanceGrid(geometry);
+        clearance.Rebuild(new bool[geometry.NodeCount]);
+        bool[] overlaid = new bool[geometry.NodeCount];
+        overlaid[geometry.GetIndex(2, 1)] = true;
+        GridSteps<MaskOverlay> steps = new GridSteps<MaskOverlay>(clearance, GridConnectivity.EightWayNoCornerCutting, new MaskOverlay(overlaid));
+        GridStep[] buffer = new GridStep[steps.MaximumDegree];
+
+        int count = steps.Enumerate(geometry.GetIndex(1, 1), 2, buffer);
+        List<(int X, int Y)> positions = [.. buffer.Take(count).Select(step => geometry.GetPosition(step.Index))];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(positions, Does.Not.Contain((2, 1)));
+            Assert.That(positions, Does.Not.Contain((2, 2)).And.Not.Contain((2, 0)));
+            Assert.That(positions, Does.Contain((1, 2)).And.Contain((0, 0)));
+        });
+    }
+
+    [Test]
     public void Enumerate_ServesAgentsOfDifferentSizesFromOneGrid()
     {
         GridSteps<NoGridOverlay> steps = CreateSteps(3, 3, GridConnectivity.EightWayNoCornerCutting, [(2, 2)]);

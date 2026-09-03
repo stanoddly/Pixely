@@ -65,8 +65,14 @@ public readonly struct GridHeuristic<TIndex, TCost> : IIndexedPathHeuristic<TInd
             return TCost.Zero;
         }
 
+        // A count that does not convert exactly rounds toward a nearby representable value, which keeps the product a bound rather than a wrong answer.
         TCost countCost = TCost.CreateSaturating(count);
-        if (int.CreateSaturating(countCost) != count || cost > TCost.MaxValue / countCost)
+        if (countCost == TCost.Zero)
+        {
+            return TCost.Zero;
+        }
+
+        if (cost > TCost.MaxValue / countCost)
         {
             return TCost.MaxValue;
         }

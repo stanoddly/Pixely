@@ -28,7 +28,8 @@ public class GridBenchmarks
         for (int index = 0; index < _blocked.Length; index++)
         {
             (int x, int y) = geometry.GetPosition(index);
-            _blocked[index] = x % 16 == 8 && y % 32 != 16;
+            // Vertical walls with gaps four tiles tall, so both the size-one and the size-three agent can cross.
+            _blocked[index] = x % 16 == 8 && y % 32 >= 4;
         }
 
         _clearance.Rebuild(_blocked);
@@ -36,10 +37,18 @@ public class GridBenchmarks
         _smallAgent = new UniformGridGraph<int, float, NoGridOverlay>(steps, 1, 1f, MathF.Sqrt(2f));
         _largeAgent = new UniformGridGraph<int, float, NoGridOverlay>(steps, 3, 1f, MathF.Sqrt(2f));
         _heuristic = _smallAgent.GetHeuristic();
-        _destination = geometry.NodeCount - 1;
-        SmallAgent_AStar();
-        LargeAgent_AStar();
+        _destination = geometry.GetIndex(Extent - 4, Extent - 4);
+        Validate(SmallAgent_AStar());
+        Validate(LargeAgent_AStar());
         Rebuild();
+    }
+
+    private static void Validate(int pathLength)
+    {
+        if (pathLength == 0)
+        {
+            throw new InvalidOperationException("Expected the benchmark search to reach its destination.");
+        }
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("AStar")]

@@ -47,6 +47,64 @@ public sealed class ClearanceGridTests
     }
 
     [Test]
+    public void Fits_AgreesWithAnExhaustiveScanForSizesBeyondASmallGrid()
+    {
+        Random random = new Random(436);
+        for (int trial = 0; trial < 4; trial++)
+        {
+            int width = random.Next(24, 41);
+            int height = random.Next(24, 41);
+            GridGeometry geometry = new GridGeometry(width, height);
+            bool[] blocked = new bool[geometry.NodeCount];
+            for (int blocker = 0; blocker < 6; blocker++)
+            {
+                blocked[random.Next(geometry.NodeCount)] = true;
+            }
+
+            ClearanceGrid grid = new ClearanceGrid(geometry);
+            grid.Rebuild(blocked);
+
+            int largestSize = Math.Min(width, height);
+            int fitsAboveTwelve = 0;
+            for (int index = 0; index < geometry.NodeCount; index++)
+            {
+                for (int agentSize = 1; agentSize <= largestSize; agentSize++)
+                {
+                    bool fits = grid.Fits(index, agentSize);
+                    Assert.That(fits, Is.EqualTo(ScanFits(geometry, blocked, index, agentSize)), $"{width}x{height} trial {trial}, index {index}, size {agentSize}");
+                    fitsAboveTwelve += fits && agentSize > 12 ? 1 : 0;
+                }
+            }
+
+            Assert.That(fitsAboveTwelve, Is.Positive, "The layout must exercise agent sizes beyond the small randomized grids.");
+        }
+    }
+
+    [Test]
+    public void Fits_AgreesWithAnExhaustiveScanAroundASaturatingRegion()
+    {
+        GridGeometry geometry = new GridGeometry(300, 300);
+        bool[] blocked = new bool[geometry.NodeCount];
+        blocked[geometry.GetIndex(280, 280)] = true;
+        ClearanceGrid grid = new ClearanceGrid(geometry);
+        grid.Rebuild(blocked);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.GetClearance(0), Is.EqualTo(ClearanceGrid.MaximumAgentSize));
+            Assert.That(grid.GetClearance(geometry.GetIndex(279, 279)), Is.EqualTo(1));
+            for (int origin = 20; origin <= 40; origin++)
+            {
+                int index = geometry.GetIndex(origin, origin);
+                for (int agentSize = 240; agentSize <= ClearanceGrid.MaximumAgentSize; agentSize++)
+                {
+                    Assert.That(grid.Fits(index, agentSize), Is.EqualTo(ScanFits(geometry, blocked, index, agentSize)), $"anchor ({origin}, {origin}), size {agentSize}");
+                }
+            }
+        });
+    }
+
+    [Test]
     public void Fits_RejectsAgentsLargerThanTheGrid()
     {
         GridGeometry geometry = new GridGeometry(4, 3);

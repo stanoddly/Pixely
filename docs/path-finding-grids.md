@@ -30,7 +30,7 @@ IndexedPathSearch<int, float> search = new IndexedPathSearch<int, float>();
 search.FindPath(graph, geometry.GetIndex(0, 0), geometry.GetIndex(31, 31), path, graph.GetHeuristic());
 ```
 
-`GetHeuristic()` returns the heuristic matching the graph's costs and connectivity, so the two cannot drift apart.
+`GetHeuristic()` returns the heuristic matching the graph's costs and connectivity, so the two cannot drift apart. A four-way consumer uses the single-cost constructor, `new UniformGridGraph<int, float, NoGridOverlay>(steps, agentSize, cardinalCost)`, which rejects any other connectivity.
 
 ## Anchors and footprints
 
@@ -74,6 +74,8 @@ Clearance answers the **static** question. Per-query exceptions stay outside it,
 - **Ignoring an existing blocker** for one query — rebuild a scratch `ClearanceGrid` from amended flags. Layering cannot make an anchor *more* walkable than its clearance says.
 
 An overlay is asked about an **anchor**, not a tile. An agent of size N anchored at an index covers an NxN footprint, so a consumer that wants to block one tile for such an agent reports every anchor whose footprint covers it. The overlay participates in every fit check the enumeration makes — the destination and both intermediate cardinals of a diagonal — because filtering emitted destinations afterwards would let an overlay-blocked corner through.
+
+That anchor expansion is specific to one agent size. Unlike the clearance grid, an overlay built for a size-one agent is wrong for a size-two one, so a consumer serving several sizes either builds one `GridSteps` per size over a size-appropriate overlay, or writes an overlay that scans the footprint itself — slower, but size-agnostic. The clearance grid is still shared in both cases.
 
 Nothing here reserves space between agents. Agents that must avoid each other express that through an overlay per query.
 

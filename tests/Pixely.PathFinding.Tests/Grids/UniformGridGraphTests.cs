@@ -130,6 +130,21 @@ public sealed class UniformGridGraphTests
         });
     }
 
+    [Test]
+    public void Constructor_AcceptsASingleCostForFourWayConnectivityOnly()
+    {
+        GridSteps<NoGridOverlay> fourWay = GridStepsTests.CreateSteps(4, 4, GridConnectivity.FourWay, []);
+        GridSteps<NoGridOverlay> eightWay = GridStepsTests.CreateSteps(4, 4, GridConnectivity.EightWay, []);
+        UniformGridGraph<int, float, NoGridOverlay> graph = new UniformGridGraph<int, float, NoGridOverlay>(fourWay, 1, 2f);
+        GridGeometry geometry = fourWay.Geometry;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(graph.GetHeuristic().EstimateCost(0, geometry.GetIndex(3, 2)), Is.EqualTo(10f).Within(1e-4f));
+            Assert.That(() => new UniformGridGraph<int, float, NoGridOverlay>(eightWay, 1, 2f), Throws.ArgumentException.With.Property(nameof(ArgumentException.ParamName)).EqualTo("steps"));
+        });
+    }
+
     private static UniformGridGraph<int, float, NoGridOverlay> CreateGraph(int width, int height, GridConnectivity connectivity, int agentSize, (int X, int Y)[] blockedPositions)
     {
         GridSteps<NoGridOverlay> steps = GridStepsTests.CreateSteps(width, height, connectivity, blockedPositions);

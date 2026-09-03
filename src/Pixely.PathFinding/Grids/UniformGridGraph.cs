@@ -36,6 +36,17 @@ public readonly struct UniformGridGraph<TIndex, TCost, TOverlay> : IIndexedPathG
         _diagonalCost = diagonalCost;
     }
 
+    /// <summary>
+    /// Creates a four-way graph, whose only step class is the cardinal one.
+    /// </summary>
+    public UniformGridGraph(GridSteps<TOverlay> steps, int agentSize, TCost cardinalCost) : this(steps, agentSize, cardinalCost, cardinalCost)
+    {
+        if (steps.Connectivity != GridConnectivity.FourWay)
+        {
+            throw new ArgumentException("A single step cost describes four-way connectivity only. Pass a diagonal cost as well.", nameof(steps));
+        }
+    }
+
     public int NodeCount => _steps.Geometry.NodeCount;
     public int MaximumDegree => _steps.MaximumDegree;
 

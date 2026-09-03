@@ -72,6 +72,48 @@ public sealed class GridHeuristicTests
         });
     }
 
+    [Test]
+    public void EstimateCost_StaysABoundWhenTheStepCountIsNotExactlyRepresentable()
+    {
+        // 2049 rounds to 2048 as a Half, so the estimate must stay a bound rather than collapsing to the saturated value.
+        GridGeometry geometry = new GridGeometry(2050, 1);
+        GridHeuristic<int, Half> heuristic = new GridHeuristic<int, Half>(geometry, Half.One, Half.One);
+
+        Half estimate = heuristic.EstimateCost(0, geometry.GetIndex(2049, 0));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(estimate, Is.LessThanOrEqualTo((Half)2049));
+            Assert.That(estimate, Is.GreaterThanOrEqualTo((Half)2048));
+        });
+    }
+
+    [Test]
+    public void EstimateCost_SaturatesWhenTheStepClassesSumBeyondTheRange()
+    {
+        GridGeometry geometry = new GridGeometry(200, 200);
+        GridHeuristic<int, byte> heuristic = new GridHeuristic<int, byte>(geometry, 3, 3);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(heuristic.EstimateCost(0, geometry.GetIndex(100, 50)), Is.EqualTo(byte.MaxValue));
+            Assert.That(heuristic.EstimateCost(0, geometry.GetIndex(40, 20)), Is.EqualTo(120));
+        });
+    }
+
+    [Test]
+    public void Constructor_SaturatesTheDoubledCardinalCostRatherThanWrapping()
+    {
+        GridGeometry geometry = new GridGeometry(8, 8);
+        GridHeuristic<int, byte> heuristic = new GridHeuristic<int, byte>(geometry, 200);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(heuristic.EstimateCost(0, geometry.GetIndex(1, 1)), Is.EqualTo(byte.MaxValue));
+            Assert.That(heuristic.EstimateCost(0, geometry.GetIndex(1, 0)), Is.EqualTo(200));
+        });
+    }
+
     [TestCase(float.NaN, 1f)]
     [TestCase(-1f, 1f)]
     [TestCase(1f, float.PositiveInfinity)]

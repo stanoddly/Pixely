@@ -24,6 +24,9 @@ public readonly record struct GridStep(int Index, float Distance)
 /// <remarks>
 /// An overlay is asked about an <em>anchor</em>, not about a tile. An agent of size N anchored at an index occupies an NxN footprint,
 /// so a consumer that wants to block a single tile for such an agent must report every anchor whose footprint covers that tile.
+/// That expansion is therefore specific to one agent size: an overlay built for size one is wrong for size two. A consumer serving
+/// several sizes either builds one <see cref="GridSteps{TOverlay}"/> per size over a size-appropriate overlay, or writes an overlay
+/// that scans the footprint itself, which is the slower but size-agnostic option.
 /// An overlay can only make an anchor less walkable than its clearance says, never more; a query that needs to ignore an existing
 /// blocker rebuilds a scratch <see cref="ClearanceGrid"/> from amended flags instead.
 /// <para>Implementations are struct-constrained wherever they are consumed so the check inlines and no interface dispatch enters the expansion path.</para>
