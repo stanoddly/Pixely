@@ -264,45 +264,57 @@ public class Element : ILayoutHost
 
     protected void ArrangeChildren(Rectangle contentBounds) => _layout.ArrangeChildren(this, contentBounds);
 
+    // Propagation always starts at the parent, never short-circuiting on this element's own flag.
+    // A node excluded from layout — a hidden one, whose Measure never runs — stays dirty forever,
+    // so testing its own flag first would swallow the invalidation that makes it visible again.
     internal void InvalidateMeasure()
     {
-        for (Element? element = this; element != null; element = element.Parent)
+        _measureDirty = true;
+        _arrangeDirty = true;
+        _paintDirty = true;
+
+        for (Element? ancestor = Parent; ancestor != null; ancestor = ancestor.Parent)
         {
-            if (element._measureDirty)
+            if (ancestor._measureDirty)
             {
                 return;
             }
 
-            element._measureDirty = true;
-            element._arrangeDirty = true;
-            element._paintDirty = true;
+            ancestor._measureDirty = true;
+            ancestor._arrangeDirty = true;
+            ancestor._paintDirty = true;
         }
     }
 
     internal void InvalidateArrange()
     {
-        for (Element? element = this; element != null; element = element.Parent)
+        _arrangeDirty = true;
+        _paintDirty = true;
+
+        for (Element? ancestor = Parent; ancestor != null; ancestor = ancestor.Parent)
         {
-            if (element._arrangeDirty)
+            if (ancestor._arrangeDirty)
             {
                 return;
             }
 
-            element._arrangeDirty = true;
-            element._paintDirty = true;
+            ancestor._arrangeDirty = true;
+            ancestor._paintDirty = true;
         }
     }
 
     internal void InvalidatePaint()
     {
-        for (Element? element = this; element != null; element = element.Parent)
+        _paintDirty = true;
+
+        for (Element? ancestor = Parent; ancestor != null; ancestor = ancestor.Parent)
         {
-            if (element._paintDirty)
+            if (ancestor._paintDirty)
             {
                 return;
             }
 
-            element._paintDirty = true;
+            ancestor._paintDirty = true;
         }
     }
 

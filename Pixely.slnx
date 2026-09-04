@@ -55,6 +55,7 @@
     <Project Path="tutorials/Pixely.Tutorials.Gamepad/Pixely.Tutorials.Gamepad.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Hotbar/Pixely.Tutorials.Hotbar.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.UiBoxes/Pixely.Tutorials.UiBoxes.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.UiScoreboard/Pixely.Tutorials.UiScoreboard.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Instancing/Pixely.Tutorials.Instancing.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.IndexBuffer/Pixely.Tutorials.IndexBuffer.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.IndexedRenderPass/Pixely.Tutorials.IndexedRenderPass.csproj" />

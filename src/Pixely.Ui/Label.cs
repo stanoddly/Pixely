@@ -7,14 +7,18 @@ namespace Pixely.Ui;
 /// A run of text. The rasterised sprite is kept until the content or font changes, so updating a
 /// label costs a measure of one element rather than a rebuild of everything around it.
 /// </summary>
-public sealed class Text : Element
+/// <remarks>
+/// Named Label rather than Text so that consumers can use <c>Pixely.Text</c> — which is where
+/// <see cref="Font"/> lives — without the two colliding.
+/// </remarks>
+public sealed class Label : Element
 {
     private string _content;
     private Font _font;
     private Color _color = Colors.White;
     private TextSpriteAsset? _sprite;
 
-    public Text(Font font, string content = "")
+    public Label(Font font, string content = "")
     {
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(content);
