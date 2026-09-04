@@ -29,6 +29,10 @@ public class Font : IDisposable
     }
 
     internal Pointer<TTF_Font> TtfFont => _ttfFont;
+
+    /// <summary>The system that loaded this font, and that rasterises text with it.</summary>
+    public IFontSystem FontSystem => _fontSystem;
+
     public string Path { get; }
     public ushort Size { get; }
     public FontRasterizationMode RasterizationMode { get; }
