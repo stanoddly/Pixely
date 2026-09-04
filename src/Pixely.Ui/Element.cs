@@ -38,6 +38,28 @@ public class Element : ILayoutHost
 
     public Element? Parent { get; internal set; }
 
+    /// <summary>
+    /// The root this element currently belongs to, or null when it is not in a rooted tree.
+    /// Kept up to date as elements are added and removed, so an element can reach shared state such
+    /// as <see cref="UiRoot.Style"/> without it being threaded through every constructor.
+    /// </summary>
+    internal UiRoot? OwnerRoot { get; private set; }
+
+    internal void SetOwnerRoot(UiRoot? root)
+    {
+        if (ReferenceEquals(OwnerRoot, root))
+        {
+            return;
+        }
+
+        OwnerRoot = root;
+
+        foreach (Element child in Children)
+        {
+            child.SetOwnerRoot(root);
+        }
+    }
+
     public ElementCollection Children { get; }
 
     public ILayout Layout

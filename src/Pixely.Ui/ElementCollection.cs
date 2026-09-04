@@ -45,6 +45,7 @@ public sealed class ElementCollection : IReadOnlyList<Element>
 
         _children.Insert(index, child);
         child.Parent = _owner;
+        child.SetOwnerRoot(_owner.OwnerRoot);
         _owner.InvalidateMeasure();
     }
 
@@ -67,6 +68,7 @@ public sealed class ElementCollection : IReadOnlyList<Element>
         Element child = _children[index];
         _children.RemoveAt(index);
         child.Parent = null;
+        child.SetOwnerRoot(null);
         _owner.InvalidateMeasure();
     }
 
@@ -80,6 +82,7 @@ public sealed class ElementCollection : IReadOnlyList<Element>
         foreach (Element child in _children)
         {
             child.Parent = null;
+            child.SetOwnerRoot(null);
         }
 
         _children.Clear();

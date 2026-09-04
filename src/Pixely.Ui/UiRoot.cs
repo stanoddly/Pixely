@@ -28,6 +28,12 @@ public sealed class UiRoot
     /// <summary>Instruction runs sharing a texture and a clip, in paint order.</summary>
     internal IReadOnlyList<PaintBatch> Batches => _batches;
 
+    /// <summary>
+    /// Defaults every element under this root can fall back on. Elements that were given an
+    /// explicit value ignore it.
+    /// </summary>
+    public UiStyle? Style { get; set; }
+
     public Vector2Int ViewportSize => _viewportSize;
 
     public IReadOnlyList<Element> Layers => _layers;
@@ -38,6 +44,7 @@ public sealed class UiRoot
         ArgumentNullException.ThrowIfNull(layer);
 
         _layers.Add(layer);
+        layer.SetOwnerRoot(this);
         _layersChanged = true;
     }
 
@@ -79,6 +86,7 @@ public sealed class UiRoot
             return false;
         }
 
+        layer.SetOwnerRoot(null);
         _layersChanged = true;
         return true;
     }

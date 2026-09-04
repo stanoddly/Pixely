@@ -48,7 +48,9 @@ public static class UiExtensions
             appBuilder.AddRegistry<ScopedUiRoot>();
         }
 
-        appBuilder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(viewScope, new UiRoot()));
+        // The style is optional: an application that gives every label an explicit font needs none.
+        appBuilder.AddSingleton<ScopedUiRoot>(provider =>
+            new ScopedUiRoot(viewScope, new UiRoot { Style = provider.GetService<UiStyle>() }));
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
             UiRenderer<TRenderContext>.Create(

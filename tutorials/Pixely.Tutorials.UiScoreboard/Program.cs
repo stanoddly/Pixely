@@ -22,6 +22,14 @@ static class Program
 
         builder.UseUi();
         builder.AddSingleton(new ScoreboardViewModel());
+        builder.AddSingleton<UiStyle>(provider =>
+        {
+            IFontSystem fonts = provider.GetRequiredService<IFontSystem>();
+            return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 16))
+            {
+                Title = fonts.Load("fonts/GohuFont-Medium.ttf", 20)
+            };
+        });
         builder.AddSingleton<IUpdatable, ScoreboardSimulation>(provider =>
             new ScoreboardSimulation(
                 provider.GetRequiredService<ScoreboardViewModel>(),
@@ -65,13 +73,7 @@ static class Program
 
         using IPixelyApp pixelyApp = builder.Build();
 
-        IFontSystem fontSystem = pixelyApp.ServiceProvider.GetRequiredService<IFontSystem>();
-
-        ScoreboardView view = new(
-            fontSystem.Load("fonts/GohuFont-Medium.ttf", 16),
-            fontSystem.Load("fonts/GohuFont-Medium.ttf", 20),
-            pixelyApp.ServiceProvider.GetRequiredService<ScoreboardViewModel>());
-
+        ScoreboardView view = new(pixelyApp.ServiceProvider.GetRequiredService<ScoreboardViewModel>());
         pixelyApp.ServiceProvider.GetUiRoot().AddView(view);
 
         return pixelyApp.Run();

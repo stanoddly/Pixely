@@ -1,5 +1,4 @@
 using Pixely.Gpu;
-using Pixely.Text;
 using Pixely.Ui;
 
 namespace Pixely.Tutorials.UiScoreboard;
@@ -22,9 +21,6 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 
     private const int BarWidth = 240;
 
-    private readonly Font _font;
-    private readonly Font _titleFont;
-
     private readonly Label _score;
     private readonly Label _lives;
     private readonly Label _elapsed;
@@ -33,18 +29,13 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 
     // Creating elements is assignment only, so the ones Sync writes to are made here and are
     // readonly. Composing them into a tree is what waits for Build, because that runs on attach.
-    public ScoreboardView(Font font, Font titleFont, ScoreboardViewModel viewModel)
+    // No fonts are threaded through: labels take theirs from the root's UiStyle.
+    public ScoreboardView(ScoreboardViewModel viewModel)
         : base(viewModel)
     {
-        ArgumentNullException.ThrowIfNull(font);
-        ArgumentNullException.ThrowIfNull(titleFont);
-
-        _font = font;
-        _titleFont = titleFont;
-
-        _score = new Label(font) { Color = Value };
-        _lives = new Label(font) { Color = Value };
-        _elapsed = new Label(font) { Color = Value };
+        _score = new Label { Color = Value };
+        _lives = new Label { Color = Value };
+        _elapsed = new Label { Color = Value };
 
         _healthFill = new Column
         {
@@ -52,8 +43,9 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Height = Sizing.Grow()
         };
 
-        _gameOver = new Label(titleFont, "GAME OVER")
+        _gameOver = new Label("GAME OVER")
         {
+            Role = TextRole.Title,
             Color = Accent,
             IsVisible = false
         };
@@ -69,7 +61,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Height = Sizing.Grow(),
             Children =
             {
-                new Label(_titleFont, "Scoreboard") { Color = Accent },
+                new Label("Scoreboard") { Role = TextRole.Title, Color = Accent },
 
                 new Column(gap: 10)
                 {
@@ -88,7 +80,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
                 {
                     Children =
                     {
-                        new Label(_font, "Health") { Color = Caption },
+                        new Label("Health") { Color = Caption },
 
                         // A fixed-width track holding a fill whose width the view model drives.
                         // Changing that width re-arranges; it never re-measures.
@@ -119,14 +111,14 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
         _gameOver.IsVisible = ViewModel.IsGameOver;
     }
 
-    private Element StatRow(string caption, Label value)
+    private static Element StatRow(string caption, Label value)
     {
         return new Row(gap: 12)
         {
             Width = Sizing.Grow(),
             Children =
             {
-                new Label(_font, caption) { Color = Caption, Width = Sizing.Fixed(90) },
+                new Label(caption) { Color = Caption, Width = Sizing.Fixed(90) },
                 value
             }
         };

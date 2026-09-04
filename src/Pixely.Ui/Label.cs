@@ -3,6 +3,14 @@ using Pixely.Text;
 
 namespace Pixely.Ui;
 
+/// <summary>Which font of the <see cref="UiStyle"/> a label uses when it was not given one.</summary>
+public enum TextRole
+{
+    Body,
+    Title,
+    Small
+}
+
 /// <summary>
 /// A run of text. The rasterised sprite is kept until the content or font changes, so updating a
 /// label costs a measure of one element rather than a rebuild of everything around it.
@@ -14,10 +22,19 @@ namespace Pixely.Ui;
 public sealed class Label : Element
 {
     private string _content;
-    private Font _font;
+    private Font? _font;
+    private TextRole _role = TextRole.Body;
     private Color _color = Colors.White;
     private TextSpriteAsset? _sprite;
 
+    /// <summary>Takes its font from the root's <see cref="UiStyle"/> according to <see cref="Role"/>.</summary>
+    public Label(string content = "")
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        _content = content;
+    }
+
+    /// <summary>Uses <paramref name="font"/> regardless of the style.</summary>
     public Label(Font font, string content = "")
     {
         ArgumentNullException.ThrowIfNull(font);
@@ -47,19 +64,35 @@ public sealed class Label : Element
         }
     }
 
-    public Font Font
+    /// <summary>An explicit font, or null to take one from the style.</summary>
+    public Font? Font
     {
         get => _font;
         set
         {
-            ArgumentNullException.ThrowIfNull(value);
-
             if (ReferenceEquals(_font, value))
             {
                 return;
             }
 
             _font = value;
+            _sprite = null;
+            InvalidateMeasure();
+        }
+    }
+
+    /// <summary>Which style font to use. Ignored when <see cref="Font"/> is set.</summary>
+    public TextRole Role
+    {
+        get => _role;
+        set
+        {
+            if (_role == value)
+            {
+                return;
+            }
+
+            _role = value;
             _sprite = null;
             InvalidateMeasure();
         }
@@ -95,6 +128,30 @@ public sealed class Label : Element
             return null;
         }
 
-        return _sprite ??= _font.CreateTextSprite(_content);
+        return _sprite ??= ResolveFont().CreateTextSprite(_content);
+    }
+
+    private Font ResolveFont()
+    {
+        if (_font != null)
+        {
+            return _font;
+        }
+
+        UiStyle? style = OwnerRoot?.Style;
+
+        if (style == null)
+        {
+            throw new InvalidOperationException(
+                $"A {nameof(Label)} without an explicit Font needs a UiStyle on the UiRoot it belongs to. " +
+                "Set UiRoot.Style, or construct the label with a font.");
+        }
+
+        return _role switch
+        {
+            TextRole.Title => style.Title,
+            TextRole.Small => style.Small,
+            _ => style.Body
+        };
     }
 }
