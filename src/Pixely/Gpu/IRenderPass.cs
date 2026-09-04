@@ -25,7 +25,7 @@ public interface IRenderPass: IDisposable
 
     /// <summary>
     /// Restricts subsequent draws to <paramref name="scissor"/>, in render target pixels.
-    /// The rectangle must lie within the render target.
+    /// The rectangle is clipped to the render target, so a larger one simply restricts nothing.
     /// </summary>
     void SetScissor(Rectangle scissor);
 

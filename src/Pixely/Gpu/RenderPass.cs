@@ -22,7 +22,7 @@ public class RenderPass<TValidator> : IRenderPass
 
     /// <summary>
     /// The area every attachment of this pass covers, which is the smallest of them.
-    /// It bounds what <see cref="SetScissor"/> accepts and is what <see cref="ClearScissor"/> restores.
+    /// It is what <see cref="SetScissor"/> clips to and what <see cref="ClearScissor"/> restores.
     /// </summary>
     public ShortSize TargetSize { get; }
 
@@ -248,14 +248,19 @@ public class RenderPass<TValidator> : IRenderPass
 
         _validator.OnSetScissor(this, scissor);
 
+        // A scissor restricts drawing to an area, so anything outside the pass is simply not part
+        // of it. Intersecting rather than rejecting also keeps the rectangle within what the
+        // backends accept, which an arbitrary caller rectangle is not.
+        Rectangle clipped = scissor.Intersect(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
+
         unsafe
         {
             SDL_Rect sdlScissor = new SDL_Rect
             {
-                x = scissor.X,
-                y = scissor.Y,
-                w = scissor.Width,
-                h = scissor.Height
+                x = clipped.X,
+                y = clipped.Y,
+                w = clipped.Width,
+                h = clipped.Height
             };
 
             SDL3.SDL_SetGPUScissor(_nativePointer, &sdlScissor);

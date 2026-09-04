@@ -36,7 +36,7 @@ public sealed class PaintContext
     /// </summary>
     public ClipScope PushClip(Rectangle clip)
     {
-        _clipStack.Add(Intersect(CurrentClip, clip));
+        _clipStack.Add(CurrentClip.Intersect(clip));
         return new ClipScope(this, _clipStack.Count, _generation);
     }
 
@@ -70,7 +70,7 @@ public sealed class PaintContext
             return;
         }
 
-        Rectangle visible = Intersect(instruction.Clip, instruction.Area);
+        Rectangle visible = instruction.Clip.Intersect(instruction.Area);
         if (visible.Width <= 0 || visible.Height <= 0)
         {
             return;
@@ -106,16 +106,6 @@ public sealed class PaintContext
         {
             _clipStack.RemoveAt(_clipStack.Count - 1);
         }
-    }
-
-    internal static Rectangle Intersect(Rectangle first, Rectangle second)
-    {
-        int left = Math.Max(first.X, second.X);
-        int top = Math.Max(first.Y, second.Y);
-        int right = Math.Min(first.X + first.Width, second.X + second.Width);
-        int bottom = Math.Min(first.Y + first.Height, second.Y + second.Height);
-
-        return new Rectangle(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
     }
 }
 

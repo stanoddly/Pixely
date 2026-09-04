@@ -217,7 +217,7 @@ public class Element : ILayoutHost
         }
 
         Bounds = bounds;
-        EffectiveClip = _clipsContent ? Intersect(inheritedClip, bounds) : inheritedClip;
+        EffectiveClip = _clipsContent ? inheritedClip.Intersect(bounds) : inheritedClip;
 
         ArrangeContent(_padding.Deflate(bounds));
 
@@ -384,16 +384,6 @@ public class Element : ILayoutHost
                 _layoutChildren.Add(child);
             }
         }
-    }
-
-    private static Rectangle Intersect(Rectangle first, Rectangle second)
-    {
-        int left = Math.Max(first.X, second.X);
-        int top = Math.Max(first.Y, second.Y);
-        int right = Math.Min(first.X + first.Width, second.X + second.Width);
-        int bottom = Math.Min(first.Y + first.Height, second.Y + second.Height);
-
-        return new Rectangle(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
     }
 
     private static int SaturatingAdd(int left, int right)

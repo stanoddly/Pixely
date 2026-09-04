@@ -219,8 +219,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
                 renderPass.DrawPrimitive();
             }
         }
-
-        renderPass.ClearScissor();
     }
 
     private void Clear(CommandBuffer commandBuffer)

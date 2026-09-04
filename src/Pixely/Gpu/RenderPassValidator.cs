@@ -208,28 +208,18 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
 
     public void OnSetScissor(RenderPass<RenderPassValidator> renderPass, Rectangle scissor)
     {
-        ValidateScissorBounds(scissor, renderPass.TargetSize);
+        ValidateScissorSize(scissor);
     }
 
-    internal static void ValidateScissorBounds(Rectangle scissor, ShortSize targetSize)
+    // A rectangle outside the target is clipped to it by SetScissor, but a negative size cannot be
+    // clipped into anything meaningful: it would silently become an empty scissor that draws nothing.
+    internal static void ValidateScissorSize(Rectangle scissor)
     {
         if (scissor.Width < 0 || scissor.Height < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(scissor),
                 $"Scissor size must not be negative, but was {scissor.Width}x{scissor.Height}.");
-        }
-
-        // Long arithmetic keeps a scissor near int.MaxValue from wrapping into a valid-looking rectangle.
-        if (scissor.X < 0 ||
-            scissor.Y < 0 ||
-            (long)scissor.X + scissor.Width > targetSize.Width ||
-            (long)scissor.Y + scissor.Height > targetSize.Height)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(scissor),
-                $"Scissor ({scissor.X}, {scissor.Y}, {scissor.Width}, {scissor.Height}) lies outside the render target bounds " +
-                $"{targetSize.Width}x{targetSize.Height}. Clip the rectangle to the target before setting it.");
         }
     }
 
