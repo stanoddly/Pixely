@@ -29,14 +29,16 @@ public class Font : IDisposable
     }
 
     internal Pointer<TTF_Font> TtfFont => _ttfFont;
-
-    /// <summary>The system that loaded this font, and that rasterises text with it.</summary>
-    public IFontSystem FontSystem => _fontSystem;
-
     public string Path { get; }
     public ushort Size { get; }
     public FontRasterizationMode RasterizationMode { get; }
     public FontHintingMode HintingMode { get; }
+
+    /// <summary>
+    /// Rasterises <paramref name="text"/> with this font. Results are cached by the font system,
+    /// so repeating the same text is cheap.
+    /// </summary>
+    public TextSpriteAsset CreateTextSprite(string text) => _fontSystem.CreateTextSprite(text, this);
 
     internal unsafe void FreeFontData()
     {

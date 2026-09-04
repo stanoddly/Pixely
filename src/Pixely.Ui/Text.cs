@@ -91,6 +91,6 @@ public sealed class Text : Element
             return null;
         }
 
-        return _sprite ??= _font.FontSystem.CreateTextSprite(_content, _font);
+        return _sprite ??= _font.CreateTextSprite(_content);
     }
 }
