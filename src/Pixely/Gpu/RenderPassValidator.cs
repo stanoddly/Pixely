@@ -43,6 +43,11 @@ public interface IRenderPassValidator<TSelfValidator> where TSelfValidator: IRen
     void OnBindFragmentStorageBuffers(RenderPass<TSelfValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
 
     /// <summary>
+    /// Called when a scissor rectangle is set on the render pass.
+    /// </summary>
+    void OnSetScissor(RenderPass<TSelfValidator> renderPass, Rectangle scissor);
+
+    /// <summary>
     /// Called when a primitive draw is requested.
     /// Validates that the current render pass state is valid for drawing.
     /// Throws an exception if validation fails.
@@ -198,6 +203,33 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         for (int i = 0; i < buffers.Length; i++)
         {
             _fragmentStorageBufferElementSizes = SetStorageBufferSlotSize(_fragmentStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
+        }
+    }
+
+    public void OnSetScissor(RenderPass<RenderPassValidator> renderPass, Rectangle scissor)
+    {
+        ValidateScissorBounds(scissor, renderPass.TargetSize);
+    }
+
+    internal static void ValidateScissorBounds(Rectangle scissor, ShortSize targetSize)
+    {
+        if (scissor.Width < 0 || scissor.Height < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(scissor),
+                $"Scissor size must not be negative, but was {scissor.Width}x{scissor.Height}.");
+        }
+
+        // Long arithmetic keeps a scissor near int.MaxValue from wrapping into a valid-looking rectangle.
+        if (scissor.X < 0 ||
+            scissor.Y < 0 ||
+            (long)scissor.X + scissor.Width > targetSize.Width ||
+            (long)scissor.Y + scissor.Height > targetSize.Height)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(scissor),
+                $"Scissor ({scissor.X}, {scissor.Y}, {scissor.Width}, {scissor.Height}) lies outside the render target bounds " +
+                $"{targetSize.Width}x{targetSize.Height}. Clip the rectangle to the target before setting it.");
         }
     }
 
@@ -383,6 +415,10 @@ public struct NullRenderPassValidator : IRenderPassValidator<NullRenderPassValid
     }
 
     public void OnBindFragmentStorageBuffers(RenderPass<NullRenderPassValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
+    {
+    }
+
+    public void OnSetScissor(RenderPass<NullRenderPassValidator> renderPass, Rectangle scissor)
     {
     }
 

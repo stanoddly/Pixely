@@ -23,6 +23,17 @@ public interface IRenderPass: IDisposable
 
     void SetStencilReference(byte reference);
 
+    /// <summary>
+    /// Restricts subsequent draws to <paramref name="scissor"/>, in render target pixels.
+    /// The rectangle must lie within the render target.
+    /// </summary>
+    void SetScissor(Rectangle scissor);
+
+    /// <summary>
+    /// Restores the scissor to cover the whole render target.
+    /// </summary>
+    void ClearScissor();
+
     void DrawPrimitive();
     void DrawPrimitiveInstanced(uint instanceCount);
     void DrawPrimitiveInstanced(uint instanceCount, uint firstInstance);

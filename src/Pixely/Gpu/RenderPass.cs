@@ -20,10 +20,21 @@ public class RenderPass<TValidator> : IRenderPass
     public ShaderBindingCounts VertexShaderBindingCounts => _vertexShaderBindingCounts;
     public DepthBufferFormat DepthBufferFormat { get; }
 
-    internal RenderPass(CommandBuffer commandBuffer, Pointer<SDL_GPURenderPass> nativePointer, DepthBufferFormat depthBufferFormat)
+    /// <summary>
+    /// The area every attachment of this pass covers, which is the smallest of them.
+    /// It bounds what <see cref="SetScissor"/> accepts and is what <see cref="ClearScissor"/> restores.
+    /// </summary>
+    public ShortSize TargetSize { get; }
+
+    internal RenderPass(
+        CommandBuffer commandBuffer,
+        Pointer<SDL_GPURenderPass> nativePointer,
+        DepthBufferFormat depthBufferFormat,
+        ShortSize targetSize)
     {
         _nativePointer = nativePointer;
         DepthBufferFormat = depthBufferFormat;
+        TargetSize = targetSize;
         _validator = TValidator.Create(commandBuffer);
     }
 
@@ -231,6 +242,31 @@ public class RenderPass<TValidator> : IRenderPass
         unsafe { SDL3.SDL_SetGPUStencilReference(_nativePointer, reference); }
     }
 
+    public void SetScissor(Rectangle scissor)
+    {
+        ThrowIfDisposed();
+
+        _validator.OnSetScissor(this, scissor);
+
+        unsafe
+        {
+            SDL_Rect sdlScissor = new SDL_Rect
+            {
+                x = scissor.X,
+                y = scissor.Y,
+                w = scissor.Width,
+                h = scissor.Height
+            };
+
+            SDL3.SDL_SetGPUScissor(_nativePointer, &sdlScissor);
+        }
+    }
+
+    public void ClearScissor()
+    {
+        SetScissor(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
+    }
+
     public void DrawPrimitive()
     {
         DrawPrimitiveInstanced(1);
@@ -339,8 +375,12 @@ public class RenderPass<TValidator> : IRenderPass
 /// </summary>
 public class RenderPass : RenderPass<RenderPassValidator>
 {
-    internal RenderPass(CommandBuffer commandBuffer, Pointer<SDL_GPURenderPass> nativePointer, DepthBufferFormat depthBufferFormat)
-        : base(commandBuffer, nativePointer, depthBufferFormat)
+    internal RenderPass(
+        CommandBuffer commandBuffer,
+        Pointer<SDL_GPURenderPass> nativePointer,
+        DepthBufferFormat depthBufferFormat,
+        ShortSize targetSize)
+        : base(commandBuffer, nativePointer, depthBufferFormat, targetSize)
     {
     }
 }
