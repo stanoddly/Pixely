@@ -40,7 +40,11 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     public int Order { get; }
     public ViewScope ViewScope { get; }
 
-    internal UiRenderer(
+    /// <summary>
+    /// Builds the pipelines, sampler and textures the renderer needs. Kept out of the constructor
+    /// so that constructing a renderer is assignment only.
+    /// </summary>
+    internal static UiRenderer<TRenderContext> Create(
         UiRoot root,
         ViewScope viewScope,
         int order,
@@ -51,12 +55,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         GpuDevice gpuDevice,
         Window window)
     {
-        _root = root;
-        ViewScope = viewScope;
-        Order = order;
-        _clearTarget = clearTarget;
-        _gpuDevice = gpuDevice;
-
         ReadOnlySpan<PositionTextureVertex> quad =
         [
             new(new Vector3(0.0f, 0.0f, 0.0f), new Vector2(0, 0)),
@@ -65,19 +63,18 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             new(new Vector3(1.0f, 1.0f, 0.0f), new Vector2(1, 1)),
         ];
 
-        _vertexBuffer = gpuMemorySystem.CreateVertexBuffer(quad);
+        GpuVertexBuffer<PositionTextureVertex> vertexBuffer = gpuMemorySystem.CreateVertexBuffer(quad);
 
         GraphicsShaderProgram quadShaderProgram = shaderLoader.LoadGraphicsShaderProgram("shaders/ui_quad");
         GraphicsShaderProgram presentShaderProgram = shaderLoader.LoadGraphicsShaderProgram("shaders/ui_present");
 
         TextureFormat colorTargetFormat = window.ColorTargetFormat;
         ShortSize renderSize = window.RenderSizeInPixels;
-        _colorTargetFormat = colorTargetFormat;
 
         // No depth attachment: submission order is paint order, which clipping needs anyway.
-        _quadPipeline = graphicsPipelineBuilder
+        GraphicsPipeline quadPipeline = graphicsPipelineBuilder
             .SetPrimitiveType(PrimitiveType.TriangleStrip)
-            .AddVertexBufferConfigBasedOnBuffer(_vertexBuffer)
+            .AddVertexBufferConfigBasedOnBuffer(vertexBuffer)
             .SetShaderProgram(quadShaderProgram)
             .AddColorTarget(colorTargetFormat, BlendingState.PremultipliedAlpha)
             .SetCullMode(CullMode.None)
@@ -85,21 +82,61 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
         // The retained texture holds premultiplied colour, so it is blended as such rather than
         // with straight alpha.
-        _presentPipeline = graphicsPipelineBuilder
+        GraphicsPipeline presentPipeline = graphicsPipelineBuilder
             .SetPrimitiveType(PrimitiveType.TriangleStrip)
-            .AddVertexBufferConfigBasedOnBuffer(_vertexBuffer)
+            .AddVertexBufferConfigBasedOnBuffer(vertexBuffer)
             .SetShaderProgram(presentShaderProgram)
             .AddColorTarget(colorTargetFormat, BlendingState.PremultipliedAlpha)
             .SetCullMode(CullMode.None)
             .Build();
 
-        _sampler = gpuDevice.CreateSampler(SamplerConfig.PixelArt);
-        _retainedTexture = gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat);
-        _viewProjection = CreateViewProjection(renderSize);
-
         using RawImage whitePixel = new([255, 255, 255, 255], new ShortSize(1, 1), PixelFormat.Abgr8888);
-        _whiteTexture = gpuMemorySystem.CreateTexture(whitePixel);
+
+        GpuResources resources = new(
+            vertexBuffer,
+            quadPipeline,
+            presentPipeline,
+            gpuDevice.CreateSampler(SamplerConfig.PixelArt),
+            gpuMemorySystem.CreateTexture(whitePixel),
+            gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat),
+            colorTargetFormat);
+
+        return new UiRenderer<TRenderContext>(root, viewScope, order, clearTarget, gpuDevice, resources);
     }
+
+    private UiRenderer(
+        UiRoot root,
+        ViewScope viewScope,
+        int order,
+        bool clearTarget,
+        GpuDevice gpuDevice,
+        GpuResources resources)
+    {
+        _root = root;
+        ViewScope = viewScope;
+        Order = order;
+        _clearTarget = clearTarget;
+        _gpuDevice = gpuDevice;
+
+        _vertexBuffer = resources.VertexBuffer;
+        _quadPipeline = resources.QuadPipeline;
+        _presentPipeline = resources.PresentPipeline;
+        _sampler = resources.Sampler;
+        _whiteTexture = resources.WhiteTexture;
+        _retainedTexture = resources.RetainedTexture;
+        _colorTargetFormat = resources.ColorTargetFormat;
+        _viewProjection = CreateViewProjection(resources.RetainedTexture.Size);
+    }
+
+    /// <summary>The GPU objects <see cref="Create"/> builds, handed to the constructor to assign.</summary>
+    private readonly record struct GpuResources(
+        GpuVertexBuffer<PositionTextureVertex> VertexBuffer,
+        GraphicsPipeline QuadPipeline,
+        GraphicsPipeline PresentPipeline,
+        Sampler Sampler,
+        Texture WhiteTexture,
+        Texture RetainedTexture,
+        TextureFormat ColorTargetFormat);
 
     public void Render(TRenderContext renderContext)
     {

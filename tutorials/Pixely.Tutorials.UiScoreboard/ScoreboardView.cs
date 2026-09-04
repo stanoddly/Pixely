@@ -10,7 +10,7 @@ namespace Pixely.Tutorials.UiScoreboard;
 /// whole build: here a changing label re-measures one element, and a changing bar width does not
 /// re-measure anything at all.
 /// </summary>
-public sealed class ScoreboardView
+public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 {
     private static readonly Color Background = new(22, 25, 31, 255);
     private static readonly Color Panel = new(42, 50, 63, 255);
@@ -22,21 +22,31 @@ public sealed class ScoreboardView
 
     private const int BarWidth = 240;
 
-    private readonly ScoreboardViewModel _viewModel;
+    private readonly Font _font;
+    private readonly Font _titleFont;
 
-    private readonly Label _score;
-    private readonly Label _lives;
-    private readonly Label _elapsed;
-    private readonly Element _healthFill;
-    private readonly Label _gameOver;
+    private Label _score = null!;
+    private Label _lives = null!;
+    private Label _elapsed = null!;
+    private Element _healthFill = null!;
+    private Label _gameOver = null!;
 
+    // Assignment only. The tree is built when the view is attached to a UiRoot.
     public ScoreboardView(Font font, Font titleFont, ScoreboardViewModel viewModel)
+        : base(viewModel)
     {
-        _viewModel = viewModel;
+        ArgumentNullException.ThrowIfNull(font);
+        ArgumentNullException.ThrowIfNull(titleFont);
 
-        _score = new Label(font) { Color = Value };
-        _lives = new Label(font) { Color = Value };
-        _elapsed = new Label(font) { Color = Value };
+        _font = font;
+        _titleFont = titleFont;
+    }
+
+    protected override Element Build()
+    {
+        _score = new Label(_font) { Color = Value };
+        _lives = new Label(_font) { Color = Value };
+        _elapsed = new Label(_font) { Color = Value };
 
         _healthFill = new Column
         {
@@ -44,24 +54,12 @@ public sealed class ScoreboardView
             Height = Sizing.Grow()
         };
 
-        _gameOver = new Label(titleFont, "GAME OVER")
+        _gameOver = new Label(_titleFont, "GAME OVER")
         {
             Color = Accent,
-            IsVisible = false,
-            HorizontalAlignment = Alignment.Center
+            IsVisible = false
         };
 
-        Root = Build(titleFont);
-
-        // The view model is the only thing that says "something changed"; nothing polls the tree.
-        viewModel.Changed += Sync;
-        Sync();
-    }
-
-    public Element Root { get; }
-
-    private Element Build(Font titleFont)
-    {
         return new Column(gap: 20)
         {
             Background = new SolidDrawable(Background),
@@ -70,7 +68,7 @@ public sealed class ScoreboardView
             Height = Sizing.Grow(),
             Children =
             {
-                new Label(titleFont, "Scoreboard") { Color = Accent },
+                new Label(_titleFont, "Scoreboard") { Color = Accent },
 
                 new Column(gap: 10)
                 {
@@ -79,9 +77,9 @@ public sealed class ScoreboardView
                     Width = Sizing.Grow(),
                     Children =
                     {
-                        StatRow("Score", _score, titleFont),
-                        StatRow("Lives", _lives, titleFont),
-                        StatRow("Time", _elapsed, titleFont)
+                        StatRow("Score", _score),
+                        StatRow("Lives", _lives),
+                        StatRow("Time", _elapsed)
                     }
                 },
 
@@ -89,10 +87,10 @@ public sealed class ScoreboardView
                 {
                     Children =
                     {
-                        new Label(titleFont, "Health") { Color = Caption },
+                        new Label(_font, "Health") { Color = Caption },
 
-                        // The bar is a fixed-width track with a fill whose width the view model
-                        // drives. Changing it re-arranges; it never re-measures.
+                        // A fixed-width track holding a fill whose width the view model drives.
+                        // Changing that width re-arranges; it never re-measures.
                         new Column
                         {
                             Background = new SolidDrawable(HealthBack),
@@ -108,28 +106,28 @@ public sealed class ScoreboardView
         };
     }
 
-    private static Element StatRow(string caption, Label value, Font font)
+    protected override void Sync()
+    {
+        // Every assignment is a no-op when the value has not actually changed, so writing all of
+        // them on any change costs nothing for the ones that stayed the same.
+        _score.Content = ViewModel.Score.ToString();
+        _lives.Content = ViewModel.Lives.ToString();
+        _elapsed.Content = $"{ViewModel.Elapsed.TotalSeconds:0.0}s";
+
+        _healthFill.Width = Sizing.Fixed((int)(BarWidth * ViewModel.HealthFraction));
+        _gameOver.IsVisible = ViewModel.IsGameOver;
+    }
+
+    private Element StatRow(string caption, Label value)
     {
         return new Row(gap: 12)
         {
             Width = Sizing.Grow(),
             Children =
             {
-                new Label(font, caption) { Color = Caption, Width = Sizing.Fixed(90) },
+                new Label(_font, caption) { Color = Caption, Width = Sizing.Fixed(90) },
                 value
             }
         };
-    }
-
-    private void Sync()
-    {
-        // Every assignment is a no-op when the value has not actually changed, so writing all of
-        // them on any change costs nothing for the ones that stayed the same.
-        _score.Content = _viewModel.Score.ToString();
-        _lives.Content = _viewModel.Lives.ToString();
-        _elapsed.Content = $"{_viewModel.Elapsed.TotalSeconds:0.0}s";
-
-        _healthFill.Width = Sizing.Fixed((int)(BarWidth * _viewModel.HealthFraction));
-        _gameOver.IsVisible = _viewModel.IsGameOver;
     }
 }

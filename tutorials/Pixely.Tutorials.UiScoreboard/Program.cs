@@ -72,7 +72,7 @@ static class Program
             fontSystem.Load("fonts/GohuFont-Medium.ttf", 20),
             pixelyApp.ServiceProvider.GetRequiredService<ScoreboardViewModel>());
 
-        pixelyApp.ServiceProvider.GetUiRoot().AddLayer(view.Root);
+        pixelyApp.ServiceProvider.GetUiRoot().AddView(view);
 
         return pixelyApp.Run();
     }

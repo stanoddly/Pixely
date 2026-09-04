@@ -1,10 +1,12 @@
+using Pixely.Ui;
+
 namespace Pixely.Tutorials.UiScoreboard;
 
 /// <summary>
 /// View-side state. It knows nothing about elements: it raises <see cref="Changed"/>, and the view
 /// decides what that means on screen.
 /// </summary>
-public sealed class ScoreboardViewModel
+public sealed class ScoreboardViewModel : IUiViewModel
 {
     public const int MaxHealth = 100;
 

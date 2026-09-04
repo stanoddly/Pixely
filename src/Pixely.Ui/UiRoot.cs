@@ -9,6 +9,7 @@ public sealed class UiRoot
     private readonly PaintContext _paintContext = new();
     private readonly List<Element> _layers = new();
     private readonly List<PaintBatch> _batches = new();
+    private readonly List<UiView> _views = new();
 
     private Vector2Int _viewportSize;
     private bool _layersChanged = true;
@@ -38,6 +39,35 @@ public sealed class UiRoot
 
         _layers.Add(layer);
         _layersChanged = true;
+    }
+
+    /// <summary>
+    /// Attaches a view — building its tree and subscribing it to its view model — and adds that
+    /// tree as a layer. Attaching here rather than in the view's constructor is what keeps view
+    /// constructors free of virtual calls.
+    /// </summary>
+    public void AddView(UiView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        view.Attach();
+        _views.Add(view);
+        AddLayer(view.Root);
+    }
+
+    /// <summary>Removes a view's layer and unsubscribes it from its view model.</summary>
+    public bool RemoveView(UiView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        if (!_views.Remove(view))
+        {
+            return false;
+        }
+
+        RemoveLayer(view.Root);
+        view.Detach();
+        return true;
     }
 
     public bool RemoveLayer(Element layer)

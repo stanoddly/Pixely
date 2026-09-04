@@ -51,7 +51,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(viewScope, new UiRoot()));
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
-            new UiRenderer<TRenderContext>(
+            UiRenderer<TRenderContext>.Create(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
                 viewScope,
                 order,
