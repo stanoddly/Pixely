@@ -17,6 +17,7 @@ public class Element : ILayoutHost
     private bool _isVisible = true;
     private bool _clipsContent;
     private bool _isEnabled = true;
+    private Drawable? _background;
 
     private readonly List<Element> _layoutChildren = new();
 
@@ -108,6 +109,13 @@ public class Element : ILayoutHost
         set => SetArrangeProperty(ref _clipsContent, value);
     }
 
+    /// <summary>Fills the element's bounds, painted before any clip is applied.</summary>
+    public Drawable? Background
+    {
+        get => _background;
+        set => SetPaintProperty(ref _background, value);
+    }
+
     /// <summary>Local enabled state. Use <see cref="IsEffectivelyEnabled"/> for the value that accounts for ancestors.</summary>
     public bool IsEnabled
     {
@@ -193,6 +201,53 @@ public class Element : ILayoutHost
 
         _arrangeDirty = false;
         _paintDirty = false;
+    }
+
+    /// <summary>
+    /// Paints this element and its subtree. Sealed: the background is painted before the clip is
+    /// pushed, so <see cref="ClipsContent"/> clips content and children rather than the element
+    /// itself, and <see cref="PaintContent"/> never paints children, so a subclass cannot break
+    /// the clip nesting.
+    /// </summary>
+    internal void Paint(PaintContext context)
+    {
+        if (!_isVisible)
+        {
+            return;
+        }
+
+        if (_background != null)
+        {
+            Drawable background = _background;
+            context.PaintIsolated(() => background.Paint(context, Bounds));
+        }
+
+        if (_clipsContent)
+        {
+            using ClipScope scope = context.PushClip(Bounds);
+            PaintSelfAndChildren(context);
+        }
+        else
+        {
+            PaintSelfAndChildren(context);
+        }
+    }
+
+    private void PaintSelfAndChildren(PaintContext context)
+    {
+        context.PaintIsolated(() => PaintContent(context));
+
+        foreach (Element child in Children)
+        {
+            child.Paint(context);
+        }
+    }
+
+    /// <summary>
+    /// Paints the element's own content. Must not paint children; the traversal does that.
+    /// </summary>
+    protected virtual void PaintContent(PaintContext context)
+    {
     }
 
     /// <summary>

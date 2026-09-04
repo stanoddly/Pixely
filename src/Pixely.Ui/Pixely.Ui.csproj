@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
+        <ProjectReference Include="..\Pixely\Pixely.csproj" />
     </ItemGroup>
 
 </Project>
