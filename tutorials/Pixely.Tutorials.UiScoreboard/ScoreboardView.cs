@@ -25,13 +25,14 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
     private readonly Font _font;
     private readonly Font _titleFont;
 
-    private Label _score = null!;
-    private Label _lives = null!;
-    private Label _elapsed = null!;
-    private Element _healthFill = null!;
-    private Label _gameOver = null!;
+    private readonly Label _score;
+    private readonly Label _lives;
+    private readonly Label _elapsed;
+    private readonly Element _healthFill;
+    private readonly Label _gameOver;
 
-    // Assignment only. The tree is built when the view is attached to a UiRoot.
+    // Creating elements is assignment only, so the ones Sync writes to are made here and are
+    // readonly. Composing them into a tree is what waits for Build, because that runs on attach.
     public ScoreboardView(Font font, Font titleFont, ScoreboardViewModel viewModel)
         : base(viewModel)
     {
@@ -40,13 +41,10 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 
         _font = font;
         _titleFont = titleFont;
-    }
 
-    protected override Element Build()
-    {
-        _score = new Label(_font) { Color = Value };
-        _lives = new Label(_font) { Color = Value };
-        _elapsed = new Label(_font) { Color = Value };
+        _score = new Label(font) { Color = Value };
+        _lives = new Label(font) { Color = Value };
+        _elapsed = new Label(font) { Color = Value };
 
         _healthFill = new Column
         {
@@ -54,12 +52,15 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Height = Sizing.Grow()
         };
 
-        _gameOver = new Label(_titleFont, "GAME OVER")
+        _gameOver = new Label(titleFont, "GAME OVER")
         {
             Color = Accent,
             IsVisible = false
         };
+    }
 
+    protected override Element Build()
+    {
         return new Column(gap: 20)
         {
             Background = new SolidDrawable(Background),

@@ -153,12 +153,13 @@ public class UiViewTests
 
         public int BuildCount { get; private set; }
         public int SyncCount { get; private set; }
-        public Element Bar { get; private set; } = null!;
+
+        public Element Bar { get; } =
+            new Column { Background = new SolidDrawable(new Color(255, 255, 255, 255)), Height = Sizing.Fixed(10) };
 
         protected override Element Build()
         {
             BuildCount++;
-            Bar = new Column { Background = new SolidDrawable(new Color(255, 255, 255, 255)), Height = Sizing.Fixed(10) };
             return new Column { Children = { Bar } };
         }
 
