@@ -13,9 +13,9 @@ public class PaintBatcherTests
         {
             Children =
             {
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) },
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) },
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) }
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) },
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) },
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) }
             }
         };
 
@@ -36,14 +36,14 @@ public class PaintBatcherTests
         {
             Children =
             {
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) },
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) },
                 new ClipBorder
                 {
                     Width = Sizing.Fixed(30),
                     Height = Sizing.Fixed(30),
-                    Content = new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) }
+                    Content = new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) }
                 },
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) }
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) }
             }
         };
 
@@ -67,14 +67,14 @@ public class PaintBatcherTests
         {
             Children =
             {
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) },
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) },
                 new ClipBorder
                 {
                     Width = Sizing.Fixed(30),
                     Height = Sizing.Fixed(30),
-                    Content = new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) }
+                    Content = new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) }
                 },
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Red) }
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Red) }
             }
         };
 

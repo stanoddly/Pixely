@@ -12,13 +12,6 @@ namespace Pixely.Ui;
 public abstract class Drawable
 {
     public abstract void Paint(PaintContext context, Rectangle bounds);
-
-    public static Drawable Solid(Color color) => new SolidDrawable(color);
-
-    public static Drawable Sprite(SpriteAsset sprite, Color tint) => new SpriteDrawable(sprite, tint);
-
-    public static Drawable NinePatch(SpriteAsset sprite, Thickness insets, Color tint) =>
-        new NinePatchDrawable(sprite, insets, tint);
 }
 
 public sealed class SolidDrawable : Drawable

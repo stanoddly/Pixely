@@ -12,10 +12,10 @@ public class PaintTests
     {
         Column root = new()
         {
-            Background = Drawable.Solid(Red),
+            Background = new SolidDrawable(Red),
             Children =
             {
-                new MeasuredBox(10, 10) { Background = Drawable.Solid(Blue) }
+                new MeasuredBox(10, 10) { Background = new SolidDrawable(Blue) }
             }
         };
 
@@ -32,7 +32,7 @@ public class PaintTests
     [Test]
     public void Paint_SolidFillHasNoTexture()
     {
-        Column root = new() { Background = Drawable.Solid(Red) };
+        Column root = new() { Background = new SolidDrawable(Red) };
 
         UiRoot uiRoot = Run(root, 100, 100);
 
@@ -45,7 +45,7 @@ public class PaintTests
     {
         ClipBorder root = new()
         {
-            Background = Drawable.Solid(Red),
+            Background = new SolidDrawable(Red),
             Content = new MeasuredBox(10, 10)
         };
 
@@ -58,7 +58,7 @@ public class PaintTests
     [Test]
     public void Paint_ChildrenAreClippedByAClippingAncestor()
     {
-        MeasuredBox child = new(200, 200) { Background = Drawable.Solid(Blue) };
+        MeasuredBox child = new(200, 200) { Background = new SolidDrawable(Blue) };
         ClipBorder clipper = new()
         {
             Width = Sizing.Fixed(40),
@@ -75,7 +75,7 @@ public class PaintTests
     [Test]
     public void Paint_NestedClipsIntersect()
     {
-        MeasuredBox leaf = new(200, 200) { Background = Drawable.Solid(Blue) };
+        MeasuredBox leaf = new(200, 200) { Background = new SolidDrawable(Blue) };
         ClipBorder inner = new()
         {
             Margin = new Thickness(20, 20, 0, 0),
@@ -103,9 +103,9 @@ public class PaintTests
         {
             Width = Sizing.Fixed(30),
             Height = Sizing.Fixed(30),
-            Content = new MeasuredBox(10, 10) { Background = Drawable.Solid(Blue) }
+            Content = new MeasuredBox(10, 10) { Background = new SolidDrawable(Blue) }
         };
-        MeasuredBox sibling = new(10, 10) { Background = Drawable.Solid(Red) };
+        MeasuredBox sibling = new(10, 10) { Background = new SolidDrawable(Red) };
         Column root = new() { Children = { clipper, sibling } };
 
         UiRoot uiRoot = Run(root, 100, 100);
@@ -120,7 +120,7 @@ public class PaintTests
         MeasuredBox offscreen = new(10, 10)
         {
             Margin = new Thickness(500, 0, 0, 0),
-            Background = Drawable.Solid(Blue)
+            Background = new SolidDrawable(Blue)
         };
         ClipBorder clipper = new()
         {
@@ -140,7 +140,7 @@ public class PaintTests
     {
         Column root = new()
         {
-            Background = Drawable.Solid(Red),
+            Background = new SolidDrawable(Red),
             Width = Sizing.Fixed(0),
             Height = Sizing.Fixed(0)
         };
@@ -154,7 +154,7 @@ public class PaintTests
     [Test]
     public void Paint_InvisibleSubtreeIsSkipped()
     {
-        MeasuredBox hidden = new(10, 10) { IsVisible = false, Background = Drawable.Solid(Blue) };
+        MeasuredBox hidden = new(10, 10) { IsVisible = false, Background = new SolidDrawable(Blue) };
         Column root = new() { Children = { hidden } };
 
         UiRoot uiRoot = Run(root, 100, 100);
@@ -165,7 +165,7 @@ public class PaintTests
     [Test]
     public void PaintContext_UnbalancedCustomDrawable_DoesNotLeakItsClip()
     {
-        MeasuredBox sibling = new(10, 10) { Background = Drawable.Solid(Red) };
+        MeasuredBox sibling = new(10, 10) { Background = new SolidDrawable(Red) };
         Column root = new()
         {
             Background = new LeakyDrawable(),

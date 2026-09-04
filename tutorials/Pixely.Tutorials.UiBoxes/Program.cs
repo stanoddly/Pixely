@@ -51,14 +51,14 @@ static class Program
     {
         return new Column(gap: 12)
         {
-            Background = Drawable.Solid(Background),
+            Background = new SolidDrawable(Background),
             Padding = new Thickness(16),
             Children =
             {
                 // A fixed-height header spanning the full width.
                 new Column
                 {
-                    Background = Drawable.Solid(Accent),
+                    Background = new SolidDrawable(Accent),
                     Height = Sizing.Fixed(48),
                     Width = Sizing.Grow()
                 },
@@ -72,7 +72,7 @@ static class Program
                     {
                         new Column
                         {
-                            Background = Drawable.Solid(Panel),
+                            Background = new SolidDrawable(Panel),
                             Width = Sizing.Fixed(180),
                             Height = Sizing.Grow()
                         },
@@ -89,8 +89,8 @@ static class Program
                                     Width = Sizing.Grow(),
                                     Children =
                                     {
-                                        new Column { Background = Drawable.Solid(Teal), Width = Sizing.Percent(0.5f), Height = Sizing.Grow() },
-                                        new Column { Background = Drawable.Solid(Panel), Width = Sizing.Grow(), Height = Sizing.Grow() }
+                                        new Column { Background = new SolidDrawable(Teal), Width = Sizing.Percent(0.5f), Height = Sizing.Grow() },
+                                        new Column { Background = new SolidDrawable(Panel), Width = Sizing.Grow(), Height = Sizing.Grow() }
                                     }
                                 },
 
@@ -102,7 +102,7 @@ static class Program
                                     Height = Sizing.Fixed(100),
                                     Content = new Column
                                     {
-                                        Background = Drawable.Solid(Pale),
+                                        Background = new SolidDrawable(Pale),
                                         Width = Sizing.Fixed(600),
                                         Height = Sizing.Fixed(400)
                                     }
@@ -115,9 +115,9 @@ static class Program
                                     Width = Sizing.Grow(),
                                     Children =
                                     {
-                                        new Column { Background = Drawable.Solid(Panel), Width = Sizing.Grow(1f), Height = Sizing.Grow() },
-                                        new Column { Background = Drawable.Solid(Teal), Width = Sizing.Grow(2f), Height = Sizing.Grow() },
-                                        new Column { Background = Drawable.Solid(Panel), Width = Sizing.Grow(1f), Height = Sizing.Grow() }
+                                        new Column { Background = new SolidDrawable(Panel), Width = Sizing.Grow(1f), Height = Sizing.Grow() },
+                                        new Column { Background = new SolidDrawable(Teal), Width = Sizing.Grow(2f), Height = Sizing.Grow() },
+                                        new Column { Background = new SolidDrawable(Panel), Width = Sizing.Grow(1f), Height = Sizing.Grow() }
                                     }
                                 }
                             }
