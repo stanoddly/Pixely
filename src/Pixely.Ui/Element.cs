@@ -30,6 +30,7 @@ public class Element : ILayoutHost
     private bool _hasMeasured;
     private Constraints _measuredWith;
     private Constraints _contentConstraints;
+    private Rectangle _arrangedWithin;
 
     public Element()
     {
@@ -266,6 +267,15 @@ public class Element : ILayoutHost
             return;
         }
 
+        // A clean subtree placed exactly where it already is arranges to what it already holds.
+        // The inherited clip is compared as well as the bounds, since it is an input this element
+        // did not choose and a clipping ancestor can move without moving this one.
+        if (!_arrangeDirty && Bounds == bounds && _arrangedWithin == inheritedClip)
+        {
+            return;
+        }
+
+        _arrangedWithin = inheritedClip;
         Bounds = bounds;
         EffectiveClip = _clipsContent ? inheritedClip.Intersect(bounds) : inheritedClip;
 

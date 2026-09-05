@@ -2,7 +2,7 @@ namespace Pixely.Ui.Tests;
 
 /// <summary>
 /// An element with intrinsic content, used to give layout tests something with a natural size and
-/// to observe how often it is actually measured.
+/// to observe how often it is actually measured and arranged.
 /// </summary>
 internal sealed class MeasuredBox : Element
 {
@@ -25,6 +25,8 @@ internal sealed class MeasuredBox : Element
 
     public int MeasureCount { get; private set; }
 
+    public int ArrangeCount { get; private set; }
+
     public Constraints LastConstraints { get; private set; }
 
     protected override Vector2Int MeasureContent(Constraints constraints)
@@ -36,5 +38,11 @@ internal sealed class MeasuredBox : Element
         return new Vector2Int(
             Math.Max(_intrinsicSize.X, children.X),
             Math.Max(_intrinsicSize.Y, children.Y));
+    }
+
+    protected override void ArrangeContent(Rectangle contentBounds)
+    {
+        ArrangeCount++;
+        base.ArrangeContent(contentBounds);
     }
 }
