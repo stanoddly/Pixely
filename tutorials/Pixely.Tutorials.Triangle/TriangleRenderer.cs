@@ -19,10 +19,7 @@ public class TriangleRenderer : IRenderer<BasicRenderContext>
     public void Render(BasicRenderContext renderContext)
     {
         renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
-            .Build();
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(renderContext.SwapchainTexture, ColorTargetSettings.Clear);
         
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
         renderPass.BindVertexBuffer(_quadVertexBuffer);

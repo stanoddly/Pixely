@@ -117,13 +117,10 @@ internal sealed class ClearRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(new ColorTargetSettings
-            {
-                ClearColorValue = _color,
-                LoadOperation = LoadOperation.Clear
-            })
-            .Build();
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(renderContext.SwapchainTexture, new ColorTargetSettings
+        {
+            ClearColorValue = _color,
+            LoadOperation = LoadOperation.Clear
+        });
     }
 }

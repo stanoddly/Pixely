@@ -87,9 +87,29 @@ public class CommandBuffer: IDisposable
     // SDL exposes no constant for it, and the prose in SDL_gpu.h still claims four.
     public const int MaxColorTargets = 8;
 
+    public IRenderPass CreateRenderPass(Texture colorTarget, ColorTargetSettings colorTargetSettings)
+    {
+        return CreateRenderPass(new ReadOnlySpan<Texture>(in colorTarget), new ReadOnlySpan<ColorTargetSettings>(in colorTargetSettings), null, DepthBufferSettings.Default);
+    }
+
+    public IRenderPass CreateRenderPass(Texture colorTarget, ColorTargetSettings colorTargetSettings, Texture depthBuffer, DepthBufferSettings depthBufferSettings)
+    {
+        return CreateRenderPass(new ReadOnlySpan<Texture>(in colorTarget), new ReadOnlySpan<ColorTargetSettings>(in colorTargetSettings), depthBuffer, depthBufferSettings);
+    }
+
+    public IRenderPass CreateDepthOnlyRenderPass(Texture depthBuffer, DepthBufferSettings depthBufferSettings)
+    {
+        return CreateRenderPass(ReadOnlySpan<Texture>.Empty, ReadOnlySpan<ColorTargetSettings>.Empty, depthBuffer, depthBufferSettings);
+    }
+
     public IRenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
+
+        if (colorTargets.Length == 0 && depthBuffer == null)
+        {
+            throw new ArgumentException("At least one color target or a depth buffer is required.", nameof(colorTargets));
+        }
 
         if (colorTargets.Length > MaxColorTargets)
         {

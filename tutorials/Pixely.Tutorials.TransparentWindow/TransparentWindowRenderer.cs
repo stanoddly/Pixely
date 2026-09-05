@@ -20,14 +20,11 @@ public class TransparentWindowRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(new ColorTargetSettings
-            {
-                ClearColorValue = FColors.Transparent,
-                LoadOperation = LoadOperation.Clear
-            })
-            .Build();
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(renderContext.SwapchainTexture, new ColorTargetSettings
+        {
+            ClearColorValue = FColors.Transparent,
+            LoadOperation = LoadOperation.Clear
+        });
 
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
 

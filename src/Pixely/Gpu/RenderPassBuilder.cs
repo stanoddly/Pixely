@@ -1,98 +1,67 @@
-using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Pixely.Gpu;
 
 /// <summary>
-/// Describes a render pass and creates it. A value type with inline storage, so building a pass
-/// every frame costs nothing on the heap. Copies are independent: passing a builder around or
-/// building from the same value twice does not share state.
+/// Collects the description of a render pass across several statements, for callers that compose one
+/// conditionally or from a varying number of targets. It allocates, so a renderer that describes the same
+/// pass every frame should call <see cref="CommandBuffer.CreateRenderPass(Texture, ColorTargetSettings)"/>
+/// or one of its overloads instead.
 /// </summary>
-public struct RenderPassBuilder
+public class RenderPassBuilder
 {
-    [InlineArray(CommandBuffer.MaxColorTargets)]
-    private struct ColorTargetArray
-    {
-        private Texture _element0;
-    }
-
-    [InlineArray(CommandBuffer.MaxColorTargets)]
-    private struct ColorTargetSettingsArray
-    {
-        private ColorTargetSettings _element0;
-    }
-
     private readonly CommandBuffer _commandBuffer;
-    private ColorTargetArray _colorTargets;
-    private ColorTargetSettingsArray _colorTargetSettings;
-    private int _colorTargetCount;
-    private int _colorTargetSettingsCount;
+    private readonly List<Texture> _colorTargets = new();
+    private readonly List<ColorTargetSettings> _colorTargetSettings = new();
     private Texture? _depthBuffer;
-    private DepthBufferSettings _depthBufferSettings;
+    private DepthBufferSettings _depthBufferSettings = DepthBufferSettings.Default;
     private ColorTargetSettings? _sharedColorTargetSettings;
 
     public RenderPassBuilder(CommandBuffer commandBuffer)
     {
         _commandBuffer = commandBuffer;
-        _depthBufferSettings = DepthBufferSettings.Default;
     }
 
-    // Every method configures a copy and returns it, so the receiver keeps whatever it already
-    // described. A method that mutated this directly would also mutate the variable it was called on.
-    public readonly RenderPassBuilder AddColorTarget(Texture texture)
+    public RenderPassBuilder AddColorTarget(Texture texture)
     {
-        ThrowIfCapacityExceeded(1);
-
-        RenderPassBuilder builder = this;
-        builder._colorTargets[builder._colorTargetCount] = texture;
-        builder._colorTargetCount++;
-        return builder;
+        _colorTargets.Add(texture);
+        return this;
     }
 
-    public readonly RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
+    public RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
     {
-        ThrowIfCapacityExceeded(1);
-
-        RenderPassBuilder builder = this;
-        builder._colorTargets[builder._colorTargetCount] = texture;
-        builder._colorTargetCount++;
-        builder._colorTargetSettings[builder._colorTargetSettingsCount] = settings;
-        builder._colorTargetSettingsCount++;
-        return builder;
+        _colorTargets.Add(texture);
+        _colorTargetSettings.Add(settings);
+        return this;
     }
 
-    public readonly RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+    public RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
     {
-        ThrowIfCapacityExceeded(textures.Length);
-
-        RenderPassBuilder builder = this;
         foreach (Texture texture in textures)
         {
-            builder._colorTargets[builder._colorTargetCount] = texture;
-            builder._colorTargetCount++;
+            _colorTargets.Add(texture);
         }
-        return builder;
+        return this;
     }
 
-    public readonly RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
+    public RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
     {
-        RenderPassBuilder builder = this;
-        builder._sharedColorTargetSettings = settings;
-        return builder;
+        _sharedColorTargetSettings = settings;
+        return this;
     }
 
-    public readonly RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
+    public RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
     {
-        RenderPassBuilder builder = this;
-        builder._depthBuffer = depthBuffer;
-        builder._depthBufferSettings = settings;
-        return builder;
+        _depthBuffer = depthBuffer;
+        _depthBufferSettings = settings;
+        return this;
     }
 
-    public readonly IRenderPass Build()
+    public IRenderPass Build()
     {
         bool hasShared = _sharedColorTargetSettings != null;
-        bool hasPerTarget = _colorTargetSettingsCount > 0;
-        bool hasColorTargets = _colorTargetCount > 0;
+        bool hasPerTarget = _colorTargetSettings.Count > 0;
+        bool hasColorTargets = _colorTargets.Count > 0;
         bool hasDepthBuffer = _depthBuffer != null;
 
         if (hasShared && hasPerTarget)
@@ -105,7 +74,7 @@ public struct RenderPassBuilder
             throw new InvalidOperationException("Must have either shared or per-target settings set when using color targets.");
         }
 
-        if (hasPerTarget && _colorTargetSettingsCount != _colorTargetCount)
+        if (hasPerTarget && _colorTargetSettings.Count != _colorTargets.Count)
         {
             throw new InvalidOperationException("Every color target needs its own settings when per-target settings are used.");
         }
@@ -115,28 +84,31 @@ public struct RenderPassBuilder
             throw new InvalidOperationException("At least one color target or a depth buffer is required.");
         }
 
-        ColorTargetArray colorTargets = _colorTargets;
-        ColorTargetSettingsArray colorTargetSettings = _colorTargetSettings;
-        Span<Texture> colorTargetSpan = colorTargets;
-        Span<ColorTargetSettings> colorTargetSettingsSpan = colorTargetSettings;
-
         if (hasShared)
         {
-            colorTargetSettingsSpan[.._colorTargetCount].Fill(_sharedColorTargetSettings!);
+            for (int i = 0; i < _colorTargets.Count; i++)
+            {
+                _colorTargetSettings.Add(_sharedColorTargetSettings!);
+            }
         }
 
-        return _commandBuffer.CreateRenderPass(
-            colorTargetSpan[.._colorTargetCount],
-            colorTargetSettingsSpan[.._colorTargetCount],
+        IRenderPass renderPass = _commandBuffer.CreateRenderPass(
+            CollectionsMarshal.AsSpan(_colorTargets),
+            CollectionsMarshal.AsSpan(_colorTargetSettings),
             _depthBuffer,
             _depthBufferSettings);
+
+        ResetState();
+
+        return renderPass;
     }
 
-    private readonly void ThrowIfCapacityExceeded(int addedColorTargets)
+    private void ResetState()
     {
-        if (_colorTargetCount + addedColorTargets > CommandBuffer.MaxColorTargets)
-        {
-            throw new InvalidOperationException($"A render pass cannot have more than {CommandBuffer.MaxColorTargets} color targets.");
-        }
+        _colorTargets.Clear();
+        _colorTargetSettings.Clear();
+        _depthBuffer = null;
+        _depthBufferSettings = DepthBufferSettings.Default;
+        _sharedColorTargetSettings = null;
     }
 }

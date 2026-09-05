@@ -32,10 +32,7 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
-            .Build();
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(renderContext.SwapchainTexture, ColorTargetSettings.Clear);
 
         renderPass.BindGraphicsPipeline(_indexedPipeline);
         renderPass.BindVertexBuffer(_vertexBuffer);
