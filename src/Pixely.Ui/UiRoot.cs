@@ -199,18 +199,20 @@ public sealed class UiRoot
             layer.Arrange(viewport, viewport);
         }
 
-        _pointerTargetAreas.Clear();
-        _pointerTargetElements.Clear();
-
-        foreach (Element layer in _layers)
-        {
-            layer.CollectPointerTargets(_pointerTargetAreas, _pointerTargetElements);
-        }
+        CollectPointerTargets();
 
         // Bounds have just moved under a pointer that did not, so what it is over is reconciled
         // between arrange and paint: the new bounds are needed to hit test at all, and painting
         // afterwards is what keeps this frame from showing a hover the tree no longer has.
         _pointerRouter.Revalidate();
+
+        // A pointer callback may have restructured the tree, and the paint below draws it as it is
+        // now. Collecting again keeps what can be hit matching what the frame shows; a hover that
+        // only repaints leaves layout clean, so the ordinary case still collects once.
+        if (NeedsLayout())
+        {
+            CollectPointerTargets();
+        }
 
         foreach (Element layer in _layers)
         {
@@ -223,6 +225,34 @@ public sealed class UiRoot
         IsPaintDirty = false;
         PaintedViewportSize = _viewportSize;
         return true;
+    }
+
+    private void CollectPointerTargets()
+    {
+        _pointerTargetAreas.Clear();
+        _pointerTargetElements.Clear();
+
+        foreach (Element layer in _layers)
+        {
+            layer.CollectPointerTargets(_pointerTargetAreas, _pointerTargetElements);
+        }
+    }
+
+    /// <summary>
+    /// Whether a layer still needs measuring or arranging. Every structural edit invalidates
+    /// measure, so this is what says a tree changed rather than only changing how it looks.
+    /// </summary>
+    private bool NeedsLayout()
+    {
+        foreach (Element layer in _layers)
+        {
+            if (layer.IsMeasureDirty || layer.IsArrangeDirty)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool NeedsUpdate()

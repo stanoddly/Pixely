@@ -677,6 +677,38 @@ public class ButtonTests
         Assert.That(root.PointerPressed(new Vector2Int(5, 5)), Is.False, "the collected areas are a build old, so a candidate is checked against the tree before it counts");
     }
 
+    [Test]
+    public void ReorderingFromAPointerCallback_ChangesWhatTheSameFrameCanHit()
+    {
+        RecordingPointerTarget first = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
+        RecordingPointerTarget second = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
+        Overlay overlay = new() { Children = { first, second } };
+        Column layer = new() { Children = { overlay }, Padding = new Thickness(100, 0, 0, 0) };
+        UiRoot root = Rooted(layer);
+
+        root.PointerMoved(new Vector2Int(5, 5));
+
+        // Entering puts `first` back on top. The paint that follows draws it there, so the press
+        // has to land on it rather than on whatever was topmost when the targets were collected.
+        second.WhenEntered = () =>
+        {
+            overlay.Children.Remove(first);
+            overlay.Children.Add(first);
+        };
+
+        layer.Padding = Thickness.Zero;
+        root.Update();
+
+        root.PointerPressed(new Vector2Int(5, 5));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.Calls, Does.Contain("enter 5,5"), "the reorder is what the enter callback did, so it has to have run");
+            Assert.That(first.Calls, Does.Contain("press 5,5"));
+            Assert.That(second.Calls, Does.Not.Contain("press 5,5"));
+        });
+    }
+
     private static UiRoot Rooted(Element content)
     {
         UiRoot root = new();
