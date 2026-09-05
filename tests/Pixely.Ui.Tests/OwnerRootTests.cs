@@ -109,6 +109,28 @@ public class OwnerRootTests
         });
     }
 
+    /// <summary>
+    /// An element in two places resolves its root through the one link it holds, so the other place
+    /// would read a style it is not painted under. The three ways into a tree all refuse it.
+    /// </summary>
+    [Test]
+    public void AnElementAlreadyInATree_CannotBeAddedToAnother()
+    {
+        Column layer = new();
+        UiRoot root = new();
+        root.AddLayer(layer);
+        Column child = new();
+        layer.Children.Add(child);
+        UiRoot other = new();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => other.AddLayer(layer), Throws.InvalidOperationException, "a layer of another root");
+            Assert.That(() => other.AddLayer(child), Throws.InvalidOperationException, "a child of another element");
+            Assert.That(() => new Column().Children.Add(layer), Throws.InvalidOperationException, "a layer, as a child");
+        });
+    }
+
     [Test]
     public void ClearingChildren_ClearsTheirRoots()
     {

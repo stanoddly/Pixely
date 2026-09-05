@@ -43,6 +43,11 @@ public sealed class ElementCollection : IReadOnlyList<Element>
             throw new InvalidOperationException("The element already has a parent; remove it from its current parent first.");
         }
 
+        if (child.LayerRoot != null)
+        {
+            throw new InvalidOperationException("The element is a layer on a root; remove it from that root first.");
+        }
+
         _children.Insert(index, child);
         child.Parent = _owner;
 

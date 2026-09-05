@@ -77,6 +77,18 @@ public sealed class UiRoot
     {
         ArgumentNullException.ThrowIfNull(layer);
 
+        if (layer.Parent != null)
+        {
+            throw new InvalidOperationException("The element is a child of another element; remove it from its parent first.");
+        }
+
+        // An element in two places at once would resolve its root through the one link it holds,
+        // so the other place would read a style that is not the one it is painted under.
+        if (layer.LayerRoot != null)
+        {
+            throw new InvalidOperationException("The element is already a layer on a root; remove it from that root first.");
+        }
+
         _layers.Add(layer);
         layer.LayerRoot = this;
         layer.InvalidateSubtreeMeasure();
