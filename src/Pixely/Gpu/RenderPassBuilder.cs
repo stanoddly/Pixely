@@ -1,90 +1,99 @@
+using System.Runtime.CompilerServices;
+
 namespace Pixely.Gpu;
 
-internal struct RenderPassBuilderState
+/// <summary>
+/// Describes a render pass and creates it. A value type with inline storage, so building a pass
+/// every frame costs nothing on the heap. Copies are independent: passing a builder around or
+/// building from the same value twice does not share state.
+/// </summary>
+public struct RenderPassBuilder
 {
-    public RenderPassBuilderState()
+    [InlineArray(CommandBuffer.MaxColorTargets)]
+    private struct ColorTargetArray
     {
-        ResetState();
+        private Texture _element0;
     }
 
-    public List<Texture> ColorTargets { get; } = new();
-    public List<ColorTargetSettings> ColorTargetSettings { get; } = new();
-    public Texture? DepthBuffer { get; set; }
-    public DepthBufferSettings DepthBufferSettings { get; set; } = DepthBufferSettings.Default;
-    public ColorTargetSettings? SharedColorTargetSettings { get; set; }
-
-    public void ResetState()
+    [InlineArray(CommandBuffer.MaxColorTargets)]
+    private struct ColorTargetSettingsArray
     {
-        ColorTargets.Clear();
-        ColorTargetSettings.Clear();
-        DepthBuffer = null;
-        DepthBufferSettings = DepthBufferSettings.Default;
-        SharedColorTargetSettings = null;
+        private ColorTargetSettings _element0;
     }
-}
 
-public interface IRenderPassBuilder
-{
-    IRenderPassBuilder AddColorTarget(Texture texture);
-    IRenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings);
-    IRenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures);
-    IRenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings);
-    IRenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings);
-
-    IRenderPass Build();
-}
-
-public class RenderPassBuilder : IRenderPassBuilder
-{
-    private RenderPassBuilderState _state = new();
     private readonly CommandBuffer _commandBuffer;
+    private ColorTargetArray _colorTargets;
+    private ColorTargetSettingsArray _colorTargetSettings;
+    private int _colorTargetCount;
+    private int _colorTargetSettingsCount;
+    private Texture? _depthBuffer;
+    private DepthBufferSettings _depthBufferSettings;
+    private ColorTargetSettings? _sharedColorTargetSettings;
 
     public RenderPassBuilder(CommandBuffer commandBuffer)
     {
         _commandBuffer = commandBuffer;
+        _depthBufferSettings = DepthBufferSettings.Default;
     }
-    
-    public IRenderPassBuilder AddColorTarget(Texture texture)
+
+    // Every method configures a copy and returns it, so the receiver keeps whatever it already
+    // described. A method that mutated this directly would also mutate the variable it was called on.
+    public readonly RenderPassBuilder AddColorTarget(Texture texture)
     {
-        _state.ColorTargets.Add(texture);
-        return this;
+        ThrowIfCapacityExceeded(1);
+
+        RenderPassBuilder builder = this;
+        builder._colorTargets[builder._colorTargetCount] = texture;
+        builder._colorTargetCount++;
+        return builder;
     }
-    
-    public IRenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+
+    public readonly RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
     {
-        foreach (var texture in textures)
+        ThrowIfCapacityExceeded(1);
+
+        RenderPassBuilder builder = this;
+        builder._colorTargets[builder._colorTargetCount] = texture;
+        builder._colorTargetCount++;
+        builder._colorTargetSettings[builder._colorTargetSettingsCount] = settings;
+        builder._colorTargetSettingsCount++;
+        return builder;
+    }
+
+    public readonly RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+    {
+        ThrowIfCapacityExceeded(textures.Length);
+
+        RenderPassBuilder builder = this;
+        foreach (Texture texture in textures)
         {
-            AddColorTarget(texture);
+            builder._colorTargets[builder._colorTargetCount] = texture;
+            builder._colorTargetCount++;
         }
-        return this;
+        return builder;
     }
 
-    public IRenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
+    public readonly RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
     {
-        _state.ColorTargets.Add(texture);
-        _state.ColorTargetSettings.Add(settings);
-        return this;
+        RenderPassBuilder builder = this;
+        builder._sharedColorTargetSettings = settings;
+        return builder;
     }
 
-    public IRenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
+    public readonly RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
     {
-        _state.SharedColorTargetSettings = settings;
-        return this;
+        RenderPassBuilder builder = this;
+        builder._depthBuffer = depthBuffer;
+        builder._depthBufferSettings = settings;
+        return builder;
     }
 
-    public IRenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
+    public readonly IRenderPass Build()
     {
-        _state.DepthBuffer = depthBuffer;
-        _state.DepthBufferSettings = settings;
-        return this;
-    }
-
-    public IRenderPass Build()
-    {
-        bool hasShared = _state.SharedColorTargetSettings != null;
-        bool hasPerTarget = _state.ColorTargetSettings.Count > 0;
-        bool hasColorTargets = _state.ColorTargets.Count > 0;
-        bool hasDepthBuffer = _state.DepthBuffer != null;
+        bool hasShared = _sharedColorTargetSettings != null;
+        bool hasPerTarget = _colorTargetSettingsCount > 0;
+        bool hasColorTargets = _colorTargetCount > 0;
+        bool hasDepthBuffer = _depthBuffer != null;
 
         if (hasShared && hasPerTarget)
         {
@@ -96,25 +105,38 @@ public class RenderPassBuilder : IRenderPassBuilder
             throw new InvalidOperationException("Must have either shared or per-target settings set when using color targets.");
         }
 
+        if (hasPerTarget && _colorTargetSettingsCount != _colorTargetCount)
+        {
+            throw new InvalidOperationException("Every color target needs its own settings when per-target settings are used.");
+        }
+
         if (!hasColorTargets && !hasDepthBuffer)
         {
             throw new InvalidOperationException("At least one color target or a depth buffer is required.");
         }
 
+        ColorTargetArray colorTargets = _colorTargets;
+        ColorTargetSettingsArray colorTargetSettings = _colorTargetSettings;
+        Span<Texture> colorTargetSpan = colorTargets;
+        Span<ColorTargetSettings> colorTargetSettingsSpan = colorTargetSettings;
+
         if (hasShared)
         {
-            for (int i = 0; i < _state.ColorTargets.Count; i++)
-            {
-                _state.ColorTargetSettings.Add(_state.SharedColorTargetSettings!);
-            }
+            colorTargetSettingsSpan[.._colorTargetCount].Fill(_sharedColorTargetSettings!);
         }
 
-        IRenderPass renderPass = _commandBuffer.CreateRenderPass(_state.ColorTargets, _state.ColorTargetSettings, _state.DepthBuffer,
-            _state.DepthBufferSettings);
+        return _commandBuffer.CreateRenderPass(
+            colorTargetSpan[.._colorTargetCount],
+            colorTargetSettingsSpan[.._colorTargetCount],
+            _depthBuffer,
+            _depthBufferSettings);
+    }
 
-        _state.ResetState();
-
-        return renderPass;
+    private readonly void ThrowIfCapacityExceeded(int addedColorTargets)
+    {
+        if (_colorTargetCount + addedColorTargets > CommandBuffer.MaxColorTargets)
+        {
+            throw new InvalidOperationException($"A render pass cannot have more than {CommandBuffer.MaxColorTargets} color targets.");
+        }
     }
 }
-
