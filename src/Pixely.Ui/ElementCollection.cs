@@ -45,7 +45,12 @@ public sealed class ElementCollection : IReadOnlyList<Element>
 
         _children.Insert(index, child);
         child.Parent = _owner;
-        _owner.InvalidateMeasure();
+
+        // The whole attached subtree, not just the owner: what those elements last laid themselves
+        // out for was their old place in a tree, and anything reading its root — a label's font —
+        // would otherwise keep an answer computed under the old one. The walk reaches the owner and
+        // its ancestors on the way up as well.
+        child.InvalidateSubtreeMeasure();
     }
 
     public bool Remove(Element child)

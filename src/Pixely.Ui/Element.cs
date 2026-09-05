@@ -378,6 +378,23 @@ public class Element : ILayoutHost
         }
     }
 
+    /// <summary>
+    /// Invalidates this element and everything under it. Ambient state — which root a subtree
+    /// belongs to, and the style on that root — is an input to measure that no setter on the
+    /// elements themselves sees change, and the upward walk above cannot reach descendants, so
+    /// whatever changes that state invalidates downward instead. Each nested call stops at its
+    /// parent, which this walk has already marked, so the whole thing is linear in the subtree.
+    /// </summary>
+    internal void InvalidateSubtreeMeasure()
+    {
+        InvalidateMeasure();
+
+        foreach (Element child in Children)
+        {
+            child.InvalidateSubtreeMeasure();
+        }
+    }
+
     internal void InvalidateArrange()
     {
         _arrangeDirty = true;

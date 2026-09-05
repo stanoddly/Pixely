@@ -94,6 +94,104 @@ public class ArrangeSkipTests
         });
     }
 
+    /// <summary>
+    /// What an element laid itself out for was its place in the tree it was in, so joining another
+    /// one has to invalidate it even where the new parent hands it the bounds it already had.
+    /// </summary>
+    [Test]
+    public void ReparentingToAParentThatPlacesItIdentically_StillRearranges()
+    {
+        MeasuredBox box = new(20, 20);
+        Column first = new() { Children = { box } };
+        Column second = new();
+        Overlay root = new() { Children = { first, second } };
+        Layout.Run(root, 100, 100);
+        int arranges = box.ArrangeCount;
+        Rectangle bounds = box.Bounds;
+
+        first.Children.Remove(box);
+        second.Children.Add(box);
+        Layout.Run(root, 100, 100);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(box.Bounds, Is.EqualTo(bounds), "the new parent places it where the old one did");
+            Assert.That(box.ArrangeCount, Is.EqualTo(arranges + 1));
+        });
+    }
+
+    [Test]
+    public void ReparentingASubtree_InvalidatesItsDescendantsToo()
+    {
+        MeasuredBox leaf = new(20, 20);
+        Column branch = new() { Children = { new Column { Children = { leaf } } } };
+        Column first = new() { Children = { branch } };
+        Column second = new();
+        Overlay root = new() { Children = { first, second } };
+        Layout.Run(root, 100, 100);
+        int measures = leaf.MeasureCount;
+        int arranges = leaf.ArrangeCount;
+
+        first.Children.Remove(branch);
+        second.Children.Add(branch);
+        Layout.Run(root, 100, 100);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(leaf.MeasureCount, Is.EqualTo(measures + 1));
+            Assert.That(leaf.ArrangeCount, Is.EqualTo(arranges + 1));
+        });
+    }
+
+    /// <summary>
+    /// A layer carries no parent to be invalidated through, so the root has to do it itself — and
+    /// the same viewport size would otherwise leave every cached measurement looking current.
+    /// </summary>
+    [Test]
+    public void AddingALayerThatWasLaidOutUnderAnotherRoot_LaysItOutAgain()
+    {
+        MeasuredBox leaf = new(20, 20);
+        Column layer = new() { Children = { leaf } };
+        UiRoot first = new();
+        first.AddLayer(layer);
+        first.SetViewportSize(new Vector2Int(320, 240));
+        first.Update();
+        int measures = leaf.MeasureCount;
+        int arranges = leaf.ArrangeCount;
+
+        first.RemoveLayer(layer);
+        UiRoot second = new();
+        second.AddLayer(layer);
+        second.SetViewportSize(new Vector2Int(320, 240));
+        second.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(leaf.MeasureCount, Is.EqualTo(measures + 1));
+            Assert.That(leaf.ArrangeCount, Is.EqualTo(arranges + 1));
+        });
+    }
+
+    /// <summary>
+    /// The style is what a label resolves its font from, so replacing it changes a measurement that
+    /// nothing on the label itself was told about.
+    /// </summary>
+    [Test]
+    public void ReplacingTheStyle_ReachesElementsBelowTheLayer()
+    {
+        MeasuredBox leaf = new(20, 20);
+        UiRoot root = new();
+        root.AddLayer(new Column { Children = { new Column { Children = { leaf } } } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+        int measures = leaf.MeasureCount;
+
+        root.Style = new UiStyle();
+        root.Update();
+
+        Assert.That(leaf.MeasureCount, Is.EqualTo(measures + 1));
+    }
+
     [Test]
     public void HoveringAButton_RepaintsWithoutRearrangingTheTree()
     {

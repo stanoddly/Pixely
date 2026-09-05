@@ -63,7 +63,7 @@ public sealed class UiRoot
 
             foreach (Element layer in _layers)
             {
-                layer.InvalidateMeasure();
+                layer.InvalidateSubtreeMeasure();
             }
         }
     }
@@ -79,6 +79,7 @@ public sealed class UiRoot
 
         _layers.Add(layer);
         layer.LayerRoot = this;
+        layer.InvalidateSubtreeMeasure();
         _layersChanged = true;
     }
 
