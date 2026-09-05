@@ -39,24 +39,30 @@ public class Element : ILayoutHost
     public Element? Parent { get; internal set; }
 
     /// <summary>
-    /// The root this element currently belongs to, or null when it is not in a rooted tree.
-    /// Kept up to date as elements are added and removed, so an element can reach shared state such
-    /// as <see cref="UiRoot.Style"/> without it being threaded through every constructor.
+    /// Set only on a layer, by the root it was added to. Everything below a layer resolves its root
+    /// through <see cref="OwnerRoot"/> instead of holding a link of its own.
     /// </summary>
-    internal UiRoot? OwnerRoot { get; private set; }
+    internal UiRoot? LayerRoot { get; set; }
 
-    internal void SetOwnerRoot(UiRoot? root)
+    /// <summary>
+    /// The root this element currently belongs to, or null when it is not in a rooted tree, so an
+    /// element can reach shared state such as <see cref="UiRoot.Style"/> without it being threaded
+    /// through every constructor. Resolved by walking up rather than propagated down, which is what
+    /// keeps adding, removing and reparenting a subtree free of bookkeeping.
+    /// </summary>
+    internal UiRoot? OwnerRoot
     {
-        if (ReferenceEquals(OwnerRoot, root))
+        get
         {
-            return;
-        }
+            for (Element? element = this; element != null; element = element.Parent)
+            {
+                if (element.LayerRoot != null)
+                {
+                    return element.LayerRoot;
+                }
+            }
 
-        OwnerRoot = root;
-
-        foreach (Element child in Children)
-        {
-            child.SetOwnerRoot(root);
+            return null;
         }
     }
 

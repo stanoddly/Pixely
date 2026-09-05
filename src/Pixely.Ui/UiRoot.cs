@@ -44,7 +44,7 @@ public sealed class UiRoot
         ArgumentNullException.ThrowIfNull(layer);
 
         _layers.Add(layer);
-        layer.SetOwnerRoot(this);
+        layer.LayerRoot = this;
         _layersChanged = true;
     }
 
@@ -86,7 +86,7 @@ public sealed class UiRoot
             return false;
         }
 
-        layer.SetOwnerRoot(null);
+        layer.LayerRoot = null;
         _layersChanged = true;
         return true;
     }

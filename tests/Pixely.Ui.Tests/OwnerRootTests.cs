@@ -88,6 +88,28 @@ public class OwnerRootTests
     }
 
     [Test]
+    public void MovingASubtreeToAnotherRoot_ReportsTheNewRoot()
+    {
+        MeasuredBox leaf = new(10, 10);
+        Column branch = new() { Children = { leaf } };
+        Column firstLayer = new() { Children = { branch } };
+        Column secondLayer = new();
+        UiRoot firstRoot = new();
+        UiRoot secondRoot = new();
+        firstRoot.AddLayer(firstLayer);
+        secondRoot.AddLayer(secondLayer);
+
+        firstLayer.Children.Remove(branch);
+        secondLayer.Children.Add(branch);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(branch.OwnerRoot, Is.SameAs(secondRoot));
+            Assert.That(leaf.OwnerRoot, Is.SameAs(secondRoot));
+        });
+    }
+
+    [Test]
     public void ClearingChildren_ClearsTheirRoots()
     {
         MeasuredBox leaf = new(10, 10);
