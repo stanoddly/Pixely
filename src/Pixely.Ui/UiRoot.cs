@@ -11,6 +11,8 @@ public sealed class UiRoot
     private readonly List<Element> _layers = new();
     private readonly List<PaintBatch> _batches = new();
     private readonly List<UiView> _views = new();
+    private readonly List<Rectangle> _pointerTargetAreas = new();
+    private readonly List<Element> _pointerTargetElements = new();
 
     private UiStyle? _style;
     private bool _isUpdating;
@@ -32,6 +34,15 @@ public sealed class UiRoot
 
     /// <summary>Instruction runs sharing a texture and a clip, in paint order.</summary>
     internal IReadOnlyList<PaintBatch> Batches => _batches;
+
+    /// <summary>
+    /// Where each pointer target can be hit, in paint order, alongside the targets themselves.
+    /// Two lists rather than one of pairs: hit testing reads only the rectangles, and keeping them
+    /// packed is the point of having the list at all.
+    /// </summary>
+    internal List<Rectangle> PointerTargetAreas => _pointerTargetAreas;
+
+    internal List<Element> PointerTargetElements => _pointerTargetElements;
 
     /// <summary>
     /// Defaults every element under this root can fall back on. Elements that were given an
@@ -186,6 +197,14 @@ public sealed class UiRoot
         {
             layer.Measure(constraints);
             layer.Arrange(viewport, viewport);
+        }
+
+        _pointerTargetAreas.Clear();
+        _pointerTargetElements.Clear();
+
+        foreach (Element layer in _layers)
+        {
+            layer.CollectPointerTargets(_pointerTargetAreas, _pointerTargetElements);
         }
 
         // Bounds have just moved under a pointer that did not, so what it is over is reconciled

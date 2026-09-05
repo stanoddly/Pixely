@@ -21,6 +21,9 @@ public class Element : ILayoutHost
 
     private readonly List<Element> _layoutChildren = new();
 
+    // Asked once here rather than tested per collection pass, since what an element is cannot change.
+    private readonly bool _isPointerTarget;
+
     private bool _measureDirty = true;
     private bool _arrangeDirty = true;
     private bool _paintDirty = true;
@@ -31,6 +34,7 @@ public class Element : ILayoutHost
     public Element()
     {
         Children = new ElementCollection(this, MaxChildCount);
+        _isPointerTarget = this is IPointerTarget;
     }
 
     /// <summary>Overridden by single-content controls to reject a second child where the mistake is made.</summary>
@@ -219,6 +223,40 @@ public class Element : ILayoutHost
         _measureDirty = false;
         _arrangeDirty = true;
         return DesiredSize;
+    }
+
+    /// <summary>
+    /// Appends this subtree's pointer targets, in paint order, with the area each one can be hit
+    /// in. Runs once per build so that hit testing — which happens far more often, at pointer rate
+    /// rather than frame rate — reads a packed list instead of walking the tree.
+    /// </summary>
+    /// <remarks>
+    /// The area is the bounds already intersected with the clip, because a point inside both is a
+    /// point inside their intersection, and a target clipped away entirely intersects to an empty
+    /// rectangle that contains nothing. Invisible elements are skipped: they are not arranged, so
+    /// their bounds are whatever they were when they were last visible. Disabled ones are kept and
+    /// rejected on the candidate instead, so the list does not depend on state that can change
+    /// between builds.
+    /// </remarks>
+    internal void CollectPointerTargets(List<Rectangle> areas, List<Element> elements)
+    {
+        if (!_isVisible)
+        {
+            return;
+        }
+
+        // Before the children, so that scanning the list backwards meets them first, which is the
+        // precedence painting gives them.
+        if (_isPointerTarget)
+        {
+            areas.Add(Bounds.Intersect(EffectiveClip));
+            elements.Add(this);
+        }
+
+        foreach (Element child in Children)
+        {
+            child.CollectPointerTargets(areas, elements);
+        }
     }
 
     internal void Arrange(Rectangle bounds, Rectangle inheritedClip)

@@ -198,47 +198,34 @@ internal sealed class PointerRouter
         ((IPointerTarget)target).OnPointerEnter(_position);
     }
 
+    /// <summary>
+    /// The topmost target at <paramref name="position"/>. Scanned back to front over the areas the
+    /// last build collected, which is paint order reversed: whatever was drawn on top is what the
+    /// pointer meets first, and a child is allowed to overflow the element that arranged it because
+    /// nothing is pruned by an ancestor's bounds.
+    /// </summary>
+    /// <remarks>
+    /// The scan reads rectangles and nothing else, so it walks contiguous memory and touches no
+    /// element until something is actually hit. Only then is the candidate checked against the tree
+    /// it belongs to, which is where the list being one build old is accounted for.
+    /// </remarks>
     private Element? HitTest(Vector2Int position)
     {
-        IReadOnlyList<Element> layers = _root.Layers;
+        List<Rectangle> areas = _root.PointerTargetAreas;
 
-        for (int i = layers.Count - 1; i >= 0; i--)
+        for (int i = areas.Count - 1; i >= 0; i--)
         {
-            Element? target = HitTest(layers[i], position);
-
-            if (target != null)
+            if (!areas[i].Contains(position))
             {
-                return target;
+                continue;
             }
-        }
 
-        return null;
-    }
+            Element candidate = _root.PointerTargetElements[i];
 
-    // Children are searched last to first and before the element itself, because that is paint order
-    // reversed: whatever was drawn on top is what the pointer meets first. The search descends
-    // without testing the parent's bounds, since clipping is opt-in and a child is allowed to
-    // overflow the element that arranged it.
-    private static Element? HitTest(Element element, Vector2Int position)
-    {
-        if (!element.IsVisible || !element.IsEnabled)
-        {
-            return null;
-        }
-
-        for (int i = element.Children.Count - 1; i >= 0; i--)
-        {
-            Element? target = HitTest(element.Children[i], position);
-
-            if (target != null)
+            if (CanBeHit(candidate))
             {
-                return target;
+                return candidate;
             }
-        }
-
-        if (element is IPointerTarget && element.Bounds.Contains(position) && element.EffectiveClip.Contains(position))
-        {
-            return element;
         }
 
         return null;

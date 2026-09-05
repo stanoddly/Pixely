@@ -389,15 +389,20 @@ public class ButtonTests
         {
             layer.Children.Clear();
             layer.Children.Add(replacement);
-            Layout.Run(layer, 320, 240);
         };
 
         root.PointerPressed(new Vector2Int(5, 5));
         root.PointerReleased(new Vector2Int(5, 5));
 
+        Assert.That(button.VisualState, Is.EqualTo(VisualState.Normal), "hover is recomputed after the callback, not from the hit that preceded it");
+
+        // The replacement was not in the tree when the targets were collected, so it takes the
+        // pointer at the build that puts it there.
+        root.Update();
+
         Assert.Multiple(() =>
         {
-            Assert.That(replacement.VisualState, Is.EqualTo(VisualState.Hovered), "hover is recomputed after the callback, not from the hit that preceded it");
+            Assert.That(replacement.VisualState, Is.EqualTo(VisualState.Hovered));
             Assert.That(button.VisualState, Is.EqualTo(VisualState.Normal));
         });
     }
@@ -644,6 +649,32 @@ public class ButtonTests
             Assert.That(root.Update(), Is.True);
             Assert.That(root.Update(), Is.False, "the frame that reconciled the hover also painted it");
         });
+    }
+
+    [Test]
+    public void AButtonOverflowingItsParent_IsStillHitOutsideIt()
+    {
+        Button button = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(40) };
+        Column parent = new() { Children = { button }, Height = Sizing.Fixed(10) };
+        UiRoot root = Rooted(parent);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(parent.Bounds.Height, Is.EqualTo(10));
+            Assert.That(root.PointerPressed(new Vector2Int(5, 30)), Is.True, "clipping is opt-in, so overflowing content is still there to be clicked");
+        });
+    }
+
+    [Test]
+    public void AButtonRemovedSinceTheLastBuild_IsNotHit()
+    {
+        Button button = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
+        Column layer = new() { Children = { button } };
+        UiRoot root = Rooted(layer);
+
+        layer.Children.Remove(button);
+
+        Assert.That(root.PointerPressed(new Vector2Int(5, 5)), Is.False, "the collected areas are a build old, so a candidate is checked against the tree before it counts");
     }
 
     private static UiRoot Rooted(Element content)
