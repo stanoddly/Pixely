@@ -94,18 +94,36 @@ public sealed class PaintContext
     }
 
     /// <summary>
-    /// Runs <paramref name="paint"/> and restores the clip depth afterwards, so an unbalanced
-    /// custom drawable stays a local bug instead of corrupting the rest of the frame.
+    /// Restores the clip depth when the returned scope is disposed, so an unbalanced custom
+    /// drawable stays a local bug instead of corrupting the rest of the frame.
     /// </summary>
-    internal void PaintIsolated(Action paint)
-    {
-        int depth = _clipStack.Count;
-        paint();
+    internal IsolationScope Isolate() => new(this, _clipStack.Count);
 
+    private void TruncateClipsTo(int depth)
+    {
         while (_clipStack.Count > depth)
         {
             _clipStack.RemoveAt(_clipStack.Count - 1);
         }
+    }
+
+    /// <summary>
+    /// Restores the clip depth it was taken at. A ref struct rather than a callback, because the
+    /// paint traversal enters one of these twice per element and a delegate would allocate a
+    /// closure over the element each time.
+    /// </summary>
+    internal readonly ref struct IsolationScope
+    {
+        private readonly PaintContext _context;
+        private readonly int _depth;
+
+        internal IsolationScope(PaintContext context, int depth)
+        {
+            _context = context;
+            _depth = depth;
+        }
+
+        public void Dispose() => _context?.TruncateClipsTo(_depth);
     }
 }
 

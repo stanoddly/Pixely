@@ -297,7 +297,8 @@ public class Element : ILayoutHost
 
         if (background != null)
         {
-            context.PaintIsolated(() => background.Paint(context, Bounds));
+            using PaintContext.IsolationScope scope = context.Isolate();
+            background.Paint(context, Bounds);
         }
 
         if (_clipsContent)
@@ -313,7 +314,10 @@ public class Element : ILayoutHost
 
     private void PaintSelfAndChildren(PaintContext context)
     {
-        context.PaintIsolated(() => PaintContent(context));
+        using (PaintContext.IsolationScope scope = context.Isolate())
+        {
+            PaintContent(context);
+        }
 
         foreach (Element child in Children)
         {
