@@ -9,8 +9,9 @@ namespace Pixely.Gpu;
 /// </summary>
 public struct RenderPassBuilder
 {
-    // SDL_GPU accepts at most four color targets in a single render pass.
-    public const int MaxColorTargets = 4;
+    // What SDL_BeginGPURenderPass rejects beyond: MAX_COLOR_TARGET_BINDINGS in SDL_sysgpu.h.
+    // SDL exposes no constant for it, and the prose in SDL_gpu.h still claims four.
+    public const int MaxColorTargets = 8;
 
     [InlineArray(MaxColorTargets)]
     private struct ColorTargetArray
