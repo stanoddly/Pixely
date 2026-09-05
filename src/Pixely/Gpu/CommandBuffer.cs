@@ -83,9 +83,23 @@ public class CommandBuffer: IDisposable
         }
     }
 
+    // What SDL_BeginGPURenderPass rejects beyond: MAX_COLOR_TARGET_BINDINGS in SDL_sysgpu.h.
+    // SDL exposes no constant for it, and the prose in SDL_gpu.h still claims four.
+    public const int MaxColorTargets = 8;
+
     public IRenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
+
+        if (colorTargets.Length > MaxColorTargets)
+        {
+            throw new ArgumentException($"A render pass cannot have more than {MaxColorTargets} color targets.", nameof(colorTargets));
+        }
+
+        if (colorTargetSettings.Length != colorTargets.Length)
+        {
+            throw new ArgumentException($"Expected settings for {colorTargets.Length} color targets, got {colorTargetSettings.Length}.", nameof(colorTargetSettings));
+        }
 
         Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
 

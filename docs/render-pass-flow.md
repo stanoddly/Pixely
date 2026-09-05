@@ -108,7 +108,7 @@ new RenderPassBuilder(commandBuffer)
 - `Load` - Keep existing contents
 - Others may exist for different load/store operations
 
-Add multiple color targets for deferred rendering (G-buffer), up to `RenderPassBuilder.MaxColorTargets` (8, the point at which SDL itself rejects the pass).
+Add multiple color targets for deferred rendering (G-buffer), up to `CommandBuffer.MaxColorTargets` (8, the point at which SDL itself rejects the pass).
 
 `RenderPassBuilder` is a value type with inline storage, so describing a pass every frame allocates nothing.
 Each fluent call returns a new value rather than mutating the receiver, so a partly configured builder

@@ -61,7 +61,7 @@ public class RenderPassBuilderTests
     public void AddColorTarget_BeyondMaxColorTargets_Throws()
     {
         RenderPassBuilder builder = CreateBuilder();
-        for (int target = 0; target < RenderPassBuilder.MaxColorTargets; target++)
+        for (int target = 0; target < CommandBuffer.MaxColorTargets; target++)
         {
             builder = builder.AddColorTarget(new FakeTexture());
         }
@@ -72,7 +72,7 @@ public class RenderPassBuilderTests
     [Test]
     public void AddColorTargets_BeyondMaxColorTargets_Throws()
     {
-        Texture[] textures = new Texture[RenderPassBuilder.MaxColorTargets + 1];
+        Texture[] textures = new Texture[CommandBuffer.MaxColorTargets + 1];
         for (int target = 0; target < textures.Length; target++)
         {
             textures[target] = new FakeTexture();
@@ -84,12 +84,50 @@ public class RenderPassBuilderTests
     }
 
     [Test]
+    public void ConfiguringABuilder_LeavesTheReceiverAlone()
+    {
+        RenderPassBuilder shared = CreateBuilder().SetSharedColorTargetSettings(ColorTargetSettings.Clear);
+
+        // Two passes branching off the same configuration, as documented in docs/render-pass-flow.md.
+        shared.AddColorTarget(new FakeTexture());
+        shared.AddColorTarget(new FakeTexture());
+
+        // Neither branch may have added to shared, so it still has room for every color target.
+        RenderPassBuilder filled = shared;
+        for (int target = 0; target < CommandBuffer.MaxColorTargets; target++)
+        {
+            filled = filled.AddColorTarget(new FakeTexture());
+        }
+
+        Assert.That(() => filled.AddColorTarget(new FakeTexture()), Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public void AddColorTargets_BeyondCapacity_AddsNothing()
+    {
+        Texture[] textures = [new FakeTexture(), new FakeTexture()];
+
+        RenderPassBuilder builder = CreateBuilder();
+        for (int target = 0; target < CommandBuffer.MaxColorTargets - 1; target++)
+        {
+            builder = builder.AddColorTarget(new FakeTexture());
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => builder.AddColorTargets(textures), Throws.InvalidOperationException);
+            // The rejected pair must not have consumed the one remaining slot.
+            Assert.That(() => builder.AddColorTarget(new FakeTexture()), Throws.Nothing);
+        });
+    }
+
+    [Test]
     public void Copies_DoNotShareState()
     {
         RenderPassBuilder original = CreateBuilder();
 
         RenderPassBuilder copy = original;
-        for (int target = 0; target < RenderPassBuilder.MaxColorTargets; target++)
+        for (int target = 0; target < CommandBuffer.MaxColorTargets; target++)
         {
             copy = copy.AddColorTarget(new FakeTexture());
         }

@@ -9,17 +9,13 @@ namespace Pixely.Gpu;
 /// </summary>
 public struct RenderPassBuilder
 {
-    // What SDL_BeginGPURenderPass rejects beyond: MAX_COLOR_TARGET_BINDINGS in SDL_sysgpu.h.
-    // SDL exposes no constant for it, and the prose in SDL_gpu.h still claims four.
-    public const int MaxColorTargets = 8;
-
-    [InlineArray(MaxColorTargets)]
+    [InlineArray(CommandBuffer.MaxColorTargets)]
     private struct ColorTargetArray
     {
         private Texture _element0;
     }
 
-    [InlineArray(MaxColorTargets)]
+    [InlineArray(CommandBuffer.MaxColorTargets)]
     private struct ColorTargetSettingsArray
     {
         private ColorTargetSettings _element0;
@@ -40,46 +36,56 @@ public struct RenderPassBuilder
         _depthBufferSettings = DepthBufferSettings.Default;
     }
 
-    public RenderPassBuilder AddColorTarget(Texture texture)
+    // Every method configures a copy and returns it, so the receiver keeps whatever it already
+    // described. A method that mutated this directly would also mutate the variable it was called on.
+    public readonly RenderPassBuilder AddColorTarget(Texture texture)
     {
-        ThrowIfColorTargetsFull();
-        _colorTargets[_colorTargetCount] = texture;
-        _colorTargetCount++;
-        return this;
+        ThrowIfCapacityExceeded(1);
+
+        RenderPassBuilder builder = this;
+        builder._colorTargets[builder._colorTargetCount] = texture;
+        builder._colorTargetCount++;
+        return builder;
     }
 
-    public RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
+    public readonly RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
     {
-        ThrowIfColorTargetsFull();
-        _colorTargets[_colorTargetCount] = texture;
-        _colorTargetCount++;
-        _colorTargetSettings[_colorTargetSettingsCount] = settings;
-        _colorTargetSettingsCount++;
-        return this;
+        ThrowIfCapacityExceeded(1);
+
+        RenderPassBuilder builder = this;
+        builder._colorTargets[builder._colorTargetCount] = texture;
+        builder._colorTargetCount++;
+        builder._colorTargetSettings[builder._colorTargetSettingsCount] = settings;
+        builder._colorTargetSettingsCount++;
+        return builder;
     }
 
-    public RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+    public readonly RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
     {
+        ThrowIfCapacityExceeded(textures.Length);
+
+        RenderPassBuilder builder = this;
         foreach (Texture texture in textures)
         {
-            ThrowIfColorTargetsFull();
-            _colorTargets[_colorTargetCount] = texture;
-            _colorTargetCount++;
+            builder._colorTargets[builder._colorTargetCount] = texture;
+            builder._colorTargetCount++;
         }
-        return this;
+        return builder;
     }
 
-    public RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
+    public readonly RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
     {
-        _sharedColorTargetSettings = settings;
-        return this;
+        RenderPassBuilder builder = this;
+        builder._sharedColorTargetSettings = settings;
+        return builder;
     }
 
-    public RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
+    public readonly RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
     {
-        _depthBuffer = depthBuffer;
-        _depthBufferSettings = settings;
-        return this;
+        RenderPassBuilder builder = this;
+        builder._depthBuffer = depthBuffer;
+        builder._depthBufferSettings = settings;
+        return builder;
     }
 
     public readonly IRenderPass Build()
@@ -126,11 +132,11 @@ public struct RenderPassBuilder
             _depthBufferSettings);
     }
 
-    private readonly void ThrowIfColorTargetsFull()
+    private readonly void ThrowIfCapacityExceeded(int addedColorTargets)
     {
-        if (_colorTargetCount == MaxColorTargets)
+        if (_colorTargetCount + addedColorTargets > CommandBuffer.MaxColorTargets)
         {
-            throw new InvalidOperationException($"A render pass cannot have more than {MaxColorTargets} color targets.");
+            throw new InvalidOperationException($"A render pass cannot have more than {CommandBuffer.MaxColorTargets} color targets.");
         }
     }
 }
