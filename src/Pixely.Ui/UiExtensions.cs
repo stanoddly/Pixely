@@ -2,6 +2,7 @@ using Pixely.App;
 using Pixely.Content;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
+using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
 
@@ -51,6 +52,13 @@ public static class UiExtensions
         // The style is optional: an application that gives every label an explicit font needs none.
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
             new ScopedUiRoot(viewScope, new UiRoot { Style = provider.GetService<UiStyle>() }));
+
+        appBuilder.AddSingleton<UiInputSystem>(provider =>
+            new UiInputSystem(
+                ScopedUiRoot.GetRequired(provider, viewScope).Root,
+                viewScope,
+                inputOrder,
+                provider.GetRequiredService<IMouseService>()));
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
             UiRenderer<TRenderContext>.Create(

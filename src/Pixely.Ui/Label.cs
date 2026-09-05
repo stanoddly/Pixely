@@ -26,6 +26,7 @@ public sealed class Label : Element
     private TextRole _role = TextRole.Body;
     private Color _color = Colors.White;
     private TextSpriteAsset? _sprite;
+    private Font? _spriteFont;
 
     /// <summary>Takes its font from the root's <see cref="UiStyle"/> according to <see cref="Role"/>.</summary>
     public Label(string content = "")
@@ -128,7 +129,18 @@ public sealed class Label : Element
             return null;
         }
 
-        return _sprite ??= ResolveFont().CreateTextSprite(_content);
+        // The font is resolved every time rather than only on a cache miss, because a style
+        // replaced on the root — or a subtree moved to a root with a different one — changes it
+        // without anything reaching this label. The walk is an ancestor chain and no allocation.
+        Font font = ResolveFont();
+
+        if (_sprite == null || !ReferenceEquals(font, _spriteFont))
+        {
+            _sprite = font.CreateTextSprite(_content);
+            _spriteFont = font;
+        }
+
+        return _sprite;
     }
 
     private Font ResolveFont()
@@ -140,18 +152,15 @@ public sealed class Label : Element
 
         UiStyle? style = OwnerRoot?.Style;
 
-        if (style == null)
+        Font? font = _role switch
         {
-            throw new InvalidOperationException(
-                $"A {nameof(Label)} without an explicit Font needs a UiStyle on the UiRoot it belongs to. " +
-                "Set UiRoot.Style, or construct the label with a font.");
-        }
-
-        return _role switch
-        {
-            TextRole.Title => style.Title,
-            TextRole.Small => style.Small,
-            _ => style.Body
+            TextRole.Title => style?.Title,
+            TextRole.Small => style?.Small,
+            _ => style?.Body
         };
+
+        return font ?? throw new InvalidOperationException(
+            $"A {nameof(Label)} without an explicit Font needs a UiStyle with a {_role} font on the UiRoot it belongs to. " +
+            "Set UiRoot.Style, or construct the label with a font.");
     }
 }

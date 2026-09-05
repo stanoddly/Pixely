@@ -40,7 +40,7 @@ static class Program
             AppControl appControl,
             ScoreboardViewModel viewModel) =>
         {
-            Console.WriteLine("Health drains on its own. Space: score   H: damage   L: lose a life   R: reset   Escape: quit");
+            Console.WriteLine("Health drains on its own. Click the buttons, or Space: score   H: damage   L: lose a life   R: reset   Escape: quit");
 
             keyboardService.KeyDown += eventArgs =>
             {

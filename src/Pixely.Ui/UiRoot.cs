@@ -6,13 +6,18 @@ namespace Pixely.Ui;
 /// </summary>
 public sealed class UiRoot
 {
+    private readonly PointerRouter _pointerRouter;
     private readonly PaintContext _paintContext = new();
     private readonly List<Element> _layers = new();
     private readonly List<PaintBatch> _batches = new();
     private readonly List<UiView> _views = new();
 
+    private UiStyle? _style;
+    private bool _isUpdating;
     private Vector2Int _viewportSize;
     private bool _layersChanged = true;
+
+    public UiRoot() => _pointerRouter = new PointerRouter(this);
 
     /// <summary>
     /// The viewport the completed instructions were built for. The renderer refuses to present
@@ -30,9 +35,27 @@ public sealed class UiRoot
 
     /// <summary>
     /// Defaults every element under this root can fall back on. Elements that were given an
-    /// explicit value ignore it.
+    /// explicit value ignore it. Replacing it invalidates the layers, since nothing below them
+    /// holds a value that would otherwise change.
     /// </summary>
-    public UiStyle? Style { get; set; }
+    public UiStyle? Style
+    {
+        get => _style;
+        set
+        {
+            if (ReferenceEquals(_style, value))
+            {
+                return;
+            }
+
+            _style = value;
+
+            foreach (Element layer in _layers)
+            {
+                layer.InvalidateMeasure();
+            }
+        }
+    }
 
     public Vector2Int ViewportSize => _viewportSize;
 
@@ -91,6 +114,26 @@ public sealed class UiRoot
         return true;
     }
 
+    /// <summary>
+    /// Routes a pointer move. Returns true when the UI is taking the pointer, so the caller can
+    /// keep the event from reaching whatever is underneath.
+    /// </summary>
+    /// <remarks>
+    /// Hit testing reads the bounds the last <see cref="Update"/> produced, so a tree that has not
+    /// been laid out yet hits nothing. There is one pointer: these are not per-device, and feeding
+    /// two mice into them interleaves their gestures into one.
+    /// </remarks>
+    public bool PointerMoved(Vector2Int position) => _pointerRouter.Moved(position);
+
+    /// <inheritdoc cref="PointerMoved"/>
+    public bool PointerPressed(Vector2Int position) => _pointerRouter.Pressed(position);
+
+    /// <inheritdoc cref="PointerMoved"/>
+    public bool PointerReleased(Vector2Int position) => _pointerRouter.Released(position);
+
+    /// <summary>The pointer left the window, which cancels a press in progress.</summary>
+    public void PointerLeft() => _pointerRouter.Left();
+
     public void SetViewportSize(Vector2Int size)
     {
         if (_viewportSize == size)
@@ -112,10 +155,27 @@ public sealed class UiRoot
     /// </summary>
     public bool Update()
     {
-        if (!NeedsUpdate())
+        // Pointer callbacks run inside this method, and one of them calling back into it would
+        // refill the paint context an outer pass is still writing to, duplicating every quad.
+        if (_isUpdating || !NeedsUpdate())
         {
             return false;
         }
+
+        _isUpdating = true;
+
+        try
+        {
+            return Rebuild();
+        }
+        finally
+        {
+            _isUpdating = false;
+        }
+    }
+
+    private bool Rebuild()
+    {
 
         Rectangle viewport = new(0, 0, _viewportSize.X, _viewportSize.Y);
         Constraints constraints = Constraints.Tight(_viewportSize);
@@ -126,6 +186,15 @@ public sealed class UiRoot
         {
             layer.Measure(constraints);
             layer.Arrange(viewport, viewport);
+        }
+
+        // Bounds have just moved under a pointer that did not, so what it is over is reconciled
+        // between arrange and paint: the new bounds are needed to hit test at all, and painting
+        // afterwards is what keeps this frame from showing a hover the tree no longer has.
+        _pointerRouter.Revalidate();
+
+        foreach (Element layer in _layers)
+        {
             layer.Paint(_paintContext);
         }
 

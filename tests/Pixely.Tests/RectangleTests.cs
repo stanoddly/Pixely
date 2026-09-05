@@ -61,4 +61,49 @@ public class RectangleTests
 
         Assert.That(first.Intersect(second), Is.EqualTo(second.Intersect(first)));
     }
+
+    [Test]
+    public void Contains_TakesTheTopAndLeftEdgesButNotTheBottomAndRight()
+    {
+        Rectangle rectangle = new(10, 20, 30, 40);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rectangle.Contains(new Vector2Int(10, 20)), Is.True);
+            Assert.That(rectangle.Contains(new Vector2Int(39, 59)), Is.True);
+            Assert.That(rectangle.Contains(new Vector2Int(40, 30)), Is.False);
+            Assert.That(rectangle.Contains(new Vector2Int(20, 60)), Is.False);
+            Assert.That(rectangle.Contains(new Vector2Int(9, 30)), Is.False);
+            Assert.That(rectangle.Contains(new Vector2Int(20, 19)), Is.False);
+        });
+    }
+
+    [Test]
+    public void Contains_LeavesNoPixelToTwoAdjacentRectangles()
+    {
+        Rectangle left = new(0, 0, 20, 10);
+        Rectangle right = new(20, 0, 20, 10);
+        Vector2Int shared = new(20, 5);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(left.Contains(shared), Is.False);
+            Assert.That(right.Contains(shared), Is.True);
+            Assert.That(left.Intersects(shared) && right.Intersects(shared), Is.True, "Intersects is inclusive, which is why hit testing does not use it");
+        });
+    }
+
+    [Test]
+    public void Contains_WithAnExtentPastIntMaxValue_DoesNotWrap()
+    {
+        Rectangle rectangle = new(int.MaxValue - 10, 0, 100, 100);
+
+        Assert.That(rectangle.Contains(new Vector2Int(int.MaxValue - 5, 5)), Is.True);
+    }
+
+    [Test]
+    public void Contains_WithAnEmptyRectangle_IsAlwaysFalse()
+    {
+        Assert.That(new Rectangle(10, 10, 0, 0).Contains(new Vector2Int(10, 10)), Is.False);
+    }
 }

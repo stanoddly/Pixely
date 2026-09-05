@@ -11,6 +11,16 @@ public readonly record struct Rectangle(int X, int Y, int Width, int Height)
     public bool Intersects(Vector2Int point) => point.X >= X && point.X <= X + Width && point.Y >= Y && point.Y <= Y + Height;
 
     /// <summary>
+    /// Whether <paramref name="point"/> is inside, with the right and bottom edges treated as
+    /// outside. That makes the test half-open, unlike the inclusive <see cref="Intersects"/>, so
+    /// two adjacent rectangles never both claim the pixel they share.
+    /// </summary>
+    public bool Contains(Vector2Int point)
+    {
+        return point.X >= X && point.Y >= Y && point.X - (long)X < Width && point.Y - (long)Y < Height;
+    }
+
+    /// <summary>
     /// The overlapping area of this rectangle and <paramref name="other"/>, or an empty rectangle
     /// when they do not overlap. Long arithmetic keeps a rectangle near <see cref="int.MaxValue"/>
     /// from wrapping into a valid-looking result.

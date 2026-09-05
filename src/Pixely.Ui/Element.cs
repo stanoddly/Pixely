@@ -144,6 +144,12 @@ public class Element : ILayoutHost
         set => SetPaintProperty(ref _background, value);
     }
 
+    /// <summary>
+    /// The drawable actually painted behind this element. A control overrides it to swap its
+    /// background per interaction state without overwriting the one its consumer assigned.
+    /// </summary>
+    protected virtual Drawable? EffectiveBackground => _background;
+
     /// <summary>Local enabled state. Use <see cref="IsEffectivelyEnabled"/> for the value that accounts for ancestors.</summary>
     public bool IsEnabled
     {
@@ -244,9 +250,15 @@ public class Element : ILayoutHost
             return;
         }
 
-        if (_background != null)
+        // Cleared here as well as in Arrange, because a paint invalidation raised between the two —
+        // a hover reconciled against the new bounds — is satisfied by this pass and would otherwise
+        // ask for a rebuild that produces the same instructions.
+        _paintDirty = false;
+
+        Drawable? background = EffectiveBackground;
+
+        if (background != null)
         {
-            Drawable background = _background;
             context.PaintIsolated(() => background.Paint(context, Bounds));
         }
 

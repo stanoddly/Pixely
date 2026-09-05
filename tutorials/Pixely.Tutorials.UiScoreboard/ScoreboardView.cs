@@ -26,6 +26,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
     private readonly Label _elapsed;
     private readonly Element _healthFill;
     private readonly Label _gameOver;
+    private readonly Button _score10;
 
     // Creating elements is assignment only, so the ones Sync writes to are made here and are
     // readonly. Composing them into a tree is what waits for Build, because that runs on attach.
@@ -49,6 +50,11 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Color = Accent,
             IsVisible = false
         };
+
+        // A button reports a click; what that click means stays in the view model, which is why the
+        // view can subscribe here and never think about the pointer again.
+        _score10 = new Button("Score +10");
+        _score10.Clicked += () => ViewModel.Score += 10;
     }
 
     protected override Element Build()
@@ -94,6 +100,16 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
                     }
                 },
 
+                new Row(gap: 10)
+                {
+                    Children =
+                    {
+                        _score10,
+                        Action("Damage 5", () => ViewModel.Damage(5)),
+                        Action("Reset", ViewModel.Reset)
+                    }
+                },
+
                 _gameOver
             }
         };
@@ -109,6 +125,16 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 
         _healthFill.Width = Sizing.Fixed((int)(BarWidth * ViewModel.HealthFraction));
         _gameOver.IsVisible = ViewModel.IsGameOver;
+
+        // A disabled button paints its disabled background and stops taking the pointer entirely.
+        _score10.IsEnabled = !ViewModel.IsGameOver;
+    }
+
+    private static Button Action(string text, Action onClick)
+    {
+        Button button = new(text);
+        button.Clicked += onClick;
+        return button;
     }
 
     private static Element StatRow(string caption, Label value)
