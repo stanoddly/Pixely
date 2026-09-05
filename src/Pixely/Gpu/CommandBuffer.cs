@@ -83,13 +83,13 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IRenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    public IRenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
-        
-        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Count];
-            
-        for (int i = 0; i < colorTargets.Count; i++)
+
+        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
+
+        for (int i = 0; i < colorTargets.Length; i++)
         {
             Texture colorTarget = colorTargets[i];
             ColorTargetSettings colorTargetSetting = colorTargetSettings[i];

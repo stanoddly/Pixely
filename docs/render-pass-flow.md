@@ -108,7 +108,30 @@ new RenderPassBuilder(commandBuffer)
 - `Load` - Keep existing contents
 - Others may exist for different load/store operations
 
-Add multiple color targets for deferred rendering (G-buffer).
+Add multiple color targets for deferred rendering (G-buffer), up to `RenderPassBuilder.MaxColorTargets` (4, the SDL_GPU limit).
+
+`RenderPassBuilder` is a value type with inline storage, so describing a pass every frame allocates nothing.
+Each fluent call returns a new value rather than mutating the receiver, so a partly configured builder
+can serve as the starting point for several passes. It holds the `CommandBuffer` it was created with,
+so a builder value is good for one frame:
+
+```csharp
+// Shared configuration, no state shared between the passes built from it
+RenderPassBuilder cleared = new RenderPassBuilder(commandBuffer)
+    .SetSharedColorTargetSettings(ColorTargetSettings.Clear);
+
+using (IRenderPass albedoPass = cleared.AddColorTarget(_albedo).Build())
+{
+    // ...
+}
+
+using (IRenderPass normalPass = cleared.AddColorTarget(_normals).Build())
+{
+    // ...
+}
+```
+
+Either give every color target its own settings, or set shared settings for all of them - mixing the two throws.
 
 ## Common Patterns
 
