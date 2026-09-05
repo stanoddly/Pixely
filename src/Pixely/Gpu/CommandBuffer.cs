@@ -118,14 +118,38 @@ public class CommandBuffer: IDisposable
             colorTargetInfos,
             depthBufferPointer,
             depthBufferSettings,
-            depthBufferFormat);
+            depthBufferFormat,
+            CalculateTargetSize(colorTargets, depthBuffer));
+    }
+
+    // A pass can only safely address the area every attachment shares, so the scissor bounds
+    // are the smallest attachment, depth included.
+    private static ShortSize CalculateTargetSize(List<Texture> colorTargets, Texture? depthBuffer)
+    {
+        ushort width = ushort.MaxValue;
+        ushort height = ushort.MaxValue;
+
+        foreach (Texture colorTarget in colorTargets)
+        {
+            width = Math.Min(width, colorTarget.Size.Width);
+            height = Math.Min(height, colorTarget.Size.Height);
+        }
+
+        if (depthBuffer != null)
+        {
+            width = Math.Min(width, depthBuffer.Size.Width);
+            height = Math.Min(height, depthBuffer.Size.Height);
+        }
+
+        return new ShortSize(width, height);
     }
 
     private IRenderPass CreateMultipleRenderTargetsPassInternal(
         ReadOnlySpan<SDL_GPUColorTargetInfo> colorTargetInfos,
         Pointer<SDL_GPUTexture> depthBufferPointer,
         DepthBufferSettings depthBufferSettings,
-        DepthBufferFormat depthBufferFormat)
+        DepthBufferFormat depthBufferFormat,
+        ShortSize targetSize)
     {
         ThrowIfDisposed();
         
@@ -163,7 +187,7 @@ public class CommandBuffer: IDisposable
                 }
             }
             
-            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat);
+            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, targetSize);
 
             return renderPass;
         }

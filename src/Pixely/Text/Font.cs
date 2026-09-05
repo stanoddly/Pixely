@@ -34,6 +34,12 @@ public class Font : IDisposable
     public FontRasterizationMode RasterizationMode { get; }
     public FontHintingMode HintingMode { get; }
 
+    /// <summary>
+    /// Rasterises <paramref name="text"/> with this font. Results are cached by the font system,
+    /// so repeating the same text is cheap.
+    /// </summary>
+    public TextSpriteAsset CreateTextSprite(string text) => _fontSystem.CreateTextSprite(text, this);
+
     internal unsafe void FreeFontData()
     {
         if (_fontData != null)
