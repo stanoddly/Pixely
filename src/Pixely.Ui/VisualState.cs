@@ -9,16 +9,18 @@ public enum VisualState
     Normal,
     Hovered,
     Pressed,
+    Disabled,
 
-    /// <summary>Holding the keyboard. Only meaningful for something that takes typing.</summary>
-    Focused,
-
-    Disabled
+    /// <summary>
+    /// Holding the keyboard. Only meaningful for something that takes typing, and last rather than
+    /// beside the other interaction states so the values already in use keep the numbers they had.
+    /// </summary>
+    Focused
 }
 
 /// <summary>
 /// One <see cref="Drawable"/> per <see cref="VisualState"/>. Unset states fall back to
-/// <see cref="Normal"/>, so a flat look costs one drawable and a fully dressed one costs four.
+/// <see cref="Normal"/>, so a flat look costs one drawable and a fully dressed one costs five.
 /// Drawables rather than colours, because a hovered button is as likely to want a different
 /// nine-patch as a different tint.
 /// </summary>

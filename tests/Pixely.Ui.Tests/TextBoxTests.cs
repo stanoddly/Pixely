@@ -1,3 +1,4 @@
+using Pixely.Gpu;
 using System.Globalization;
 using Pixely.Input;
 
@@ -409,18 +410,73 @@ public class TextBoxTests
     }
 
     [Test]
-    public void ADisabledField_ReadsAsDisabledWhateverElseIsTrue()
+    public void AFieldDisabledWhileBeingTypedInto_ReadsAsDisabledRatherThanFocused()
+    {
+        TextBox field = new();
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        // Disabled while the edit is still open, so both states are true at once and only the order
+        // they are checked in decides the answer.
+        field.IsEnabled = false;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.IsEditing, Is.True);
+            Assert.That(field.VisualState, Is.EqualTo(VisualState.Disabled));
+        });
+    }
+
+    [Test]
+    public void ADisabledField_CannotBeTypedIntoAtAll()
     {
         TextBox field = new() { IsEnabled = false };
         UiRoot root = Rooted(field);
 
         root.Focus(field);
 
+        Assert.That(root.FocusedElement, Is.Null);
+    }
+
+    [Test]
+    public void BackgroundsAssignedToTheField_BeatTheStyleAndFallBackWithin()
+    {
+        StateDrawables backgrounds = new(new SolidDrawable(Colors.Red)) { Focused = new SolidDrawable(Colors.Green) };
+        ExposedTextBox focused = new() { Backgrounds = backgrounds };
+        ExposedTextBox plain = new() { Backgrounds = new StateDrawables(backgrounds.Normal) };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { focused, plain } });
+        root.Focus(focused);
+
         Assert.Multiple(() =>
         {
-            Assert.That(field.VisualState, Is.EqualTo(VisualState.Disabled));
-            Assert.That(root.FocusedElement, Is.Null, "and cannot be typed into at all");
+            Assert.That(focused.Background(), Is.SameAs(backgrounds.Focused));
+            Assert.That(plain.Background(), Is.SameAs(backgrounds.Normal), "an unfocused field takes the ordinary one");
         });
+    }
+
+    [Test]
+    public void WithNoBackgroundsOfItsOwn_AFieldTakesTheStylesAndThenTheDefault()
+    {
+        StateDrawables styled = new(new SolidDrawable(Colors.Blue));
+        ExposedTextBox fromStyle = new();
+        ExposedTextBox fromDefault = new();
+        UiRoot styledRoot = new() { Style = new UiStyle { FieldBackground = styled } };
+        styledRoot.AddLayer(new Column { Children = { fromStyle } });
+        UiRoot plainRoot = new();
+        plainRoot.AddLayer(new Column { Children = { fromDefault } });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fromStyle.Background(), Is.SameAs(styled.Normal));
+            Assert.That(fromDefault.Background(), Is.SameAs(TextBox.DefaultBackground.Normal));
+        });
+    }
+
+    /// <summary>Opens the resolved background up, which is protected because only painting reads it.</summary>
+    private sealed class ExposedTextBox : TextBox
+    {
+        public Drawable? Background() => EffectiveBackground;
     }
 
     /// <summary>
