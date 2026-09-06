@@ -267,6 +267,40 @@ public class RootNotificationTests
         Assert.That(late, Is.EqualTo(new[] { new Vector2Int(2, 2) }));
     }
 
+    [Test]
+    public void AListenerThatUnsubscribesEveryoneAndRoutesAgain_StillStopsTheDelivery()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> second = new();
+        Action<Vector2Int> secondHandler = second.Add;
+        Action<Vector2Int>? firstHandler = null;
+        bool routed = false;
+
+        firstHandler = _ =>
+        {
+            if (routed)
+            {
+                return;
+            }
+
+            routed = true;
+
+            // Nothing is left to tell, so the nested report has no subscribers at all. It is still a
+            // newer report, and the delivery it interrupted must not carry on as though it never
+            // happened.
+            root.PointerPositionChanged -= firstHandler;
+            root.PointerPositionChanged -= secondHandler;
+            root.PointerMoved(new Vector2Int(99, 99));
+        };
+
+        root.PointerPositionChanged += firstHandler;
+        root.PointerPositionChanged += secondHandler;
+
+        root.PointerMoved(new Vector2Int(12, 34));
+
+        Assert.That(second, Is.Empty);
+    }
+
     private static UiRoot Empty()
     {
         UiRoot root = new();

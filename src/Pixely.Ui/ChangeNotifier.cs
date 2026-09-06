@@ -28,13 +28,13 @@ internal sealed class ChangeNotifier<T>
 
     private int _generation;
 
-    internal void Add(Action<T> handler)
+    internal void Add(Action<T>? handler)
     {
         _handlers += handler;
         _subscribers = null;
     }
 
-    internal void Remove(Action<T> handler)
+    internal void Remove(Action<T>? handler)
     {
         _handlers -= handler;
         _subscribers = null;
@@ -42,6 +42,11 @@ internal sealed class ChangeNotifier<T>
 
     internal void Notify(T value)
     {
+        // Advanced before the early return, not after it. A delivery with nobody left to tell is
+        // still a newer delivery, and an outer one that carried on because this looked like it never
+        // happened would go on to hand its own stale value to the rest of its list.
+        int generation = ++_generation;
+
         if (_handlers == null)
         {
             return;
@@ -53,7 +58,6 @@ internal sealed class ChangeNotifier<T>
         // cache rather than edit it, so a callback that subscribes is heard from the next delivery
         // on, which is what a multicast delegate does too.
         Action<T>[] subscribers = _subscribers;
-        int generation = ++_generation;
 
         foreach (Action<T> subscriber in subscribers)
         {
