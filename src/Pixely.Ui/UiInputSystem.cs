@@ -47,21 +47,26 @@ internal sealed class UiInputSystem
     /// the mouse reports window coordinates. Without this the two disagree by the display scale and
     /// every hit test lands somewhere else.
     /// </summary>
-    private Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition)
-    {
-        Size<uint> windowSize = _window.Size;
-        Vector2Int viewport = _root.ViewportSize;
+    private Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition) =>
+        ToUiPosition(windowPosition, _window.Size, _root.ViewportSize);
 
-        // Before the first build there is no viewport to scale into, and a window can report zero
-        // while minimised. Either way the raw position is the best answer available and is what the
-        // unscaled case would have used anyway.
-        if (windowSize.Width == 0 || windowSize.Height == 0 || viewport.X == 0 || viewport.Y == 0)
-        {
-            return (Vector2Int)windowPosition;
-        }
+    /// <inheritdoc cref="ToUiPosition(System.Numerics.Vector2)"/>
+    internal static Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition, Size<uint> windowSize, Vector2Int viewport) =>
+        new(Scale(windowPosition.X, viewport.X, windowSize.Width), Scale(windowPosition.Y, viewport.Y, windowSize.Height));
 
-        return new Vector2Int(
-            (int)(windowPosition.X * viewport.X / windowSize.Width),
-            (int)(windowPosition.Y * viewport.Y / windowSize.Height));
-    }
+    /// <summary>
+    /// Scales one axis, flooring rather than truncating. A pixel covers the half-open span from its
+    /// own coordinate to the next, so the position left of the origin belongs to pixel -1; truncation
+    /// rounds it towards zero into pixel 0 instead, which turns a release just outside an element's
+    /// left edge into a click on it.
+    /// </summary>
+    /// <remarks>
+    /// Each axis falls back on its own. Before the first build there is no viewport to scale into,
+    /// and a window can report zero while minimised; scaling the other axis is still right, and
+    /// abandoning both because one is unusable would put the pointer somewhere it never was.
+    /// </remarks>
+    private static int Scale(float windowPosition, int viewportExtent, uint windowExtent) =>
+        viewportExtent == 0 || windowExtent == 0
+            ? (int)MathF.Floor(windowPosition)
+            : (int)MathF.Floor(windowPosition * viewportExtent / windowExtent);
 }
