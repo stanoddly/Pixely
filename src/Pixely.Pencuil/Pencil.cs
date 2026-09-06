@@ -425,205 +425,22 @@ public class Pencil
             return false;
         }
 
-        switch (scancode)
+        TextEditingOutcome outcome = TextEditingCommands.HandleKey(EditingState.Editor, scancode, shift, ctrl, _clipboardService);
+
+        switch (outcome)
         {
-            case Scancode.Backspace:
-                if (EditingState.HasSelection)
-                {
-                    EditingState.TryDeleteSelection();
-                }
-                else if (ctrl)
-                {
-                    int target = FindWordBoundaryLeft(EditingState.Buffer, EditingState.CursorPosition);
-                    EditingState.TryRemove(target, EditingState.CursorPosition - target);
-                }
-                else if (EditingState.CursorPosition > 0)
-                {
-                    EditingState.TryRemove(EditingState.CursorPosition - 1, 1);
-                }
-                break;
-            case Scancode.Delete:
-                if (EditingState.HasSelection)
-                {
-                    EditingState.TryDeleteSelection();
-                }
-                else if (ctrl)
-                {
-                    int target = FindWordBoundaryRight(EditingState.Buffer, EditingState.CursorPosition);
-                    EditingState.TryRemove(EditingState.CursorPosition, target - EditingState.CursorPosition);
-                }
-                else if (EditingState.CursorPosition < EditingState.Buffer.Length)
-                {
-                    EditingState.TryRemove(EditingState.CursorPosition, 1);
-                }
-                break;
-            case Scancode.Left:
-                if (shift)
-                {
-                    EditingState.SelectionAnchor ??= EditingState.CursorPosition;
-                    EditingState.CursorPosition = ctrl
-                        ? FindWordBoundaryLeft(EditingState.Buffer, EditingState.CursorPosition)
-                        : Math.Max(0, EditingState.CursorPosition - 1);
-                }
-                else if (EditingState.HasSelection && !ctrl)
-                {
-                    (int start, _) = EditingState.GetSelectionRange();
-                    EditingState.CursorPosition = start;
-                    EditingState.SelectionAnchor = null;
-                }
-                else
-                {
-                    EditingState.SelectionAnchor = null;
-                    EditingState.CursorPosition = ctrl
-                        ? FindWordBoundaryLeft(EditingState.Buffer, EditingState.CursorPosition)
-                        : Math.Max(0, EditingState.CursorPosition - 1);
-                }
-                break;
-            case Scancode.Right:
-                if (shift)
-                {
-                    EditingState.SelectionAnchor ??= EditingState.CursorPosition;
-                    EditingState.CursorPosition = ctrl
-                        ? FindWordBoundaryRight(EditingState.Buffer, EditingState.CursorPosition)
-                        : Math.Min(EditingState.Buffer.Length, EditingState.CursorPosition + 1);
-                }
-                else if (EditingState.HasSelection && !ctrl)
-                {
-                    (int start, int length) = EditingState.GetSelectionRange();
-                    EditingState.CursorPosition = start + length;
-                    EditingState.SelectionAnchor = null;
-                }
-                else
-                {
-                    EditingState.SelectionAnchor = null;
-                    EditingState.CursorPosition = ctrl
-                        ? FindWordBoundaryRight(EditingState.Buffer, EditingState.CursorPosition)
-                        : Math.Min(EditingState.Buffer.Length, EditingState.CursorPosition + 1);
-                }
-                break;
-            case Scancode.Home:
-                if (shift)
-                {
-                    EditingState.SelectionAnchor ??= EditingState.CursorPosition;
-                }
-                else
-                {
-                    EditingState.SelectionAnchor = null;
-                }
-                EditingState.CursorPosition = 0;
-                break;
-            case Scancode.End:
-                if (shift)
-                {
-                    EditingState.SelectionAnchor ??= EditingState.CursorPosition;
-                }
-                else
-                {
-                    EditingState.SelectionAnchor = null;
-                }
-                EditingState.CursorPosition = EditingState.Buffer.Length;
-                break;
-            case Scancode.A:
-                if (ctrl)
-                {
-                    EditingState.SelectionAnchor = 0;
-                    EditingState.CursorPosition = EditingState.Buffer.Length;
-                }
-                else
-                {
-                    return false;
-                }
-                break;
-            case Scancode.C:
-                if (ctrl && EditingState.HasSelection)
-                {
-                    _clipboardService.SetText(EditingState.GetSelectedText());
-                }
-                else if (!ctrl)
-                {
-                    return false;
-                }
-                break;
-            case Scancode.X:
-                if (ctrl && EditingState.HasSelection)
-                {
-                    string selectedText = EditingState.GetSelectedText();
-                    if (EditingState.TryDeleteSelection())
-                    {
-                        _clipboardService.SetText(selectedText);
-                    }
-                }
-                else if (!ctrl)
-                {
-                    return false;
-                }
-                break;
-            case Scancode.V:
-                if (ctrl)
-                {
-                    string? clipboardText = _clipboardService.GetText();
-                    if (clipboardText != null)
-                    {
-                        EditingState.TryInsertText(clipboardText);
-                    }
-                }
-                else
-                {
-                    return false;
-                }
-                break;
-            case Scancode.Return:
-            case Scancode.Return2:
-            case Scancode.KeypadEnter:
+            case TextEditingOutcome.Ignored:
+                return false;
+            case TextEditingOutcome.Commit:
                 EditingState.Committed = true;
                 break;
-            case Scancode.Escape:
+            case TextEditingOutcome.Cancel:
                 EditingState.Canceled = true;
                 break;
-            default:
-                return false;
         }
 
         Invalidate();
         return true;
-    }
-
-    private static int FindWordBoundaryLeft(string text, int position)
-    {
-        if (position <= 0)
-        {
-            return 0;
-        }
-
-        int i = position - 1;
-        while (i > 0 && char.IsWhiteSpace(text[i]))
-        {
-            i--;
-        }
-        while (i > 0 && !char.IsWhiteSpace(text[i - 1]))
-        {
-            i--;
-        }
-        return i;
-    }
-
-    private static int FindWordBoundaryRight(string text, int position)
-    {
-        if (position >= text.Length)
-        {
-            return text.Length;
-        }
-
-        int i = position;
-        while (i < text.Length && !char.IsWhiteSpace(text[i]))
-        {
-            i++;
-        }
-        while (i < text.Length && char.IsWhiteSpace(text[i]))
-        {
-            i++;
-        }
-        return i;
     }
 
     internal bool HaveInstructionsChanged()
@@ -1045,15 +862,15 @@ public static class PencilExtensions
 
 internal delegate bool TextFieldValidator(string text, IFormatProvider? formatProvider);
 
+/// <summary>
+/// A field's edit in progress: the shared buffer plus the part Pencuil owns, which is when the edit
+/// is finished and whether the value is one this field will take.
+/// </summary>
 internal class TextFieldEditingState
 {
     private readonly IFormatProvider? _formatProvider;
-    private readonly TextFieldValidator? _acceptsEdit;
     private readonly TextFieldValidator? _canCommit;
 
-    public string Buffer;
-    public int CursorPosition;
-    public int? SelectionAnchor;
     public bool Committed;
     public bool Canceled;
 
@@ -1064,75 +881,40 @@ internal class TextFieldEditingState
         TextFieldValidator? canCommit = null)
     {
         _formatProvider = formatProvider;
-        _acceptsEdit = acceptsEdit;
         _canCommit = canCommit;
-        Buffer = initialValue;
-        CursorPosition = initialValue.Length;
+        Editor = new TextEditingBuffer(
+            initialValue,
+            acceptsEdit == null ? null : candidate => acceptsEdit(candidate, formatProvider));
     }
 
-    public bool HasSelection => SelectionAnchor != null && SelectionAnchor.Value != CursorPosition;
+    public TextEditingBuffer Editor { get; }
 
-    public (int Start, int Length) GetSelectionRange()
+    public string Buffer => Editor.Text;
+
+    public int CursorPosition
     {
-        if (SelectionAnchor == null)
-        {
-            return (CursorPosition, 0);
-        }
-
-        int start = Math.Min(SelectionAnchor.Value, CursorPosition);
-        int end = Math.Max(SelectionAnchor.Value, CursorPosition);
-        return (start, end - start);
+        get => Editor.CursorPosition;
+        set => Editor.CursorPosition = value;
     }
 
-    public string GetSelectedText()
+    public int? SelectionAnchor
     {
-        (int start, int length) = GetSelectionRange();
-        if (length == 0)
-        {
-            return string.Empty;
-        }
-
-        return Buffer.Substring(start, length);
+        get => Editor.SelectionAnchor;
+        set => Editor.SelectionAnchor = value;
     }
 
-    public bool TryInsertText(string text)
-    {
-        (int start, int length) = GetSelectionRange();
-        return TryReplace(start, length, text);
-    }
+    public bool HasSelection => Editor.HasSelection;
 
-    public bool TryDeleteSelection()
-    {
-        (int start, int length) = GetSelectionRange();
-        if (length == 0)
-        {
-            return false;
-        }
+    public (int Start, int Length) GetSelectionRange() => Editor.GetSelectionRange();
 
-        return TryReplace(start, length, string.Empty);
-    }
+    public string GetSelectedText() => Editor.GetSelectedText();
 
-    public bool TryRemove(int start, int length)
-    {
-        return TryReplace(start, length, string.Empty);
-    }
+    public bool TryInsertText(string text) => Editor.TryInsertText(text);
 
-    public bool CanCommit()
-    {
-        return _canCommit == null || _canCommit(Buffer, _formatProvider);
-    }
+    public bool TryDeleteSelection() => Editor.TryDeleteSelection();
 
-    private bool TryReplace(int start, int length, string replacement)
-    {
-        string candidate = Buffer.Remove(start, length).Insert(start, replacement);
-        if (_acceptsEdit != null && !_acceptsEdit(candidate, _formatProvider))
-        {
-            return false;
-        }
+    public bool TryRemove(int start, int length) => Editor.TryRemove(start, length);
 
-        Buffer = candidate;
-        CursorPosition = start + replacement.Length;
-        SelectionAnchor = null;
-        return true;
-    }
+    public bool CanCommit() => _canCommit == null || _canCommit(Buffer, _formatProvider);
 }
+
