@@ -477,6 +477,49 @@ public class PointerButtonTests
         Assert.That(second.Calls, Is.EqualTo(new[] { "enter 50,10", "leave" }));
     }
 
+    [Test]
+    public void ALeaveCallbackThatKeepsMakingItselfUnreachable_IsGivenUpOn()
+    {
+        RecordingPointerTarget target = Sized();
+        UiRoot root = Rooted(target);
+        root.PointerMoved(new Vector2Int(300, 200));
+
+        target.WhenEntered = () => target.IsVisible = false;
+
+        // Shows itself, routes back onto itself and hides again, every single time. Nothing about
+        // this sequence converges, so the router has to stop rather than follow it.
+        int cycles = 0;
+        target.WhenLeft = () =>
+        {
+            if (cycles++ >= 20)
+            {
+                return;
+            }
+
+            // Bringing it back is enough to be routed onto again, and the enter above hides it once
+            // more, so hover is unreachable again by the time this returns.
+            target.IsVisible = true;
+            root.Update();
+        };
+
+        root.PointerMoved(new Vector2Int(10, 10));
+        int leaves = target.Calls.Count(call => call == "leave");
+
+        // Giving up clears hover rather than leaving it on the hidden element, so bringing that
+        // element back is enough for the pointer to find it again.
+        target.WhenEntered = null;
+        target.WhenLeft = null;
+        target.Calls.Clear();
+        target.IsVisible = true;
+        root.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(leaves, Is.EqualTo(8), "settling gives up at its bound");
+            Assert.That(target.Calls, Is.EqualTo(new[] { "enter 10,10" }), "and leaves nothing unreachable behind");
+        });
+    }
+
     /// <summary>
     /// Side by side, with the first inside a fixed-size holder so hiding it does not slide the
     /// second one out from under the coordinates a test is pressing at.

@@ -25,6 +25,13 @@ internal sealed class PointerRouter
     // between the two.
     private const int CaptureSlotCount = 6;
 
+    /// <summary>
+    /// How many times settling hover will send a leave before giving up. Each leave is a callback
+    /// that can put hover back onto something unreachable, and onto the same element as last time,
+    /// so nothing about the sequence says it converges.
+    /// </summary>
+    private const int MaxHoverSettlingRounds = 8;
+
     private readonly UiRoot _root;
 
     // Hit testing only ever returns elements that are pointer targets, which is what lets these be
@@ -46,6 +53,9 @@ internal sealed class PointerRouter
 
     private Vector2Int _position;
     private bool _isInWindow;
+
+    // Whether a route further out is already settling hover. See UpdateHover.
+    private bool _isSettlingHover;
 
     // Bumped by every entry point, so a callback that routes the pointer again can be told apart
     // from one that did not. Without it the call it interrupted would finish and overwrite it.
@@ -321,14 +331,41 @@ internal sealed class PointerRouter
         // reach. Checked against the tree rather than against the route version, because a nested
         // route proves only that something happened, not that what it settled on survived.
         //
-        // A loop rather than a check, because the leave below is another callback and may leave
-        // hover somewhere just as unreachable. It ends when hover names something that can be hit or
-        // names nothing, and each turn requires a callback to have moved hover somewhere new.
-        while (_hovered != null && !CanBeHit(_hovered))
+        // Only the outermost route settles. The leave sent below routes the pointer in the very case
+        // this exists for, and letting each of those nested routes settle too would spend the bound
+        // one level deep at a time instead of on the cycle it is counting.
+        if (_isSettlingHover)
         {
-            Element stale = _hovered;
-            _hovered = null;
-            ((IPointerTarget)stale).OnPointerLeave();
+            return;
+        }
+
+        _isSettlingHover = true;
+
+        try
+        {
+            // A loop rather than a check, because that leave is another callback and may put hover
+            // somewhere just as unreachable. Bounded rather than run to a fixed point, because a
+            // callback that shows its element, routes onto it and hides it again would cycle for
+            // good: giving up clears hover outright, which is a state the next event can build on,
+            // where a stalled input thread is not. Reaching the bound means the application's
+            // callbacks are fighting the router, and the pairing lost there is worth less than
+            // staying responsive.
+            for (int round = 0; _hovered != null && !CanBeHit(_hovered); round++)
+            {
+                if (round == MaxHoverSettlingRounds)
+                {
+                    _hovered = null;
+                    break;
+                }
+
+                Element stale = _hovered;
+                _hovered = null;
+                ((IPointerTarget)stale).OnPointerLeave();
+            }
+        }
+        finally
+        {
+            _isSettlingHover = false;
         }
     }
 
