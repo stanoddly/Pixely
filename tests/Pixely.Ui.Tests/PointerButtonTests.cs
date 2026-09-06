@@ -387,6 +387,72 @@ public class PointerButtonTests
         });
     }
 
+    [Test]
+    public void LeavingTheWindow_KeepsAGestureThatRecapturedTheSameElement()
+    {
+        RecordingPointerTarget held = Sized();
+        held.Accepts.Add(MouseButton.Right);
+        RecordingPointerTarget other = Sized();
+        other.Accepts.Add(MouseButton.Right);
+        UiRoot root = InRow(held, other);
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        root.PointerPressed(new Vector2Int(50, 10), MouseButton.Right);
+        other.Calls.Clear();
+
+        // The replacement is the same element on the same button, so the sweep cannot tell it from
+        // the gesture it was told to cancel by looking at the element alone.
+        bool pressedAgain = false;
+        held.WhenCancelled = () =>
+        {
+            if (pressedAgain)
+            {
+                return;
+            }
+
+            pressedAgain = true;
+            root.PointerPressed(new Vector2Int(50, 10), MouseButton.Right);
+        };
+
+        root.PointerLeft();
+
+        // The nested press puts the pointer back in the window, which is why the enter is here.
+        Assert.That(other.Calls, Is.EqualTo(new[] { "cancel Right", "enter 50,10", "press 50,10 Right" }),
+            "the old gesture ends and the one that replaced it is left alone");
+    }
+
+    [Test]
+    public void ACancelCallbackThatOnlyMovesThePointer_StillAbandonsTheOuterPress()
+    {
+        RecordingPointerTarget held = Sized();
+        RecordingPointerTarget other = Sized();
+        UiRoot root = InRow(held, other);
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+
+        // No nested press, so nothing occupies the button's slot. Only the route version records
+        // that the tree was walked away from underneath this press.
+        bool moved = false;
+        held.WhenCancelled = () =>
+        {
+            if (moved)
+            {
+                return;
+            }
+
+            moved = true;
+            root.PointerMoved(new Vector2Int(50, 10));
+        };
+
+        bool consumed = root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.False, "the press was made somewhere the pointer no longer is");
+            Assert.That(held.Calls.Count(call => call == "press 10,10 Left"), Is.EqualTo(1), "and never reached a second press");
+        });
+    }
+
     /// <summary>
     /// Side by side, with the first inside a fixed-size holder so hiding it does not slide the
     /// second one out from under the coordinates a test is pressing at.

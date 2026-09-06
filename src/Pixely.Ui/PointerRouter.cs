@@ -33,13 +33,16 @@ internal sealed class PointerRouter
 
     private readonly Element?[] _captured = new Element?[CaptureSlotCount];
 
-    // Which capture came first, so hover has an owner when the left button is not one of them.
+    // Rising with every capture installed. It orders them, which is how hover picks an owner when the
+    // left button is not one of them, and it identifies them, which is how a sweep tells the capture
+    // it decided to cancel from a later one on the same button.
     private readonly int[] _captureTokens = new int[CaptureSlotCount];
     private int _lastCaptureToken;
 
     // Reused by CancelAll, which cannot stackalloc a span of elements and should not allocate on a
     // path the pointer reaches every time it leaves the window.
     private readonly Element?[] _cancelScratch = new Element?[CaptureSlotCount];
+    private readonly int[] _cancelTokenScratch = new int[CaptureSlotCount];
 
     private Vector2Int _position;
     private bool _isInWindow;
@@ -261,6 +264,7 @@ internal sealed class PointerRouter
     private void CancelAll()
     {
         Array.Copy(_captured, _cancelScratch, CaptureSlotCount);
+        Array.Copy(_captureTokens, _cancelTokenScratch, CaptureSlotCount);
 
         // In button order, so a target holding two of them hears about them predictably.
         for (int slot = 0; slot < CaptureSlotCount; slot++)
@@ -272,31 +276,34 @@ internal sealed class PointerRouter
 
             if (held != null)
             {
-                Cancel((MouseButton)slot, held);
+                Cancel((MouseButton)slot, held, _cancelTokenScratch[slot]);
             }
         }
     }
 
     private void Cancel(MouseButton button)
     {
-        Element? captured = _captured[(int)button];
+        int slot = (int)button;
+        Element? captured = _captured[slot];
 
         if (captured != null)
         {
-            Cancel(button, captured);
+            Cancel(button, captured, _captureTokens[slot]);
         }
     }
 
-    /// <param name="expected">
-    /// The capture this cancel was decided on. A callback earlier in the same sweep can have ended
-    /// this button's gesture and started another, and cancelling that one would end a gesture that
-    /// has only just begun.
+    /// <param name="expected">The capture this cancel was decided on.</param>
+    /// <param name="token">
+    /// Which capture that was. A callback earlier in the same sweep can have ended this button's
+    /// gesture and started another, and cancelling that one would end a gesture that has only just
+    /// begun. The element alone does not say: the replacement is often the same element pressed
+    /// again, and only the token tells the two apart.
     /// </param>
-    private void Cancel(MouseButton button, Element expected)
+    private void Cancel(MouseButton button, Element expected, int token)
     {
         int slot = (int)button;
 
-        if (!ReferenceEquals(_captured[slot], expected))
+        if (!ReferenceEquals(_captured[slot], expected) || _captureTokens[slot] != token)
         {
             return;
         }
@@ -306,6 +313,22 @@ internal sealed class PointerRouter
     }
 
     private void UpdateHover(Element? target)
+    {
+        Route(target);
+
+        // Whatever the callbacks above did — routed the pointer again, detached the element they
+        // were sent to, or both — hover must not be left naming something hit testing can no longer
+        // reach. Checked against the tree rather than against the route version, because a nested
+        // route proves only that something happened, not that what it settled on survived.
+        if (_hovered != null && !CanBeHit(_hovered))
+        {
+            Element stale = _hovered;
+            _hovered = null;
+            ((IPointerTarget)stale).OnPointerLeave();
+        }
+    }
+
+    private void Route(Element? target)
     {
         if (ReferenceEquals(_hovered, target))
         {
@@ -333,16 +356,7 @@ internal sealed class PointerRouter
         }
 
         _hovered = target;
-        version = _routeVersion;
         ((IPointerTarget)target).OnPointerEnter(_position);
-
-        // The enter callback may have removed the element it was just sent to. A later route would
-        // eventually notice, but only by sending a leave to something no longer in the tree.
-        if (_routeVersion == version && !CanBeHit(target))
-        {
-            _hovered = null;
-            ((IPointerTarget)target).OnPointerLeave();
-        }
     }
 
     /// <summary>
