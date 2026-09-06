@@ -46,6 +46,12 @@ static class Program
 
             keyboardService.KeyDown += eventArgs =>
             {
+                // Every action here is a discrete press; holding a key must not retrigger it.
+                if (eventArgs.Repeat)
+                {
+                    return;
+                }
+
                 if (eventArgs.Key == VirtualKey.Space)
                 {
                     AudioSource source = sources[sourceIndex];

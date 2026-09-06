@@ -19,6 +19,7 @@
     <Project Path="src/Pixely.DependencyInjection/Pixely.DependencyInjection.csproj" />
     <Project Path="src/Pixely.DependencyInjection.Generator/Pixely.DependencyInjection.Generator.csproj" />
     <Project Path="src/Pixely.Pencuil/Pixely.Pencuil.csproj" />
+    <Project Path="src/Pixely.Ui/Pixely.Ui.csproj" />
     <Project Path="src/Pixely.Utils/Pixely.Utils.csproj" />
     <Project Path="src/Pixely/Pixely.csproj" />
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
@@ -33,6 +34,7 @@
     <Project Path="tests/Pixely.DependencyInjection.Generator.Tests/Pixely.DependencyInjection.Generator.Tests.csproj" />
     <Project Path="tests/Pixely.DependencyInjection.Tests/Pixely.DependencyInjection.Tests.csproj" />
     <Project Path="tests/Pixely.Architecture.Tests/Pixely.Architecture.Tests.csproj" />
+    <Project Path="tests/Pixely.Ui.Tests/Pixely.Ui.Tests.csproj" />
     <Project Path="tests/Pixely.Architecture.Testing.Tests/Pixely.Architecture.Testing.Tests.csproj" />
     <Project Path="tests/Pixely.Events.Tests/Pixely.Events.Tests.csproj" />
     <Project Path="tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj" />
@@ -52,6 +54,8 @@
     <Project Path="tutorials/Pixely.Tutorials.StencilBuffer/Pixely.Tutorials.StencilBuffer.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Gamepad/Pixely.Tutorials.Gamepad.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Hotbar/Pixely.Tutorials.Hotbar.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.UiBoxes/Pixely.Tutorials.UiBoxes.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.UiScoreboard/Pixely.Tutorials.UiScoreboard.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Instancing/Pixely.Tutorials.Instancing.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.IndexBuffer/Pixely.Tutorials.IndexBuffer.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.IndexedRenderPass/Pixely.Tutorials.IndexedRenderPass.csproj" />

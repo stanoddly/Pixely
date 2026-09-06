@@ -35,7 +35,8 @@ static class Program
 
             keyboardService.KeyDown += eventArgs =>
             {
-                if (eventArgs.Key != VirtualKey.Space)
+                // Toggling on every repeat while the key is held would flap the flag.
+                if (eventArgs.Repeat || eventArgs.Key != VirtualKey.Space)
                 {
                     return;
                 }

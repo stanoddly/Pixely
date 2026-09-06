@@ -9,6 +9,14 @@ public class KeyEventArgs : ConsumableInputEventArgs
     public Scancode Scancode { get; internal set; }
     public VirtualKey Key { get; internal set; }
     public ulong Timestamp { get; internal set; }
+
+    /// <summary>
+    /// True when the platform generated this key down because the key is being held,
+    /// rather than because it was just pressed. Handlers that act on a press
+    /// (toggling a mode, firing a shot) should ignore repeats; handlers that act on a
+    /// held key (moving a text caret, deleting characters) should honour them.
+    /// </summary>
+    public bool Repeat { get; internal set; }
 }
 
 public class KeyboardService : IKeyboardService
@@ -80,20 +88,28 @@ public class KeyboardService : IKeyboardService
         _keyEventArgs.Timestamp = timestamp;
         if (keyboardEvent.down)
         {
-            if (keyboard.Set(scancode))
-            {
-                if (keyboard.Ctrl && scancode == Scancode.Q)
-                {
-                    _appControl.Quit();
-                }
+            // A held key arrives as repeated downs against an already-set scancode. Both the
+            // initial press and the repeats are delivered; Repeat tells them apart. It is
+            // derived from tracked key state rather than SDL_KeyboardEvent.repeat so that it
+            // always agrees with Keyboard.IsPressed, even if a key up is missed.
+            bool pressed = keyboard.Set(scancode);
+            bool repeat = !pressed;
 
-                _keyDownHandlers.Invoke(viewScope, _keyEventArgs);
+            if (pressed && keyboard.Ctrl && scancode == Scancode.Q)
+            {
+                _appControl.Quit();
             }
+
+            _keyEventArgs.Repeat = repeat;
+            _keyDownHandlers.Invoke(viewScope, _keyEventArgs);
         }
         else
         {
             keyboard.Unset(scancode);
 
+            // The event args are cached and reused, so Repeat has to be reset here or a
+            // key up would carry the flag left behind by the previous key down.
+            _keyEventArgs.Repeat = false;
             _keyUpHandlers.Invoke(viewScope, _keyEventArgs);
         }
     }

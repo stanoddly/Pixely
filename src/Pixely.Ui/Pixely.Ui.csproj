@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <UiContentDirectory>$(MSBuildProjectDirectory)/Content</UiContentDirectory>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Pixely.Ui.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
+        <ProjectReference Include="..\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\Pixely.Componentize\Pixely.Componentize.csproj" />
+        <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+        <ProjectReference Include="..\Pixely.SdlangCompiler\Pixely.SdlangCompiler.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <!-- Import the compiler's props and targets files -->
+    <Import Project="..\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.props" />
+    <Import Project="..\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets" />
+
+    <ItemGroup>
+        <SdlangShader Include="Content\shaders\*.slang" />
+    </ItemGroup>
+
+    <Target Name="EmbedUiShaderOutputs"
+            BeforeTargets="AssignTargetPaths"
+            DependsOnTargets="CompileSdlangShaders"
+            Condition="'$(NoBuild)' != 'true'">
+        <ItemGroup>
+            <_UiShaderResource Include="@(SdlangShaderOutput)">
+                <ContentRelativePath>$([MSBuild]::MakeRelative('$(UiContentDirectory)', '%(FullPath)'))</ContentRelativePath>
+            </_UiShaderResource>
+            <EmbeddedResource Include="@(_UiShaderResource)">
+                <WithCulture>false</WithCulture>
+                <LogicalName>$([System.String]::Copy('%(ContentRelativePath)').Replace('\', '/'))</LogicalName>
+            </EmbeddedResource>
+        </ItemGroup>
+    </Target>
+
+</Project>
