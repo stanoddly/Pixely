@@ -10,10 +10,18 @@ namespace Pixely.Ui;
 /// <remarks>
 /// The hazard here is that focus changes hands inside a pointer press, and a callback on the way
 /// out — a field committing what was typed — can restructure the tree that press is still walking.
-/// So every transition is validated against the tree afterwards rather than assumed to have held.
+/// So focus is settled against the tree after every transition rather than assumed to have held,
+/// and a callback that moves focus itself is what the transition it interrupted defers to.
 /// </remarks>
 internal sealed class FocusRouter
 {
+    /// <summary>
+    /// How many times settling will send a blur before giving up, for the same reason hover has a
+    /// bound: a handler is free to make its element reachable again and then unreachable again, and
+    /// nothing about that sequence says it converges.
+    /// </summary>
+    private const int MaxSettlingRounds = 8;
+
     private readonly UiRoot _root;
 
     private Element? _focused;
@@ -22,9 +30,18 @@ internal sealed class FocusRouter
     // that did not. Without it the transition it interrupted would finish and overwrite it.
     private int _routeVersion;
 
+    private bool _isSettling;
+    private int _routingDepth;
+
     internal FocusRouter(UiRoot root) => _root = root;
 
     internal Element? Focused => _focused;
+
+    /// <summary>
+    /// Whether a transition is in flight. What reports focus outward waits for this to clear, so a
+    /// handoff is seen as one move rather than as focus leaving and something else taking it.
+    /// </summary>
+    internal bool IsRouting => _routingDepth > 0;
 
     /// <summary>
     /// Moves focus to <paramref name="target"/>, or takes it away when that is null. Does nothing if
@@ -32,44 +49,16 @@ internal sealed class FocusRouter
     /// </summary>
     internal void Focus(Element? target)
     {
-        if (target != null && !_root.CanBeHit(target))
+        _routingDepth++;
+
+        try
         {
-            target = null;
+            Route(target);
+            Settle();
         }
-
-        if (ReferenceEquals(_focused, target))
+        finally
         {
-            return;
-        }
-
-        Element? previous = _focused;
-
-        // Cleared before the callback rather than pointed at the destination, so a handler that
-        // moves focus itself neither sees the new target as focused nor loses the old one twice.
-        _focused = null;
-        int version = ++_routeVersion;
-
-        if (previous != null)
-        {
-            ((IFocusTarget)previous).OnFocusLost();
-        }
-
-        // Losing focus is where a field commits, and committing can rebuild whatever the incoming
-        // target belonged to. This transition is abandoned rather than completed on top of that.
-        if (target == null || _routeVersion != version || !_root.CanBeHit(target))
-        {
-            return;
-        }
-
-        _focused = target;
-        ((IFocusTarget)target).OnFocusGained();
-
-        // Gaining focus can detach the element just as losing it can, and leaving focus on something
-        // unreachable would send it keys it can no longer act on.
-        if (_routeVersion == version && !_root.CanBeHit(target))
-        {
-            _focused = null;
-            ((IFocusTarget)target).OnFocusLost();
+            _routingDepth--;
         }
     }
 
@@ -90,26 +79,95 @@ internal sealed class FocusRouter
     /// hover: an element can be hidden, disabled or detached without any keyboard event happening, so
     /// nothing else would notice.
     /// </summary>
-    internal void Revalidate() => Current();
+    internal void Revalidate() => Settle();
+
+    private void Route(Element? target)
+    {
+        if (target != null && !_root.CanBeHit(target))
+        {
+            target = null;
+        }
+
+        // Advanced before the no-op check below, not after it. A callback that asks for focus it
+        // already has is still saying where focus belongs, and a transition further out that carried
+        // on because this looked like nothing would then move focus somewhere the callback rejected.
+        int version = ++_routeVersion;
+
+        if (ReferenceEquals(_focused, target))
+        {
+            return;
+        }
+
+        Element? previous = _focused;
+
+        // Cleared before the callback rather than pointed at the destination, so a handler that
+        // moves focus itself neither sees the new target as focused nor loses the old one twice.
+        _focused = null;
+
+        if (previous != null)
+        {
+            ((IFocusTarget)previous).OnFocusLost();
+        }
+
+        // Losing focus is where a field commits, and committing can rebuild whatever the incoming
+        // target belonged to. A nested transition is the current answer, so this one is abandoned
+        // rather than completed on top of it; Settle then checks what that answer left behind.
+        if (target == null || _routeVersion != version || !_root.CanBeHit(target))
+        {
+            return;
+        }
+
+        _focused = target;
+        ((IFocusTarget)target).OnFocusGained();
+    }
 
     /// <summary>
-    /// The focused element if it is still reachable, dropping it if it is not. Checked on every
-    /// dispatch rather than only after a build, because a callback can detach the focused element and
-    /// the next key would otherwise reach something no longer in the tree.
+    /// Leaves focus on something input can still reach, or on nothing. Every path into this router
+    /// ends here rather than trusting what a callback left, because a callback can settle a nested
+    /// transition and then detach the element that transition chose.
+    /// </summary>
+    private void Settle()
+    {
+        // Only the outermost transition settles. The blur below moves focus in the very case this
+        // exists for, and letting each nested transition settle too would spend the bound one level
+        // deep at a time instead of on the cycle it is counting.
+        if (_isSettling)
+        {
+            return;
+        }
+
+        _isSettling = true;
+
+        try
+        {
+            for (int round = 0; _focused != null && !_root.CanBeHit(_focused); round++)
+            {
+                if (round == MaxSettlingRounds)
+                {
+                    _focused = null;
+                    break;
+                }
+
+                Element stale = _focused;
+                _focused = null;
+                _routeVersion++;
+                ((IFocusTarget)stale).OnFocusLost();
+            }
+        }
+        finally
+        {
+            _isSettling = false;
+        }
+    }
+
+    /// <summary>
+    /// The focused element if input can still reach it. Settled on every dispatch rather than only
+    /// after a build, because a callback can detach the focused element and the next key would
+    /// otherwise reach something no longer in the tree.
     /// </summary>
     private Element? Current()
     {
-        if (_focused == null || _root.CanBeHit(_focused))
-        {
-            return _focused;
-        }
-
-        Element stale = _focused;
-        _focused = null;
-        _routeVersion++;
-        ((IFocusTarget)stale).OnFocusLost();
-
-        // The callback may have focused something else, which is the current answer.
+        Settle();
         return _focused;
     }
 }

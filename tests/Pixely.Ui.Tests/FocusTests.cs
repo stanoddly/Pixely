@@ -324,6 +324,200 @@ public class FocusTests
         Assert.That(reported, Is.EqualTo(new Element?[] { first, second }));
     }
 
+    [Test]
+    public void ABlurHandlerThatTakesFocusAway_IsNotOverriddenByTheHandoff()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        UiRoot root = InRow(first, second);
+        root.Focus(first);
+
+        // Asking for focus it already has - none - is still saying where focus belongs. A handoff
+        // that carried on because that looked like nothing would move focus somewhere this refused.
+        first.WhenBlurred = () =>
+        {
+            first.WhenBlurred = null;
+            root.Focus(null);
+        };
+
+        root.Focus(second);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.FocusedElement, Is.Null);
+            Assert.That(second.Calls, Does.Not.Contain("focused"));
+        });
+    }
+
+    [Test]
+    public void ABlurHandlerThatDetachesWhatItJustFocused_LeavesNothingFocused()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        RecordingFocusTarget third = Sized();
+        UiRoot root = InRow(first, second, third);
+        root.Focus(first);
+
+        // The nested transition finishes and only then is its element taken away, so the outer route
+        // cannot tell from the version alone that anything is wrong with what it left behind.
+        first.WhenBlurred = () =>
+        {
+            first.WhenBlurred = null;
+            root.Focus(third);
+            third.IsVisible = false;
+        };
+
+        root.Focus(second);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.FocusedElement, Is.Null);
+            Assert.That(third.Calls, Is.EqualTo(new[] { "focused", "blurred" }));
+        });
+    }
+
+    [Test]
+    public void AKeyWhoseValidationFocusesSomethingThenDetachesIt_ReachesNothing()
+    {
+        RecordingFocusTarget stale = Sized();
+        RecordingFocusTarget replacement = Sized();
+        UiRoot root = InRow(stale, replacement);
+        root.Focus(stale);
+
+        // Dispatching first has to notice the focused element is gone; blurring it is what focuses
+        // the replacement, and that replacement is taken away before the key is delivered.
+        stale.WhenBlurred = () =>
+        {
+            stale.WhenBlurred = null;
+            root.Focus(replacement);
+            replacement.IsVisible = false;
+        };
+
+        stale.IsVisible = false;
+        bool consumed = root.KeyPressed(Scancode.A, NoModifiers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.False);
+            Assert.That(replacement.Calls, Does.Not.Contain("key A"));
+        });
+    }
+
+    [Test]
+    public void RemovingTheLayerHoldingFocus_BlursItStraightAway()
+    {
+        RecordingFocusTarget field = Sized();
+        Element layer = new Column { Children = { field } };
+        UiRoot root = new();
+        root.AddLayer(layer);
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+        root.Focus(field);
+
+        List<Element?> reported = new();
+        root.FocusChanged += reported.Add;
+
+        // No pass follows a window being closed, so waiting for one would leave the platform's text
+        // input running for a field that is gone.
+        root.RemoveLayer(layer);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.FocusedElement, Is.Null);
+            Assert.That(field.Calls, Does.Contain("blurred"));
+            Assert.That(reported, Is.EqualTo(new Element?[] { null }));
+        });
+    }
+
+    [Test]
+    public void AFocusSubscriberThatDetachesWhatItWasTold_IsToldAgain()
+    {
+        RecordingFocusTarget field = Sized();
+        UiRoot root = Rooted(field);
+
+        List<Element?> reported = new();
+        bool detached = false;
+        root.FocusChanged += focused =>
+        {
+            reported.Add(focused);
+
+            if (focused == null || detached)
+            {
+                return;
+            }
+
+            detached = true;
+            field.IsVisible = false;
+        };
+
+        root.Focus(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.EqualTo(new Element?[] { field, null }));
+            Assert.That(root.FocusedElement, Is.Null, "text input must not be left running for it");
+        });
+    }
+
+    [Test]
+    public void AnUpdateFromInsideABlurHandler_DoesNotReportAHandoffAsTwoMoves()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        UiRoot root = InRow(first, second);
+        root.Focus(first);
+
+        List<Element?> reported = new();
+        root.FocusChanged += reported.Add;
+
+        // A field that commits by rebuilding its view changes the tree and runs a pass, all while
+        // focus is between owners.
+        first.WhenBlurred = () =>
+        {
+            first.WhenBlurred = null;
+            second.Margin = new Thickness(1);
+            root.Update();
+        };
+
+        root.Focus(second);
+
+        Assert.That(reported, Is.EqualTo(new Element?[] { second }),
+            "reported once, so nothing stops and restarts the platform's text input mid-handoff");
+    }
+
+    [Test]
+    public void ABlurHandlerThatThrows_StillReportsThatFocusWent()
+    {
+        RecordingFocusTarget field = Sized();
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        List<Element?> reported = new();
+        root.FocusChanged += reported.Add;
+        field.WhenBlurred = () => throw new InvalidOperationException("commit failed");
+
+        Assert.Throws<InvalidOperationException>(() => root.Focus(null));
+
+        Assert.That(reported, Is.EqualTo(new Element?[] { null }),
+            "focus has already gone, and leaving that unsaid leaves text input running for nothing");
+    }
+
+    private static UiRoot InRow(params Element[] children)
+    {
+        Row row = new();
+
+        foreach (Element child in children)
+        {
+            row.Children.Add(child);
+        }
+
+        UiRoot root = new();
+        root.AddLayer(row);
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+        return root;
+    }
+
     private static RecordingFocusTarget Sized() =>
         new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
 

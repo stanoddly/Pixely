@@ -23,6 +23,9 @@ public sealed class UiRoot
 
     // Starts where the router's position starts, so the first route to the origin is the non-event it
     // actually is rather than a change from nowhere.
+    /// <summary>How many times reporting will chase a subscriber that invalidates what it was told.</summary>
+    private const int MaxFocusReportRounds = 8;
+
     private Vector2Int _reportedPointerPosition;
 
     private readonly FocusRouter _focusRouter;
@@ -152,6 +155,13 @@ public sealed class UiRoot
 
         layer.LayerRoot = null;
         _layersChanged = true;
+
+        // Now, not at the next pass. A window closed on the way out may never run another one, and
+        // whatever the removed subtree was holding would stay held: a gesture with no way to end, and
+        // the platform's text input left running for a field that is gone.
+        _pointerRouter.Revalidate();
+        _focusRouter.Revalidate();
+        ReportFocus();
         return true;
     }
 
@@ -206,8 +216,17 @@ public sealed class UiRoot
     /// </summary>
     public void Focus(Element? element)
     {
-        _focusRouter.Focus(element as IFocusTarget == null ? null : element);
-        ReportFocus();
+        try
+        {
+            _focusRouter.Focus(element as IFocusTarget == null ? null : element);
+        }
+        finally
+        {
+            // In a finally because a focus callback is application code: if it throws, focus has
+            // already moved, and leaving that unreported would leave the platform's text input
+            // running for an element that no longer holds anything.
+            ReportFocus();
+        }
     }
 
     /// <summary>
@@ -216,18 +235,29 @@ public sealed class UiRoot
     /// </summary>
     public bool KeyPressed(Scancode scancode, Keyboard keyboard, bool isRepeat = false)
     {
-        bool consumed = _focusRouter.KeyDown(scancode, keyboard, isRepeat);
-        ReportFocus();
-        return consumed;
+        try
+        {
+            return _focusRouter.KeyDown(scancode, keyboard, isRepeat);
+        }
+        finally
+        {
+            ReportFocus();
+        }
     }
 
     /// <inheritdoc cref="KeyPressed"/>
     public bool TextEntered(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        bool consumed = _focusRouter.TextInput(text);
-        ReportFocus();
-        return consumed;
+
+        try
+        {
+            return _focusRouter.TextInput(text);
+        }
+        finally
+        {
+            ReportFocus();
+        }
     }
 
     /// <summary>
@@ -302,17 +332,35 @@ public sealed class UiRoot
     /// this one to say. That is what keeps a later subscriber from being told a position two routes
     /// out of date, after an earlier one has already moved on.
     /// </remarks>
+    /// <summary>
+    /// Announces where focus ended up. Deliberately silent while a transition is still in flight: a
+    /// field that commits and hands focus straight to the next one would otherwise be reported as
+    /// focus leaving and something else taking it, and whatever drives the platform's text input
+    /// would stop and restart it in between.
+    /// </summary>
     private void ReportFocus()
     {
-        Element? focused = _focusRouter.Focused;
-
-        if (ReferenceEquals(_reportedFocus, focused))
+        if (_focusRouter.IsRouting)
         {
             return;
         }
 
-        _reportedFocus = focused;
-        _focusChanged.Notify(focused);
+        // A subscriber can detach the element it was just told about, so what was reported is settled
+        // against the tree again afterwards. Bounded for the same reason the routers are: a subscriber
+        // free to keep doing that is not a sequence that converges.
+        for (int round = 0; round < MaxFocusReportRounds; round++)
+        {
+            _focusRouter.Revalidate();
+            Element? focused = _focusRouter.Focused;
+
+            if (ReferenceEquals(_reportedFocus, focused))
+            {
+                return;
+            }
+
+            _reportedFocus = focused;
+            _focusChanged.Notify(focused);
+        }
     }
 
     private void ReportPointerPosition()
