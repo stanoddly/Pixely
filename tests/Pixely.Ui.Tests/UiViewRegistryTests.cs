@@ -75,6 +75,55 @@ public class UiViewRegistryTests
         });
     }
 
+    [Test]
+    public void AViewBuiltWhileAnotherIsAttaching_IsStillTrackedSeparately()
+    {
+        UiRoot root = new();
+        ServiceCollection services = Configured(root, root, out UiViewRegistry registry);
+        // Both transient, so they are built when asked for rather than up front with the singletons.
+        // That is what puts one activation inside the other.
+        services.AddTransient<DisposableView>(() => new DisposableView());
+        services.AddTransient<NestingView>((ServiceProvider p) => new NestingView(() => p.GetRequiredService<DisposableView>()));
+
+        ServiceProvider provider = services.BuildServiceProvider();
+        NestingView outer;
+
+        try
+        {
+            registry.Bind(provider);
+            outer = provider.GetRequiredService<NestingView>();
+
+            Assert.That(root.Layers, Has.Count.EqualTo(2), "both are on the root");
+        }
+        finally
+        {
+            provider.Dispose();
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.Layers, Is.Empty, "and both come off it again");
+            Assert.That(outer.IsAttached, Is.False);
+        });
+    }
+
+    internal sealed class NestingView : ScopedView, IDisposable
+    {
+        private readonly Func<UiView> _buildAnother;
+
+        public NestingView(Func<UiView> buildAnother) : base(default) => _buildAnother = buildAnother;
+
+        public void Dispose()
+        {
+        }
+
+        protected override Element BuildRoot()
+        {
+            _buildAnother();
+            return new Column();
+        }
+    }
+
     private static ServiceCollection Configured(UiRoot first, UiRoot second, out UiViewRegistry registry)
     {
         ServiceCollection services = new();
@@ -85,7 +134,7 @@ public class UiViewRegistryTests
         return services;
     }
 
-    private class ScopedView : UiView
+    internal class ScopedView : UiView
     {
         private readonly ViewScope _viewScope;
 
@@ -101,7 +150,7 @@ public class UiViewRegistryTests
     }
 
     /// <summary>Disposable so the container keeps hold of it and tears it down with the provider.</summary>
-    private sealed class DisposableView : ScopedView, IDisposable
+    internal sealed class DisposableView : ScopedView, IDisposable
     {
         public DisposableView() : base(default)
         {

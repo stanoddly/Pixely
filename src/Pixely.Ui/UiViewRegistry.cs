@@ -20,7 +20,12 @@ namespace Pixely.Ui;
 /// </para>
 /// <para>
 /// Register views as singletons. The container only keeps hold of a transient it has to dispose, so
-/// a transient view would be added to a root and never taken away again.
+/// a transient view would be added to a root and never taken away again. Only the container taking a
+/// view down is noticed; disposing one by hand is not.
+/// </para>
+/// <para>
+/// A view has to derive from <see cref="UiView"/> to be found. <see cref="IUiView"/> is the role an
+/// application registers under, not an alternative to inheriting the behaviour.
 /// </para>
 /// </remarks>
 internal sealed class UiViewRegistry
@@ -66,7 +71,7 @@ internal sealed class UiViewRegistry
 
             if (root == null)
             {
-                _views[i] = (view, AddToRoot(view));
+                Record(view, AddToRoot(view));
             }
         }
 
@@ -84,7 +89,24 @@ internal sealed class UiViewRegistry
         }
 
         _views.Add((view, null));
-        _views[^1] = (view, AddToRoot(view));
+
+        // Recorded first and filled in afterwards, because attaching is what builds the tree and a
+        // tree can ask the container for another view. That one lands here too, so by the time this
+        // returns the entry to write to is no longer the last one — or even at the same index.
+        UiRoot? root = AddToRoot(view);
+        Record(view, root);
+    }
+
+    private void Record(UiView view, UiRoot? root)
+    {
+        for (int i = 0; i < _views.Count; i++)
+        {
+            if (ReferenceEquals(_views[i].View, view))
+            {
+                _views[i] = (view, root);
+                return;
+            }
+        }
     }
 
     private void Remove(UiView view)

@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Pixely.Ui;
 
 /// <summary>
@@ -14,6 +16,10 @@ public interface IUiViewModel
 /// register one under this and let the container find it, rather than naming its concrete type
 /// wherever the wiring lives.
 /// </summary>
+/// <remarks>
+/// Implemented by <see cref="UiView"/>, which is what an application derives from. This is the role
+/// it registers under, not a second way of being a view.
+/// </remarks>
 public interface IUiView
 {
     /// <summary>Which window this view belongs to.</summary>
@@ -180,9 +186,11 @@ public abstract class UiView : IUiView
             }
         }
 
+        // Rethrown through the dispatch info rather than plainly, so the accessor that objected is
+        // still what the stack names.
         if (failure != null)
         {
-            throw failure;
+            ExceptionDispatchInfo.Capture(failure).Throw();
         }
     }
 }
