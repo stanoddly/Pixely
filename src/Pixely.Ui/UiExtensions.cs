@@ -47,6 +47,10 @@ public static class UiExtensions
             appBuilder.ConfigureContent(contentSourceBuilder =>
                 contentSourceBuilder.AddSource(EmbeddedContentSource.Create(typeof(UiExtensions).Assembly)));
             appBuilder.AddRegistry<ScopedUiRoot>();
+
+            // Built like any other singleton, which is what hands it the provider its views need.
+            UiViewRegistry registry = UiViewRegistry.Register(appBuilder);
+            appBuilder.AddSingleton<UiViewRegistry>(registry.Bind);
         }
 
         // The style is optional: an application that gives every label an explicit font needs none.

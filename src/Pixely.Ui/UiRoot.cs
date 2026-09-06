@@ -127,8 +127,20 @@ public sealed class UiRoot
         ArgumentNullException.ThrowIfNull(view);
 
         view.Attach();
-        _views.Add(view);
-        AddLayer(view.Root);
+
+        try
+        {
+            _views.Add(view);
+            AddLayer(view.Root);
+        }
+        catch
+        {
+            // A layer that was refused leaves a view attached to nothing: subscribed to its models
+            // and syncing a tree no root will ever draw.
+            _views.Remove(view);
+            view.Detach();
+            throw;
+        }
     }
 
     /// <summary>Removes a view's layer and unsubscribes it from its view model.</summary>
