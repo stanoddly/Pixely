@@ -167,6 +167,26 @@ public sealed class UiRoot
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>
     public void PointerLeft() => _pointerRouter.Left();
 
+    /// <summary>Where the pointer last was, in the same coordinates the tree is laid out in.</summary>
+    public Vector2Int PointerPosition => _pointerRouter.Position;
+
+    /// <summary>
+    /// Raised when <see cref="PointerPosition"/> changes. For what follows the pointer without being
+    /// under it — a tooltip is not a hit target, so no <see cref="IPointerTarget"/> callback reaches
+    /// it — and cheap to answer, because moving something is an arrange and not a measure.
+    /// </summary>
+    public event Action<Vector2Int>? PointerPositionChanged;
+
+    /// <summary>
+    /// Raised after the viewport changed and the layers were invalidated. Layout alone answers most
+    /// of what a resize means, but not a position the application derives from the viewport itself:
+    /// a popup anchored to something in the world is at a different place on screen afterwards, and
+    /// nothing in the tree can work that out for it.
+    /// </summary>
+    public event Action<Vector2Int>? ViewportChanged;
+
+    internal void OnPointerPositionChanged(Vector2Int position) => PointerPositionChanged?.Invoke(position);
+
     public void SetViewportSize(Vector2Int size)
     {
         if (_viewportSize == size)
@@ -180,6 +200,8 @@ public sealed class UiRoot
         {
             layer.InvalidateMeasure();
         }
+
+        ViewportChanged?.Invoke(size);
     }
 
     /// <summary>
