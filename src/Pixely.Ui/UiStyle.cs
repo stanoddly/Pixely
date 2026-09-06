@@ -54,6 +54,15 @@ public sealed class UiStyle
     /// <summary>Text and anything drawn as text, when the element does not say otherwise.</summary>
     public Color Foreground { get; init; } = DefaultForeground;
 
+    /// <summary>
+    /// Text in a control that cannot be used. Its own colour rather than a tint of the foreground,
+    /// because how far to fade depends on what the text is drawn against.
+    /// </summary>
+    public Color DisabledForeground { get; init; } = DefaultDisabledForeground;
+
+    /// <summary>Behind an editable field, per state — which is how a focused one shows that it is.</summary>
+    public StateDrawables FieldBackground { get; init; } = TextBox.DefaultBackground;
+
     /// <summary>The caret in an editable field. Defaults to whatever the text is drawn in.</summary>
     public Color? Caret { get; init; }
 
@@ -62,4 +71,7 @@ public sealed class UiStyle
 
     /// <inheritdoc cref="DefaultSelection"/>
     public static Color DefaultForeground { get; } = Colors.White;
+
+    /// <inheritdoc cref="DefaultSelection"/>
+    public static Color DefaultDisabledForeground { get; } = new(130, 130, 130, 255);
 }

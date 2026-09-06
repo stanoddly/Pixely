@@ -709,6 +709,19 @@ public class ButtonTests
         });
     }
 
+    [Test]
+    public void StateDrawables_ResolveFocusedAndFallBackWhenItIsNotSet()
+    {
+        SolidDrawable normal = new(Colors.Red);
+        SolidDrawable focused = new(Colors.Green);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(new StateDrawables(normal) { Focused = focused }.Resolve(VisualState.Focused), Is.SameAs(focused));
+            Assert.That(new StateDrawables(normal).Resolve(VisualState.Focused), Is.SameAs(normal));
+        });
+    }
+
     private static UiRoot Rooted(Element content)
     {
         UiRoot root = new();

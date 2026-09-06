@@ -392,6 +392,37 @@ public class TextBoxTests
         Assert.That(root.PointerPressed(new Vector2Int(10, 5), MouseButton.Right), Is.False);
     }
 
+    [Test]
+    public void AFocusedField_LooksDifferentFromAnIdleOne()
+    {
+        TextBox field = new();
+        UiRoot root = Rooted(field);
+
+        VisualState idle = field.VisualState;
+        root.Focus(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(idle, Is.EqualTo(VisualState.Normal));
+            Assert.That(field.VisualState, Is.EqualTo(VisualState.Focused), "a field shows which one the typing goes to");
+        });
+    }
+
+    [Test]
+    public void ADisabledField_ReadsAsDisabledWhateverElseIsTrue()
+    {
+        TextBox field = new() { IsEnabled = false };
+        UiRoot root = Rooted(field);
+
+        root.Focus(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.VisualState, Is.EqualTo(VisualState.Disabled));
+            Assert.That(root.FocusedElement, Is.Null, "and cannot be typed into at all");
+        });
+    }
+
     /// <summary>
     /// A field that can be laid out without a font, so a test can run a real pass over one. Measuring
     /// and drawing text needs a device to rasterise with, and everything below those two methods is

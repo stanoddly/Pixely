@@ -21,12 +21,23 @@ namespace Pixely.Ui;
 /// </remarks>
 public class TextBox : Element, IPointerTarget, IFocusTarget
 {
+    /// <summary>
+    /// Used when neither the field nor the root's <see cref="UiStyle"/> supplies one, so a field is
+    /// visible and shows that it is focused without any setup.
+    /// </summary>
+    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new Color(28, 32, 40, 255)))
+    {
+        Focused = new SolidDrawable(new Color(38, 44, 55, 255)),
+        Disabled = new SolidDrawable(new Color(32, 34, 38, 255))
+    };
+
     private const int CaretWidth = 1;
 
     private readonly Font? _font;
 
     private string _text = string.Empty;
     private Color? _color;
+    private StateDrawables? _backgrounds;
     private TextEditingBuffer? _editor;
 
     // How far the text is slid left so the caret stays in view. Paint owns it: it is the only place
@@ -76,6 +87,50 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     /// <summary>Whether an edit is in progress.</summary>
     public bool IsEditing => _editor != null;
+
+    /// <summary>
+    /// Backgrounds for this field alone. When null the inherited <see cref="Element.Background"/> is
+    /// used for every state if it was set, and the root style's otherwise.
+    /// </summary>
+    public StateDrawables? Backgrounds
+    {
+        get => _backgrounds;
+        set => SetPaintProperty(ref _backgrounds, value);
+    }
+
+    /// <summary>
+    /// Focused rather than hovered: a field shows which one the typing goes to, and a pointer resting
+    /// over it says nothing about that.
+    /// </summary>
+    public VisualState VisualState
+    {
+        get
+        {
+            if (!IsEffectivelyEnabled)
+            {
+                return VisualState.Disabled;
+            }
+
+            return _editor != null ? VisualState.Focused : VisualState.Normal;
+        }
+    }
+
+    protected override Drawable? EffectiveBackground
+    {
+        get
+        {
+            if (_backgrounds != null)
+            {
+                return _backgrounds.Resolve(VisualState);
+            }
+
+            // A plain Background assigned through the inherited property means one look for every
+            // state. Honouring it is what keeps that property from accepting a value and then quietly
+            // doing nothing on this one element.
+            return base.EffectiveBackground
+                ?? (OwnerRoot?.Style?.FieldBackground ?? DefaultBackground).Resolve(VisualState);
+        }
+    }
 
     /// <summary>Whether a candidate may be typed, including the half-finished states on the way.</summary>
     protected virtual bool AcceptsEdit(string candidate) => true;
@@ -264,7 +319,15 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     private Color SelectionColor() => OwnerRoot?.Style?.Selection ?? UiStyle.DefaultSelection;
 
-    private Color ForegroundColor() => _color ?? OwnerRoot?.Style?.Foreground ?? UiStyle.DefaultForeground;
+    private Color ForegroundColor()
+    {
+        if (!IsEffectivelyEnabled)
+        {
+            return OwnerRoot?.Style?.DisabledForeground ?? UiStyle.DefaultDisabledForeground;
+        }
+
+        return _color ?? OwnerRoot?.Style?.Foreground ?? UiStyle.DefaultForeground;
+    }
 
     private Color CaretColor() => OwnerRoot?.Style?.Caret ?? ForegroundColor();
 

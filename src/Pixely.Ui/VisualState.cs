@@ -9,6 +9,10 @@ public enum VisualState
     Normal,
     Hovered,
     Pressed,
+
+    /// <summary>Holding the keyboard. Only meaningful for something that takes typing.</summary>
+    Focused,
+
     Disabled
 }
 
@@ -32,6 +36,8 @@ public sealed class StateDrawables
 
     public Drawable? Pressed { get; init; }
 
+    public Drawable? Focused { get; init; }
+
     public Drawable? Disabled { get; init; }
 
     public Drawable Resolve(VisualState state)
@@ -40,6 +46,7 @@ public sealed class StateDrawables
         {
             VisualState.Hovered => Hovered ?? Normal,
             VisualState.Pressed => Pressed ?? Normal,
+            VisualState.Focused => Focused ?? Normal,
             VisualState.Disabled => Disabled ?? Normal,
             _ => Normal
         };
