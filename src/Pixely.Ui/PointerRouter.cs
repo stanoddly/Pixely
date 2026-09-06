@@ -320,7 +320,11 @@ internal sealed class PointerRouter
         // were sent to, or both — hover must not be left naming something hit testing can no longer
         // reach. Checked against the tree rather than against the route version, because a nested
         // route proves only that something happened, not that what it settled on survived.
-        if (_hovered != null && !CanBeHit(_hovered))
+        //
+        // A loop rather than a check, because the leave below is another callback and may leave
+        // hover somewhere just as unreachable. It ends when hover names something that can be hit or
+        // names nothing, and each turn requires a callback to have moved hover somewhere new.
+        while (_hovered != null && !CanBeHit(_hovered))
         {
             Element stale = _hovered;
             _hovered = null;

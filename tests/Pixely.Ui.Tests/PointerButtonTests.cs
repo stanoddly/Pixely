@@ -453,6 +453,30 @@ public class PointerButtonTests
         });
     }
 
+    [Test]
+    public void ALeaveCallbackThatDetachesWhereItRouted_DoesNotLeaveThatHovered()
+    {
+        RecordingPointerTarget first = Sized();
+        RecordingPointerTarget second = Sized();
+        UiRoot root = InRow(first, second);
+        root.PointerMoved(new Vector2Int(300, 200));
+
+        // The element removes itself on the way in. Tidying that up sends it a leave, and that leave
+        // moves the pointer onto the second element and removes that one too, so the tidying has to
+        // run again on its own result rather than once.
+        first.WhenEntered = () => first.IsVisible = false;
+        first.WhenLeft = () =>
+        {
+            first.WhenLeft = null;
+            root.PointerMoved(new Vector2Int(50, 10));
+            second.IsVisible = false;
+        };
+
+        root.PointerMoved(new Vector2Int(10, 10));
+
+        Assert.That(second.Calls, Is.EqualTo(new[] { "enter 50,10", "leave" }));
+    }
+
     /// <summary>
     /// Side by side, with the first inside a fixed-size holder so hiding it does not slide the
     /// second one out from under the coordinates a test is pressing at.
