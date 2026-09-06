@@ -161,13 +161,10 @@ public class AnchoredLayoutTests
 
         Layout.Run(host, 320, 240);
 
-        // The margin box would be 20 wide by 40 short of nothing; treated as an extent it is negative,
-        // and clamping between crossed bounds would let the anchor through unchanged.
-        Assert.Multiple(() =>
-        {
-            Assert.That(child.Bounds.X, Is.LessThanOrEqualTo(320));
-            Assert.That(child.Bounds.Y, Is.LessThanOrEqualTo(240));
-        });
+        // Both margin boxes come out negative, and an extent below zero would let the clamp pass the
+        // anchor straight through. Treated as nothing instead, the box is placed at the far edge and
+        // the negative margin then pulls the element back by its own width.
+        Assert.That(child.Bounds, Is.EqualTo(new Rectangle(290, 210, 40, 20)));
     }
 
     [Test]

@@ -130,8 +130,13 @@ public class RootNotificationTests
 
         root.PointerReleased(new Vector2Int(50, 10), MouseButton.Left);
 
-        Assert.That(held.Calls, Does.Contain("release 50,10 Left inside=False"),
-            "the release ends the gesture it was made for");
+        Assert.Multiple(() =>
+        {
+            Assert.That(pressed, Is.True, "the listener ran at all");
+            Assert.That(held.Calls, Does.Contain("release 50,10 Left inside=False"), "the release ends the gesture it was made for");
+            Assert.That(other.Calls, Does.Contain("press 50,10 Left"), "and the gesture the listener started is the one still held");
+            Assert.That(other.Calls, Does.Not.Contain("release 50,10 Left inside=True"));
+        });
     }
 
     [Test]
@@ -174,6 +179,92 @@ public class RootNotificationTests
         root.Update();
 
         Assert.That(child.Bounds, Is.EqualTo(new Rectangle(320, 240, 40, 20)));
+    }
+
+    [Test]
+    public void AListenerThatMovesAwayAndBack_DoesNotLeaveAnEarlierDeliveryToFinish()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> second = new();
+        bool routed = false;
+
+        root.PointerPositionChanged += _ =>
+        {
+            if (routed)
+            {
+                return;
+            }
+
+            routed = true;
+            root.PointerMoved(new Vector2Int(99, 99));
+            root.PointerMoved(new Vector2Int(12, 34));
+        };
+        root.PointerPositionChanged += second.Add;
+
+        root.PointerMoved(new Vector2Int(12, 34));
+
+        Assert.That(second, Is.EqualTo(new[] { new Vector2Int(99, 99), new Vector2Int(12, 34) }),
+            "the position ends where it started, but the delivery it interrupted is finished with all the same");
+    }
+
+    [Test]
+    public void TheFirstRouteToTheOrigin_ReportsNothing()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> reported = new();
+        root.PointerPositionChanged += reported.Add;
+
+        root.PointerMoved(new Vector2Int(0, 0));
+
+        Assert.That(reported, Is.Empty, "the pointer starts there, so arriving there is not a change");
+    }
+
+    [Test]
+    public void AViewportListenerThatResizesAgain_LeavesEverySubscriberOnTheLatestSize()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> second = new();
+        bool resized = false;
+
+        root.ViewportChanged += _ =>
+        {
+            if (resized)
+            {
+                return;
+            }
+
+            resized = true;
+            root.SetViewportSize(new Vector2Int(800, 600));
+        };
+        root.ViewportChanged += second.Add;
+
+        root.SetViewportSize(new Vector2Int(640, 480));
+
+        Assert.That(second, Is.EqualTo(new[] { new Vector2Int(800, 600) }));
+    }
+
+    [Test]
+    public void SubscribingFromInsideADelivery_TakesEffectOnTheNextOne()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> late = new();
+        bool subscribed = false;
+
+        root.PointerPositionChanged += _ =>
+        {
+            if (subscribed)
+            {
+                return;
+            }
+
+            subscribed = true;
+            root.PointerPositionChanged += late.Add;
+        };
+
+        root.PointerMoved(new Vector2Int(1, 1));
+        root.PointerMoved(new Vector2Int(2, 2));
+
+        Assert.That(late, Is.EqualTo(new[] { new Vector2Int(2, 2) }));
     }
 
     private static UiRoot Empty()

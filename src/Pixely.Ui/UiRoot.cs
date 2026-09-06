@@ -21,14 +21,12 @@ public sealed class UiRoot
     private Vector2Int _viewportSize;
     private bool _layersChanged = true;
 
+    // Starts where the router's position starts, so the first route to the origin is the non-event it
+    // actually is rather than a change from nowhere.
     private Vector2Int _reportedPointerPosition;
-    private bool _hasReportedPointerPosition;
-    private Action<Vector2Int>? _pointerPositionChanged;
 
-    // The subscribers as an array, so reporting can stop partway through. Cached because a pointer
-    // reports on every move it makes, and asking the delegate for its invocation list each time would
-    // allocate on exactly the path a retained tree exists to keep quiet.
-    private Action<Vector2Int>[]? _pointerPositionSubscribers;
+    private readonly ChangeNotifier<Vector2Int> _pointerPositionChanged = new();
+    private readonly ChangeNotifier<Vector2Int> _viewportChanged = new();
 
     public UiRoot() => _pointerRouter = new PointerRouter(this);
 
@@ -199,16 +197,8 @@ public sealed class UiRoot
     /// </summary>
     public event Action<Vector2Int>? PointerPositionChanged
     {
-        add
-        {
-            _pointerPositionChanged += value;
-            _pointerPositionSubscribers = null;
-        }
-        remove
-        {
-            _pointerPositionChanged -= value;
-            _pointerPositionSubscribers = null;
-        }
+        add => _pointerPositionChanged.Add(value);
+        remove => _pointerPositionChanged.Remove(value);
     }
 
     /// <summary>
@@ -217,7 +207,11 @@ public sealed class UiRoot
     /// a popup anchored to something in the world is at a different place on screen afterwards, and
     /// nothing in the tree can work that out for it.
     /// </summary>
-    public event Action<Vector2Int>? ViewportChanged;
+    public event Action<Vector2Int>? ViewportChanged
+    {
+        add => _viewportChanged.Add(value);
+        remove => _viewportChanged.Remove(value);
+    }
 
     /// <summary>
     /// Reports the pointer's position once the route that moved it has finished. Deliberately not
@@ -234,33 +228,13 @@ public sealed class UiRoot
     {
         Vector2Int position = _pointerRouter.Position;
 
-        if (_hasReportedPointerPosition && _reportedPointerPosition == position)
+        if (_reportedPointerPosition == position)
         {
             return;
         }
 
-        _hasReportedPointerPosition = true;
         _reportedPointerPosition = position;
-
-        if (_pointerPositionChanged == null)
-        {
-            return;
-        }
-
-        _pointerPositionSubscribers ??= Array.ConvertAll(
-            _pointerPositionChanged.GetInvocationList(), handler => (Action<Vector2Int>)handler);
-
-        foreach (Action<Vector2Int> subscriber in _pointerPositionSubscribers)
-        {
-            subscriber(position);
-
-            // One of them routed the pointer, and that route has already told everybody where it
-            // ended up. Carrying on would tell the rest of this list something two routes old.
-            if (_reportedPointerPosition != position)
-            {
-                return;
-            }
-        }
+        _pointerPositionChanged.Notify(position);
     }
 
     public void SetViewportSize(Vector2Int size)
@@ -277,7 +251,7 @@ public sealed class UiRoot
             layer.InvalidateMeasure();
         }
 
-        ViewportChanged?.Invoke(size);
+        _viewportChanged.Notify(size);
     }
 
     /// <summary>
