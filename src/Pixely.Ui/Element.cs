@@ -31,6 +31,8 @@ public class Element : ILayoutHost
     private Constraints _measuredWith;
     private Constraints _contentConstraints;
     private Rectangle _arrangedWithin;
+    private Vector2Int _offset;
+    private Vector2Int _anchor;
 
     public Element()
     {
@@ -111,6 +113,34 @@ public class Element : ILayoutHost
     {
         get => _height;
         set => SetMeasureProperty(ref _height, value);
+    }
+
+    /// <summary>
+    /// Moves this element after its parent has placed it, without changing where the parent thinks
+    /// it is. Deliberately an arrange property and deliberately absent from
+    /// <see cref="DesiredSize"/>: a tooltip that follows the pointer changes only this, so it costs
+    /// an arrange of one subtree and no measure at all.
+    /// </summary>
+    /// <remarks>
+    /// The parent is not told, which is the whole point and also the cost: an offset element can
+    /// overflow its parent, a parent sized to fit will not grow to contain it, and a clipping
+    /// ancestor still clips it.
+    /// </remarks>
+    public Vector2Int Offset
+    {
+        get => _offset;
+        set => SetArrangeProperty(ref _offset, value);
+    }
+
+    /// <summary>
+    /// Where this element wants to sit, in the coordinates of whatever is arranging it. Read only by
+    /// <see cref="AnchoredLayout"/>, which decides through its pivot which part of the element lands
+    /// here, and which keeps the result on screen.
+    /// </summary>
+    public Vector2Int Anchor
+    {
+        get => _anchor;
+        set => SetArrangeProperty(ref _anchor, value);
     }
 
     public Alignment HorizontalAlignment
@@ -518,8 +548,12 @@ public class Element : ILayoutHost
         int x = AlignAxis(inner.X, inner.Width, child.DesiredSize.X, child.HorizontalAlignment);
         int y = AlignAxis(inner.Y, inner.Height, child.DesiredSize.Y, child.VerticalAlignment);
 
-        child.Arrange(new Rectangle(x, y, child.DesiredSize.X, child.DesiredSize.Y), EffectiveClip);
+        child.Arrange(
+            new Rectangle(x + child.Offset.X, y + child.Offset.Y, child.DesiredSize.X, child.DesiredSize.Y),
+            EffectiveClip);
     }
+
+    void ILayoutHost.ArrangeChildAt(int index, Rectangle bounds) => _layoutChildren[index].Arrange(bounds, EffectiveClip);
 
     private int? GetDefiniteContentExtent(Orientation orientation)
     {

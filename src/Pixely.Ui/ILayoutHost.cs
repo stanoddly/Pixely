@@ -41,7 +41,20 @@ public interface ILayoutHost
     Vector2Int MeasureChildWithExtent(int index, Orientation orientation, int extent, Constraints available);
 
     /// <summary>
-    /// Places a child in <paramref name="slot"/>, applying its margin and alignment. Never measures.
+    /// Places a child in <paramref name="slot"/>, applying its margin, alignment and offset. Never
+    /// measures.
     /// </summary>
     void ArrangeChild(int index, Rectangle slot);
+
+    /// <summary>
+    /// Places a child at exactly <paramref name="bounds"/>, which becomes its
+    /// <see cref="Element.Bounds"/> unchanged: no margin, no alignment, no offset, no measuring.
+    /// </summary>
+    /// <remarks>
+    /// For a layout that computes a final rectangle itself, where the usual slot-and-alignment path
+    /// would only have to be undone. A layout that positions rather than allocates — one that pins a
+    /// popup to a point and keeps it on screen — knows the answer before it asks, and expressing it
+    /// as a slot chosen to make alignment produce that rectangle is arithmetic nobody can read.
+    /// </remarks>
+    void ArrangeChildAt(int index, Rectangle bounds);
 }
