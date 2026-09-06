@@ -56,6 +56,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
+                provider.GetWindow(viewScope),
                 viewScope,
                 inputOrder,
                 provider.GetRequiredService<IMouseService>()));
