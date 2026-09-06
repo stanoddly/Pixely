@@ -59,7 +59,9 @@ public static class UiExtensions
                 provider.GetWindow(viewScope),
                 viewScope,
                 inputOrder,
-                provider.GetRequiredService<IMouseService>()));
+                provider.GetRequiredService<IMouseService>(),
+                provider.GetRequiredService<IKeyboardService>(),
+                provider.GetRequiredService<ITextInputService>()));
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
             UiRenderer<TRenderContext>.Create(
