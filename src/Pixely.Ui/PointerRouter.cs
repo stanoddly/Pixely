@@ -97,8 +97,20 @@ internal sealed class PointerRouter
 
         // Cancel and hover callbacks can route the pointer themselves. Pressing on top of that would
         // hand capture to an element the current route has already moved away from.
-        if (target == null || _routeVersion != version)
+        if (_routeVersion != version)
         {
+            return false;
+        }
+
+        // A press on nothing still takes focus away, which is what makes clicking the background
+        // commit whatever was being edited.
+        if (target == null)
+        {
+            if (button == MouseButton.Left)
+            {
+                _root.Focus(null);
+            }
+
             return false;
         }
 
@@ -106,6 +118,15 @@ internal sealed class PointerRouter
         // That is the whole difference from a press that cannot be declined, and it is why
         // everything the callback may have changed is re-checked below.
         bool accepted = ((IPointerTarget)target).OnPointerPress(position, button);
+
+        // Focus moves on the left button and only the left button, before the checks below and well
+        // before any click is raised on release: a field has to have committed what was typed into it
+        // by the time the button the user clicked next acts on the value. Anything other than an
+        // accepted press on a focus target takes focus away, including a press on nothing at all.
+        if (button == MouseButton.Left)
+        {
+            _root.Focus(accepted ? target : null);
+        }
 
         if (!accepted)
         {
@@ -116,7 +137,7 @@ internal sealed class PointerRouter
         // Accepted, but the world it accepted in may be gone: the callback may have routed again or
         // detached the target. A nested press of this same button needs no separate check, because
         // routing at all is what bumps the version.
-        if (_routeVersion != version || !CanBeHit(target))
+        if (_routeVersion != version || !_root.CanBeHit(target))
         {
             ((IPointerTarget)target).OnPointerCancel(button);
 
@@ -182,36 +203,13 @@ internal sealed class PointerRouter
             // callback can end this button's gesture and start another one. Reachability is what
             // decides, so a replacement the callback just installed is kept and an unreachable one
             // is not, whichever order they arrived in.
-            if (captured != null && !CanBeHit(captured))
+            if (captured != null && !_root.CanBeHit(captured))
             {
                 Cancel((MouseButton)slot);
             }
         }
 
         Track();
-    }
-
-    /// <summary>
-    /// Whether hit testing could still reach <paramref name="element"/>. A target that was hidden,
-    /// disabled or detached mid-gesture has to lose capture: resuming when it comes back would turn
-    /// a press the user made before into a click on something else.
-    /// </summary>
-    private bool CanBeHit(Element element)
-    {
-        if (!ReferenceEquals(element.OwnerRoot, _root))
-        {
-            return false;
-        }
-
-        for (Element? ancestor = element; ancestor != null; ancestor = ancestor.Parent)
-        {
-            if (!ancestor.IsVisible || !ancestor.IsEnabled)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private void MoveTo(Vector2Int position)
@@ -352,7 +350,7 @@ internal sealed class PointerRouter
             // where a stalled input thread is not. Reaching the bound means the application's
             // callbacks are fighting the router, and the pairing lost there is worth less than
             // staying responsive.
-            for (int round = 0; _hovered != null && !CanBeHit(_hovered); round++)
+            for (int round = 0; _hovered != null && !_root.CanBeHit(_hovered); round++)
             {
                 if (round == MaxHoverSettlingRounds)
                 {
@@ -393,7 +391,7 @@ internal sealed class PointerRouter
         // A leave callback may have routed the pointer itself, or detached the element this
         // transition was heading for. Either way that result is the current one, so this transition
         // is abandoned rather than completed on top of it.
-        if (target == null || _routeVersion != version || !CanBeHit(target))
+        if (target == null || _routeVersion != version || !_root.CanBeHit(target))
         {
             return;
         }
@@ -426,7 +424,7 @@ internal sealed class PointerRouter
 
             Element candidate = _root.PointerTargetElements[i];
 
-            if (CanBeHit(candidate))
+            if (_root.CanBeHit(candidate))
             {
                 return candidate;
             }

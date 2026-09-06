@@ -25,10 +25,18 @@ public sealed class UiRoot
     // actually is rather than a change from nowhere.
     private Vector2Int _reportedPointerPosition;
 
+    private readonly FocusRouter _focusRouter;
+    private Element? _reportedFocus;
+
     private readonly ChangeNotifier<Vector2Int> _pointerPositionChanged = new();
+    private readonly ChangeNotifier<Element?> _focusChanged = new();
     private readonly ChangeNotifier<Vector2Int> _viewportChanged = new();
 
-    public UiRoot() => _pointerRouter = new PointerRouter(this);
+    public UiRoot()
+    {
+        _pointerRouter = new PointerRouter(this);
+        _focusRouter = new FocusRouter(this);
+    }
 
     /// <summary>
     /// The viewport the completed instructions were built for. The renderer refuses to present
@@ -173,6 +181,7 @@ public sealed class UiRoot
     {
         bool consumed = _pointerRouter.Pressed(position, button);
         ReportPointerPosition();
+        ReportFocus();
         return consumed;
     }
 
@@ -186,6 +195,75 @@ public sealed class UiRoot
 
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>
     public void PointerLeft() => _pointerRouter.Left();
+
+    /// <summary>The element taking keyboard input, if any.</summary>
+    public Element? FocusedElement => _focusRouter.Focused;
+
+    /// <summary>
+    /// Moves focus, or takes it away when <paramref name="element"/> is null. An element that is not
+    /// an <see cref="IFocusTarget"/>, or that input cannot reach, takes focus away instead of
+    /// receiving it.
+    /// </summary>
+    public void Focus(Element? element)
+    {
+        _focusRouter.Focus(element as IFocusTarget == null ? null : element);
+        ReportFocus();
+    }
+
+    /// <summary>
+    /// Routes a key to whatever holds focus. Returns true when it was used, so the caller can keep
+    /// the key from reaching whatever is underneath.
+    /// </summary>
+    public bool KeyPressed(Scancode scancode, Keyboard keyboard, bool isRepeat = false)
+    {
+        bool consumed = _focusRouter.KeyDown(scancode, keyboard, isRepeat);
+        ReportFocus();
+        return consumed;
+    }
+
+    /// <inheritdoc cref="KeyPressed"/>
+    public bool TextEntered(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        bool consumed = _focusRouter.TextInput(text);
+        ReportFocus();
+        return consumed;
+    }
+
+    /// <summary>
+    /// Raised when focus moves, with the element that now holds it or null. What starts and stops the
+    /// platform's text input reads this: the decision belongs to the final state a route settled on,
+    /// not to any of the transitions along the way.
+    /// </summary>
+    public event Action<Element?>? FocusChanged
+    {
+        add => _focusChanged.Add(value);
+        remove => _focusChanged.Remove(value);
+    }
+
+    /// <summary>
+    /// Whether input could still reach <paramref name="element"/>. A target that was hidden, disabled
+    /// or detached mid-gesture has to lose whatever it holds: resuming when it comes back would turn
+    /// a press the user made before into a click on something else, or send a key to a field that is
+    /// no longer on screen.
+    /// </summary>
+    internal bool CanBeHit(Element element)
+    {
+        if (!ReferenceEquals(element.OwnerRoot, this))
+        {
+            return false;
+        }
+
+        for (Element? ancestor = element; ancestor != null; ancestor = ancestor.Parent)
+        {
+            if (!ancestor.IsVisible || !ancestor.IsEnabled)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>Where the pointer last was, in the same coordinates the tree is laid out in.</summary>
     public Vector2Int PointerPosition => _pointerRouter.Position;
@@ -224,6 +302,19 @@ public sealed class UiRoot
     /// this one to say. That is what keeps a later subscriber from being told a position two routes
     /// out of date, after an earlier one has already moved on.
     /// </remarks>
+    private void ReportFocus()
+    {
+        Element? focused = _focusRouter.Focused;
+
+        if (ReferenceEquals(_reportedFocus, focused))
+        {
+            return;
+        }
+
+        _reportedFocus = focused;
+        _focusChanged.Notify(focused);
+    }
+
     private void ReportPointerPosition()
     {
         Vector2Int position = _pointerRouter.Position;
@@ -276,6 +367,7 @@ public sealed class UiRoot
         finally
         {
             _isUpdating = false;
+            ReportFocus();
         }
     }
 
@@ -299,6 +391,10 @@ public sealed class UiRoot
         // between arrange and paint: the new bounds are needed to hit test at all, and painting
         // afterwards is what keeps this frame from showing a hover the tree no longer has.
         _pointerRouter.Revalidate();
+
+        // Focus survives layout moving underneath it, but not the element leaving the tree, being
+        // hidden or being disabled. None of those produces a keyboard event, so nothing else notices.
+        _focusRouter.Revalidate();
 
         // A pointer callback may have restructured the tree, and the paint below draws it as it is
         // now. Collecting again keeps what can be hit matching what the frame shows; a hover that
