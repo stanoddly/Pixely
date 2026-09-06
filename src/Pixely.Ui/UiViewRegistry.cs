@@ -10,7 +10,7 @@ namespace Pixely.Ui;
 /// <para>
 /// So that registering a view is one line beside everything else it needs, rather than a line of
 /// registration and a second line somewhere else remembering to add it to a root. Which root is the
-/// view's own answer, through <see cref="UiView.ViewScope"/> — an application with a window per
+/// view's own answer, through <see cref="IUiView.ViewScope"/> — an application with a window per
 /// screen registers the same way for all of them.
 /// </para>
 /// <para>
@@ -18,10 +18,16 @@ namespace Pixely.Ui;
 /// is built after this is: the container decides the order, and a view that arrived first would
 /// otherwise be silently dropped.
 /// </para>
+/// <para>
+/// Register views as singletons. The container only keeps hold of a transient it has to dispose, so
+/// a transient view would be added to a root and never taken away again.
+/// </para>
 /// </remarks>
 internal sealed class UiViewRegistry
 {
-    private readonly List<UiView> _views = new();
+    // The root each view went to, rather than the scope it asked for. Disposal is where this is read,
+    // and by then the provider has marked itself disposed and will refuse to resolve anything.
+    private readonly List<(UiView View, UiRoot? Root)> _views = new();
 
     private ServiceProvider? _provider;
 
@@ -56,7 +62,12 @@ internal sealed class UiViewRegistry
         // Indexed rather than foreach: attaching a view can build another one, which lands here.
         for (int i = 0; i < _views.Count; i++)
         {
-            AddToRoot(_views[i]);
+            (UiView view, UiRoot? root) = _views[i];
+
+            if (root == null)
+            {
+                _views[i] = (view, AddToRoot(view));
+            }
         }
 
         return this;
@@ -64,7 +75,7 @@ internal sealed class UiViewRegistry
 
     private void Add(UiView view)
     {
-        foreach (UiView existing in _views)
+        foreach ((UiView existing, UiRoot? _) in _views)
         {
             if (ReferenceEquals(existing, view))
             {
@@ -72,27 +83,36 @@ internal sealed class UiViewRegistry
             }
         }
 
-        _views.Add(view);
-        AddToRoot(view);
+        _views.Add((view, null));
+        _views[^1] = (view, AddToRoot(view));
     }
 
     private void Remove(UiView view)
     {
-        if (!_views.Remove(view) || _provider == null || !view.IsAttached)
+        for (int i = 0; i < _views.Count; i++)
         {
+            (UiView existing, UiRoot? root) = _views[i];
+
+            if (!ReferenceEquals(existing, view))
+            {
+                continue;
+            }
+
+            _views.RemoveAt(i);
+            root?.RemoveView(view);
             return;
         }
-
-        ScopedUiRoot.GetRequired(_provider, view.ViewScope).Root.RemoveView(view);
     }
 
-    private void AddToRoot(UiView view)
+    private UiRoot? AddToRoot(UiView view)
     {
         if (_provider == null || view.IsAttached)
         {
-            return;
+            return null;
         }
 
-        ScopedUiRoot.GetRequired(_provider, view.ViewScope).Root.AddView(view);
+        UiRoot root = ScopedUiRoot.GetRequired(_provider, view.ViewScope).Root;
+        root.AddView(view);
+        return root;
     }
 }

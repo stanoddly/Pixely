@@ -10,6 +10,17 @@ public interface IUiViewModel
 }
 
 /// <summary>
+/// A view, from the point of view of whatever adds it to a root. Exists so an application can
+/// register one under this and let the container find it, rather than naming its concrete type
+/// wherever the wiring lives.
+/// </summary>
+public interface IUiView
+{
+    /// <summary>Which window this view belongs to.</summary>
+    ViewScope ViewScope { get; }
+}
+
+/// <summary>
 /// A view over one or more view models. The element tree is built once and afterwards the view only
 /// assigns to the elements it kept, which is the whole point of retaining the tree.
 /// </summary>
@@ -19,7 +30,7 @@ public interface IUiViewModel
 /// belongs to attach and detach. A view that also has to subscribe to something that is not a view
 /// model does it in <see cref="OnAttached"/>.
 /// </remarks>
-public abstract class UiView
+public abstract class UiView : IUiView
 {
     private readonly List<IUiViewModel> _viewModels = new();
 
@@ -102,7 +113,16 @@ public abstract class UiView
         }
         catch
         {
-            Detach();
+            try
+            {
+                Detach();
+            }
+            catch
+            {
+                // The caller is already unwinding with the reason this view could not be attached,
+                // which is more use than whatever went wrong tidying up after it.
+            }
+
             throw;
         }
     }
@@ -115,8 +135,14 @@ public abstract class UiView
         }
         finally
         {
-            Unsubscribe();
-            _root = null;
+            try
+            {
+                Unsubscribe();
+            }
+            finally
+            {
+                _root = null;
+            }
         }
     }
 
@@ -138,10 +164,25 @@ public abstract class UiView
         }
 
         _isSubscribed = false;
+        Exception? failure = null;
 
+        // Every model is let go of even if one of them objects, because leaving the rest subscribed
+        // would keep syncing a view that is no longer on screen. The first objection is still raised.
         foreach (IUiViewModel viewModel in _viewModels)
         {
-            viewModel.Changed -= Synchronize;
+            try
+            {
+                viewModel.Changed -= Synchronize;
+            }
+            catch (Exception exception)
+            {
+                failure ??= exception;
+            }
+        }
+
+        if (failure != null)
+        {
+            throw failure;
         }
     }
 }
