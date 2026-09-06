@@ -456,6 +456,30 @@ public class TextBoxTests
     }
 
     [Test]
+    public void AFieldsOwnBackgrounds_BeatAStyleThatAlsoSuppliesThem()
+    {
+        StateDrawables mine = new(new SolidDrawable(Colors.Red));
+        ExposedTextBox field = new() { Backgrounds = mine };
+        UiRoot root = new() { Style = new UiStyle { FieldBackground = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
+        root.AddLayer(new Column { Children = { field } });
+
+        Assert.That(field.ResolvedBackground(), Is.SameAs(mine.Normal));
+    }
+
+    [Test]
+    public void APlainBackgroundAssignedToTheField_BeatsTheStyle()
+    {
+        SolidDrawable plain = new(Colors.Red);
+        ExposedTextBox field = new() { Background = plain };
+        UiRoot root = new() { Style = new UiStyle { FieldBackground = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
+        root.AddLayer(new Column { Children = { field } });
+        root.Focus(field);
+
+        Assert.That(field.ResolvedBackground(), Is.SameAs(plain),
+            "one look for every state is what assigning it plainly asks for");
+    }
+
+    [Test]
     public void WithNoBackgroundsOfItsOwn_AFieldTakesTheStylesAndThenTheDefault()
     {
         StateDrawables styled = new(new SolidDrawable(Colors.Blue));

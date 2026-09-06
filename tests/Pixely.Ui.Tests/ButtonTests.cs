@@ -710,6 +710,20 @@ public class ButtonTests
     }
 
     [Test]
+    public void VisualState_KeepsTheValuesItAlreadyHad()
+    {
+        // Anything already compiled against these has the numbers baked in, so a reorder is a silent
+        // break: it makes an old Disabled mean something else.
+        Assert.Multiple(() =>
+        {
+            Assert.That((int)VisualState.Normal, Is.Zero);
+            Assert.That((int)VisualState.Hovered, Is.EqualTo(1));
+            Assert.That((int)VisualState.Pressed, Is.EqualTo(2));
+            Assert.That((int)VisualState.Disabled, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
     public void StateDrawables_ResolveFocusedAndFallBackWhenItIsNotSet()
     {
         SolidDrawable normal = new(Colors.Red);
