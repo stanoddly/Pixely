@@ -216,18 +216,8 @@ internal sealed class PointerRouter
 
     private void MoveTo(Vector2Int position)
     {
-        _isInWindow = true;
-
-        if (_position == position)
-        {
-            return;
-        }
-
         _position = position;
-
-        // Announced before hit testing, so anything that positions itself from the pointer has done
-        // so by the time this route decides what is under it.
-        _root.OnPointerPositionChanged(position);
+        _isInWindow = true;
     }
 
     private bool Track()

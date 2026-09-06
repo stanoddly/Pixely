@@ -21,6 +21,15 @@ public sealed class UiRoot
     private Vector2Int _viewportSize;
     private bool _layersChanged = true;
 
+    private Vector2Int _reportedPointerPosition;
+    private bool _hasReportedPointerPosition;
+    private Action<Vector2Int>? _pointerPositionChanged;
+
+    // The subscribers as an array, so reporting can stop partway through. Cached because a pointer
+    // reports on every move it makes, and asking the delegate for its invocation list each time would
+    // allocate on exactly the path a retained tree exists to keep quiet.
+    private Action<Vector2Int>[]? _pointerPositionSubscribers;
+
     public UiRoot() => _pointerRouter = new PointerRouter(this);
 
     /// <summary>
@@ -149,7 +158,12 @@ public sealed class UiRoot
     /// been laid out yet hits nothing. There is one pointer: these are not per-device, and feeding
     /// two mice into them interleaves their gestures into one.
     /// </remarks>
-    public bool PointerMoved(Vector2Int position) => _pointerRouter.Moved(position);
+    public bool PointerMoved(Vector2Int position)
+    {
+        bool consumed = _pointerRouter.Moved(position);
+        ReportPointerPosition();
+        return consumed;
+    }
 
     /// <inheritdoc cref="PointerMoved"/>
     /// <remarks>
@@ -157,12 +171,20 @@ public sealed class UiRoot
     /// captured and does not hide the press from whatever the UI is drawn over, so the buttons a
     /// screen does not use stay available to the game.
     /// </remarks>
-    public bool PointerPressed(Vector2Int position, MouseButton button = MouseButton.Left) =>
-        _pointerRouter.Pressed(position, button);
+    public bool PointerPressed(Vector2Int position, MouseButton button = MouseButton.Left)
+    {
+        bool consumed = _pointerRouter.Pressed(position, button);
+        ReportPointerPosition();
+        return consumed;
+    }
 
     /// <inheritdoc cref="PointerPressed"/>
-    public bool PointerReleased(Vector2Int position, MouseButton button = MouseButton.Left) =>
-        _pointerRouter.Released(position, button);
+    public bool PointerReleased(Vector2Int position, MouseButton button = MouseButton.Left)
+    {
+        bool consumed = _pointerRouter.Released(position, button);
+        ReportPointerPosition();
+        return consumed;
+    }
 
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>
     public void PointerLeft() => _pointerRouter.Left();
@@ -175,7 +197,19 @@ public sealed class UiRoot
     /// under it — a tooltip is not a hit target, so no <see cref="IPointerTarget"/> callback reaches
     /// it — and cheap to answer, because moving something is an arrange and not a measure.
     /// </summary>
-    public event Action<Vector2Int>? PointerPositionChanged;
+    public event Action<Vector2Int>? PointerPositionChanged
+    {
+        add
+        {
+            _pointerPositionChanged += value;
+            _pointerPositionSubscribers = null;
+        }
+        remove
+        {
+            _pointerPositionChanged -= value;
+            _pointerPositionSubscribers = null;
+        }
+    }
 
     /// <summary>
     /// Raised after the viewport changed and the layers were invalidated. Layout alone answers most
@@ -185,7 +219,49 @@ public sealed class UiRoot
     /// </summary>
     public event Action<Vector2Int>? ViewportChanged;
 
-    internal void OnPointerPositionChanged(Vector2Int position) => PointerPositionChanged?.Invoke(position);
+    /// <summary>
+    /// Reports the pointer's position once the route that moved it has finished. Deliberately not
+    /// from inside the route: a listener is free to route the pointer itself, and doing that partway
+    /// through a press would let it take the capture the outer press is about to install, or hand the
+    /// outer release a gesture that had only just begun.
+    /// </summary>
+    /// <remarks>
+    /// A listener that does route again reports from its own nested call, which leaves nothing for
+    /// this one to say. That is what keeps a later subscriber from being told a position two routes
+    /// out of date, after an earlier one has already moved on.
+    /// </remarks>
+    private void ReportPointerPosition()
+    {
+        Vector2Int position = _pointerRouter.Position;
+
+        if (_hasReportedPointerPosition && _reportedPointerPosition == position)
+        {
+            return;
+        }
+
+        _hasReportedPointerPosition = true;
+        _reportedPointerPosition = position;
+
+        if (_pointerPositionChanged == null)
+        {
+            return;
+        }
+
+        _pointerPositionSubscribers ??= Array.ConvertAll(
+            _pointerPositionChanged.GetInvocationList(), handler => (Action<Vector2Int>)handler);
+
+        foreach (Action<Vector2Int> subscriber in _pointerPositionSubscribers)
+        {
+            subscriber(position);
+
+            // One of them routed the pointer, and that route has already told everybody where it
+            // ended up. Carrying on would tell the rest of this list something two routes old.
+            if (_reportedPointerPosition != position)
+            {
+                return;
+            }
+        }
+    }
 
     public void SetViewportSize(Vector2Int size)
     {

@@ -63,7 +63,12 @@ public sealed class AnchoredLayout : ILayout
             // Everything is decided on the margin box and converted back at the end. A margin is
             // space the element asked to keep clear, so clamping the border box would push that
             // space off screen and call the result on screen.
-            Vector2Int size = new(child.DesiredSize.X + margin.Horizontal, child.DesiredSize.Y + margin.Vertical);
+            // Never negative, which margins are allowed to make it: an extent below zero would turn
+            // the clamp below into an inverted interval and let the element be placed past the far
+            // edge. Measure already treats an over-subtracted extent as nothing.
+            Vector2Int size = new(
+                Math.Max(0, child.DesiredSize.X + margin.Horizontal),
+                Math.Max(0, child.DesiredSize.Y + margin.Vertical));
 
             int x = Place(child.Anchor.X + child.Offset.X, size.X, HorizontalPivot, contentBounds.X, contentBounds.Width);
             int y = Place(child.Anchor.Y + child.Offset.Y, size.Y, VerticalPivot, contentBounds.Y, contentBounds.Height);

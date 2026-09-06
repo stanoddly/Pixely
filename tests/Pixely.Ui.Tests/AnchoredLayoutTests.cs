@@ -129,6 +129,60 @@ public class AnchoredLayoutTests
             "an anchor places an element without resizing what holds it, exactly as an offset does");
     }
 
+    [Test]
+    public void ChangingAnAnchor_ArrangesWithoutMeasuringOrDisturbingASibling()
+    {
+        MeasuredBox moving = Sized(40, 20);
+        MeasuredBox still = Sized(40, 20);
+        still.Anchor = new Vector2Int(10, 10);
+        Element host = new() { Layout = AnchoredLayout.TopLeft, Children = { moving, still } };
+        Layout.Run(host, 320, 240);
+        int measures = moving.MeasureCount;
+        int stillArranges = still.ArrangeCount;
+
+        moving.Anchor = new Vector2Int(60, 60);
+        Layout.Run(host, 320, 240);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(moving.Bounds, Is.EqualTo(new Rectangle(60, 60, 40, 20)));
+            Assert.That(moving.MeasureCount, Is.EqualTo(measures), "an anchor is not an input to measure");
+            Assert.That(still.ArrangeCount, Is.EqualTo(stillArranges), "and moving one child does not rearrange another");
+        });
+    }
+
+    [Test]
+    public void MarginsLargerThanTheChild_DoNotPlaceItPastTheFarEdge()
+    {
+        MeasuredBox child = Sized(40, 20);
+        child.Anchor = new Vector2Int(1000, 1000);
+        child.Margin = new Thickness(-30, -30, -30, -30);
+        Element host = Anchored(child);
+
+        Layout.Run(host, 320, 240);
+
+        // The margin box would be 20 wide by 40 short of nothing; treated as an extent it is negative,
+        // and clamping between crossed bounds would let the anchor through unchanged.
+        Assert.Multiple(() =>
+        {
+            Assert.That(child.Bounds.X, Is.LessThanOrEqualTo(320));
+            Assert.That(child.Bounds.Y, Is.LessThanOrEqualTo(240));
+        });
+    }
+
+    [Test]
+    public void AStretchPivot_ReadsAsStart()
+    {
+        MeasuredBox child = Sized(40, 20);
+        child.Anchor = new Vector2Int(100, 50);
+        Element host = Anchored(child, new AnchoredLayout(Alignment.Stretch, Alignment.Stretch));
+
+        Layout.Run(host, 320, 240);
+
+        Assert.That(child.Bounds, Is.EqualTo(new Rectangle(100, 50, 40, 20)),
+            "there is no extent to fill against a point");
+    }
+
     private static MeasuredBox Sized(int width, int height) =>
         new() { Width = Sizing.Fixed(width), Height = Sizing.Fixed(height) };
 

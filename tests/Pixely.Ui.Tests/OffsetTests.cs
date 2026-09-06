@@ -31,11 +31,17 @@ public class OffsetTests
         Element host = new Column { Children = { first, second } };
         Layout.Run(host, 320, 240);
 
+        int arranges = second.ArrangeCount;
+
         first.Offset = new Vector2Int(0, 100);
         Layout.Run(host, 320, 240);
 
-        Assert.That(second.Bounds, Is.EqualTo(new Rectangle(0, 20, 40, 20)),
-            "the parent still allocates from the size it measured, so the slot the offset element left is not reclaimed");
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.Bounds, Is.EqualTo(new Rectangle(0, 20, 40, 20)),
+                "the parent still allocates from the size it measured, so the slot the offset element left is not reclaimed");
+            Assert.That(second.ArrangeCount, Is.EqualTo(arranges), "and the sibling is not arranged again to be told so");
+        });
     }
 
     [Test]

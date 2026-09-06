@@ -51,7 +51,7 @@ public class RootNotificationTests
     }
 
     [Test]
-    public void APositionListener_RunsBeforeHitTesting()
+    public void APositionListener_RunsOnceTheRouteHasFinished()
     {
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new();
@@ -59,15 +59,79 @@ public class RootNotificationTests
         root.SetViewportSize(new Vector2Int(320, 240));
         root.Update();
 
-        // Positioning from the pointer only works if the move is announced before the route decides
-        // what is under it, or the tree is one event behind whatever follows the cursor.
+        // A listener may route the pointer itself, so it runs when there is no route in flight for it
+        // to interfere with. Nothing is lost by the wait: what follows the pointer is not a hit target
+        // and only needs the position before the next pass, which has not run yet either.
         List<string> order = new();
         root.PointerPositionChanged += _ => order.Add("reported");
         target.WhenEntered = () => order.Add("entered");
 
         root.PointerMoved(new Vector2Int(10, 10));
 
-        Assert.That(order, Is.EqualTo(new[] { "reported", "entered" }));
+        Assert.That(order, Is.EqualTo(new[] { "entered", "reported" }));
+    }
+
+    [Test]
+    public void APositionListenerThatRoutesAgain_LeavesEverySubscriberOnTheLatestPosition()
+    {
+        UiRoot root = Empty();
+        List<Vector2Int> second = new();
+        bool routed = false;
+
+        root.PointerPositionChanged += _ =>
+        {
+            if (routed)
+            {
+                return;
+            }
+
+            routed = true;
+            root.PointerMoved(new Vector2Int(99, 99));
+        };
+        root.PointerPositionChanged += second.Add;
+
+        root.PointerMoved(new Vector2Int(12, 34));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(second, Is.EqualTo(new[] { new Vector2Int(99, 99) }),
+                "a subscriber is never told a position an earlier one has already moved on from");
+            Assert.That(root.PointerPosition, Is.EqualTo(new Vector2Int(99, 99)));
+        });
+    }
+
+    [Test]
+    public void APositionListenerThatPresses_DoesNotHijackAReleaseInFlight()
+    {
+        RecordingPointerTarget held = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
+        RecordingPointerTarget other = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { held, other } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        held.Calls.Clear();
+
+        // Reported from inside the route, this press would land before the release had read which
+        // gesture it was ending. The release would then find the brand new capture and end that
+        // instead, and the gesture it was actually for would hear only a cancel.
+        bool pressed = false;
+        root.PointerPositionChanged += _ =>
+        {
+            if (pressed)
+            {
+                return;
+            }
+
+            pressed = true;
+            root.PointerPressed(new Vector2Int(50, 10), MouseButton.Left);
+        };
+
+        root.PointerReleased(new Vector2Int(50, 10), MouseButton.Left);
+
+        Assert.That(held.Calls, Does.Contain("release 50,10 Left inside=False"),
+            "the release ends the gesture it was made for");
     }
 
     [Test]
