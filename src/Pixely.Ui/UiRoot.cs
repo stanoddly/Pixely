@@ -1,3 +1,5 @@
+using Pixely.Input;
+
 namespace Pixely.Ui;
 
 /// <summary>
@@ -150,12 +152,19 @@ public sealed class UiRoot
     public bool PointerMoved(Vector2Int position) => _pointerRouter.Moved(position);
 
     /// <inheritdoc cref="PointerMoved"/>
-    public bool PointerPressed(Vector2Int position) => _pointerRouter.Pressed(position);
+    /// <remarks>
+    /// Consumed only when a target took <paramref name="button"/>. A target that declines it is not
+    /// captured and does not hide the press from whatever the UI is drawn over, so the buttons a
+    /// screen does not use stay available to the game.
+    /// </remarks>
+    public bool PointerPressed(Vector2Int position, MouseButton button = MouseButton.Left) =>
+        _pointerRouter.Pressed(position, button);
 
-    /// <inheritdoc cref="PointerMoved"/>
-    public bool PointerReleased(Vector2Int position) => _pointerRouter.Released(position);
+    /// <inheritdoc cref="PointerPressed"/>
+    public bool PointerReleased(Vector2Int position, MouseButton button = MouseButton.Left) =>
+        _pointerRouter.Released(position, button);
 
-    /// <summary>The pointer left the window, which cancels a press in progress.</summary>
+    /// <summary>The pointer left the window, which cancels every press in progress.</summary>
     public void PointerLeft() => _pointerRouter.Left();
 
     public void SetViewportSize(Vector2Int size)

@@ -19,7 +19,7 @@ internal sealed class UiInputSystem
 
         mouseService.SubscribeButtonPress(viewScope, inputOrder, eventArgs =>
         {
-            if (eventArgs.Button == MouseButton.Left && root.PointerPressed((Vector2Int)eventArgs.Position))
+            if (root.PointerPressed((Vector2Int)eventArgs.Position, eventArgs.Button))
             {
                 eventArgs.Consume();
             }
@@ -27,7 +27,7 @@ internal sealed class UiInputSystem
 
         mouseService.SubscribeButtonRelease(viewScope, inputOrder, eventArgs =>
         {
-            if (eventArgs.Button == MouseButton.Left && root.PointerReleased((Vector2Int)eventArgs.Position))
+            if (root.PointerReleased((Vector2Int)eventArgs.Position, eventArgs.Button))
             {
                 eventArgs.Consume();
             }
