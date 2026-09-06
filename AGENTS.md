@@ -12,6 +12,7 @@
 - `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies
 - `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
 - `docs/subrenderers.md` - Composing multiple renderers within IRenderer<T> (IOrderable, IEnumerable injection)
+- `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, views and view models, pointer and focus routing, text fields, styling
 - `docs/architecture-concept.md` - MVP + CQS + Events: layer responsibilities, boundary contract vs. internal representation, per-genre decision framework
 - `docs/architecture-library.md` - Pixely.Architecture API: command/query handlers, dispatcher, domain event stream/cursor, pump, post-dispatch hooks, registration extensions
 - `docs/architecture-testing.md` - Pixely.Architecture.Testing: CqsConventions and ModelBoundary checks that enforce the architecture-concept.md boundary claims as unit tests
