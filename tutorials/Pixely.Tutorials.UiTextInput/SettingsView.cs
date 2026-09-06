@@ -38,9 +38,10 @@ public sealed class SettingsView : UiView<SettingsViewModel>
         _name = Field(new TextBox());
         _name.Committed += text => ViewModel.Name = text;
 
-        // A NumberBox refuses a keystroke that cannot lead to a number, while still allowing the
-        // ones on the way to it: "-", "1." and "1e" are all accepted. Finishing is what requires a
-        // complete number, so ValueCommitted only ever carries one the view model can take as it is.
+        // A NumberBox refuses a keystroke that cannot lead to a number of its own type, while still
+        // allowing the ones on the way to one: an int field takes "-" but not "1.", where the float
+        // field below takes both. Finishing is what requires a complete number, so ValueCommitted
+        // only ever carries one the view model can take as it is.
         _width = Field(new NumberBox<int>(formatProvider: CultureInfo.InvariantCulture));
         _width.ValueCommitted += value => ViewModel.Width = value;
 
@@ -70,7 +71,7 @@ public sealed class SettingsView : UiView<SettingsViewModel>
             Children =
             {
                 new Label("Settings") { Role = TextRole.Title, Color = Accent },
-                new Label("Click a field to edit. Enter or clicking away commits; Escape cancels.") { Color = Caption },
+                new Label("Click a field to edit. Enter or clicking away commits a valid value; Escape cancels.") { Color = Caption },
 
                 new Column(gap: 10)
                 {

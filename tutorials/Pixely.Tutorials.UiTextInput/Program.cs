@@ -8,8 +8,9 @@ namespace Pixely.Tutorials.UiTextInput;
 
 /// <summary>
 /// Editable fields in a retained UI. The immediate-mode version of this tutorial lives in
-/// <c>Pixely.Tutorials.TextInput</c>; the difference is that a field here keeps its own edit and
-/// its own focus, so nothing is passed by reference through a build that runs every frame.
+/// <c>Pixely.Tutorials.TextInput</c>; the difference is that a field here is an element holding its
+/// own edit, so nothing is passed by reference through a build that runs every frame. Focus belongs
+/// to the root, which tells the field when it has it.
 /// </summary>
 static class Program
 {
@@ -36,7 +37,7 @@ static class Program
 
         builder.OnStart((AppControl appControl, IKeyboardService keyboardService) =>
         {
-            Console.WriteLine("Click a field to edit it. Enter or clicking away commits, Escape cancels, Escape outside a field quits.");
+            Console.WriteLine("Click a field to edit it. Enter or clicking away commits a valid value, Escape cancels, Escape outside a field quits.");
 
             keyboardService.KeyDown += eventArgs =>
             {

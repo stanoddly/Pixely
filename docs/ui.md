@@ -1,6 +1,6 @@
 # Retained UI
 
-`Pixely.Ui` builds a tree of elements once and keeps it. A change writes to the element it concerns rather than rebuilding anything. `Pixely.Pencuil` is the immediate-mode alternative: it has no tree, and every change reruns the whole build.
+`Pixely.Ui` builds a tree of elements once and keeps it. A change writes to the element it concerns rather than rebuilding the element tree. `Pixely.Pencuil` is the immediate-mode alternative: it has no tree, and every change reruns the whole build.
 
 What that buys is measure and arrange, which are cached per subtree: a clean subtree asked for the same size and the same position returns what it already holds. Painting is not incremental — any rebuild walks every visible element and produces the instruction list afresh. So a change costs the layout of the path it invalidated plus a full repaint, not a full rebuild.
 
@@ -78,7 +78,7 @@ new Row(gap: 8)      // Layout = new StackLayout(Orientation.Horizontal, 8)
 new Overlay()        // Layout = OverlayLayout.Instance, every child offered the whole content box
 ```
 
-An overlay offers each child the same slot; it does not force them to fill it. A `Fit` child keeps its desired size and is placed in that slot by its alignment, and only a stretching or growing child spans it.
+An overlay offers each child the same slot; it does not force them to fill it. A `Fit` child keeps its desired size and is placed in that slot by its alignment. A child spans the slot when its sizing works out that way — stretching, growing, `Percent(1f)`, a matching fixed size, or content that happens to be that big.
 
 `AnchoredLayout` pins each child to its own `Anchor` point and keeps it inside the parent, which is what a context menu or a tooltip needs:
 
@@ -92,7 +92,7 @@ Element layer = new()
 };
 ```
 
-`Anchor` is a coordinate in the arranging layout's space. The pivot says which point of the child's own margin box lands on it — `Start` its leading edge, `Center` its middle, `End` its trailing edge. `Offset` is added to the anchor, and the result is then moved back inside the parent, so a menu opening near the right edge stays on screen. A child larger than the parent is pinned to the leading edge instead, since no position fits.
+`Anchor` is a coordinate in the arranging layout's space. The pivot says which point of the child's own margin box lands on it — `Start` its leading edge, `Center` its middle, `End` its trailing edge. `Offset` is added to the anchor, and the margin box is then moved back inside the parent, so a menu opening near the right edge stays on screen. A child larger than the parent is pinned to the leading edge instead, since no position fits. It is the margin box that is kept inside, so a negative margin can still leave the child's own bounds outside.
 
 `Alignment.Stretch` is accepted as a pivot and behaves as `Start`: there is no extent to fill against a point.
 
@@ -100,7 +100,7 @@ Clamping is why this is a layout rather than an `Offset` the caller computes: a 
 
 Anchoring to something in the world means converting first — casting `Vector2` to `Vector2Int` truncates, so round if the anchor came from a camera.
 
-`Offset` moves an element after its parent placed it. It is an arrange property, so changing it re-arranges without re-measuring anything.
+`Offset` shifts an element away from where its layout put it, and is an arrange property, so changing it re-arranges without re-measuring anything. Stacks and overlays apply it after alignment; `AnchoredLayout` instead adds it to the anchor before pivoting and clamping, so there it moves the anchor rather than the result.
 
 Write a custom `ILayout` when allocation is the thing that differs. `ILayoutHost` is the sizing mechanics the layout calls into; `Element` implements it.
 
@@ -110,7 +110,7 @@ Write a custom `ILayout` when allocation is the thing that differs. `ILayoutHost
 
 Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background.
 
-A custom element overrides `MeasureContent` and `PaintContent`, and caps its children with `MaxChildCount` when it draws its own content:
+A custom element overrides `MeasureContent` and `PaintContent`. Drawing content and having children are independent — `MeasureContent` can measure intrinsic content against `MeasureChildren` — so set `MaxChildCount` only to say what the element actually accepts. `Divider` below sets zero because it is a leaf, not because it paints:
 
 ```csharp
 public sealed class Divider : Element
@@ -178,15 +178,17 @@ public sealed class ScoreView : UiView<ScoreViewModel>
 }
 ```
 
-`Build` runs once per attachment, and `Sync` runs on attach and then only when the model reports a change — never per frame. Detaching clears the tree, so a view attached again builds again.
+`Build` runs on attach, and `Sync` runs on attach and then only when the model reports a change — never per frame.
+
+In practice a view is attached once. `Build` runs again on a second attach, but detaching does not take the tree apart: the elements a view kept are still parented to the tree the first `Build` made, and composing them into a fresh one throws. Treat a detached view as spent rather than reusable.
 
 Creating elements and subscribing to them in the constructor is the intended shape; what a constructor must not do is call `Build` or `Sync`, which are virtual and would run before a derived class had initialised its fields. That is why attaching, not construction, is what builds the tree.
 
 Assigning an unchanged value to an ordinary property is a no-op — the setters compare before invalidating — so `Sync` can write every scalar it owns without checking which one moved.
 
-`Button.Content` and `ClipBorder.Content` are the exception: they are backed by the child collection and assigning one clears and re-adds the child whatever it is, which invalidates structurally. Write to the content element you kept rather than reassigning the property.
+`Button.Content` and `ClipBorder.Content` are the exception: they are backed by the child collection, so assigning one clears and re-adds the child even when it is the same element, which invalidates structurally. (Assigning `null` to an already-empty one does nothing.) Write to the content element you kept rather than reassigning the property.
 
-A view reading more than one model calls `Observe` for each; the subscription is owned by the base and lifetime-scoped, and observing the same model twice is ignored. `OnAttached` and `OnDetached` are the hooks for anything the view holds that is not an element.
+A view reading more than one model calls `Observe` for each; the base owns the subscribing and unsubscribing, and observing the same model twice is ignored. The list of observed models lasts as long as the view, while the `Changed` subscriptions exist only while it is attached. Observing a model after attachment subscribes it but does not synchronise there and then. `OnAttached` and `OnDetached` are the hooks for anything the view holds that is not an element.
 
 ## Registering views
 
@@ -205,9 +207,9 @@ Attaching by hand with `root.AddView(view)` stays available and is what the tuto
 
 An element takes the pointer by implementing `IPointerTarget`. `OnPointerPress` returns whether the element takes that button: only an accepted press is captured, and only an accepted press leads to a release or a cancel. A declined press is left unconsumed and reaches whatever is behind the UI.
 
-Capture is per button, so a right-drag and a left-drag can be held by different elements at once. While a gesture is in progress its element is the only one that can be hovered, which is what makes a pressed button un-highlight when the pointer is dragged off it and light up again on return. Hover has one owner even when several buttons are held: the left button's capture if there is one, and otherwise the oldest capture still standing.
+Capture is per button, so a right-drag and a left-drag can be held by different elements at once. Hover then has a single owner: the left button's capture if there is one, otherwise the oldest capture still standing. While a gesture is in progress that owner is the only element that can be hovered, which is what makes a pressed button un-highlight when the pointer is dragged off it and light up again on return — an element holding some other button meanwhile is not hovered at all.
 
-`OnPointerRelease` reports whether the release landed inside, which is what separates a click from a press the user dragged away. `inside` means the captured element is still the topmost target at that position, not merely that the position is within its bounds — something drawn over it makes the release land outside.
+`OnPointerRelease` reports whether the release landed inside, which is what separates a click from a press the user dragged away. `inside` means the captured element is still the topmost target at that position, not merely that the position is within its bounds — another `IPointerTarget` over it makes the release land outside. A purely visual element drawn on top changes nothing, since only pointer targets are hit-tested.
 
 `OnPointerCancel` means the press ended without a release the element can be told about. That covers more than losing a drag: the pointer left the window, the same button was pressed again anywhere — the old gesture is cancelled before the new press is even hit-tested, so a press that goes on to be declined still cancels it — the element left the tree or became hidden or disabled, or the press was accepted at a moment when capture could not be installed.
 
@@ -217,11 +219,11 @@ Callbacks may do anything, including pressing again, moving the pointer, or rest
 
 ## Focus, keyboard and text
 
-An element takes the keyboard by implementing `IFocusTarget`. A left press moves focus to the element it lands on only when that press was accepted *and* the element is an `IFocusTarget`; anything else takes focus away, including an accepted press on a `Button`, which is only an `IPointerTarget`. `UiRoot.Focus` sets it directly and applies the same rule, and `FocusChanged` reports where it ended up.
+An element takes the keyboard by implementing `IFocusTarget`. A left press moves focus to the element it lands on only when that press was accepted *and* the element is an `IFocusTarget`; anything else takes focus away, including an accepted press on a `Button`, which is only an `IPointerTarget`. `UiRoot.Focus` sets it directly — there is no press to accept, so it requires only that the element is an `IFocusTarget` and that input can still reach it — and `FocusChanged` reports where it ended up.
 
 `OnKeyDown` returns whether the element used the key, which is what keeps it from reaching the game. `isRepeat` says whether the platform produced it because the key is held: moving a caret and deleting want repeats, anything that toggles a mode does not. `OnTextInput` receives text the platform has already committed, however many keystrokes it took.
 
-Focus is reconciled against the tree, so an element that is removed, hidden or disabled loses focus even though none of those raises an input event. Reconciliation is not instant: hiding or disabling only invalidates, and focus is settled on the next `UiRoot.Update`, on the next input dispatch, or immediately when a whole layer is removed. Until then `FocusedElement` can still name the element that just became unreachable.
+Focus is reconciled against the tree, so an element that is removed, hidden or disabled loses focus even though none of those raises an input event. Reconciliation is not instant: hiding or disabling only invalidates. Focus is settled on the next `UiRoot.Update`, on a key or text dispatch, on a pointer press, or immediately when a whole layer is removed — but not on pointer motion, release or window leave. Until then `FocusedElement` can still name the element that just became unreachable.
 
 The input bridge subscribes at `inputOrder`, which defaults to `-10_000`. Handlers run in ascending priority and a consumed event stops the rest, so the UI sees input before a plain `keyboardService.KeyDown +=` at priority `0`. A key the focused element does not use is left unconsumed and carries on to those handlers, so being focused does not swallow everything. Platform text input is started and stopped from where focus ends up, not from the transitions on the way there.
 
@@ -239,9 +241,11 @@ NumberBox<int> width = new(formatProvider: CultureInfo.InvariantCulture) { Width
 width.ValueCommitted += value => viewModel.Width = value;
 ```
 
-Enter commits and releases focus, Escape cancels, and clicking away commits. `Committed` and `ValueCommitted` are the only notifications — a field does not report every keystroke.
+Enter commits an acceptable value and releases focus, Escape cancels, and clicking away commits. `Committed` and `ValueCommitted` are the only notifications — a field does not report every keystroke.
 
-A field that will not accept what is in it does not commit. `NumberBox<T>` allows the values on the way to a number — `-`, `1.` and `1e` are all typable, since refusing them would make the numbers they lead to unreachable — but only a complete, finite number finishes an edit. Enter on an incomplete one consumes the key and keeps focus, leaving the user looking at what needs fixing; losing focus discards the edit rather than committing it. Infinity and NaN parse and are still refused.
+A field that will not accept what is in it does not commit. `NumberBox<T>` allows the values on the way to a number, since refusing them would make the numbers they lead to unreachable: a candidate is accepted when it is empty, parses as `T`, or parses with a digit appended. What that admits therefore depends on `T` — `NumberBox<float>` takes `-`, `1.` and `1e`, while `NumberBox<int>` takes `-` and rejects the other two.
+
+Only a complete number finishes an edit. Enter on an incomplete one consumes the key and keeps focus, leaving the user looking at what needs fixing; losing focus discards the edit rather than committing it. For the types whose parsers produce them, infinity and NaN are refused as well.
 
 Copy and paste do nothing until `Clipboard` is set. Cut still deletes the selection, since deleting is the half that needs no clipboard. `Clipboard` is a property rather than a constructor dependency because an element is not resolved from the container.
 

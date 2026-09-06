@@ -53,6 +53,11 @@ public sealed class SettingsViewModel : IUiViewModel
     /// </summary>
     public void Reset()
     {
+        if (_name == "Player" && _width == 64 && _height == 48 && _scale == 1f)
+        {
+            return;
+        }
+
         _name = "Player";
         _width = 64;
         _height = 48;
