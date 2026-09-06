@@ -1,0 +1,298 @@
+using System.Globalization;
+using Pixely.Input;
+
+namespace Pixely.Ui.Tests;
+
+/// <summary>
+/// A field's behaviour: what reaches the value, when, and what happens to an edit that is abandoned
+/// or refused. Nothing here lays the tree out, because measuring text needs a font and a font needs
+/// a GPU — the drawing is exercised by running the application, the same as <see cref="Label"/>.
+/// </summary>
+public class TextBoxTests
+{
+    private static readonly Keyboard NoModifiers = new();
+
+    [Test]
+    public void AnUnfocusedField_ShowsItsValue()
+    {
+        TextBox field = new() { Text = "hello" };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.DisplayText, Is.EqualTo("hello"));
+            Assert.That(field.IsEditing, Is.False);
+        });
+    }
+
+    [Test]
+    public void FocusingAField_StartsAnEditFromItsValue()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+
+        root.Focus(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.IsEditing, Is.True);
+            Assert.That(field.DisplayText, Is.EqualTo("hello"));
+        });
+    }
+
+    [Test]
+    public void TypingIntoAFocusedField_LeavesTheValueAlone()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        root.TextEntered("!");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.DisplayText, Is.EqualTo("hello!"));
+            Assert.That(field.Text, Is.EqualTo("hello"), "nothing reaches the value until the edit finishes");
+        });
+    }
+
+    [Test]
+    public void AssigningWhileFocused_DoesNotDisturbWhatIsBeingTyped()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("!");
+
+        field.Text = "elsewhere";
+
+        Assert.That(field.DisplayText, Is.EqualTo("hello!"),
+            "a value changing under someone's hands mid-word is worse than it arriving late");
+    }
+
+    [Test]
+    public void Enter_CommitsAndGivesUpFocus()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("!");
+        List<string> committed = new();
+        field.Committed += committed.Add;
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.Text, Is.EqualTo("hello!"));
+            Assert.That(committed, Is.EqualTo(new[] { "hello!" }));
+            Assert.That(root.FocusedElement, Is.Null);
+        });
+    }
+
+    [Test]
+    public void Escape_DiscardsAndGivesUpFocus()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("!");
+        List<string> committed = new();
+        field.Committed += committed.Add;
+
+        root.KeyPressed(Scancode.Escape, NoModifiers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.Text, Is.EqualTo("hello"));
+            Assert.That(committed, Is.Empty);
+            Assert.That(root.FocusedElement, Is.Null);
+        });
+    }
+
+    [Test]
+    public void LosingFocus_Commits()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("!");
+
+        root.Focus(null);
+
+        Assert.That(field.Text, Is.EqualTo("hello!"));
+    }
+
+    [Test]
+    public void TheEditIsOverBeforeCommittedIsRaised()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        bool editingDuringCommit = true;
+        field.Committed += _ => editingDuringCommit = field.IsEditing;
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.That(editingDuringCommit, Is.False,
+            "a handler that assigns to this field is not fighting an edit that is still in progress");
+    }
+
+    [Test]
+    public void AHandlerThatAssignsBackToTheField_Sticks()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("!");
+        field.Committed += _ => field.Text = "rewritten";
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.That(field.Text, Is.EqualTo("rewritten"));
+    }
+
+    [Test]
+    public void AKeyThatMeansNothingToTheField_IsLeftForTheGame()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        Assert.That(root.KeyPressed(Scancode.F1, NoModifiers), Is.False);
+    }
+
+    [Test]
+    public void AnUnfocusedField_TakesNoKeys()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.KeyPressed(Scancode.Backspace, NoModifiers), Is.False);
+            Assert.That(root.TextEntered("x"), Is.False);
+            Assert.That(field.Text, Is.EqualTo("hello"));
+        });
+    }
+
+    [Test]
+    public void ANumberField_RefusesLettersWhileTyping()
+    {
+        NumberBox<float> field = new(formatProvider: CultureInfo.InvariantCulture);
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        root.TextEntered("1");
+        root.TextEntered("x");
+        root.TextEntered("2");
+
+        Assert.That(field.DisplayText, Is.EqualTo("12"));
+    }
+
+    [TestCase("-")]
+    [TestCase("1.")]
+    [TestCase("-1.")]
+    public void ANumberField_AcceptsWhatIsOnTheWayToANumber(string typed)
+    {
+        NumberBox<float> field = new(formatProvider: CultureInfo.InvariantCulture);
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        foreach (char character in typed)
+        {
+            root.TextEntered(character.ToString());
+        }
+
+        Assert.That(field.DisplayText, Is.EqualTo(typed), "refusing these would make the number they lead to unreachable");
+    }
+
+    [Test]
+    public void ANumberField_WillNotCommitSomethingIncomplete()
+    {
+        NumberBox<float> field = new(formatProvider: CultureInfo.InvariantCulture) { Text = "5" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.KeyPressed(Scancode.Backspace, NoModifiers);
+        root.TextEntered("-");
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.DisplayText, Is.EqualTo("-"), "what was typed is still there to be fixed");
+            Assert.That(field.Text, Is.EqualTo("5"), "the old value is still what the application sees");
+            Assert.That(root.FocusedElement, Is.SameAs(field), "and the caret stays where the problem is");
+        });
+    }
+
+    [Test]
+    public void ANumberFieldLosingFocusMidEdit_ThrowsTheEditAway()
+    {
+        NumberBox<float> field = new(formatProvider: CultureInfo.InvariantCulture) { Text = "5" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.TextEntered("-");
+
+        root.Focus(null);
+
+        Assert.That(field.Text, Is.EqualTo("5"));
+    }
+
+    [Test]
+    public void ANumberField_ReportsItsValueAndHonoursItsCulture()
+    {
+        NumberBox<float> field = new(formatProvider: new CultureInfo("de-DE"));
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        List<float> committed = new();
+        field.ValueCommitted += committed.Add;
+
+        foreach (char character in "1,5")
+        {
+            root.TextEntered(character.ToString());
+        }
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(committed, Is.EqualTo(new[] { 1.5f }));
+            Assert.That(field.Value, Is.EqualTo(1.5f));
+        });
+    }
+
+    [Test]
+    public void ANumberField_RefusesInfinity()
+    {
+        NumberBox<float> field = new(formatProvider: CultureInfo.InvariantCulture) { Text = "1" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        root.KeyPressed(Scancode.Backspace, NoModifiers);
+        root.TextEntered("Infinity");
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.That(field.Text, Is.EqualTo("1"), "parseable, but not a value a field like this is asking for");
+    }
+
+    [Test]
+    public void SettingANumberFieldsValue_WritesItInItsOwnCulture()
+    {
+        NumberBox<float> field = new(formatProvider: new CultureInfo("de-DE"));
+
+        field.SetValue(1.5f);
+
+        Assert.That(field.Text, Is.EqualTo("1,5"));
+    }
+
+    /// <summary>
+    /// Rooted but never laid out: <see cref="UiRoot.Update"/> would measure, and measuring text needs
+    /// a font. Focus only needs the element to be reachable, which being in the tree is enough for.
+    /// </summary>
+    private static UiRoot Rooted(Element field)
+    {
+        UiRoot root = new();
+        root.AddLayer(new Column { Children = { field } });
+        return root;
+    }
+}

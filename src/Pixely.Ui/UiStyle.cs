@@ -1,3 +1,4 @@
+using Pixely.Gpu;
 using Pixely.Text;
 
 namespace Pixely.Ui;
@@ -43,4 +44,13 @@ public sealed class UiStyle
     /// nothing per button.
     /// </summary>
     public StateDrawables ButtonBackground { get; init; } = Button.DefaultBackground;
+
+    /// <summary>
+    /// Behind selected text. Its own value rather than part of a drawable, because it is painted
+    /// under a run of characters whose extent is only known while the text is being drawn.
+    /// </summary>
+    public Color Selection { get; init; } = DefaultSelection;
+
+    /// <summary>Used when no style supplies one, so a field is usable without any setup.</summary>
+    public static Color DefaultSelection { get; } = new(51, 102, 170, 180);
 }
