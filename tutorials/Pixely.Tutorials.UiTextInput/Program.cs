@@ -45,7 +45,9 @@ static class Program
                 // edited uses Escape to cancel, so Escape reaches here only when none is — which is
                 // what keeps one press from both cancelling and quitting. Keys a field does not use
                 // still come through.
-                if (eventArgs.Key == VirtualKey.Escape)
+                // Repeats are ignored because cancelling an edit releases focus: holding Escape
+                // would otherwise cancel on the first event and quit on the next one.
+                if (eventArgs.Key == VirtualKey.Escape && !eventArgs.Repeat)
                 {
                     appControl.Quit();
                 }

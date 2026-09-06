@@ -180,7 +180,7 @@ public sealed class ScoreView : UiView<ScoreViewModel>
 
 `Build` runs on attach, and `Sync` runs on attach and then only when the model reports a change — never per frame.
 
-In practice a view is attached once. `Build` runs again on a second attach, but detaching does not take the tree apart: the elements a view kept are still parented to the tree the first `Build` made, and composing them into a fresh one throws. Treat a detached view as spent rather than reusable.
+A view can be attached again after being removed, and `Build` runs again when it is. What detaching does *not* do is take the old tree apart, so whether reattaching works is a property of `Build`: returning a freshly created tree is fine, and so is returning the same root it returned before. What throws is composing a retained descendant into a newly created parent, because that element is still parented to the tree the first `Build` made.
 
 Creating elements and subscribing to them in the constructor is the intended shape; what a constructor must not do is call `Build` or `Sync`, which are virtual and would run before a derived class had initialised its fields. That is why attaching, not construction, is what builds the tree.
 
@@ -207,7 +207,7 @@ Attaching by hand with `root.AddView(view)` stays available and is what the tuto
 
 An element takes the pointer by implementing `IPointerTarget`. `OnPointerPress` returns whether the element takes that button: only an accepted press is captured, and only an accepted press leads to a release or a cancel. A declined press is left unconsumed and reaches whatever is behind the UI.
 
-Capture is per button, so a right-drag and a left-drag can be held by different elements at once. Hover then has a single owner: the left button's capture if there is one, otherwise the oldest capture still standing. While a gesture is in progress that owner is the only element that can be hovered, which is what makes a pressed button un-highlight when the pointer is dragged off it and light up again on return — an element holding some other button meanwhile is not hovered at all.
+Capture is per button, so a right-drag and a left-drag can be held by different elements at once. Hover then has a single owner: the left button's capture if there is one, otherwise the oldest capture still standing. While a gesture is in progress that owner is the only element that can be hovered, which is what makes a pressed button un-highlight when the pointer is dragged off it and light up again on return — a *different* element holding another button meanwhile is not hovered at all. Ownership picks an element, not one of its buttons, so an element holding both left and right is simply the owner.
 
 `OnPointerRelease` reports whether the release landed inside, which is what separates a click from a press the user dragged away. `inside` means the captured element is still the topmost target at that position, not merely that the position is within its bounds — another `IPointerTarget` over it makes the release land outside. A purely visual element drawn on top changes nothing, since only pointer targets are hit-tested.
 
@@ -241,7 +241,7 @@ NumberBox<int> width = new(formatProvider: CultureInfo.InvariantCulture) { Width
 width.ValueCommitted += value => viewModel.Width = value;
 ```
 
-Enter commits an acceptable value and releases focus, Escape cancels, and clicking away commits. `Committed` and `ValueCommitted` are the only notifications — a field does not report every keystroke.
+Enter commits an acceptable value and releases focus, Escape cancels, and clicking away commits an acceptable value and discards an unacceptable one. `Committed` and `ValueCommitted` are the only notifications — a field does not report every keystroke.
 
 A field that will not accept what is in it does not commit. `NumberBox<T>` allows the values on the way to a number, since refusing them would make the numbers they lead to unreachable: a candidate is accepted when it is empty, parses as `T`, or parses with a digit appended. What that admits therefore depends on `T` — `NumberBox<float>` takes `-`, `1.` and `1e`, while `NumberBox<int>` takes `-` and rejects the other two.
 

@@ -47,9 +47,9 @@ public sealed class SettingsViewModel : IUiViewModel
     }
 
     /// <summary>
-    /// Writes the fields directly and reports one change, rather than four assignments reporting
-    /// four. A view synchronises on every notification, so batching an action that moves several
-    /// values at once is the view model's job.
+    /// Writes the fields directly and reports one change however many of them moved, or none when
+    /// they were all already default. A view synchronises on every notification, so batching an
+    /// action that moves several values at once is the view model's job.
     /// </summary>
     public void Reset()
     {
