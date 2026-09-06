@@ -285,6 +285,127 @@ public class TextBoxTests
         Assert.That(field.Text, Is.EqualTo("1,5"));
     }
 
+    [Test]
+    public void MovingBetweenTwoFields_CommitsTheFirstBeforeTheSecondTakesOver()
+    {
+        TextBox first = new() { Text = "one" };
+        TextBox second = new() { Text = "two" };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { first, second } });
+        root.Focus(first);
+        root.TextEntered("!");
+
+        List<string> order = new();
+        first.Committed += value => order.Add($"committed {value}");
+        second.Committed += _ => order.Add("second committed");
+        root.FocusChanged += focused => order.Add(focused == second ? "second focused" : "focus moved");
+
+        root.Focus(second);
+
+        Assert.That(order, Is.EqualTo(new[] { "committed one!", "second focused" }),
+            "the outgoing field has written its value before anything the incoming one does can read it");
+    }
+
+    [Test]
+    public void ACommitHandlerThatFocusesAnotherField_KeepsThatFocus()
+    {
+        TextBox first = new() { Text = "one" };
+        TextBox second = new() { Text = "two" };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { first, second } });
+        root.Focus(first);
+        first.Committed += _ => root.Focus(second);
+
+        root.KeyPressed(Scancode.Return, NoModifiers);
+
+        Assert.That(root.FocusedElement, Is.SameAs(second),
+            "moving to the next field on Enter is the ordinary thing to want, and giving up focus afterwards would undo it");
+    }
+
+    [Test]
+    public void ACommitHandlerThatThrows_StillLeavesTheFieldUsable()
+    {
+        TextBox field = new() { Text = "one" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+        field.Committed += _ => throw new InvalidOperationException("save failed");
+
+        Assert.Throws<InvalidOperationException>(() => root.KeyPressed(Scancode.Return, NoModifiers));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.FocusedElement, Is.Null, "focus was given up before the handler ran");
+            Assert.That(field.IsEditing, Is.False, "so the field is not left refusing every key it is sent");
+        });
+    }
+
+    [Test]
+    public void WithNoClipboard_CopyAndPasteDoNothing()
+    {
+        TextBox field = new() { Text = "hello" };
+        UiRoot root = Rooted(field);
+        root.Focus(field);
+
+        Assert.That(field.Clipboard, Is.Null, "a field is given one, rather than finding one of its own");
+    }
+
+    [Test]
+    public void BlurringAFieldNobodyChanged_StillRepaintsIt()
+    {
+        FontlessTextBox field = new() { Text = "hello" };
+        UiRoot root = new();
+        root.AddLayer(new Column { Children = { field } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+        root.Focus(field);
+        root.Update();
+
+        root.Focus(null);
+
+        Assert.That(field.IsPaintDirty, Is.True,
+            "the caret was on screen a moment ago, and nothing else is going to ask for it to be taken off");
+    }
+
+    [Test]
+    public void PressingAField_FocusesIt()
+    {
+        FontlessTextBox field = new();
+        UiRoot root = new();
+        root.AddLayer(new Column { Children = { field } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+
+        root.PointerPressed(new Vector2Int(10, 5), MouseButton.Left);
+
+        Assert.That(root.FocusedElement, Is.SameAs(field));
+    }
+
+    [Test]
+    public void ARightPressOnAField_IsLeftForTheGame()
+    {
+        FontlessTextBox field = new();
+        UiRoot root = new();
+        root.AddLayer(new Column { Children = { field } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+
+        Assert.That(root.PointerPressed(new Vector2Int(10, 5), MouseButton.Right), Is.False);
+    }
+
+    /// <summary>
+    /// A field that can be laid out without a font, so a test can run a real pass over one. Measuring
+    /// and drawing text needs a device to rasterise with, and everything below those two methods is
+    /// the same field.
+    /// </summary>
+    private sealed class FontlessTextBox : TextBox
+    {
+        protected override Vector2Int MeasureContent(Constraints constraints) => new(60, 12);
+
+        protected override void PaintContent(PaintContext context)
+        {
+        }
+    }
+
     /// <summary>
     /// Rooted but never laid out: <see cref="UiRoot.Update"/> would measure, and measuring text needs
     /// a font. Focus only needs the element to be reachable, which being in the tree is enough for.

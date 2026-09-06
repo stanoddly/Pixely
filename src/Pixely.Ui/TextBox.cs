@@ -21,10 +21,12 @@ namespace Pixely.Ui;
 /// </remarks>
 public class TextBox : Element, IPointerTarget, IFocusTarget
 {
+    private const int CaretWidth = 1;
+
     private readonly Font? _font;
 
     private string _text = string.Empty;
-    private Color _color = Colors.White;
+    private Color? _color;
     private TextEditingBuffer? _editor;
 
     // How far the text is slid left so the caret stays in view. Paint owns it: it is the only place
@@ -56,11 +58,18 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         }
     }
 
-    public Color Color
+    /// <summary>The text colour, or null to take the one from the root's <see cref="UiStyle"/>.</summary>
+    public Color? Color
     {
         get => _color;
         set => SetPaintProperty(ref _color, value);
     }
+
+    /// <summary>
+    /// The clipboard the copy, cut and paste shortcuts reach. Null leaves them inert: cut still
+    /// deletes, because that is the field's own business, but nothing is copied or pasted.
+    /// </summary>
+    public IClipboardService? Clipboard { get; set; }
 
     /// <summary>What is on screen: the edit while there is one, and the value otherwise.</summary>
     public string DisplayText => _editor?.Text ?? _text;
@@ -97,7 +106,9 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         string display = DisplayText;
         int caret = _editor?.CursorPosition ?? 0;
 
-        _scrollOffset = ScrollToShowCaret(font, display, caret, content.Width);
+        _scrollOffset = _editor == null
+            ? 0
+            : ScrollOffsetFor(TextWidth(font, display, caret), TextWidth(font, display), content.Width, _scrollOffset);
         int originX = content.X - _scrollOffset;
 
         using ClipScope scope = context.PushClip(context.CurrentClip.Intersect(content));
@@ -113,12 +124,12 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         if (display.Length > 0)
         {
             TextSpriteAsset sprite = font.CreateTextSprite(display);
-            context.DrawSprite(sprite, new Rectangle(originX, content.Y, sprite.Size.X, sprite.Size.Y), _color);
+            context.DrawSprite(sprite, new Rectangle(originX, content.Y, sprite.Size.X, sprite.Size.Y), ForegroundColor());
         }
 
         if (_editor != null)
         {
-            context.FillRectangle(new Rectangle(originX + TextWidth(font, display, caret), content.Y, 1, content.Height), _color);
+            context.FillRectangle(new Rectangle(originX + TextWidth(font, display, caret), content.Y, CaretWidth, content.Height), CaretColor());
         }
     }
 
@@ -159,7 +170,9 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         // what makes clicking away from a half-typed number leave the old one in place.
         if (CanCommit(_editor.Text))
         {
-            Commit();
+            // Focus is already going; asking for it to go again would be answered by this same
+            // callback, which by then has nothing left to commit.
+            Commit(releaseFocus: false);
         }
         else
         {
@@ -186,15 +199,15 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
                 // looking at what needs fixing rather than at it being silently discarded.
                 if (CanCommit(_editor.Text))
                 {
-                    Commit();
-                    OwnerRoot?.Focus(null);
+                    Commit(releaseFocus: true);
                 }
 
                 break;
 
             case TextEditingOutcome.Cancel:
+                UiRoot? root = OwnerRoot;
                 Discard();
-                OwnerRoot?.Focus(null);
+                root?.Focus(null);
                 break;
         }
 
@@ -214,17 +227,31 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         return true;
     }
 
-    /// <summary>The clipboard editing shortcuts use, or null when there is none to reach.</summary>
-    protected virtual IClipboardService? Clipboard => null;
-
-    private void Commit()
+    private void Commit(bool releaseFocus)
     {
         string value = _editor!.Text;
+
+        // Read before any callback runs: one of them may move this field to another root, and the
+        // focus being given up belongs to the root it is being given up on.
+        UiRoot? root = OwnerRoot;
 
         // Cleared before anything is raised, so a handler that assigns to this field or moves focus
         // out of it is not fighting an edit that is still notionally in progress.
         _editor = null;
         SetMeasureProperty(ref _text, value);
+
+        // The caret was on screen a moment ago whether or not the value changed, so this cannot wait
+        // for the value to differ.
+        InvalidatePaint();
+
+        // Before the notification rather than after it. A handler is free to move focus to the next
+        // field, and releasing afterwards would take it straight back off again; and a handler that
+        // throws would otherwise leave this field focused with no edit, refusing every key.
+        if (releaseFocus)
+        {
+            root?.Focus(null);
+        }
+
         OnCommitted(value);
         Committed?.Invoke(value);
     }
@@ -237,24 +264,35 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     private Color SelectionColor() => OwnerRoot?.Style?.Selection ?? UiStyle.DefaultSelection;
 
+    private Color ForegroundColor() => _color ?? OwnerRoot?.Style?.Foreground ?? UiStyle.DefaultForeground;
+
+    private Color CaretColor() => OwnerRoot?.Style?.Caret ?? ForegroundColor();
+
     /// <summary>
-    /// How far to slide the text so the caret is inside the content. Only ever as far as it has to
-    /// be, so a field that fits its text does not scroll at all and one that does not keeps the
+    /// How far to slide the text left so the caret is inside the content. Only ever as far as it has
+    /// to be, so a field that fits its text does not scroll at all and one that does not keeps the
     /// caret at whichever edge the typing is happening against.
     /// </summary>
-    private int ScrollToShowCaret(Font font, string display, int caret, int contentWidth)
+    /// <remarks>
+    /// Takes widths rather than text so the arithmetic can be checked on its own. Everything else
+    /// about drawing a field needs a font, and a font needs a device to rasterise with.
+    /// </remarks>
+    internal static int ScrollOffsetFor(int caretX, int textWidth, int contentWidth, int currentOffset)
     {
-        if (_editor == null || contentWidth <= 0)
+        if (contentWidth <= 0)
         {
             return 0;
         }
 
-        int caretX = TextWidth(font, display, caret);
-        int offset = Math.Min(_scrollOffset, Math.Max(0, TextWidth(font, display) - contentWidth));
+        // Never further than the text reaches: a deletion can leave an offset that would otherwise
+        // scroll past the end and show empty space.
+        int offset = Math.Min(currentOffset, Math.Max(0, textWidth - contentWidth));
 
-        if (caretX - offset > contentWidth)
+        // The caret is a rectangle starting at its own coordinate, so sitting exactly on the trailing
+        // edge puts it wholly outside a clip that ends there.
+        if (caretX - offset + CaretWidth > contentWidth)
         {
-            offset = caretX - contentWidth;
+            offset = caretX + CaretWidth - contentWidth;
         }
         else if (caretX - offset < 0)
         {

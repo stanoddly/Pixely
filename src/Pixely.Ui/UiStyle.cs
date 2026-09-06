@@ -51,6 +51,15 @@ public sealed class UiStyle
     /// </summary>
     public Color Selection { get; init; } = DefaultSelection;
 
+    /// <summary>Text and anything drawn as text, when the element does not say otherwise.</summary>
+    public Color Foreground { get; init; } = DefaultForeground;
+
+    /// <summary>The caret in an editable field. Defaults to whatever the text is drawn in.</summary>
+    public Color? Caret { get; init; }
+
     /// <summary>Used when no style supplies one, so a field is usable without any setup.</summary>
     public static Color DefaultSelection { get; } = new(51, 102, 170, 180);
+
+    /// <inheritdoc cref="DefaultSelection"/>
+    public static Color DefaultForeground { get; } = Colors.White;
 }
