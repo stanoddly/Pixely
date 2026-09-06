@@ -107,6 +107,11 @@ internal sealed class UiViewRegistry
                 return;
             }
         }
+
+        // The entry went while this view was attaching, which is what happens when attaching it is
+        // what took the container down. It has just been put on a root that nothing is left to take
+        // it off, so it comes off now.
+        root?.RemoveView(view);
     }
 
     private void Remove(UiView view)

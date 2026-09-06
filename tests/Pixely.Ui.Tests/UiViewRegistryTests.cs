@@ -124,6 +124,45 @@ public class UiViewRegistryTests
         }
     }
 
+    [Test]
+    public void AViewTakenAwayWhileItIsAttaching_DoesNotStayOnTheRoot()
+    {
+        UiRoot root = new();
+        ServiceCollection services = Configured(root, root, out UiViewRegistry registry);
+        ServiceProvider? built = null;
+        services.AddTransient<SelfDisposingView>(() => new SelfDisposingView(() => built!.Dispose()));
+
+        built = services.BuildServiceProvider();
+        registry.Bind(built);
+
+        // The container tracks a disposable transient before it announces it, so taking the container
+        // down from inside this view's own attach removes its entry while the attach is still going.
+        SelfDisposingView view = built.GetRequiredService<SelfDisposingView>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.Layers, Is.Empty, "or it is left on a root with nothing able to take it off");
+            Assert.That(view.IsAttached, Is.False);
+        });
+    }
+
+    internal sealed class SelfDisposingView : ScopedView, IDisposable
+    {
+        private readonly Action _onBuild;
+
+        public SelfDisposingView(Action onBuild) : base(default) => _onBuild = onBuild;
+
+        public void Dispose()
+        {
+        }
+
+        protected override Element BuildRoot()
+        {
+            _onBuild();
+            return new Column();
+        }
+    }
+
     private static ServiceCollection Configured(UiRoot first, UiRoot second, out UiViewRegistry registry)
     {
         ServiceCollection services = new();
