@@ -388,22 +388,25 @@ public sealed class UiRoot
                 _focusChanged.Notify(focused);
             }
 
-            // Out of rounds. Focus staying where it is now is fine as long as input can reach it —
-            // the chase stopped, not the state. What is not fine is leaving it on something
-            // unreachable, which would keep the platform's text input running for nothing.
-            _focusRouter.Revalidate();
-            Element? settled = _focusRouter.Focused;
+            // Out of rounds. Keeping focus where it is would be the kinder answer, but there is no
+            // value that can be announced and still be true afterwards: announcing is a callback, and
+            // this application's callbacks move focus every time they are asked. Focus is dropped and
+            // held there while that is said, because the one thing that must not outlive giving up is
+            // the platform being told a field has focus when none does.
+            _focusRouter.Abandon();
+            _focusRouter.Freeze();
 
-            if (settled != null && !CanBeHit(settled))
+            try
             {
-                _focusRouter.Abandon();
-                settled = null;
+                if (_reportedFocus != null)
+                {
+                    _reportedFocus = null;
+                    _focusChanged.Notify(null);
+                }
             }
-
-            if (!ReferenceEquals(_reportedFocus, settled))
+            finally
             {
-                _reportedFocus = settled;
-                _focusChanged.Notify(settled);
+                _focusRouter.Unfreeze();
             }
         }
         finally

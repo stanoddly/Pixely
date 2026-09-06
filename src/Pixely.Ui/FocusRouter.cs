@@ -31,6 +31,7 @@ internal sealed class FocusRouter
     private int _routeVersion;
 
     private bool _isSettling;
+    private bool _isFrozen;
     private int _busyDepth;
 
     internal FocusRouter(UiRoot root) => _root = root;
@@ -51,6 +52,12 @@ internal sealed class FocusRouter
     /// </summary>
     internal void Focus(Element? target)
     {
+        // Refused while frozen. See Freeze.
+        if (_isFrozen)
+        {
+            return;
+        }
+
         _busyDepth++;
 
         try
@@ -95,10 +102,18 @@ internal sealed class FocusRouter
     }
 
     /// <summary>
-    /// Drops focus without telling anyone, for a caller that has run out of ways to settle it. The
-    /// element is unreachable by then, so there is nothing left that a blur could usefully do.
+    /// Drops focus without telling anyone, for a caller that has run out of ways to settle it.
     /// </summary>
     internal void Abandon() => _focused = null;
+
+    /// <summary>
+    /// Refuses to move focus until <see cref="Unfreeze"/>. For announcing a final state: an
+    /// announcement is a callback like any other and can move focus again, so the only value that
+    /// stays true while it is being made is one that nothing is allowed to change.
+    /// </summary>
+    internal void Freeze() => _isFrozen = true;
+
+    internal void Unfreeze() => _isFrozen = false;
 
     /// <summary>
     /// Reconciles focus with a tree that has just been rebuilt, the way the pointer router reconciles

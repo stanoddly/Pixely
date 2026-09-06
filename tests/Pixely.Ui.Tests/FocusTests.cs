@@ -512,15 +512,48 @@ public class FocusTests
         // Alternating between two reachable elements: every report is a real change, so nothing
         // converges, and every nested report would start its own chase one level deeper.
         int reports = 0;
+        Element? lastReported = null;
         root.FocusChanged += focused =>
         {
             reports++;
+            lastReported = focused;
             root.Focus(ReferenceEquals(focused, first) ? second : first);
         };
 
         root.Focus(first);
 
-        Assert.That(reports, Is.LessThanOrEqualTo(9), "reporting follows a moving target only so far before it stops");
+        Assert.Multiple(() =>
+        {
+            Assert.That(reports, Is.LessThanOrEqualTo(9), "reporting follows a moving target only so far before it stops");
+            Assert.That(lastReported, Is.Null, "and what it stops on is what is actually focused");
+            Assert.That(root.FocusedElement, Is.Null);
+        });
+    }
+
+    [Test]
+    public void AFocusSubscriberAlternatingWithNothing_LeavesThePlatformAgreeingWithFocus()
+    {
+        RecordingFocusTarget field = Sized();
+        UiRoot root = Rooted(field);
+
+        // Alternates between a reachable element and nothing, so every round is a real change and the
+        // budget runs out with focus somewhere valid. Whatever is announced last is announced to a
+        // callback that will move focus again, which is why the last word has to be one nothing can
+        // contradict.
+        Element? lastReported = null;
+        root.FocusChanged += focused =>
+        {
+            lastReported = focused;
+            root.Focus(focused == null ? field : null);
+        };
+
+        root.Focus(field);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(lastReported, Is.Null);
+            Assert.That(root.FocusedElement, Is.Null, "or the platform is left with text input on for a field nothing is focused on");
+        });
     }
 
     [Test]
