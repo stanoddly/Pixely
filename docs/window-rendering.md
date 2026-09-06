@@ -228,6 +228,8 @@ Scoped overloads exist for keyboard, mouse, and text-input subscriptions.
 
 ## Pencuil
 
+The immediate-mode UI. See `docs/ui.md` for `Pixely.Ui`, the retained-mode one, which is scoped the same way.
+
 The common case requires no scope:
 
 ```csharp

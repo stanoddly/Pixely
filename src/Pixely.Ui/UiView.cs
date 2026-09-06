@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Pixely.Ui;
 
 /// <summary>
@@ -10,19 +12,97 @@ public interface IUiViewModel
 }
 
 /// <summary>
-/// A view over a view model. The element tree is built once and afterwards the view only assigns
-/// to the elements it kept, which is the whole point of retaining the tree.
+/// A view, from the point of view of whatever adds it to a root. Exists so an application can
+/// register one under this and let the container find it, rather than naming its concrete type
+/// wherever the wiring lives.
 /// </summary>
-public abstract class UiView
+/// <remarks>
+/// Implemented by <see cref="UiView"/>, which is what an application derives from. This is the role
+/// it registers under, not a second way of being a view.
+/// </remarks>
+public interface IUiView
 {
+    /// <summary>Which window this view belongs to.</summary>
+    ViewScope ViewScope { get; }
+}
+
+/// <summary>
+/// A view over one or more view models. The element tree is built once and afterwards the view only
+/// assigns to the elements it kept, which is the whole point of retaining the tree.
+/// </summary>
+/// <remarks>
+/// Subscription is the base class's business, not a derived one's: <see cref="Observe"/> is how a
+/// view says which models it reads, and everything about when those subscriptions start and stop
+/// belongs to attach and detach. A view that also has to subscribe to something that is not a view
+/// model does it in <see cref="OnAttached"/>.
+/// </remarks>
+public abstract class UiView : IUiView
+{
+    private readonly List<IUiViewModel> _viewModels = new();
+
     private Element? _root;
+    private bool _isSubscribed;
 
     /// <summary>The built tree. Available once the view has been added to a <see cref="UiRoot"/>.</summary>
     public Element Root => _root ?? throw new InvalidOperationException(
         $"{GetType().Name} has not been attached yet. Add it to a UiRoot before using its Root.");
 
+    /// <summary>Which window this view belongs to, for whatever adds it to a root on the view's behalf.</summary>
+    public virtual ViewScope ViewScope => default;
+
     internal bool IsAttached => _root != null;
 
+    /// <summary>
+    /// Reads <paramref name="viewModel"/> from here on, so a change to it syncs this view. Registered
+    /// for the view's lifetime rather than the attachment's, because a view usually says what it
+    /// reads once, in its constructor, and detaching must not lose that.
+    /// </summary>
+    protected void Observe(IUiViewModel viewModel)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+
+        foreach (IUiViewModel observed in _viewModels)
+        {
+            if (ReferenceEquals(observed, viewModel))
+            {
+                return;
+            }
+        }
+
+        _viewModels.Add(viewModel);
+
+        // A model named while already attached still has to be heard from, or whether a view syncs
+        // would depend on when it happened to say so.
+        if (_isSubscribed)
+        {
+            viewModel.Changed += Synchronize;
+        }
+    }
+
+    /// <summary>Builds the element tree. Called exactly once per attachment.</summary>
+    protected abstract Element BuildRoot();
+
+    /// <summary>Copies the view models into the tree.</summary>
+    protected abstract void Synchronize();
+
+    /// <summary>
+    /// Runs once the tree exists and the view models are subscribed, before the first sync. Where a
+    /// view subscribes to anything else it needs — the root's pointer position, for something that
+    /// follows the cursor.
+    /// </summary>
+    protected virtual void OnAttached()
+    {
+    }
+
+    /// <summary>Undoes <see cref="OnAttached"/>. Runs even if attaching failed partway.</summary>
+    protected virtual void OnDetached()
+    {
+    }
+
+    /// <summary>
+    /// Builds, subscribes, and syncs, in that order. Any step throwing undoes the ones before it, so
+    /// a view that failed to attach is not left half-attached and still listening.
+    /// </summary>
     internal void Attach()
     {
         if (_root != null)
@@ -30,21 +110,89 @@ public abstract class UiView
             throw new InvalidOperationException($"{GetType().Name} is already attached.");
         }
 
-        _root = BuildRoot();
-        Subscribe();
-        Synchronize();
+        try
+        {
+            _root = BuildRoot();
+            Subscribe();
+            OnAttached();
+            Synchronize();
+        }
+        catch
+        {
+            try
+            {
+                Detach();
+            }
+            catch
+            {
+                // The caller is already unwinding with the reason this view could not be attached,
+                // which is more use than whatever went wrong tidying up after it.
+            }
+
+            throw;
+        }
     }
 
     internal void Detach()
     {
-        Unsubscribe();
-        _root = null;
+        try
+        {
+            OnDetached();
+        }
+        finally
+        {
+            try
+            {
+                Unsubscribe();
+            }
+            finally
+            {
+                _root = null;
+            }
+        }
     }
 
-    private protected abstract Element BuildRoot();
-    private protected abstract void Subscribe();
-    private protected abstract void Unsubscribe();
-    private protected abstract void Synchronize();
+    private void Subscribe()
+    {
+        _isSubscribed = true;
+
+        foreach (IUiViewModel viewModel in _viewModels)
+        {
+            viewModel.Changed += Synchronize;
+        }
+    }
+
+    private void Unsubscribe()
+    {
+        if (!_isSubscribed)
+        {
+            return;
+        }
+
+        _isSubscribed = false;
+        Exception? failure = null;
+
+        // Every model is let go of even if one of them objects, because leaving the rest subscribed
+        // would keep syncing a view that is no longer on screen. The first objection is still raised.
+        foreach (IUiViewModel viewModel in _viewModels)
+        {
+            try
+            {
+                viewModel.Changed -= Synchronize;
+            }
+            catch (Exception exception)
+            {
+                failure ??= exception;
+            }
+        }
+
+        // Rethrown through the dispatch info rather than plainly, so the accessor that objected is
+        // still what the stack names.
+        if (failure != null)
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+    }
 }
 
 /// <inheritdoc cref="UiView"/>
@@ -61,6 +209,7 @@ public abstract class UiView<TViewModel> : UiView
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ViewModel = viewModel;
+        Observe(viewModel);
     }
 
     protected TViewModel ViewModel { get; }
@@ -77,11 +226,7 @@ public abstract class UiView<TViewModel> : UiView
     /// </summary>
     protected abstract void Sync();
 
-    private protected sealed override Element BuildRoot() => Build();
+    protected sealed override Element BuildRoot() => Build();
 
-    private protected sealed override void Subscribe() => ViewModel.Changed += Sync;
-
-    private protected sealed override void Unsubscribe() => ViewModel.Changed -= Sync;
-
-    private protected sealed override void Synchronize() => Sync();
+    protected sealed override void Synchronize() => Sync();
 }

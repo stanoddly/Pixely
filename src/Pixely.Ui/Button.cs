@@ -1,4 +1,5 @@
 using Pixely.Gpu;
+using Pixely.Input;
 
 namespace Pixely.Ui;
 
@@ -123,13 +124,21 @@ public sealed class Button : Element, IPointerTarget
         InvalidatePaint();
     }
 
-    void IPointerTarget.OnPointerPress(Vector2Int position)
+    // Left only. A button that took every button would activate on a right-click, and would also
+    // swallow one meant for whatever the UI is drawn over.
+    bool IPointerTarget.OnPointerPress(Vector2Int position, MouseButton button)
     {
+        if (button != MouseButton.Left)
+        {
+            return false;
+        }
+
         _isPressed = true;
         InvalidatePaint();
+        return true;
     }
 
-    void IPointerTarget.OnPointerRelease(Vector2Int position, bool inside)
+    void IPointerTarget.OnPointerRelease(Vector2Int position, MouseButton button, bool inside)
     {
         _isPressed = false;
         InvalidatePaint();
@@ -140,7 +149,7 @@ public sealed class Button : Element, IPointerTarget
         }
     }
 
-    void IPointerTarget.OnPointerCancel()
+    void IPointerTarget.OnPointerCancel(MouseButton button)
     {
         _isPressed = false;
         InvalidatePaint();

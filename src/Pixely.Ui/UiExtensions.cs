@@ -47,6 +47,10 @@ public static class UiExtensions
             appBuilder.ConfigureContent(contentSourceBuilder =>
                 contentSourceBuilder.AddSource(EmbeddedContentSource.Create(typeof(UiExtensions).Assembly)));
             appBuilder.AddRegistry<ScopedUiRoot>();
+
+            // Built like any other singleton, which is what hands it the provider its views need.
+            UiViewRegistry registry = UiViewRegistry.Register(appBuilder);
+            appBuilder.AddSingleton<UiViewRegistry>(registry.Bind);
         }
 
         // The style is optional: an application that gives every label an explicit font needs none.
@@ -56,9 +60,12 @@ public static class UiExtensions
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
+                CreateWindowSizeSource(provider, viewScope),
                 viewScope,
                 inputOrder,
-                provider.GetRequiredService<IMouseService>()));
+                provider.GetRequiredService<IMouseService>(),
+                provider.GetRequiredService<IKeyboardService>(),
+                provider.GetRequiredService<ITextInputService>()));
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
             UiRenderer<TRenderContext>.Create(
@@ -73,6 +80,16 @@ public static class UiExtensions
                 provider.GetWindow(viewScope)));
 
         return appBuilder;
+    }
+
+    /// <summary>
+    /// The window's logical size, resolved once and read per event. The window itself is resolved
+    /// here rather than inside the input system, which needs the size and nothing else.
+    /// </summary>
+    private static Func<Size<uint>> CreateWindowSizeSource(ServiceProvider provider, ViewScope viewScope)
+    {
+        Window window = provider.GetWindow(viewScope);
+        return () => window.Size;
     }
 
     /// <summary>Resolves the <see cref="UiRoot"/> registered for a window.</summary>

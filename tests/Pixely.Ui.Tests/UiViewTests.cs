@@ -169,4 +169,212 @@ public class UiViewTests
             Bar.Width = Sizing.Fixed(ViewModel.Count * 10);
         }
     }
+    [Test]
+    public void AViewOverTwoModels_SyncsFromEither()
+    {
+        Model first = new();
+        Model second = new();
+        TwoModelView view = new(first, second);
+        UiRoot root = new();
+        root.AddView(view);
+        int afterAttach = view.SyncCount;
+
+        first.RaiseChanged();
+        second.RaiseChanged();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterAttach, Is.EqualTo(1), "attaching syncs once so the tree starts out right");
+            Assert.That(view.SyncCount, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public void AViewAddedAgainAfterBeingRemoved_SyncsOncePerChange()
+    {
+        Model model = new();
+        TwoModelView view = new(model, new Model());
+        UiRoot root = new();
+        root.AddView(view);
+        root.RemoveView(view);
+        root.AddView(view);
+        view.ResetCount();
+
+        model.RaiseChanged();
+
+        Assert.That(view.SyncCount, Is.EqualTo(1),
+            "the models a view named are remembered, and naming them again on the way back in must not double the subscription");
+    }
+
+    [Test]
+    public void ARemovedView_StopsSyncing()
+    {
+        Model model = new();
+        TwoModelView view = new(model, new Model());
+        UiRoot root = new();
+        root.AddView(view);
+        root.RemoveView(view);
+        view.ResetCount();
+
+        model.RaiseChanged();
+
+        Assert.That(view.SyncCount, Is.Zero);
+    }
+
+    [Test]
+    public void AViewWhoseFirstSyncThrows_IsNotLeftSubscribed()
+    {
+        Model model = new();
+        ThrowingView view = new(model);
+
+        Assert.Throws<InvalidOperationException>(() => new UiRoot().AddView(view));
+
+        view.StopThrowing();
+        model.RaiseChanged();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(view.SyncCount, Is.Zero, "an attach that failed leaves nothing listening");
+            Assert.That(view.DetachedCount, Is.EqualTo(1), "and whatever it had set up is undone");
+        });
+    }
+
+    [Test]
+    public void AViewIsToldItIsAttached_BeforeItsFirstSync()
+    {
+        Model model = new();
+        OrderedView view = new(model);
+
+        new UiRoot().AddView(view);
+
+        Assert.That(view.Calls, Is.EqualTo(new[] { "build", "attached", "sync" }),
+            "whatever OnAttached subscribes to is in place before anything reads it");
+    }
+
+    [Test]
+    public void RemovingAView_TellsItSoBeforeUnsubscribing()
+    {
+        Model model = new();
+        OrderedView view = new(model);
+        UiRoot root = new();
+        root.AddView(view);
+        view.Calls.Clear();
+
+        root.RemoveView(view);
+
+        Assert.That(view.Calls, Is.EqualTo(new[] { "detached" }));
+    }
+
+    [Test]
+    public void AViewWhoseTreeCannotBeAdded_IsNotLeftAttached()
+    {
+        Model model = new();
+        Element alreadyOwned = new Column();
+        _ = new Column { Children = { alreadyOwned } };
+        GivenRootView view = new(model, alreadyOwned);
+        UiRoot root = new();
+
+        // The tree attached fine and the root then refused it, which leaves the view built and
+        // subscribed to a tree nothing will ever draw.
+        Assert.Throws<InvalidOperationException>(() => root.AddView(view));
+
+        model.RaiseChanged();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(view.SyncCount, Is.EqualTo(1), "the sync from attaching, and nothing since");
+            Assert.That(view.IsAttached, Is.False);
+        });
+    }
+
+    private sealed class GivenRootView : UiView
+    {
+        private readonly Element _root;
+
+        public GivenRootView(IUiViewModel model, Element root)
+        {
+            _root = root;
+            Observe(model);
+        }
+
+        public int SyncCount { get; private set; }
+
+        protected override Element BuildRoot() => _root;
+
+        protected override void Synchronize() => SyncCount++;
+    }
+
+    private sealed class Model : IUiViewModel
+    {
+        public event Action? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke();
+    }
+
+    private sealed class TwoModelView : UiView
+    {
+        public TwoModelView(IUiViewModel first, IUiViewModel second)
+        {
+            Observe(first);
+            Observe(second);
+
+            // Named twice on purpose: a view that says so more than once is still read once.
+            Observe(first);
+        }
+
+        public int SyncCount { get; private set; }
+
+        public void ResetCount() => SyncCount = 0;
+
+        protected override Element BuildRoot() => new Column();
+
+        protected override void Synchronize() => SyncCount++;
+    }
+
+    private sealed class ThrowingView : UiView
+    {
+        private bool _throwing = true;
+
+        public ThrowingView(IUiViewModel model) => Observe(model);
+
+        public int SyncCount { get; private set; }
+
+        public int DetachedCount { get; private set; }
+
+        public void StopThrowing() => _throwing = false;
+
+        protected override Element BuildRoot() => new Column();
+
+        protected override void OnDetached() => DetachedCount++;
+
+        protected override void Synchronize()
+        {
+            if (_throwing)
+            {
+                throw new InvalidOperationException("cannot sync");
+            }
+
+            SyncCount++;
+        }
+    }
+
+    private sealed class OrderedView : UiView
+    {
+        public OrderedView(IUiViewModel model) => Observe(model);
+
+        public List<string> Calls { get; } = new();
+
+        protected override Element BuildRoot()
+        {
+            Calls.Add("build");
+            return new Column();
+        }
+
+        protected override void OnAttached() => Calls.Add("attached");
+
+        protected override void OnDetached() => Calls.Add("detached");
+
+        protected override void Synchronize() => Calls.Add("sync");
+    }
+
 }

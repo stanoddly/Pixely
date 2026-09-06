@@ -286,7 +286,7 @@ public class ButtonTests
     /// arranged at the full viewport and would leave a button covering the whole screen.
     /// </summary>
     [Test]
-    public void PressingASecondButton_CancelsTheFirstsPress()
+    public void PressingASecondElement_CancelsTheFirstsPress()
     {
         Button first = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
         Button second = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
@@ -416,7 +416,7 @@ public class ButtonTests
         root.PointerPressed(new Vector2Int(5, 5));
         root.PointerLeft();
 
-        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 5,5", "cancel", "leave" }));
+        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 5,5 Left", "cancel Left", "leave" }));
     }
 
     [Test]
@@ -429,7 +429,7 @@ public class ButtonTests
         root.PointerPressed(new Vector2Int(6, 6));
         root.PointerReleased(new Vector2Int(7, 7));
 
-        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 6,6", "release 7,7 inside=True" }));
+        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 6,6 Left", "release 7,7 Left inside=True" }));
     }
 
     [Test]
@@ -542,7 +542,7 @@ public class ButtonTests
         target.IsVisible = false;
         root.Update();
 
-        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 5,5", "cancel", "leave" }));
+        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 5,5", "press 5,5 Left", "cancel Left", "leave" }));
     }
 
     [Test]
@@ -704,8 +704,35 @@ public class ButtonTests
         Assert.Multiple(() =>
         {
             Assert.That(second.Calls, Does.Contain("enter 5,5"), "the reorder is what the enter callback did, so it has to have run");
-            Assert.That(first.Calls, Does.Contain("press 5,5"));
-            Assert.That(second.Calls, Does.Not.Contain("press 5,5"));
+            Assert.That(first.Calls, Does.Contain("press 5,5 Left"));
+            Assert.That(second.Calls, Does.Not.Contain("press 5,5 Left"));
+        });
+    }
+
+    [Test]
+    public void VisualState_KeepsTheValuesItAlreadyHad()
+    {
+        // Anything already compiled against these has the numbers baked in, so a reorder is a silent
+        // break: it makes an old Disabled mean something else.
+        Assert.Multiple(() =>
+        {
+            Assert.That((int)VisualState.Normal, Is.Zero);
+            Assert.That((int)VisualState.Hovered, Is.EqualTo(1));
+            Assert.That((int)VisualState.Pressed, Is.EqualTo(2));
+            Assert.That((int)VisualState.Disabled, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public void StateDrawables_ResolveFocusedAndFallBackWhenItIsNotSet()
+    {
+        SolidDrawable normal = new(Colors.Red);
+        SolidDrawable focused = new(Colors.Green);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(new StateDrawables(normal) { Focused = focused }.Resolve(VisualState.Focused), Is.SameAs(focused));
+            Assert.That(new StateDrawables(normal).Resolve(VisualState.Focused), Is.SameAs(normal));
         });
     }
 
