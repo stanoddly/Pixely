@@ -162,20 +162,126 @@ public class PointerButtonTests
     [Test]
     public void WithNoLeftCapture_HoverFollowsTheOldestHeldButton()
     {
-        RecordingPointerTarget target = Sized();
-        target.Accepts.Add(MouseButton.Right);
-        target.Accepts.Add(MouseButton.Middle);
-        UiRoot root = Rooted(target);
+        RecordingPointerTarget first = Sized();
+        first.Accepts.Add(MouseButton.Right);
+        RecordingPointerTarget second = Sized();
+        second.Accepts.Add(MouseButton.Middle);
+        UiRoot root = InRow(first, second);
 
         root.PointerPressed(new Vector2Int(10, 10), MouseButton.Right);
-        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Middle);
-        target.Calls.Clear();
+        root.PointerPressed(new Vector2Int(50, 10), MouseButton.Middle);
+        first.Calls.Clear();
+        second.Calls.Clear();
 
-        root.PointerMoved(new Vector2Int(300, 200));
         root.PointerMoved(new Vector2Int(10, 10));
 
-        Assert.That(target.Calls, Is.EqualTo(new[] { "leave", "enter 10,10" }),
-            "the right press came first, so it is what hover tracks");
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Calls, Is.EqualTo(new[] { "enter 10,10" }), "the right press came first, so it is what hover tracks");
+            Assert.That(second.Calls, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void ReleasingTheOldestCapture_HandsHoverToTheNextOne()
+    {
+        RecordingPointerTarget first = Sized();
+        first.Accepts.Add(MouseButton.Right);
+        RecordingPointerTarget second = Sized();
+        second.Accepts.Add(MouseButton.Middle);
+        UiRoot root = InRow(first, second);
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Right);
+        root.PointerPressed(new Vector2Int(50, 10), MouseButton.Middle);
+        root.PointerMoved(new Vector2Int(50, 10));
+        second.Calls.Clear();
+
+        root.PointerReleased(new Vector2Int(50, 10), MouseButton.Right);
+
+        Assert.That(second.Calls, Does.Contain("enter 50,10"),
+            "with the older gesture gone the middle capture owns hover, so the element under the pointer lights up again");
+    }
+
+    [Test]
+    public void ANestedPressFromACancelCallback_KeepsItsOwnCapture()
+    {
+        RecordingPointerTarget held = Sized();
+        RecordingPointerTarget other = Sized();
+        UiRoot root = InRow(held, other);
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+
+        // Pressing left again cancels the gesture held has. That cancel presses left itself, which
+        // captures the other element; the outer press must not carry on and overwrite it, leaving a
+        // gesture that can never be released.
+        bool pressedAgain = false;
+        held.WhenCancelled = () =>
+        {
+            if (pressedAgain)
+            {
+                return;
+            }
+
+            pressedAgain = true;
+            root.PointerPressed(new Vector2Int(50, 10), MouseButton.Left);
+        };
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        other.Calls.Clear();
+        root.PointerReleased(new Vector2Int(50, 10), MouseButton.Left);
+
+        Assert.That(other.Calls, Does.Contain("release 50,10 Left inside=True"),
+            "the gesture the cancel callback started is the one that is still held");
+    }
+
+    [Test]
+    public void LeavingTheWindow_KeepsAGestureACancelCallbackStarted()
+    {
+        RecordingPointerTarget held = Sized();
+        held.Accepts.Add(MouseButton.Right);
+        RecordingPointerTarget other = Sized();
+        other.Accepts.Add(MouseButton.Right);
+        UiRoot root = InRow(held, other);
+
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Right);
+
+        // Right sorts after left, so a sweep that cancelled whatever it found in each slot would
+        // reach this replacement and end it. Which button it happens to be must not decide that.
+        bool pressedAgain = false;
+        held.WhenCancelled = () =>
+        {
+            if (pressedAgain)
+            {
+                return;
+            }
+
+            pressedAgain = true;
+            root.PointerPressed(new Vector2Int(50, 10), MouseButton.Right);
+        };
+
+        root.PointerLeft();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(other.Calls, Does.Contain("press 50,10 Right"));
+            Assert.That(other.Calls, Does.Not.Contain("cancel Right"));
+        });
+    }
+
+    [Test]
+    public void AnEnterCallbackThatDetachesItsElement_DoesNotLeaveItHovered()
+    {
+        RecordingPointerTarget target = Sized();
+        UiRoot root = Rooted(target);
+        root.PointerMoved(new Vector2Int(300, 200));
+
+        target.WhenEntered = () => target.IsVisible = false;
+
+        root.PointerMoved(new Vector2Int(10, 10));
+
+        Assert.That(target.Calls, Is.EqualTo(new[] { "enter 10,10", "leave" }),
+            "an element that removes itself on the way in is not left holding hover");
     }
 
     [Test]

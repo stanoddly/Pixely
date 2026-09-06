@@ -37,6 +37,10 @@ internal sealed class PointerRouter
     private readonly int[] _captureTokens = new int[CaptureSlotCount];
     private int _lastCaptureToken;
 
+    // Reused by CancelAll, which cannot stackalloc a span of elements and should not allocate on a
+    // path the pointer reaches every time it leaves the window.
+    private readonly Element?[] _cancelScratch = new Element?[CaptureSlotCount];
+
     private Vector2Int _position;
     private bool _isInWindow;
 
@@ -58,11 +62,21 @@ internal sealed class PointerRouter
         _routeVersion++;
         MoveTo(position);
 
+        // Read before the cancel below, not after it: that cancel runs a callback which may route the
+        // pointer itself, and a version taken afterwards would already include whatever it did. The
+        // press would then continue on top of a nested one and overwrite the capture it installed,
+        // leaving that gesture with no way to end.
+        int version = _routeVersion;
+
         // A second press of the same button cancels the gesture it already holds. Without this the
         // first target never hears how its press ended and stays pressed for good.
         Cancel(button);
 
-        int version = _routeVersion;
+        if (_routeVersion != version)
+        {
+            return false;
+        }
+
         Element? target = HitTest(position);
         UpdateHover(target);
 
@@ -90,6 +104,10 @@ internal sealed class PointerRouter
         if (_routeVersion != version || !CanBeHit(target))
         {
             ((IPointerTarget)target).OnPointerCancel(button);
+
+            // Hover can be left pointing at the element that just detached itself, and nothing else
+            // routes until the next event.
+            Track();
             return true;
         }
 
@@ -234,27 +252,57 @@ internal sealed class PointerRouter
         return oldest;
     }
 
+    /// <summary>
+    /// Ends every gesture that was in flight when this was called. Read out first and then cancelled
+    /// by identity, because a cancel callback can start a gesture of its own: without the snapshot
+    /// whether that one survives would depend on where its button sorts against the ones still to be
+    /// swept, which is not a rule anyone could rely on.
+    /// </summary>
     private void CancelAll()
     {
-        // In button order, so a target that holds two of them hears about them predictably.
+        Array.Copy(_captured, _cancelScratch, CaptureSlotCount);
+
+        // In button order, so a target holding two of them hears about them predictably.
         for (int slot = 0; slot < CaptureSlotCount; slot++)
         {
-            Cancel((MouseButton)slot);
+            Element? held = _cancelScratch[slot];
+
+            // Cleared as it goes, so the scratch never keeps an element alive past this sweep.
+            _cancelScratch[slot] = null;
+
+            if (held != null)
+            {
+                Cancel((MouseButton)slot, held);
+            }
         }
     }
 
     private void Cancel(MouseButton button)
     {
-        int slot = (int)button;
-        Element? captured = _captured[slot];
+        Element? captured = _captured[(int)button];
 
-        if (captured == null)
+        if (captured != null)
+        {
+            Cancel(button, captured);
+        }
+    }
+
+    /// <param name="expected">
+    /// The capture this cancel was decided on. A callback earlier in the same sweep can have ended
+    /// this button's gesture and started another, and cancelling that one would end a gesture that
+    /// has only just begun.
+    /// </param>
+    private void Cancel(MouseButton button, Element expected)
+    {
+        int slot = (int)button;
+
+        if (!ReferenceEquals(_captured[slot], expected))
         {
             return;
         }
 
         _captured[slot] = null;
-        ((IPointerTarget)captured).OnPointerCancel(button);
+        ((IPointerTarget)expected).OnPointerCancel(button);
     }
 
     private void UpdateHover(Element? target)
@@ -285,7 +333,16 @@ internal sealed class PointerRouter
         }
 
         _hovered = target;
+        version = _routeVersion;
         ((IPointerTarget)target).OnPointerEnter(_position);
+
+        // The enter callback may have removed the element it was just sent to. A later route would
+        // eventually notice, but only by sending a leave to something no longer in the tree.
+        if (_routeVersion == version && !CanBeHit(target))
+        {
+            _hovered = null;
+            ((IPointerTarget)target).OnPointerLeave();
+        }
     }
 
     /// <summary>
