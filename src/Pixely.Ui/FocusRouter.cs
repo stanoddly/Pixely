@@ -31,17 +31,19 @@ internal sealed class FocusRouter
     private int _routeVersion;
 
     private bool _isSettling;
-    private int _routingDepth;
+    private int _busyDepth;
 
     internal FocusRouter(UiRoot root) => _root = root;
 
     internal Element? Focused => _focused;
 
     /// <summary>
-    /// Whether a transition is in flight. What reports focus outward waits for this to clear, so a
-    /// handoff is seen as one move rather than as focus leaving and something else taking it.
+    /// Whether this router is partway through anything — a transition, a settle, or a dispatch whose
+    /// callback is still running. What reports focus outward waits for this to clear, so a handoff is
+    /// seen as one move rather than as focus leaving and something else taking it, and so nothing
+    /// half-finished is announced as where focus ended up.
     /// </summary>
-    internal bool IsRouting => _routingDepth > 0;
+    internal bool IsRouting => _busyDepth > 0;
 
     /// <summary>
     /// Moves focus to <paramref name="target"/>, or takes it away when that is null. Does nothing if
@@ -49,7 +51,7 @@ internal sealed class FocusRouter
     /// </summary>
     internal void Focus(Element? target)
     {
-        _routingDepth++;
+        _busyDepth++;
 
         try
         {
@@ -58,28 +60,64 @@ internal sealed class FocusRouter
         }
         finally
         {
-            _routingDepth--;
+            _busyDepth--;
         }
     }
 
     internal bool KeyDown(Scancode scancode, Keyboard keyboard, bool isRepeat)
     {
-        Element? target = Current();
-        return target != null && ((IFocusTarget)target).OnKeyDown(scancode, keyboard, isRepeat);
+        _busyDepth++;
+
+        try
+        {
+            Element? target = Current();
+            return target != null && ((IFocusTarget)target).OnKeyDown(scancode, keyboard, isRepeat);
+        }
+        finally
+        {
+            _busyDepth--;
+        }
     }
 
     internal bool TextInput(string text)
     {
-        Element? target = Current();
-        return target != null && ((IFocusTarget)target).OnTextInput(text);
+        _busyDepth++;
+
+        try
+        {
+            Element? target = Current();
+            return target != null && ((IFocusTarget)target).OnTextInput(text);
+        }
+        finally
+        {
+            _busyDepth--;
+        }
     }
+
+    /// <summary>
+    /// Drops focus without telling anyone, for a caller that has run out of ways to settle it. The
+    /// element is unreachable by then, so there is nothing left that a blur could usefully do.
+    /// </summary>
+    internal void Abandon() => _focused = null;
 
     /// <summary>
     /// Reconciles focus with a tree that has just been rebuilt, the way the pointer router reconciles
     /// hover: an element can be hidden, disabled or detached without any keyboard event happening, so
     /// nothing else would notice.
     /// </summary>
-    internal void Revalidate() => Settle();
+    internal void Revalidate()
+    {
+        _busyDepth++;
+
+        try
+        {
+            Settle();
+        }
+        finally
+        {
+            _busyDepth--;
+        }
+    }
 
     private void Route(Element? target)
     {
@@ -168,6 +206,10 @@ internal sealed class FocusRouter
     private Element? Current()
     {
         Settle();
-        return _focused;
+
+        // Checked again rather than trusting the settle above, which does nothing when an outer one
+        // is already running. That outer settle will finish the job, but not before this dispatch
+        // would otherwise have handed a key to an element input can no longer reach.
+        return _focused != null && _root.CanBeHit(_focused) ? _focused : null;
     }
 }

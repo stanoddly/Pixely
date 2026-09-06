@@ -502,6 +502,133 @@ public class FocusTests
             "focus has already gone, and leaving that unsaid leaves text input running for nothing");
     }
 
+    [Test]
+    public void AFocusSubscriberThatKeepsMovingFocus_IsGivenUpOn()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        UiRoot root = InRow(first, second);
+
+        // Alternating between two reachable elements: every report is a real change, so nothing
+        // converges, and every nested report would start its own chase one level deeper.
+        int reports = 0;
+        root.FocusChanged += focused =>
+        {
+            reports++;
+            root.Focus(ReferenceEquals(focused, first) ? second : first);
+        };
+
+        root.Focus(first);
+
+        Assert.That(reports, Is.LessThanOrEqualTo(9), "reporting follows a moving target only so far before it stops");
+    }
+
+    [Test]
+    public void AFocusSubscriberThatNeverSettles_LeavesNothingFocused()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        UiRoot root = InRow(first, second);
+
+        // Moves focus every round, so reporting keeps chasing and runs out of rounds, and makes its
+        // last choice unreachable on the way out. Focus has to end nowhere rather than on an element
+        // the platform would keep text input running for.
+        int reports = 0;
+        root.FocusChanged += focused =>
+        {
+            RecordingFocusTarget next = ReferenceEquals(focused, first) ? second : first;
+            root.Focus(next);
+
+            if (++reports == 8)
+            {
+                next.IsVisible = false;
+            }
+        };
+
+        root.Focus(first);
+
+        Assert.That(root.FocusedElement, Is.Null);
+    }
+
+    [Test]
+    public void AKeyDispatchedWhileAnOuterSettleRuns_StillReachesNothingUnreachable()
+    {
+        RecordingFocusTarget stale = Sized();
+        RecordingFocusTarget replacement = Sized();
+        UiRoot root = InRow(stale, replacement);
+        root.Focus(stale);
+
+        // The blur that settling sends focuses the replacement, makes it unreachable, and dispatches
+        // a key before returning. The outer settle has not finished, so nothing else is going to
+        // notice in time.
+        stale.WhenBlurred = () =>
+        {
+            stale.WhenBlurred = null;
+            root.Focus(replacement);
+            replacement.IsVisible = false;
+            root.KeyPressed(Scancode.B, NoModifiers);
+        };
+
+        stale.IsVisible = false;
+        root.KeyPressed(Scancode.A, NoModifiers);
+
+        Assert.That(replacement.Calls, Does.Not.Contain("key B"));
+    }
+
+    [Test]
+    public void APressWhoseFocusHandlerThrows_DoesNotLeaveTheTargetPressed()
+    {
+        RecordingFocusTarget field = Sized();
+        RecordingPointerTarget button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
+        UiRoot root = InRow(field, button);
+        root.Focus(field);
+        field.WhenBlurred = () => throw new InvalidOperationException("commit failed");
+
+        Assert.Throws<InvalidOperationException>(() => root.PointerPressed(new Vector2Int(50, 10), MouseButton.Left));
+
+        Assert.That(button.Calls, Does.Contain("cancel Left"),
+            "the press was taken and can never be captured now, so it has to be given back");
+    }
+
+    [Test]
+    public void RemovingAViewWhoseBlurThrows_StillDetachesIt()
+    {
+        RecordingFocusTarget field = Sized();
+        RecordingViewModel viewModel = new();
+        FocusView view = new(viewModel, field);
+        UiRoot root = new();
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.AddView(view);
+        root.Update();
+        root.Focus(field);
+        field.WhenBlurred = () => throw new InvalidOperationException("commit failed");
+
+        Assert.Throws<InvalidOperationException>(() => root.RemoveView(view));
+
+        viewModel.RaiseChanged();
+        Assert.That(view.SyncCount, Is.EqualTo(1), "a view left subscribed would keep syncing a tree that is gone");
+    }
+
+    private sealed class RecordingViewModel : IUiViewModel
+    {
+        public event Action? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke();
+    }
+
+    private sealed class FocusView : UiView<RecordingViewModel>
+    {
+        private readonly Element _content;
+
+        public FocusView(RecordingViewModel viewModel, Element content) : base(viewModel) => _content = content;
+
+        public int SyncCount { get; private set; }
+
+        protected override Element Build() => new Column { Children = { _content } };
+
+        protected override void Sync() => SyncCount++;
+    }
+
     private static UiRoot InRow(params Element[] children)
     {
         Row row = new();

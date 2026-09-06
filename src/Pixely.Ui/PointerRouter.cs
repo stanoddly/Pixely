@@ -125,7 +125,22 @@ internal sealed class PointerRouter
         // accepted press on a focus target takes focus away, including a press on nothing at all.
         if (button == MouseButton.Left)
         {
-            _root.Focus(accepted ? target : null);
+            try
+            {
+                _root.Focus(accepted ? target : null);
+            }
+            catch
+            {
+                // Caught only to end what was started. The target has taken a press that is now never
+                // going to be captured, and without this it stays pressed with nothing to tell it
+                // otherwise.
+                if (accepted)
+                {
+                    ((IPointerTarget)target).OnPointerCancel(button);
+                }
+
+                throw;
+            }
         }
 
         if (!accepted)

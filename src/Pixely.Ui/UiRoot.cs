@@ -26,6 +26,8 @@ public sealed class UiRoot
     /// <summary>How many times reporting will chase a subscriber that invalidates what it was told.</summary>
     private const int MaxFocusReportRounds = 8;
 
+    private bool _isReportingFocus;
+
     private Vector2Int _reportedPointerPosition;
 
     private readonly FocusRouter _focusRouter;
@@ -139,8 +141,18 @@ public sealed class UiRoot
             return false;
         }
 
-        RemoveLayer(view.Root);
-        view.Detach();
+        try
+        {
+            RemoveLayer(view.Root);
+        }
+        finally
+        {
+            // A blur raised on the way out is application code. If it throws, the view has still been
+            // removed, and leaving it subscribed to its view model would keep it syncing a tree that
+            // is no longer on screen.
+            view.Detach();
+        }
+
         return true;
     }
 
@@ -156,12 +168,19 @@ public sealed class UiRoot
         layer.LayerRoot = null;
         _layersChanged = true;
 
-        // Now, not at the next pass. A window closed on the way out may never run another one, and
-        // whatever the removed subtree was holding would stay held: a gesture with no way to end, and
-        // the platform's text input left running for a field that is gone.
-        _pointerRouter.Revalidate();
-        _focusRouter.Revalidate();
-        ReportFocus();
+        try
+        {
+            // Now, not at the next pass. A window closed on the way out may never run another one, and
+            // whatever the removed subtree was holding would stay held: a gesture with no way to end,
+            // and the platform's text input left running for a field that is gone.
+            _pointerRouter.Revalidate();
+            _focusRouter.Revalidate();
+        }
+        finally
+        {
+            ReportFocus();
+        }
+
         return true;
     }
 
@@ -340,26 +359,56 @@ public sealed class UiRoot
     /// </summary>
     private void ReportFocus()
     {
-        if (_focusRouter.IsRouting)
+        // Only the outermost report reconciles. A subscriber is free to move focus, and every nested
+        // report that started would otherwise chase it one level deeper until the stack ran out; the
+        // loop below is what follows it instead, at one level.
+        if (_isReportingFocus || _focusRouter.IsRouting)
         {
             return;
         }
 
-        // A subscriber can detach the element it was just told about, so what was reported is settled
-        // against the tree again afterwards. Bounded for the same reason the routers are: a subscriber
-        // free to keep doing that is not a sequence that converges.
-        for (int round = 0; round < MaxFocusReportRounds; round++)
-        {
-            _focusRouter.Revalidate();
-            Element? focused = _focusRouter.Focused;
+        _isReportingFocus = true;
 
-            if (ReferenceEquals(_reportedFocus, focused))
+        try
+        {
+            // A subscriber can detach the element it was just told about, so what was reported is
+            // settled against the tree again afterwards. Bounded for the same reason the routers are:
+            // a subscriber free to keep doing that is not a sequence that converges.
+            for (int round = 0; round < MaxFocusReportRounds; round++)
             {
-                return;
+                _focusRouter.Revalidate();
+                Element? focused = _focusRouter.Focused;
+
+                if (ReferenceEquals(_reportedFocus, focused))
+                {
+                    return;
+                }
+
+                _reportedFocus = focused;
+                _focusChanged.Notify(focused);
             }
 
-            _reportedFocus = focused;
-            _focusChanged.Notify(focused);
+            // Out of rounds. Focus staying where it is now is fine as long as input can reach it —
+            // the chase stopped, not the state. What is not fine is leaving it on something
+            // unreachable, which would keep the platform's text input running for nothing.
+            _focusRouter.Revalidate();
+            Element? settled = _focusRouter.Focused;
+
+            if (settled != null && !CanBeHit(settled))
+            {
+                _focusRouter.Abandon();
+                settled = null;
+            }
+
+            if (!ReferenceEquals(_reportedFocus, settled))
+            {
+                _reportedFocus = settled;
+                _focusChanged.Notify(settled);
+            }
+        }
+        finally
+        {
+            _isReportingFocus = false;
         }
     }
 

@@ -16,6 +16,12 @@ internal sealed class FakeTextInputService : ITextInputService
 
     public void Stop(ViewScope viewScope = default) => Calls.Add($"stop {viewScope}");
 
+    /// <summary>What subscribed for committed text, so a test can deliver some.</summary>
+    public InputEventHandler<TextInputEventArgs>? TextInputHandler { get; private set; }
+
+    /// <summary>The scope and order it subscribed with.</summary>
+    public (ViewScope Scope, int Priority)? TextInputSubscription { get; private set; }
+
     public event InputEventHandler<TextInputEventArgs>? TextInput { add { } remove { } }
     public event InputEventHandler<TextEditingEventArgs>? TextEditing { add { } remove { } }
 
@@ -23,14 +29,23 @@ internal sealed class FakeTextInputService : ITextInputService
 
     public void SubscribeTextEditing(int priority, InputEventHandler<TextEditingEventArgs> handler) { }
 
-    public void SubscribeTextInput(ViewScope viewScope, int priority, InputEventHandler<TextInputEventArgs> handler) { }
+    public void SubscribeTextInput(ViewScope viewScope, int priority, InputEventHandler<TextInputEventArgs> handler)
+    {
+        TextInputHandler = handler;
+        TextInputSubscription = (viewScope, priority);
+    }
 
     public void SubscribeTextEditing(ViewScope viewScope, int priority, InputEventHandler<TextEditingEventArgs> handler) { }
 }
 
-/// <summary>Subscribes to nothing that happens, because these tests drive the root directly.</summary>
-internal sealed class SilentKeyboardService : IKeyboardService
+/// <summary>Keeps what subscribed to key presses, so a test can deliver one.</summary>
+internal sealed class FakeKeyboardService : IKeyboardService
 {
+    public InputEventHandler<KeyEventArgs>? KeyDownHandler { get; private set; }
+
+    /// <summary>The scope and order it subscribed with.</summary>
+    public (ViewScope Scope, int Priority)? KeyDownSubscription { get; private set; }
+
     public event InputEventHandler<KeyEventArgs>? KeyDown { add { } remove { } }
     public event InputEventHandler<KeyEventArgs>? KeyUp { add { } remove { } }
 
@@ -38,7 +53,11 @@ internal sealed class SilentKeyboardService : IKeyboardService
 
     public void SubscribeKeyUp(int priority, InputEventHandler<KeyEventArgs> handler) { }
 
-    public void SubscribeKeyDown(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler) { }
+    public void SubscribeKeyDown(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler)
+    {
+        KeyDownHandler = handler;
+        KeyDownSubscription = (viewScope, priority);
+    }
 
     public void SubscribeKeyUp(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler) { }
 }
