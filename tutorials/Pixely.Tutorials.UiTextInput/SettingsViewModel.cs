@@ -40,19 +40,24 @@ public sealed class SettingsViewModel : IUiViewModel
         set => Set(ref _scale, value);
     }
 
-    /// <summary>Whether the fields refuse to be edited, which is what a disabled field demonstrates.</summary>
     public bool IsLocked
     {
         get => _isLocked;
         set => Set(ref _isLocked, value);
     }
 
+    /// <summary>
+    /// Writes the fields directly and reports one change, rather than four assignments reporting
+    /// four. A view synchronises on every notification, so batching an action that moves several
+    /// values at once is the view model's job.
+    /// </summary>
     public void Reset()
     {
-        Name = "Player";
-        Width = 64;
-        Height = 48;
-        Scale = 1f;
+        _name = "Player";
+        _width = 64;
+        _height = 48;
+        _scale = 1f;
+        Changed?.Invoke();
     }
 
     private void Set<T>(ref T field, T value)

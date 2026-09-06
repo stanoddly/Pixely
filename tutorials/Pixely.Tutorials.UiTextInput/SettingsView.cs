@@ -38,8 +38,9 @@ public sealed class SettingsView : UiView<SettingsViewModel>
         _name = Field(new TextBox());
         _name.Committed += text => ViewModel.Name = text;
 
-        // A NumberBox refuses a keystroke that would leave the field unparseable, so there is no
-        // invalid state to validate on commit — only a value the view model can take as it is.
+        // A NumberBox refuses a keystroke that cannot lead to a number, while still allowing the
+        // ones on the way to it: "-", "1." and "1e" are all accepted. Finishing is what requires a
+        // complete number, so ValueCommitted only ever carries one the view model can take as it is.
         _width = Field(new NumberBox<int>(formatProvider: CultureInfo.InvariantCulture));
         _width.ValueCommitted += value => ViewModel.Width = value;
 
@@ -51,8 +52,8 @@ public sealed class SettingsView : UiView<SettingsViewModel>
 
         _summary = new Label { Color = Value };
 
-        // The caption is kept and written to rather than replaced, so toggling the lock re-measures
-        // one label instead of building a new element and re-laying out the row around it.
+        // The caption is kept and written to rather than replaced. Re-measuring still happens —
+        // the text changed width — but no element is allocated and nothing is reparented.
         _lockCaption = new Label();
         _lock = new Button { Content = _lockCaption };
         _lock.Clicked += () => ViewModel.IsLocked = !ViewModel.IsLocked;
@@ -62,10 +63,10 @@ public sealed class SettingsView : UiView<SettingsViewModel>
     {
         return new Column(gap: 18)
         {
+            // No sizing here: a layer is measured against the viewport and arranged to it, so its
+            // own Width and Height are never consulted.
             Background = new SolidDrawable(Background),
             Padding = new Thickness(28),
-            Width = Sizing.Grow(),
-            Height = Sizing.Grow(),
             Children =
             {
                 new Label("Settings") { Role = TextRole.Title, Color = Accent },
@@ -111,8 +112,9 @@ public sealed class SettingsView : UiView<SettingsViewModel>
             $"Name: {ViewModel.Name}  Size: {ViewModel.Width}x{ViewModel.Height}  " +
             $"Scale: {ViewModel.Scale.ToString(CultureInfo.InvariantCulture)}";
 
-        // A disabled field paints its disabled background, refuses the pointer, and gives up focus
-        // if it happens to be the field being edited.
+        // A disabled field paints its disabled background and refuses the pointer. It would give up
+        // focus too, but not visibly here: clicking the lock button has already taken focus off the
+        // field before this runs.
         _name.IsEnabled = !ViewModel.IsLocked;
         _width.IsEnabled = !ViewModel.IsLocked;
         _height.IsEnabled = !ViewModel.IsLocked;
@@ -126,7 +128,8 @@ public sealed class SettingsView : UiView<SettingsViewModel>
     {
         box.Width = Sizing.Fixed(FieldWidth);
 
-        // Cut, copy and paste do nothing until a field is given somewhere to put the text.
+        // Copy and paste do nothing until a field is given somewhere to put the text. Cut still
+        // deletes the selection, since deleting is the part that does not need a clipboard.
         box.Clipboard = _clipboard;
         return box;
     }

@@ -40,8 +40,10 @@ static class Program
 
             keyboardService.KeyDown += eventArgs =>
             {
-                // The UI sees keys first and consumes the ones it uses, so this only runs when no
-                // field is being edited — which is what keeps Escape from both cancelling and quitting.
+                // The UI subscribes ahead of this and consumes the keys it uses. A field being
+                // edited uses Escape to cancel, so Escape reaches here only when none is — which is
+                // what keeps one press from both cancelling and quitting. Keys a field does not use
+                // still come through.
                 if (eventArgs.Key == VirtualKey.Escape)
                 {
                     appControl.Quit();
