@@ -56,7 +56,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
-                provider.GetWindow(viewScope),
+                CreateWindowSizeSource(provider, viewScope),
                 viewScope,
                 inputOrder,
                 provider.GetRequiredService<IMouseService>(),
@@ -76,6 +76,16 @@ public static class UiExtensions
                 provider.GetWindow(viewScope)));
 
         return appBuilder;
+    }
+
+    /// <summary>
+    /// The window's logical size, resolved once and read per event. The window itself is resolved
+    /// here rather than inside the input system, which needs the size and nothing else.
+    /// </summary>
+    private static Func<Size<uint>> CreateWindowSizeSource(ServiceProvider provider, ViewScope viewScope)
+    {
+        Window window = provider.GetWindow(viewScope);
+        return () => window.Size;
     }
 
     /// <summary>Resolves the <see cref="UiRoot"/> registered for a window.</summary>

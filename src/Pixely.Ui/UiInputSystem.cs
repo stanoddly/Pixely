@@ -10,14 +10,19 @@ namespace Pixely.Ui;
 internal sealed class UiInputSystem
 {
     private readonly UiRoot _root;
-    private readonly Window _window;
+    private readonly Func<Size<uint>> _windowSize;
     private readonly ITextInputService _textInputService;
     private readonly ViewScope _viewScope;
     private bool _textInputStarted;
 
+    /// <param name="windowSize">
+    /// The window's logical size, read per event rather than held: it changes as the window is
+    /// resized, and this needs the size at the moment a position arrived. A size rather than the
+    /// window, because the size is all this does with it.
+    /// </param>
     internal UiInputSystem(
         UiRoot root,
-        Window window,
+        Func<Size<uint>> windowSize,
         ViewScope viewScope,
         int inputOrder,
         IMouseService mouseService,
@@ -25,7 +30,7 @@ internal sealed class UiInputSystem
         ITextInputService textInputService)
     {
         _root = root;
-        _window = window;
+        _windowSize = windowSize;
         _textInputService = textInputService;
         _viewScope = viewScope;
 
@@ -107,7 +112,7 @@ internal sealed class UiInputSystem
     /// every hit test lands somewhere else.
     /// </summary>
     private Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition) =>
-        ToUiPosition(windowPosition, _window.Size, _root.ViewportSize);
+        ToUiPosition(windowPosition, _windowSize(), _root.ViewportSize);
 
     /// <inheritdoc cref="ToUiPosition(System.Numerics.Vector2)"/>
     internal static Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition, Size<uint> windowSize, Vector2Int viewport) =>
