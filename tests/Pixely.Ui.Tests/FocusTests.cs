@@ -662,6 +662,93 @@ public class FocusTests
         protected override void Sync() => SyncCount++;
     }
 
+    [Test]
+    public void AFocusSubscriberThatMovesFocusAndThenThrows_DoesNotLeaveTheReportBehind()
+    {
+        RecordingFocusTarget field = Sized();
+        UiRoot root = Rooted(field);
+
+        List<Element?> reported = new();
+        bool thrown = false;
+        root.FocusChanged += focused =>
+        {
+            reported.Add(focused);
+
+            if (focused == null || thrown)
+            {
+                return;
+            }
+
+            thrown = true;
+            root.Focus(null);
+            throw new InvalidOperationException("commit failed");
+        };
+
+        Assert.Throws<InvalidOperationException>(() => root.Focus(field));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.FocusedElement, Is.Null);
+            Assert.That(reported, Is.EqualTo(new Element?[] { field, null }),
+                "what was announced last has to be what is actually focused, or text input stays on for nothing");
+        });
+    }
+
+    [Test]
+    public void ASubscriberThrowingOnTheTerminalReport_DoesNotLeaveTheRouterFrozen()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        UiRoot root = InRow(first, second);
+
+        // Keeps moving focus until reporting gives up, then throws from the announcement that giving
+        // up produces. Focus must still be movable afterwards.
+        Action<Element?> handler = focused =>
+        {
+            if (focused == null)
+            {
+                throw new InvalidOperationException("no");
+            }
+
+            root.Focus(ReferenceEquals(focused, first) ? second : first);
+        };
+        root.FocusChanged += handler;
+
+        Assert.Throws<InvalidOperationException>(() => root.Focus(first));
+
+        root.FocusChanged -= handler;
+        root.Focus(second);
+
+        Assert.That(root.FocusedElement, Is.SameAs(second), "the freeze was only for the announcement");
+    }
+
+    [Test]
+    public void ATerminalSubscriberThatRemovesALayer_LeavesNothingFocused()
+    {
+        RecordingFocusTarget first = Sized();
+        RecordingFocusTarget second = Sized();
+        Row layer = new() { Children = { first, second } };
+        UiRoot root = new();
+        root.AddLayer(layer);
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+
+        root.FocusChanged += focused =>
+        {
+            if (focused == null)
+            {
+                root.RemoveLayer(layer);
+                return;
+            }
+
+            root.Focus(ReferenceEquals(focused, first) ? second : first);
+        };
+
+        root.Focus(first);
+
+        Assert.That(root.FocusedElement, Is.Null);
+    }
+
     private static UiRoot InRow(params Element[] children)
     {
         Row row = new();

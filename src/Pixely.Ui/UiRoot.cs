@@ -390,28 +390,53 @@ public sealed class UiRoot
 
             // Out of rounds. Keeping focus where it is would be the kinder answer, but there is no
             // value that can be announced and still be true afterwards: announcing is a callback, and
-            // this application's callbacks move focus every time they are asked. Focus is dropped and
-            // held there while that is said, because the one thing that must not outlive giving up is
-            // the platform being told a field has focus when none does.
-            _focusRouter.Abandon();
-            _focusRouter.Freeze();
-
+            // this application's callbacks move focus every time they are asked.
+            AbandonFocus();
+        }
+        catch
+        {
+            // A subscriber can move focus and then throw, which leaves what was last announced naming
+            // an element that no longer holds anything and no round left to correct it. The same
+            // terminal state settles that, best effort: an exception from announcing it would replace
+            // the one the caller is already unwinding with, which is the more useful of the two.
             try
             {
-                if (_reportedFocus != null)
-                {
-                    _reportedFocus = null;
-                    _focusChanged.Notify(null);
-                }
+                AbandonFocus();
             }
-            finally
+            catch
             {
-                _focusRouter.Unfreeze();
+                // Nothing to add.
             }
+
+            throw;
         }
         finally
         {
             _isReportingFocus = false;
+        }
+    }
+
+    /// <summary>
+    /// Drops focus and says so, with the router held there while it is said. The last word on focus
+    /// has to be one that nothing can contradict, and an announcement is a callback like any other:
+    /// anything else it might be told could be made false by the telling.
+    /// </summary>
+    private void AbandonFocus()
+    {
+        _focusRouter.Abandon();
+        _focusRouter.Freeze();
+
+        try
+        {
+            if (_reportedFocus != null)
+            {
+                _reportedFocus = null;
+                _focusChanged.Notify(null);
+            }
+        }
+        finally
+        {
+            _focusRouter.Unfreeze();
         }
     }
 
