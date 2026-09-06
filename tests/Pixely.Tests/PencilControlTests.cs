@@ -441,6 +441,116 @@ public sealed class PencilControlTests
         pencil.RenderDirty = false;
     }
 
+    [Test]
+    public void HandleEditingKeyDown_WithNoFieldBeingEdited_IsNotTaken()
+    {
+        Pencil pencil = CreatePencil();
+
+        Assert.That(pencil.HandleEditingKeyDown(Scancode.Backspace, shift: false, ctrl: false), Is.False);
+    }
+
+    [Test]
+    public void HandleEditingKeyDown_EditsTheBufferAndInvalidates()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.EditingState = new TextFieldEditingState("hello");
+        pencil.NeedsUpdate = false;
+
+        bool handled = pencil.HandleEditingKeyDown(Scancode.Backspace, shift: false, ctrl: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handled, Is.True);
+            Assert.That(pencil.EditingState.Buffer, Is.EqualTo("hell"));
+            Assert.That(pencil.NeedsUpdate, Is.True, "the field looks different now, so the frame has to be built again");
+        });
+    }
+
+    [Test]
+    public void HandleEditingKeyDown_Enter_AsksToCommitAndNotToCancel()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.EditingState = new TextFieldEditingState("hello");
+
+        pencil.HandleEditingKeyDown(Scancode.Return, shift: false, ctrl: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.EditingState.Committed, Is.True);
+            Assert.That(pencil.EditingState.Canceled, Is.False);
+        });
+    }
+
+    [Test]
+    public void HandleEditingKeyDown_Escape_AsksToCancelAndNotToCommit()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.EditingState = new TextFieldEditingState("hello");
+
+        pencil.HandleEditingKeyDown(Scancode.Escape, shift: false, ctrl: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.EditingState.Canceled, Is.True);
+            Assert.That(pencil.EditingState.Committed, Is.False);
+        });
+    }
+
+    [Test]
+    public void HandleEditingKeyDown_AKeyThatMeansNothingHere_IsLeftAlone()
+    {
+        Pencil pencil = CreatePencil();
+        pencil.EditingState = new TextFieldEditingState("hello");
+        pencil.NeedsUpdate = false;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pencil.HandleEditingKeyDown(Scancode.F1, shift: false, ctrl: false), Is.False);
+            Assert.That(pencil.NeedsUpdate, Is.False, "nothing changed, so nothing needs redrawing");
+        });
+    }
+
+    [Test]
+    public void HandleEditingKeyDown_Copy_ReachesTheClipboard()
+    {
+        RecordingClipboardService clipboard = new();
+        Pencil pencil = new(new TestFontSystem(), clipboard, GuiStyles.Style);
+        pencil.EditingState = new TextFieldEditingState("hello") { SelectionAnchor = 0, CursorPosition = 2 };
+
+        pencil.HandleEditingKeyDown(Scancode.C, shift: false, ctrl: true);
+
+        Assert.That(clipboard.Text, Is.EqualTo("he"));
+    }
+
+    [Test]
+    public void ANumberFieldEdit_IsValidatedWithTheGivenCulture()
+    {
+        System.Globalization.CultureInfo german = new("de-DE");
+        TextFieldEditingState state = new(
+            "1,5",
+            german,
+            acceptsEdit: static (text, provider) => text.Length == 0 || float.TryParse(text, System.Globalization.NumberStyles.Float, provider, out float _),
+            canCommit: static (text, provider) => float.TryParse(text, System.Globalization.NumberStyles.Float, provider, out float _));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.CanCommit(), Is.True, "a comma is the decimal separator in this culture");
+            Assert.That(state.TryInsertText("x"), Is.False);
+            Assert.That(state.Buffer, Is.EqualTo("1,5"));
+        });
+    }
+
+    private sealed class RecordingClipboardService : IClipboardService
+    {
+        public string? Text { get; private set; }
+
+        public bool HasText => Text != null;
+
+        public string? GetText() => Text;
+
+        public void SetText(string text) => Text = text;
+    }
+
     private static Pencil CreatePencil()
     {
         return new Pencil(new TestFontSystem(), new TestClipboardService(), GuiStyles.Style);

@@ -12,6 +12,9 @@ public sealed class TextEditingBuffer
 {
     private readonly Func<string, bool>? _acceptsEdit;
 
+    private int _cursorPosition;
+    private int? _selectionAnchor;
+
     /// <param name="acceptsEdit">
     /// Whether a candidate string may be typed. Called for every edit including the half-finished
     /// ones, so a numeric field can refuse a letter without refusing the minus sign that has no digits
@@ -23,15 +26,28 @@ public sealed class TextEditingBuffer
 
         _acceptsEdit = acceptsEdit;
         Text = text;
-        CursorPosition = text.Length;
+        _cursorPosition = text.Length;
     }
 
     public string Text { get; private set; }
 
-    public int CursorPosition { get; set; }
+    /// <summary>
+    /// Where the caret sits, always within the text. Clamped rather than rejected: callers compute
+    /// these by walking the text, and one position past either end is what that walk naturally
+    /// produces at the ends.
+    /// </summary>
+    public int CursorPosition
+    {
+        get => _cursorPosition;
+        set => _cursorPosition = Math.Clamp(value, 0, Text.Length);
+    }
 
     /// <summary>Where a selection started, or null when there is none. The caret is its other end.</summary>
-    public int? SelectionAnchor { get; set; }
+    public int? SelectionAnchor
+    {
+        get => _selectionAnchor;
+        set => _selectionAnchor = value == null ? null : Math.Clamp(value.Value, 0, Text.Length);
+    }
 
     public bool HasSelection => SelectionAnchor != null && SelectionAnchor.Value != CursorPosition;
 
@@ -71,17 +87,22 @@ public sealed class TextEditingBuffer
     public bool TryRemove(int start, int length) => TryReplace(start, length, string.Empty);
 
     /// <summary>
-    /// Replaces the text outright, as an external value arriving rather than something typed. The
-    /// caret goes to the end and any selection is dropped, and no edit filter applies: the value came
-    /// from the application, which is not restricted to what a user could have typed.
+    /// Replaces the text outright, starting the edit again from a new value. The caret goes to the
+    /// end and any selection is dropped, and no edit filter applies: the value came from the
+    /// application, which is not restricted to what a user could have typed.
     /// </summary>
+    /// <remarks>
+    /// For deliberately restarting an edit, not for an external value arriving while one is in
+    /// progress — a field being typed into goes on showing what was typed, and a value assigned
+    /// underneath it is what the edit is compared against when it finishes.
+    /// </remarks>
     public void Reset(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
 
         Text = text;
-        CursorPosition = text.Length;
-        SelectionAnchor = null;
+        _cursorPosition = text.Length;
+        _selectionAnchor = null;
     }
 
     private bool TryReplace(int start, int length, string replacement)
@@ -94,8 +115,8 @@ public sealed class TextEditingBuffer
         }
 
         Text = candidate;
-        CursorPosition = start + replacement.Length;
-        SelectionAnchor = null;
+        _cursorPosition = start + replacement.Length;
+        _selectionAnchor = null;
         return true;
     }
 }

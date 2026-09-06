@@ -917,4 +917,3 @@ internal class TextFieldEditingState
 
     public bool CanCommit() => _canCommit == null || _canCommit(Buffer, _formatProvider);
 }
-
