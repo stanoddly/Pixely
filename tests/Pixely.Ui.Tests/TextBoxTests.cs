@@ -450,8 +450,8 @@ public class TextBoxTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(focused.Background(), Is.SameAs(backgrounds.Focused));
-            Assert.That(plain.Background(), Is.SameAs(backgrounds.Normal), "an unfocused field takes the ordinary one");
+            Assert.That(focused.ResolvedBackground(), Is.SameAs(backgrounds.Focused));
+            Assert.That(plain.ResolvedBackground(), Is.SameAs(backgrounds.Normal), "an unfocused field takes the ordinary one");
         });
     }
 
@@ -468,15 +468,15 @@ public class TextBoxTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(fromStyle.Background(), Is.SameAs(styled.Normal));
-            Assert.That(fromDefault.Background(), Is.SameAs(TextBox.DefaultBackground.Normal));
+            Assert.That(fromStyle.ResolvedBackground(), Is.SameAs(styled.Normal));
+            Assert.That(fromDefault.ResolvedBackground(), Is.SameAs(TextBox.DefaultBackground.Normal));
         });
     }
 
     /// <summary>Opens the resolved background up, which is protected because only painting reads it.</summary>
     private sealed class ExposedTextBox : TextBox
     {
-        public Drawable? Background() => EffectiveBackground;
+        public Drawable? ResolvedBackground() => EffectiveBackground;
     }
 
     /// <summary>
