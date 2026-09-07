@@ -117,3 +117,68 @@ public sealed class NinePatchDrawable : Drawable
 
     private static float Lerp(float from, float to, float amount) => from + ((to - from) * amount);
 }
+
+/// <summary>
+/// An outline drawn inside an element's bounds, with an optional <see cref="Fill"/> painted in
+/// what is left. The fill is a <see cref="Drawable"/> rather than a colour, so a nine-patch or a
+/// gradient sits inside a border without needing a separate composition type.
+/// </summary>
+public sealed class BorderDrawable : Drawable
+{
+    private readonly Thickness _thickness;
+
+    public BorderDrawable(Color color, Thickness thickness, Drawable? fill = null)
+    {
+        if (thickness.HasNegativeEdge)
+        {
+            throw new ArgumentOutOfRangeException(nameof(thickness), thickness, "Border thickness must not be negative.");
+        }
+
+        Color = color;
+        _thickness = thickness;
+        Fill = fill;
+    }
+
+    public Color Color { get; }
+    public Thickness Thickness => _thickness;
+    public Drawable? Fill { get; }
+
+    public override void Paint(PaintContext context, Rectangle bounds)
+    {
+        // Clamped here because nothing downstream does it: Thickness.Deflate clamps the inner size
+        // alone, and the context clips against the current clip rather than these bounds, so an
+        // edge wider than the element would paint outside it and over its opposite edge.
+        int left = Math.Min(_thickness.Left, bounds.Width);
+        int right = Math.Min(_thickness.Right, bounds.Width - left);
+        int top = Math.Min(_thickness.Top, bounds.Height);
+        int bottom = Math.Min(_thickness.Bottom, bounds.Height - top);
+
+        // From the clamped edges rather than Thickness.Deflate: the two agree while the edges fit,
+        // but a thickness wider than the element deflates to a rectangle past its far edge, and the
+        // totals Deflate adds up can overflow.
+        int innerWidth = bounds.Width - left - right;
+        int innerHeight = bounds.Height - top - bottom;
+
+        // The horizontal edges span the full width and the vertical ones only what is between
+        // them, which is what keeps the four disjoint at any thickness.
+        context.FillRectangle(new Rectangle(bounds.X, bounds.Y, bounds.Width, top), Color);
+        context.FillRectangle(new Rectangle(bounds.X, bounds.Y + bounds.Height - bottom, bounds.Width, bottom), Color);
+        context.FillRectangle(new Rectangle(bounds.X, bounds.Y + top, left, innerHeight), Color);
+        context.FillRectangle(new Rectangle(bounds.X + bounds.Width - right, bounds.Y + top, right, innerHeight), Color);
+
+        // An empty interior is skipped rather than handed on, because a NinePatchDrawable emits
+        // its corners at their natural size even from bounds with no room for them.
+        if (Fill == null || innerWidth <= 0 || innerHeight <= 0)
+        {
+            return;
+        }
+
+        Rectangle inner = new(bounds.X + left, bounds.Y + top, innerWidth, innerHeight);
+
+        // Clipped for the same reason as above: an interior too small for what fills it — a
+        // nine-patch narrower than its own insets — would otherwise paint over the border that is
+        // supposed to surround it.
+        using ClipScope scope = context.PushClip(inner);
+        Fill.Paint(context, inner);
+    }
+}

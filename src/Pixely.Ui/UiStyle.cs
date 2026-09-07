@@ -46,6 +46,14 @@ public sealed class UiStyle
     public StateDrawables ButtonBackground { get; init; } = Button.DefaultBackground;
 
     /// <summary>
+    /// What the text in a <see cref="Button"/> is drawn in, per state — which is how a theme tints
+    /// a button's label on hover. The pair of this and <see cref="ButtonBackground"/> is what a
+    /// button offers its content; a label given a colour of its own keeps it while it is enabled
+    /// and takes the <see cref="VisualState.Disabled"/> entry here when it is not.
+    /// </summary>
+    public StateColors ButtonForeground { get; init; } = Button.DefaultForeground;
+
+    /// <summary>
     /// Behind selected text. Its own value rather than part of a drawable, because it is painted
     /// under a run of characters whose extent is only known while the text is being drawn.
     /// </summary>

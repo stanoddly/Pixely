@@ -108,7 +108,7 @@ Write a custom `ILayout` when allocation is the thing that differs. `ILayoutHost
 
 `Label`, `Button`, `Image`, `TextBox`, `NumberBox<T>` and `ClipBorder` are the built-in leaves and wrappers. Everything else is composition: a panel is an `Element` with a `Background` and a `Layout`.
 
-Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background.
+Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable`, `BorderDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background. `BorderDrawable` takes a colour, a `Thickness` and an optional inner `Drawable` to fill what is left, so a border around a nine-patch is one drawable rather than two nested elements. It clamps its own edges: a thickness wider than the element paints an outline that swallows it rather than one that spills outside.
 
 A custom element overrides `MeasureContent` and `PaintContent`. Drawing content and having children are independent — `MeasureContent` can measure intrinsic content against `MeasureChildren` — so set `MaxChildCount` only to say what the element actually accepts. `Divider` below sets zero because it is a leaf, not because it paints:
 
@@ -257,13 +257,23 @@ Derive from `TextBox` and override `AcceptsEdit` and `CanCommit` for a field wit
 
 ## Styling
 
-`UiStyle` holds what an element falls back on when it was not given a value: `Body`, `Title` and `Small` fonts, `Foreground`, `DisabledForeground`, `Selection`, `Caret`, `ButtonBackground` and `FieldBackground`. An element given an explicit value ignores the style. Replacing `UiRoot.Style` invalidates every layer.
+`UiStyle` holds what an element falls back on when it was not given a value: `Body`, `Title` and `Small` fonts, `Foreground`, `DisabledForeground`, `Selection`, `Caret`, `ButtonBackground`, `ButtonForeground` and `FieldBackground`. An explicit value on an element wins, except that text in a disabled element takes a disabled colour instead — `Label.Foregrounds` is what says which. Replacing `UiRoot.Style` invalidates every layer.
 
-Not every field is consumed by every element. The fonts, `ButtonBackground` and `FieldBackground` are general; `Foreground`, `DisabledForeground`, `Selection` and `Caret` are currently read by `TextBox` alone. `Label.Color` is a plain colour defaulting to white, so a label — including the one a `Button(string)` makes — is not tinted by `Foreground`. Set `Label.Color` when you want a label to follow a palette.
+Not every field is consumed by every element. The fonts, `ButtonBackground` and `FieldBackground` are general; `Selection` and `Caret` are read by `TextBox` alone. Text colour is what `Label` and `TextBox` share, and a label resolves it in this order:
+
+1. `Label.Foregrounds`, a `StateColors` — full control, including what disabled looks like.
+2. Disabled: the nearest `IVisualStateSource`'s `ContentForeground` for `Disabled`, else `UiStyle.DisabledForeground`.
+3. `Label.Color`, when it was given one.
+4. The nearest `IVisualStateSource`'s `ContentForeground` for the current state.
+5. `UiStyle.Foreground`.
+
+So a label in a themed button follows `ButtonForeground` — including the one `Button(string)` makes — a label given a colour keeps it, and both take a disabled colour when they cannot be used, unless the label named its own through `Foregrounds`. `TextBox` applies the same disabled-beats-explicit rule to its own colour, without the `StateColors` escape hatch.
 
 Everything that takes a font takes `IFont` — `UiStyle.Body/Title/Small`, `Label.Font`, `TextBox` and `NumberBox<T>`. `Font` implements it, so passing one loaded from an `IFontSystem` is unchanged. The interface is what makes text layout testable without a device: measuring goes through `IFont.Measure`, which for a real `Font` is `TTF_GetStringSizeWrapped` and uploads nothing, while `IFont.CreateTextSprite` is reached only by painting. A test can substitute a font with stated metrics and let rasterisation throw, which is what `FixedWidthFont` in `Pixely.Ui.Tests` does.
 
-Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given.
+Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given. `StateColors` is the same shape over `Color`, and is what `Label.Foregrounds`, `Button.Foregrounds` and `UiStyle.ButtonForeground` hold.
+
+A control's state reaches the text inside it through `IVisualStateSource`, which `Button` implements: a `Label` walks up to the nearest one and resolves its colour against that state while painting. This is what lets a button tint its label on hover without knowing that its content is text at all — the content stays an ordinary element. An implementation of the interface must invalidate paint when its state *or* its `ContentForeground` changes (`SetPaintProperty` for either kept in a field, `InvalidatePaint` for what is derived); nothing below it is marked dirty otherwise.
 
 Which state an element is in is the element's own answer. `TextBox` reports `Disabled` before `Focused`, so a disabled field looks disabled even while it holds the keyboard. `Focused` is last in the enum rather than beside the other interaction states, so the values already in use kept their numbers.
 

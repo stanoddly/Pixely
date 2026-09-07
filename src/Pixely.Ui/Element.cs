@@ -442,7 +442,9 @@ public class Element : ILayoutHost
         }
     }
 
-    internal void InvalidatePaint()
+    /// <summary>Marks this element and its ancestors as needing a repaint. Protected for an
+    /// <see cref="IVisualStateSource"/> whose state is derived rather than stored in a field.</summary>
+    protected internal void InvalidatePaint()
     {
         _paintDirty = true;
 

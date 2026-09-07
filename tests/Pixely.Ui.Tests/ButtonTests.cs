@@ -736,6 +736,27 @@ public class ButtonTests
         });
     }
 
+    [Test]
+    public void ContentForeground_PrefersItsOwnThenTheStyleThenTheDefault()
+    {
+        StateColors own = new(Colors.Red);
+        StateColors styled = new(Colors.Green);
+        Button button = new();
+        UiRoot root = Rooted(button);
+
+        StateColors withoutAnything = ((IVisualStateSource)button).ContentForeground;
+        root.Style = new UiStyle { ButtonForeground = styled };
+        StateColors withAStyle = ((IVisualStateSource)button).ContentForeground;
+        button.Foregrounds = own;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(withoutAnything, Is.SameAs(Button.DefaultForeground), "an unstyled button still has to resolve");
+            Assert.That(withAStyle, Is.SameAs(styled));
+            Assert.That(((IVisualStateSource)button).ContentForeground, Is.SameAs(own));
+        });
+    }
+
     private static UiRoot Rooted(Element content)
     {
         UiRoot root = new();
