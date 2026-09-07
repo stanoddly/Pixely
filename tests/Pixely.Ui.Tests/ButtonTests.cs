@@ -230,13 +230,10 @@ public class ButtonTests
     {
         SolidDrawable normal = new(Colors.Red);
         SolidDrawable hovered = new(Colors.Green);
-        Button button = new()
-        {
-            Width = Sizing.Fixed(40),
-            Height = Sizing.Fixed(20),
-            Backgrounds = new StateDrawables(normal) { Hovered = hovered }
-        };
+        Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = Rooted(button);
+        root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(normal) { Hovered = hovered } } };
+        root.Update();
 
         Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
 
@@ -251,7 +248,7 @@ public class ButtonTests
     {
         SolidDrawable styled = new(Colors.Blue);
         Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
-        UiRoot root = new() { Style = new UiStyle { ButtonBackground = new StateDrawables(styled) } };
+        UiRoot root = new() { Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(styled) } } };
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
@@ -452,31 +449,16 @@ public class ButtonTests
     }
 
     [Test]
-    public void StateBackgrounds_WinOverTheInheritedOne()
-    {
-        Button button = new()
-        {
-            Width = Sizing.Fixed(40),
-            Height = Sizing.Fixed(20),
-            Background = new SolidDrawable(Colors.Red),
-            Backgrounds = new StateDrawables(new SolidDrawable(Colors.Blue))
-        };
-        UiRoot root = Rooted(button);
-
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Blue));
-    }
-
-    [Test]
     public void ReplacingTheStyle_Repaints()
     {
         Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
-        UiRoot root = new() { Style = new UiStyle { ButtonBackground = new StateDrawables(new SolidDrawable(Colors.Red)) } };
+        UiRoot root = new() { Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Red)) } } };
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
         Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
 
-        root.Style = new UiStyle { ButtonBackground = new StateDrawables(new SolidDrawable(Colors.Blue)) };
+        root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
 
         Assert.Multiple(() =>
         {
@@ -488,14 +470,17 @@ public class ButtonTests
     [Test]
     public void AMovedButton_IsPaintedInTheStateItEndsUpIn()
     {
-        Button button = new()
-        {
-            Width = Sizing.Fixed(20),
-            Height = Sizing.Fixed(20),
-            Backgrounds = new StateDrawables(new SolidDrawable(Colors.Red)) { Hovered = new SolidDrawable(Colors.Green) }
-        };
+        Button button = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(20) };
         Column layer = new() { Children = { button } };
         UiRoot root = Rooted(layer);
+        root.Style = new UiStyle
+        {
+            Button = new ButtonAppearance
+            {
+                Background = new StateDrawables(new SolidDrawable(Colors.Red)) { Hovered = new SolidDrawable(Colors.Green) }
+            }
+        };
+        root.Update();
 
         root.PointerMoved(new Vector2Int(5, 5));
         root.Update();
@@ -737,23 +722,19 @@ public class ButtonTests
     }
 
     [Test]
-    public void ContentForeground_PrefersItsOwnThenTheStyleThenTheDefault()
+    public void ContentForeground_PrefersTheStyleAndFallsBackOnTheDefault()
     {
-        StateColors own = new(Colors.Red);
         StateColors styled = new(Colors.Green);
         Button button = new();
         UiRoot root = Rooted(button);
 
-        StateColors withoutAnything = ((IVisualStateSource)button).ContentForeground;
-        root.Style = new UiStyle { ButtonForeground = styled };
-        StateColors withAStyle = ((IVisualStateSource)button).ContentForeground;
-        button.Foregrounds = own;
+        StateColors withoutAStyle = ((IVisualStateSource)button).ContentForeground;
+        root.Style = new UiStyle { Button = new ButtonAppearance { Foreground = styled } };
 
         Assert.Multiple(() =>
         {
-            Assert.That(withoutAnything, Is.SameAs(Button.DefaultForeground), "an unstyled button still has to resolve");
-            Assert.That(withAStyle, Is.SameAs(styled));
-            Assert.That(((IVisualStateSource)button).ContentForeground, Is.SameAs(own));
+            Assert.That(withoutAStyle, Is.SameAs(ButtonAppearance.DefaultForeground), "an unstyled button still has to resolve");
+            Assert.That(((IVisualStateSource)button).ContentForeground, Is.SameAs(styled));
         });
     }
 

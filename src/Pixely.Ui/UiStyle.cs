@@ -4,16 +4,24 @@ using Pixely.Text;
 namespace Pixely.Ui;
 
 /// <summary>
-/// Defaults shared by every element in a <see cref="UiRoot"/>, so a view does not have to carry
-/// fonts through its constructors or restate the same values in each tree it builds.
+/// The look of every element under a <see cref="UiRoot"/>. Authoritative: elements hold no colours
+/// or drawables of their own, so a theme is what a screen looks like rather than a starting point
+/// that individual controls quietly walk away from.
 /// </summary>
 /// <remarks>
+/// <para>
+/// A record, so a variation is <c>style with { Button = quiet }</c> rather than a restatement of
+/// everything that did not change. Appearances are grouped per control, which keeps a variation to
+/// the one member that differs and keeps this type from growing a field per control per property.
+/// </para>
+/// <para>
 /// Fonts have to be loaded from content, so they have no built-in default and stay optional: a
 /// style that only themes buttons needs none. Roles rather than a single font, because "the same
 /// face at two sizes" is a type scale, and every real screen needs at least a title and body
 /// distinction.
+/// </para>
 /// </remarks>
-public sealed class UiStyle
+public sealed record UiStyle
 {
     public UiStyle()
     {
@@ -29,6 +37,9 @@ public sealed class UiStyle
         Small = body;
     }
 
+    /// <summary>What a root paints with until it is given a style, so nothing has to check for null.</summary>
+    public static UiStyle Default { get; } = new();
+
     /// <summary>The font a <see cref="Label"/> uses when it is not given one.</summary>
     public IFont? Body { get; init; }
 
@@ -38,41 +49,12 @@ public sealed class UiStyle
     /// <summary>Defaults to <see cref="Body"/>.</summary>
     public IFont? Small { get; init; }
 
-    /// <summary>
-    /// What a <see cref="Button"/> paints when it was not given its own. Unlike a font this has a
-    /// usable default, so a screen full of buttons needs no style at all and a themed one restates
-    /// nothing per button.
-    /// </summary>
-    public StateDrawables ButtonBackground { get; init; } = Button.DefaultBackground;
+    public ButtonAppearance Button { get; init; }
 
-    /// <summary>
-    /// What the text in a <see cref="Button"/> is drawn in, per state — which is how a theme tints
-    /// a button's label on hover. The pair of this and <see cref="ButtonBackground"/> is what a
-    /// button offers its content; a label given a colour of its own keeps it while it is enabled
-    /// and takes the <see cref="VisualState.Disabled"/> entry here when it is not.
-    /// </summary>
-    public StateColors ButtonForeground { get; init; } = Button.DefaultForeground;
+    public FieldAppearance Field { get; init; }
 
-    /// <summary>
-    /// Behind selected text. Its own value rather than part of a drawable, because it is painted
-    /// under a run of characters whose extent is only known while the text is being drawn.
-    /// </summary>
-    public Color Selection { get; init; } = DefaultSelection;
-
-    /// <summary>Text and anything drawn as text, when the element does not say otherwise.</summary>
-    public Color Foreground { get; init; } = DefaultForeground;
-
-    /// <summary>
-    /// Text in a control that cannot be used. Its own colour rather than a tint of the foreground,
-    /// because how far to fade depends on what the text is drawn against.
-    /// </summary>
-    public Color DisabledForeground { get; init; } = DefaultDisabledForeground;
-
-    /// <summary>Behind an editable field, per state — which is how a focused one shows that it is.</summary>
-    public StateDrawables FieldBackground { get; init; } = TextBox.DefaultBackground;
-
-    /// <summary>The caret in an editable field. Defaults to whatever the text is drawn in.</summary>
-    public Color? Caret { get; init; }
+    /// <summary>Text that is not inside a control with a look of its own.</summary>
+    public TextAppearance Text { get; init; }
 
     /// <summary>Used when no style supplies one, so a field is usable without any setup.</summary>
     public static Color DefaultSelection { get; } = new(51, 102, 170, 180);
@@ -82,4 +64,10 @@ public sealed class UiStyle
 
     /// <inheritdoc cref="DefaultSelection"/>
     public static Color DefaultDisabledForeground { get; } = new(130, 130, 130, 255);
+
+    /// <inheritdoc cref="DefaultSelection"/>
+    public static Color DefaultMuted { get; } = new(160, 168, 180, 255);
+
+    /// <inheritdoc cref="DefaultSelection"/>
+    public static Color DefaultAccent { get; } = new(239, 139, 79, 255);
 }

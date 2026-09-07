@@ -55,7 +55,7 @@ public static class UiExtensions
 
         // The style is optional: an application that gives every label an explicit font needs none.
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
-            new ScopedUiRoot(viewScope, new UiRoot { Style = provider.GetService<UiStyle>() }));
+            new ScopedUiRoot(viewScope, new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default }));
 
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(

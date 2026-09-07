@@ -73,6 +73,12 @@ public class Element : ILayoutHost
         }
     }
 
+    /// <summary>
+    /// The look this element paints with. An element outside any root gets the built-in style, so
+    /// a detached subtree measures and paints instead of failing on a root it does not have yet.
+    /// </summary>
+    protected UiStyle Style => OwnerRoot?.Style ?? UiStyle.Default;
+
     public ElementCollection Children { get; }
 
     public ILayout Layout

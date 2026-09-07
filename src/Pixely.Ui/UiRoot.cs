@@ -16,7 +16,7 @@ public sealed class UiRoot
     private readonly List<Rectangle> _pointerTargetAreas = new();
     private readonly List<Element> _pointerTargetElements = new();
 
-    private UiStyle? _style;
+    private UiStyle _style = UiStyle.Default;
     private bool _isUpdating;
     private Vector2Int _viewportSize;
     private bool _layersChanged = true;
@@ -67,15 +67,17 @@ public sealed class UiRoot
     internal List<Element> PointerTargetElements => _pointerTargetElements;
 
     /// <summary>
-    /// Defaults every element under this root can fall back on. Elements that were given an
-    /// explicit value ignore it. Replacing it invalidates the layers, since nothing below them
-    /// holds a value that would otherwise change.
+    /// The look of everything under this root. Never null, because no element holds a look of its
+    /// own to fall back on. Replacing it invalidates the layers, since nothing below them holds a
+    /// value that would otherwise change.
     /// </summary>
-    public UiStyle? Style
+    public UiStyle Style
     {
         get => _style;
         set
         {
+            ArgumentNullException.ThrowIfNull(value);
+
             if (ReferenceEquals(_style, value))
             {
                 return;

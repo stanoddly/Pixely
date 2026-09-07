@@ -14,7 +14,7 @@ Element         the node; layout, painting and invalidation live here
 ILayout         how a parent allocates space to children
 Drawable        how a background paints itself
 UiView          a tree plus the code that copies a view model into it
-UiStyle         defaults an element falls back on when it was not given one
+UiStyle         the look of everything under a root; elements hold none of their own
 ```
 
 ## Getting started
@@ -257,21 +257,62 @@ Derive from `TextBox` and override `AcceptsEdit` and `CanCommit` for a field wit
 
 ## Styling
 
-`UiStyle` holds what an element falls back on when it was not given a value: `Body`, `Title` and `Small` fonts, `Foreground`, `DisabledForeground`, `Selection`, `Caret`, `ButtonBackground`, `ButtonForeground` and `FieldBackground`. An explicit value on an element wins, except that text in a disabled element takes a disabled colour instead — `Label.Foregrounds` is what says which. Replacing `UiRoot.Style` invalidates every layer.
+`UiStyle` is where a screen's look lives, and it is the only place: no element holds a colour or a drawable of its own. That is what makes a theme a theme rather than a set of defaults individual controls quietly walk away from — swapping `UiRoot.Style` restyles everything, with nothing left behind holding a value of its own. Replacing it invalidates every layer.
 
-Not every field is consumed by every element. The fonts, `ButtonBackground` and `FieldBackground` are general; `Selection` and `Caret` are read by `TextBox` alone. Text colour is what `Label` and `TextBox` share, and a label resolves it in this order:
+It is a record, so a variation is `style with { Button = quiet }` rather than a restatement of what did not change, and appearances are grouped per control so a variation touches one member:
 
-1. `Label.Foregrounds`, a `StateColors` — full control, including what disabled looks like.
-2. Disabled: the nearest `IVisualStateSource`'s `ContentForeground` for `Disabled`, else `UiStyle.DisabledForeground`.
-3. `Label.Color`, when it was given one.
-4. The nearest `IVisualStateSource`'s `ContentForeground` for the current state.
-5. `UiStyle.Foreground`.
+```csharp
+root.Style = new UiStyle(body)
+{
+    Title = titleFont,
+    Text = new TextAppearance { Foreground = Value, Muted = Caption, Accent = Highlight },
+    Button = new ButtonAppearance
+    {
+        Background = new StateDrawables(new SolidDrawable(Idle)) { Hovered = new SolidDrawable(Lit) },
+        Foreground = new StateColors(Colors.White) { Hovered = Highlight }
+    }
+};
+```
 
-So a label in a themed button follows `ButtonForeground` — including the one `Button(string)` makes — a label given a colour keeps it, and both take a disabled colour when they cannot be used, unless the label named its own through `Foregrounds`. `TextBox` applies the same disabled-beats-explicit rule to its own colour, without the `StateColors` escape hatch.
+`ButtonAppearance`, `FieldAppearance` and `TextAppearance` are `record struct`s, and every member of them reads through a fallback — so `default` and `new()` produce a style that paints rather than one that is invisible, and a theme sets only what it cares about.
+
+Fonts have no built-in default, since they have to be loaded from content. Everything else does: `UiStyle.Default` is what a root paints with until it is given a style, which is why nothing has to check for null.
+
+### Which control reads what
+
+`TextAppearance` is text that is not inside a control with a look of its own. Two small axes select within it, neither multiplying the other:
+
+- `TextRole` — `Body`, `Title`, `Small` — picks the font.
+- `TextEmphasis` — `Normal`, `Muted`, `Accent` — picks the colour.
+
+```csharp
+new Label("Scoreboard") { Role = TextRole.Title, Emphasis = TextEmphasis.Accent }
+```
+
+An intent rather than a colour, so the theme decides what "secondary" looks like and every screen that says it gets the same answer. `Disabled` beats both: unusable is the more important thing to show.
+
+`ButtonAppearance` and `FieldAppearance` cover the controls that have a look of their own; `FieldAppearance.Selection` and `Caret` are read by `TextBox` alone, and a null `Caret` means whatever the text is drawn in.
+
+A label inside a control takes that control's answer, not `TextAppearance`, so `Emphasis` is ignored there — what a button's text looks like is the button's to say. Resolution is short enough to state whole:
+
+1. The nearest `IVisualStateSource` above the label, resolved for the current state.
+2. Failing that, `UiStyle.Text` resolved for the label's `Emphasis` and its effective enablement.
+
+### Wanting something different
+
+There is no per-element override to reach for. In order of what to try:
+
+- **A recurring intent** is an emphasis or, for a control, a member of the style. Three labels in a screen that all want to be quieter are `TextEmphasis.Muted`, not three colours.
+- **A genuinely different control** is a different element. `IVisualStateSource` is public precisely so an element outside `Pixely.Ui` can colour the text inside it the way `Button` does.
+- **Content that happens to be coloured** — a player's team colour, a health bar — is not styling at all. `Image.Tint` and a custom element's own `PaintContent` are where that belongs; a theme cannot hold a value computed at runtime.
+
+`Element.Background` stays a primitive alongside `Padding` and `Margin`: a grey strip behind a toolbar is not a control look, and assigning one means one drawable for every state. `Button` and `TextBox` honour it ahead of the style's, which is what keeps an inherited property from accepting a value and then doing nothing.
+
+### Fonts, states and the seam
 
 Everything that takes a font takes `IFont` — `UiStyle.Body/Title/Small`, `Label.Font`, `TextBox` and `NumberBox<T>`. `Font` implements it, so passing one loaded from an `IFontSystem` is unchanged. The interface is what makes text layout testable without a device: measuring goes through `IFont.Measure`, which for a real `Font` is `TTF_GetStringSizeWrapped` and uploads nothing, while `IFont.CreateTextSprite` is reached only by painting. A test can substitute a font with stated metrics and let rasterisation throw, which is what `FixedWidthFont` in `Pixely.Ui.Tests` does.
 
-Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given. `StateColors` is the same shape over `Color`, and is what `Label.Foregrounds`, `Button.Foregrounds` and `UiStyle.ButtonForeground` hold.
+Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given. `StateColors` is the same shape over `Color`.
 
 A control's state reaches the text inside it through `IVisualStateSource`, which `Button` implements: a `Label` walks up to the nearest one and resolves its colour against that state while painting. This is what lets a button tint its label on hover without knowing that its content is text at all — the content stays an ordinary element. An implementation of the interface must invalidate paint when its state *or* its `ContentForeground` changes (`SetPaintProperty` for either kept in a field, `InvalidatePaint` for what is derived); nothing below it is marked dirty otherwise.
 
