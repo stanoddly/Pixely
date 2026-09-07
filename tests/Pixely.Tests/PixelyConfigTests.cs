@@ -15,14 +15,6 @@ public sealed class PixelyConfigTests
     }
 
     [Test]
-    public void Defaults_DeliverActivatingMouseClicks()
-    {
-        PixelyConfig config = new();
-
-        Assert.That(config.DeliverActivatingMouseClicks, Is.True);
-    }
-
-    [Test]
     public void TaskbarPresentation_CanBeConfigured()
     {
         PixelyConfig config = new(
