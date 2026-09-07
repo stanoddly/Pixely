@@ -17,16 +17,16 @@ public enum TextRole
 /// </summary>
 /// <remarks>
 /// Named Label rather than Text so that consumers can use <c>Pixely.Text</c> — which is where
-/// <see cref="Font"/> lives — without the two colliding.
+/// <see cref="IFont"/> lives — without the two colliding.
 /// </remarks>
 public sealed class Label : Element
 {
     private string _content;
-    private Font? _font;
+    private IFont? _font;
     private TextRole _role = TextRole.Body;
     private Color _color = Colors.White;
     private TextSpriteAsset? _sprite;
-    private Font? _spriteFont;
+    private IFont? _spriteFont;
 
     /// <summary>Takes its font from the root's <see cref="UiStyle"/> according to <see cref="Role"/>.</summary>
     public Label(string content = "")
@@ -36,7 +36,7 @@ public sealed class Label : Element
     }
 
     /// <summary>Uses <paramref name="font"/> regardless of the style.</summary>
-    public Label(Font font, string content = "")
+    public Label(IFont font, string content = "")
     {
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(content);
@@ -66,7 +66,7 @@ public sealed class Label : Element
     }
 
     /// <summary>An explicit font, or null to take one from the style.</summary>
-    public Font? Font
+    public IFont? Font
     {
         get => _font;
         set
@@ -107,8 +107,13 @@ public sealed class Label : Element
 
     protected override Vector2Int MeasureContent(Constraints constraints)
     {
-        TextSpriteAsset? sprite = ResolveSprite();
-        return sprite == null ? default : new Vector2Int(sprite.Size.X, sprite.Size.Y);
+        if (_content.Length == 0)
+        {
+            return default;
+        }
+
+        ShortSize size = ResolveFont().Measure(_content);
+        return new Vector2Int(size.Width, size.Height);
     }
 
     protected override void PaintContent(PaintContext context)
@@ -132,7 +137,7 @@ public sealed class Label : Element
         // The font is resolved every time rather than only on a cache miss, because a style
         // replaced on the root — or a subtree moved to a root with a different one — changes it
         // without anything reaching this label. The walk is an ancestor chain and no allocation.
-        Font font = ResolveFont();
+        IFont font = ResolveFont();
 
         if (_sprite == null || !ReferenceEquals(font, _spriteFont))
         {
@@ -143,7 +148,7 @@ public sealed class Label : Element
         return _sprite;
     }
 
-    private Font ResolveFont()
+    private IFont ResolveFont()
     {
         if (_font != null)
         {
@@ -152,7 +157,7 @@ public sealed class Label : Element
 
         UiStyle? style = OwnerRoot?.Style;
 
-        Font? font = _role switch
+        IFont? font = _role switch
         {
             TextRole.Title => style?.Title,
             TextRole.Small => style?.Small,
