@@ -24,7 +24,8 @@ public sealed class Label : Element
     private string _content;
     private IFont? _font;
     private TextRole _role = TextRole.Body;
-    private Color _color = Colors.White;
+    private Color? _color;
+    private StateColors? _foregrounds;
     private TextSpriteAsset? _sprite;
     private IFont? _spriteFont;
 
@@ -99,10 +100,63 @@ public sealed class Label : Element
         }
     }
 
-    public Color Color
+    /// <summary>
+    /// An explicit colour, or null to take one from the control above this label and the style.
+    /// Set, it still loses to a disabled state; <see cref="Foregrounds"/> is how a label says otherwise.
+    /// </summary>
+    public Color? Color
     {
         get => _color;
         set => SetPaintProperty(ref _color, value);
+    }
+
+    /// <summary>
+    /// A colour per state, resolved against the nearest <see cref="IVisualStateSource"/> above this
+    /// label — or against nothing but its own enablement when there is none. The way to give one
+    /// label a look the control it sits in does not offer. Named as <see cref="Button.Foregrounds"/>
+    /// is, since the two hold the same thing for the same reason.
+    /// </summary>
+    public StateColors? Foregrounds
+    {
+        get => _foregrounds;
+        set => SetPaintProperty(ref _foregrounds, value);
+    }
+
+    /// <summary>
+    /// What this label paints in. An explicit colour wins, except over a disabled state, which is
+    /// the precedence <see cref="TextBox"/> already applies to its own.
+    /// </summary>
+    private Color ResolvedColor
+    {
+        get
+        {
+            IVisualStateSource? source = FindStateSource();
+
+            // Effective enablement rather than the source's own answer: a disabled element between
+            // an enabled button and this label leaves that button reporting Normal.
+            VisualState state = !IsEffectivelyEnabled ? VisualState.Disabled : source?.VisualState ?? VisualState.Normal;
+
+            if (_foregrounds != null)
+            {
+                return _foregrounds.Resolve(state);
+            }
+
+            UiStyle? style = OwnerRoot?.Style;
+
+            if (state == VisualState.Disabled)
+            {
+                return source?.ContentForeground.Resolve(VisualState.Disabled)
+                    ?? style?.DisabledForeground
+                    ?? UiStyle.DefaultDisabledForeground;
+            }
+
+            if (_color != null)
+            {
+                return _color.Value;
+            }
+
+            return source?.ContentForeground.Resolve(state) ?? style?.Foreground ?? UiStyle.DefaultForeground;
+        }
     }
 
     protected override Vector2Int MeasureContent(Constraints constraints)
@@ -124,7 +178,20 @@ public sealed class Label : Element
             return;
         }
 
-        context.DrawSprite(sprite, new Rectangle(Bounds.X, Bounds.Y, sprite.Size.X, sprite.Size.Y), _color);
+        context.DrawSprite(sprite, new Rectangle(Bounds.X, Bounds.Y, sprite.Size.X, sprite.Size.Y), ResolvedColor);
+    }
+
+    private IVisualStateSource? FindStateSource()
+    {
+        for (Element? element = Parent; element != null; element = element.Parent)
+        {
+            if (element is IVisualStateSource source)
+            {
+                return source;
+            }
+        }
+
+        return null;
     }
 
     private TextSpriteAsset? ResolveSprite()

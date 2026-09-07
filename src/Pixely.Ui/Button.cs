@@ -8,7 +8,7 @@ namespace Pixely.Ui;
 /// nothing else: what the button says is an ordinary child element, so the same type carries a
 /// label, an icon or a row of both without knowing about any of them.
 /// </summary>
-public sealed class Button : Element, IPointerTarget
+public sealed class Button : Element, IPointerTarget, IVisualStateSource
 {
     /// <summary>
     /// Used when neither the button nor the root's <see cref="UiStyle"/> supplies one, so a button
@@ -22,7 +22,18 @@ public sealed class Button : Element, IPointerTarget
         Disabled = new SolidDrawable(new Color(40, 44, 51, 255))
     };
 
+    /// <summary>
+    /// What a button's text falls back on. <see cref="UiStyle.ButtonForeground"/> defaults to it,
+    /// and it deliberately carries no hover tint: recolouring text on hover is a theme's decision,
+    /// not something every button should start out doing.
+    /// </summary>
+    public static StateColors DefaultForeground { get; } = new(UiStyle.DefaultForeground)
+    {
+        Disabled = UiStyle.DefaultDisabledForeground
+    };
+
     private StateDrawables? _backgrounds;
+    private StateColors? _foregrounds;
     private bool _isHovered;
     private bool _isPressed;
 
@@ -75,6 +86,18 @@ public sealed class Button : Element, IPointerTarget
         set => SetPaintProperty(ref _backgrounds, value);
     }
 
+    /// <summary>
+    /// Colours for the text in this button alone. When null the root style's
+    /// <see cref="UiStyle.ButtonForeground"/> is used, and <see cref="DefaultForeground"/> when
+    /// there is no style. A <see cref="Label"/> given a colour of its own uses that while it is
+    /// enabled, and the <see cref="VisualState.Disabled"/> entry here when it is not.
+    /// </summary>
+    public StateColors? Foregrounds
+    {
+        get => _foregrounds;
+        set => SetPaintProperty(ref _foregrounds, value);
+    }
+
     public VisualState VisualState
     {
         get
@@ -111,6 +134,9 @@ public sealed class Button : Element, IPointerTarget
                 ?? (OwnerRoot?.Style?.ButtonBackground ?? DefaultBackground).Resolve(VisualState);
         }
     }
+
+    StateColors IVisualStateSource.ContentForeground =>
+        _foregrounds ?? OwnerRoot?.Style?.ButtonForeground ?? DefaultForeground;
 
     void IPointerTarget.OnPointerEnter(Vector2Int position)
     {

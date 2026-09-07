@@ -1,3 +1,5 @@
+using Pixely.Gpu;
+
 namespace Pixely.Ui;
 
 /// <summary>
@@ -43,6 +45,42 @@ public sealed class StateDrawables
     public Drawable? Disabled { get; init; }
 
     public Drawable Resolve(VisualState state)
+    {
+        return state switch
+        {
+            VisualState.Hovered => Hovered ?? Normal,
+            VisualState.Pressed => Pressed ?? Normal,
+            VisualState.Focused => Focused ?? Normal,
+            VisualState.Disabled => Disabled ?? Normal,
+            _ => Normal
+        };
+    }
+}
+
+/// <summary>
+/// One <see cref="Color"/> per <see cref="VisualState"/>, with the fallbacks
+/// <see cref="StateDrawables"/> has. A parallel type rather than a generic one over both, because
+/// a drawable and a colour are the only two things that vary per state, and generalising would
+/// rename what consumers already write.
+/// </summary>
+public sealed class StateColors
+{
+    public StateColors(Color normal)
+    {
+        Normal = normal;
+    }
+
+    public Color Normal { get; }
+
+    public Color? Hovered { get; init; }
+
+    public Color? Pressed { get; init; }
+
+    public Color? Focused { get; init; }
+
+    public Color? Disabled { get; init; }
+
+    public Color Resolve(VisualState state)
     {
         return state switch
         {
