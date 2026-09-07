@@ -78,9 +78,8 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     /// <summary>
     /// The clipboard the copy, cut and paste shortcuts reach, overriding the one on the root this
-    /// field belongs to. Null falls back on <see cref="UiRoot.Clipboard"/>, and with neither of them
-    /// set copy and paste are inert: cut still deletes, because that is the field's own business,
-    /// but nothing is copied or pasted.
+    /// field belongs to. Null falls back on <see cref="UiRoot.Clipboard"/>, which is where a field
+    /// in an application gets a working one.
     /// </summary>
     public IClipboardService? Clipboard { get; set; }
 

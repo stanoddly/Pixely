@@ -111,7 +111,7 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void WithNoClipboard_CutStillDeletesAndPasteDoesNothing()
+    public void WithTheRootsDefaultClipboard_CutStillDeletesAndPasteDoesNothing()
     {
         TextBox field = new() { Text = "hello" };
         UiRoot root = Rooted(field);
