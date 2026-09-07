@@ -42,6 +42,10 @@ public class PixelyFactory: IDisposable
             SDL3.SDL_SetHint(SDL3.SDL_HINT_LOGGING, "*=debug");
         }
 
+        // SDL swallows the mouse click that activates an unfocused window by default, which loses the first
+        // click whenever the user switches windows, including between two windows of the same application.
+        SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
+
         SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO |
                                   SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
         if (SDL3.SDL_Init(initFlags) == false)

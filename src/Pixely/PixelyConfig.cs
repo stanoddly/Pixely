@@ -14,12 +14,14 @@ public sealed record PixelyConfig(
     bool EnableGpuValidation = true,
     GpuBackend GpuBackend = GpuBackend.Automatic,
     string? ApplicationIdentifier = null,
-    string? TaskbarIconPath = null);
+    string? TaskbarIconPath = null,
+    bool DeliverActivatingMouseClicks = true);
 #else
 public sealed record PixelyConfig(
     bool EnableSdlLogging = false,
     bool EnableGpuValidation = false,
     GpuBackend GpuBackend = GpuBackend.Automatic,
     string? ApplicationIdentifier = null,
-    string? TaskbarIconPath = null);
+    string? TaskbarIconPath = null,
+    bool DeliverActivatingMouseClicks = true);
 #endif

@@ -226,6 +226,20 @@ keyboardService.SubscribeKeyDown(
 
 Scoped overloads exist for keyboard, mouse, and text-input subscriptions.
 
+## Activating mouse clicks
+
+Clicking an unfocused window activates it. SDL discards that click by default, so the first click after
+switching windows is lost, including when switching between two windows of the same application. Pixely
+delivers it instead: it enables `SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH` during initialization. Register
+`PixelyConfig` with `DeliverActivatingMouseClicks: false` to restore the SDL default:
+
+```csharp
+builder.AddSingleton(new PixelyConfig(DeliverActivatingMouseClicks: false));
+```
+
+Either way, `IMouseService` only raises `ButtonRelease` for a button whose press it saw, so a suppressed
+press never leaves a release behind it.
+
 ## Pencuil
 
 The immediate-mode UI. See `docs/ui.md` for `Pixely.Ui`, the retained-mode one, which is scoped the same way.
