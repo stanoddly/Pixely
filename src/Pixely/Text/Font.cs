@@ -40,6 +40,12 @@ public class Font : IDisposable
     /// </summary>
     public TextSpriteAsset CreateTextSprite(string text) => _fontSystem.CreateTextSprite(text, this);
 
+    /// <summary>
+    /// The size <paramref name="text"/> would rasterise to, without rasterising it: no surface is
+    /// rendered and no texture is uploaded, so this works without a device.
+    /// </summary>
+    public ShortSize Measure(string text) => _fontSystem.MeasureTextSprite(text, this);
+
     internal unsafe void FreeFontData()
     {
         if (_fontData != null)

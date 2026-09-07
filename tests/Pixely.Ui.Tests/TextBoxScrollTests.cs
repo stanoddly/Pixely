@@ -2,9 +2,9 @@ namespace Pixely.Ui.Tests;
 
 /// <summary>
 /// Where a field slides its text to so the caret stays visible. Separated from the field itself
-/// because everything else about drawing one needs a font, and a font needs a device to rasterise
-/// with — this is the part that can be checked on its own, and it is the part that gets edge cases
-/// wrong.
+/// because everything else about drawing one needs a font, and a <see cref="Font"/> cannot be
+/// substituted for a fake — this is the part that can be checked on its own, and it is the part
+/// that gets edge cases wrong.
 /// </summary>
 public class TextBoxScrollTests
 {

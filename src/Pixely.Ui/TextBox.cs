@@ -149,8 +149,8 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
         // Measured against the value rather than what is being typed, so a field does not resize
         // itself with every keystroke and shuffle everything beside it along.
-        int height = font.CreateTextSprite("Ay").Size.Y;
-        int width = _text.Length == 0 ? 0 : font.CreateTextSprite(_text).Size.X;
+        int height = font.Measure("Ay").Height;
+        int width = _text.Length == 0 ? 0 : font.Measure(_text).Width;
         return new Vector2Int(width, height);
     }
 
@@ -338,7 +338,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     /// </summary>
     /// <remarks>
     /// Takes widths rather than text so the arithmetic can be checked on its own. Everything else
-    /// about drawing a field needs a font, and a font needs a device to rasterise with.
+    /// about drawing a field needs a font, and a <see cref="Font"/> cannot be substituted for a fake.
     /// </remarks>
     internal static int ScrollOffsetFor(int caretX, int textWidth, int contentWidth, int currentOffset)
     {
@@ -367,7 +367,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     private static int TextWidth(Font font, string text, int length) => TextWidth(font, text[..length]);
 
-    private static int TextWidth(Font font, string text) => text.Length == 0 ? 0 : font.CreateTextSprite(text).Size.X;
+    private static int TextWidth(Font font, string text) => text.Length == 0 ? 0 : font.Measure(text).Width;
 
     private Font ResolveFont() =>
         _font

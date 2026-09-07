@@ -107,8 +107,13 @@ public sealed class Label : Element
 
     protected override Vector2Int MeasureContent(Constraints constraints)
     {
-        TextSpriteAsset? sprite = ResolveSprite();
-        return sprite == null ? default : new Vector2Int(sprite.Size.X, sprite.Size.Y);
+        if (_content.Length == 0)
+        {
+            return default;
+        }
+
+        ShortSize size = ResolveFont().Measure(_content);
+        return new Vector2Int(size.Width, size.Height);
     }
 
     protected override void PaintContent(PaintContext context)
