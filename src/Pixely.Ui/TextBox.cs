@@ -76,13 +76,6 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         set => SetPaintProperty(ref _color, value);
     }
 
-    /// <summary>
-    /// The clipboard the copy, cut and paste shortcuts reach, overriding the one on the root this
-    /// field belongs to. Null falls back on <see cref="UiRoot.Clipboard"/>, which is where a field
-    /// in an application gets a working one.
-    /// </summary>
-    public IClipboardService? Clipboard { get; set; }
-
     /// <summary>What is on screen: the edit while there is one, and the value otherwise.</summary>
     public string DisplayText => _editor?.Text ?? _text;
 
@@ -243,7 +236,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
             return false;
         }
 
-        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, Clipboard ?? OwnerRoot?.Clipboard);
+        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, OwnerRoot?.Clipboard ?? NullClipboardService.Instance);
 
         switch (outcome)
         {

@@ -30,9 +30,10 @@ public static class TextEditingCommands
         Scancode scancode,
         bool shift,
         bool ctrl,
-        IClipboardService? clipboard = null)
+        IClipboardService clipboard)
     {
         ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentNullException.ThrowIfNull(clipboard);
 
         switch (scancode)
         {
@@ -68,7 +69,7 @@ public static class TextEditingCommands
             case Scancode.C when ctrl:
                 if (buffer.HasSelection)
                 {
-                    clipboard?.SetText(buffer.GetSelectedText());
+                    clipboard.SetText(buffer.GetSelectedText());
                 }
 
                 return TextEditingOutcome.Handled;
@@ -182,7 +183,7 @@ public static class TextEditingCommands
         buffer.CursorPosition = position;
     }
 
-    private static void Cut(TextEditingBuffer buffer, IClipboardService? clipboard)
+    private static void Cut(TextEditingBuffer buffer, IClipboardService clipboard)
     {
         if (!buffer.HasSelection)
         {
@@ -195,13 +196,13 @@ public static class TextEditingCommands
         // silently replace what was on the clipboard.
         if (buffer.TryDeleteSelection())
         {
-            clipboard?.SetText(selected);
+            clipboard.SetText(selected);
         }
     }
 
-    private static void Paste(TextEditingBuffer buffer, IClipboardService? clipboard)
+    private static void Paste(TextEditingBuffer buffer, IClipboardService clipboard)
     {
-        string? text = clipboard?.GetText();
+        string? text = clipboard.GetText();
 
         if (text != null)
         {

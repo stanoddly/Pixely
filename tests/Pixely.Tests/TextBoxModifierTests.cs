@@ -49,36 +49,7 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void ControlAndC_ReachTheClipboardTheFieldWasGiven()
-    {
-        TextBox field = new() { Text = "hello" };
-        RecordingClipboard clipboard = new();
-        field.Clipboard = clipboard;
-        UiRoot root = Rooted(field);
-        root.Focus(field);
-
-        root.KeyPressed(Scancode.A, Held(Scancode.LeftCtrl));
-        root.KeyPressed(Scancode.C, Held(Scancode.LeftCtrl));
-
-        Assert.That(clipboard.Text, Is.EqualTo("hello"));
-    }
-
-    [Test]
-    public void ControlAndV_PasteFromTheClipboardTheFieldWasGiven()
-    {
-        TextBox field = new();
-        RecordingClipboard clipboard = new() { Text = "pasted" };
-        field.Clipboard = clipboard;
-        UiRoot root = Rooted(field);
-        root.Focus(field);
-
-        root.KeyPressed(Scancode.V, Held(Scancode.LeftCtrl));
-
-        Assert.That(field.DisplayText, Is.EqualTo("pasted"));
-    }
-
-    [Test]
-    public void WithNoClipboardOfItsOwn_TheFieldReachesTheRootsClipboard()
+    public void ControlAndC_ReachesTheRootsClipboard()
     {
         TextBox field = new() { Text = "hello" };
         RecordingClipboard clipboard = new();
@@ -93,21 +64,16 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void TheFieldsOwnClipboard_WinsOverTheRoots()
+    public void ControlAndV_PastesFromTheRootsClipboard()
     {
-        TextBox field = new() { Text = "hello" };
-        RecordingClipboard fieldClipboard = new();
-        RecordingClipboard rootClipboard = new();
-        field.Clipboard = fieldClipboard;
+        TextBox field = new();
         UiRoot root = Rooted(field);
-        root.Clipboard = rootClipboard;
+        root.Clipboard = new RecordingClipboard { Text = "pasted" };
         root.Focus(field);
 
-        root.KeyPressed(Scancode.A, Held(Scancode.LeftCtrl));
-        root.KeyPressed(Scancode.C, Held(Scancode.LeftCtrl));
+        root.KeyPressed(Scancode.V, Held(Scancode.LeftCtrl));
 
-        Assert.That(fieldClipboard.Text, Is.EqualTo("hello"));
-        Assert.That(rootClipboard.Text, Is.Null);
+        Assert.That(field.DisplayText, Is.EqualTo("pasted"));
     }
 
     [Test]

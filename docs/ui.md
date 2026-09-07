@@ -247,7 +247,7 @@ A field that will not accept what is in it does not commit. `NumberBox<T>` allow
 
 Only a complete number finishes an edit. Enter on an incomplete one consumes the key and keeps focus, leaving the user looking at what needs fixing; losing focus discards the edit rather than committing it. For the types whose parsers produce them, infinity and NaN are refused as well.
 
-Copy and paste reach the clipboard `UseUi` resolved onto `UiRoot.Clipboard`, so they work in a field nobody configured. `TextBox.Clipboard` overrides it for one field. A root built by hand keeps its default, `NullClipboardService`, and there copy and paste do nothing while cut still deletes the selection, since deleting is the half that needs no clipboard. Both are properties rather than constructor dependencies because an element is not resolved from the container.
+Copy and paste reach the clipboard `UseUi` resolved onto `UiRoot.Clipboard`, so they work in a field nobody configured. A root built by hand keeps its default, `NullClipboardService`, and there copy and paste do nothing while cut still deletes the selection, since deleting is the half that needs no clipboard. The clipboard sits on the root rather than on the field because an element is not resolved from the container, and rather than in `UiStyle` because it is a service and not a look.
 
 Assigning `Text` while the field is focused leaves what is being typed alone. It becomes the value the edit is compared against when it finishes, not a replacement for it — which is what lets `Sync` write every field unconditionally.
 
