@@ -4,7 +4,7 @@ using SDL;
 
 namespace Pixely.Text;
 
-public class Font : IDisposable
+public class Font : IFont, IDisposable
 {
     private FontSystem _fontSystem;
     private readonly Pointer<TTF_Font> _ttfFont;

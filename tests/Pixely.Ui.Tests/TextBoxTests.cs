@@ -6,9 +6,9 @@ namespace Pixely.Ui.Tests;
 
 /// <summary>
 /// A field's behaviour: what reaches the value, when, and what happens to an edit that is abandoned
-/// or refused. Nothing here lays the tree out, because that needs a font and a <see cref="Font"/>
-/// cannot be substituted for a fake — the drawing is exercised by running the application, the same
-/// as <see cref="Label"/>.
+/// or refused. Nothing here lays the tree out — that is <see cref="TextLayoutTests"/>, which
+/// measures against a stand-in font — and nothing here paints, which is exercised by running the
+/// application.
 /// </summary>
 public class TextBoxTests
 {

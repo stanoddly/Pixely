@@ -20,7 +20,7 @@ public sealed class UiStyle
     }
 
     /// <summary>Puts <paramref name="body"/> in every text role, which is where most screens start.</summary>
-    public UiStyle(Font body)
+    public UiStyle(IFont body)
     {
         ArgumentNullException.ThrowIfNull(body);
 
@@ -30,13 +30,13 @@ public sealed class UiStyle
     }
 
     /// <summary>The font a <see cref="Label"/> uses when it is not given one.</summary>
-    public Font? Body { get; init; }
+    public IFont? Body { get; init; }
 
     /// <summary>Defaults to <see cref="Body"/>.</summary>
-    public Font? Title { get; init; }
+    public IFont? Title { get; init; }
 
     /// <summary>Defaults to <see cref="Body"/>.</summary>
-    public Font? Small { get; init; }
+    public IFont? Small { get; init; }
 
     /// <summary>
     /// What a <see cref="Button"/> paints when it was not given its own. Unlike a font this has a

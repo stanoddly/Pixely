@@ -33,7 +33,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     private const int CaretWidth = 1;
 
-    private readonly Font? _font;
+    private readonly IFont? _font;
 
     private string _text = string.Empty;
     private Color? _color;
@@ -44,7 +44,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     // that knows how wide anything is.
     private int _scrollOffset;
 
-    public TextBox(Font? font = null)
+    public TextBox(IFont? font = null)
     {
         _font = font;
         Padding = new Thickness(4, 2);
@@ -145,7 +145,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     protected override Vector2Int MeasureContent(Constraints constraints)
     {
-        Font font = ResolveFont();
+        IFont font = ResolveFont();
 
         // Measured against the value rather than what is being typed, so a field does not resize
         // itself with every keystroke and shuffle everything beside it along.
@@ -156,7 +156,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     protected override void PaintContent(PaintContext context)
     {
-        Font font = ResolveFont();
+        IFont font = ResolveFont();
         Rectangle content = Padding.Deflate(Bounds);
         string display = DisplayText;
         int caret = _editor?.CursorPosition ?? 0;
@@ -338,7 +338,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     /// </summary>
     /// <remarks>
     /// Takes widths rather than text so the arithmetic can be checked on its own. Everything else
-    /// about drawing a field needs a font, and a <see cref="Font"/> cannot be substituted for a fake.
+    /// about drawing a field needs a font that can rasterise.
     /// </remarks>
     internal static int ScrollOffsetFor(int caretX, int textWidth, int contentWidth, int currentOffset)
     {
@@ -365,11 +365,11 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         return Math.Max(0, offset);
     }
 
-    private static int TextWidth(Font font, string text, int length) => TextWidth(font, text[..length]);
+    private static int TextWidth(IFont font, string text, int length) => TextWidth(font, text[..length]);
 
-    private static int TextWidth(Font font, string text) => text.Length == 0 ? 0 : font.Measure(text).Width;
+    private static int TextWidth(IFont font, string text) => text.Length == 0 ? 0 : font.Measure(text).Width;
 
-    private Font ResolveFont() =>
+    private IFont ResolveFont() =>
         _font
         ?? OwnerRoot?.Style?.Body
         ?? throw new InvalidOperationException(

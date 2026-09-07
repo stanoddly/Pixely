@@ -16,7 +16,7 @@ namespace Pixely.Ui;
 public sealed class NumberBox<T> : TextBox
     where T : struct, INumber<T>
 {
-    public NumberBox(Font? font = null, IFormatProvider? formatProvider = null)
+    public NumberBox(IFont? font = null, IFormatProvider? formatProvider = null)
         : base(font) =>
         FormatProvider = formatProvider;
 

@@ -261,6 +261,8 @@ Derive from `TextBox` and override `AcceptsEdit` and `CanCommit` for a field wit
 
 Not every field is consumed by every element. The fonts, `ButtonBackground` and `FieldBackground` are general; `Foreground`, `DisabledForeground`, `Selection` and `Caret` are currently read by `TextBox` alone. `Label.Color` is a plain colour defaulting to white, so a label — including the one a `Button(string)` makes — is not tinted by `Foreground`. Set `Label.Color` when you want a label to follow a palette.
 
+Everything that takes a font takes `IFont` — `UiStyle.Body/Title/Small`, `Label.Font`, `TextBox` and `NumberBox<T>`. `Font` implements it, so passing one loaded from an `IFontSystem` is unchanged. The interface is what makes text layout testable without a device: measuring goes through `IFont.Measure`, which for a real `Font` is `TTF_GetStringSizeWrapped` and uploads nothing, while `IFont.CreateTextSprite` is reached only by painting. A test can substitute a font with stated metrics and let rasterisation throw, which is what `FixedWidthFont` in `Pixely.Ui.Tests` does.
+
 Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given.
 
 Which state an element is in is the element's own answer. `TextBox` reports `Disabled` before `Focused`, so a disabled field looks disabled even while it holds the keyboard. `Focused` is last in the enum rather than beside the other interaction states, so the values already in use kept their numbers.
