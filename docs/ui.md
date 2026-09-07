@@ -234,7 +234,7 @@ Three things are not implemented yet, and are worth knowing before designing aro
 `TextBox` edits a string; `NumberBox<T>` edits any `struct` implementing `INumber<T>`:
 
 ```csharp
-TextBox name = new() { Width = Sizing.Fixed(240), Clipboard = clipboardService };
+TextBox name = new() { Width = Sizing.Fixed(240) };
 name.Committed += text => viewModel.Name = text;
 
 NumberBox<int> width = new(formatProvider: CultureInfo.InvariantCulture) { Width = Sizing.Fixed(240) };
@@ -247,7 +247,7 @@ A field that will not accept what is in it does not commit. `NumberBox<T>` allow
 
 Only a complete number finishes an edit. Enter on an incomplete one consumes the key and keeps focus, leaving the user looking at what needs fixing; losing focus discards the edit rather than committing it. For the types whose parsers produce them, infinity and NaN are refused as well.
 
-Copy and paste do nothing until `Clipboard` is set. Cut still deletes the selection, since deleting is the half that needs no clipboard. `Clipboard` is a property rather than a constructor dependency because an element is not resolved from the container.
+Copy and paste reach the clipboard `UseUi` resolved onto `UiRoot.Clipboard`, so they work in a field nobody configured. `TextBox.Clipboard` overrides it for one field; with neither set — a root built by hand, or an application with no `IClipboardService` — copy and paste do nothing, while cut still deletes the selection, since deleting is the half that needs no clipboard. Both are properties rather than constructor dependencies because an element is not resolved from the container.
 
 Assigning `Text` while the field is focused leaves what is being typed alone. It becomes the value the edit is compared against when it finishes, not a replacement for it — which is what lets `Sync` write every field unconditionally.
 

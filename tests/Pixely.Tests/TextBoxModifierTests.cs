@@ -78,6 +78,39 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
+    public void WithNoClipboardOfItsOwn_TheFieldReachesTheRootsClipboard()
+    {
+        TextBox field = new() { Text = "hello" };
+        RecordingClipboard clipboard = new();
+        UiRoot root = Rooted(field);
+        root.Clipboard = clipboard;
+        root.Focus(field);
+
+        root.KeyPressed(Scancode.A, Held(Scancode.LeftCtrl));
+        root.KeyPressed(Scancode.C, Held(Scancode.LeftCtrl));
+
+        Assert.That(clipboard.Text, Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void TheFieldsOwnClipboard_WinsOverTheRoots()
+    {
+        TextBox field = new() { Text = "hello" };
+        RecordingClipboard fieldClipboard = new();
+        RecordingClipboard rootClipboard = new();
+        field.Clipboard = fieldClipboard;
+        UiRoot root = Rooted(field);
+        root.Clipboard = rootClipboard;
+        root.Focus(field);
+
+        root.KeyPressed(Scancode.A, Held(Scancode.LeftCtrl));
+        root.KeyPressed(Scancode.C, Held(Scancode.LeftCtrl));
+
+        Assert.That(fieldClipboard.Text, Is.EqualTo("hello"));
+        Assert.That(rootClipboard.Text, Is.Null);
+    }
+
+    [Test]
     public void WithNoClipboard_CutStillDeletesAndPasteDoesNothing()
     {
         TextBox field = new() { Text = "hello" };

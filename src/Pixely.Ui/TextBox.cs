@@ -77,8 +77,10 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     }
 
     /// <summary>
-    /// The clipboard the copy, cut and paste shortcuts reach. Null leaves them inert: cut still
-    /// deletes, because that is the field's own business, but nothing is copied or pasted.
+    /// The clipboard the copy, cut and paste shortcuts reach, overriding the one on the root this
+    /// field belongs to. Null falls back on <see cref="UiRoot.Clipboard"/>, and with neither of them
+    /// set copy and paste are inert: cut still deletes, because that is the field's own business,
+    /// but nothing is copied or pasted.
     /// </summary>
     public IClipboardService? Clipboard { get; set; }
 
@@ -242,7 +244,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
             return false;
         }
 
-        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, Clipboard);
+        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, Clipboard ?? OwnerRoot?.Clipboard);
 
         switch (outcome)
         {
