@@ -36,4 +36,19 @@ public class MouseStateTests
             Assert.That(mouse.IsPressed(MouseButton.Middle), Is.True);
         });
     }
+
+    [Test]
+    public void UnsetReportsWhetherTheButtonWasPressed()
+    {
+        Mouse mouse = new Mouse((SDL_MouseID)1);
+
+        mouse.Set(MouseButton.Left);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mouse.Unset(MouseButton.Left), Is.True);
+            Assert.That(mouse.Unset(MouseButton.Left), Is.False);
+            Assert.That(mouse.Unset(MouseButton.Right), Is.False);
+        });
+    }
 }

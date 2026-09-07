@@ -61,10 +61,12 @@ public class Mouse
         return wasUnset;
     }
 
-    internal void Unset(MouseButton button)
+    internal bool Unset(MouseButton button)
     {
         int mask = 1 << ((int)button - 1);
+        bool wasSet = (ButtonFlags & mask) != 0;
         ButtonFlags &= ~mask;
+        return wasSet;
     }
 }
 
@@ -288,9 +290,12 @@ public class MouseService : IMouseService
         }
         else
         {
-            mouse.Unset(button);
-
-            _buttonReleaseHandlers.Invoke(viewScope, _buttonEventArgs);
+            // A release without a recorded press reaches handlers as a gesture that never started, so it is
+            // dropped. SDL can suppress a press on its own, for example the click that activates a window.
+            if (mouse.Unset(button))
+            {
+                _buttonReleaseHandlers.Invoke(viewScope, _buttonEventArgs);
+            }
         }
     }
 
