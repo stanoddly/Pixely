@@ -2,6 +2,7 @@ using Pixely.App;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Text;
+using Pixely.Gpu;
 using Pixely.Ui;
 
 namespace Pixely.Tutorials.UiTextInput;
@@ -31,7 +32,13 @@ static class Program
             IFontSystem fonts = provider.GetRequiredService<IFontSystem>();
             return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 16))
             {
-                Title = fonts.Load("fonts/GohuFont-Medium.ttf", 20)
+                Title = fonts.Load("fonts/GohuFont-Medium.ttf", 20),
+                Text = new TextAppearance
+                {
+                    Foreground = new Color(235, 238, 242, 255),
+                    Muted = new Color(150, 162, 180, 255),
+                    Accent = new Color(233, 138, 76, 255)
+                }
             };
         });
 

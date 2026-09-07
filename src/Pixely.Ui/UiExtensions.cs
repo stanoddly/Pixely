@@ -59,7 +59,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
             new ScopedUiRoot(
                 viewScope,
-                new UiRoot { Style = provider.GetService<UiStyle>(), Clipboard = provider.GetRequiredService<IClipboardService>() }));
+                new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>() }));
 
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(

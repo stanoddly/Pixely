@@ -441,12 +441,12 @@ public class TextBoxTests
     }
 
     [Test]
-    public void BackgroundsAssignedToTheField_BeatTheStyleAndFallBackWithin()
+    public void TheStylesBackgrounds_FallBackWithinThemselves()
     {
         StateDrawables backgrounds = new(new SolidDrawable(Colors.Red)) { Focused = new SolidDrawable(Colors.Green) };
-        ExposedTextBox focused = new() { Backgrounds = backgrounds };
-        ExposedTextBox plain = new() { Backgrounds = new StateDrawables(backgrounds.Normal) };
-        UiRoot root = new();
+        ExposedTextBox focused = new();
+        ExposedTextBox plain = new();
+        UiRoot root = new() { Style = new UiStyle { Field = new FieldAppearance { Background = backgrounds } } };
         root.AddLayer(new Row { Children = { focused, plain } });
         root.Focus(focused);
 
@@ -458,22 +458,11 @@ public class TextBoxTests
     }
 
     [Test]
-    public void AFieldsOwnBackgrounds_BeatAStyleThatAlsoSuppliesThem()
-    {
-        StateDrawables mine = new(new SolidDrawable(Colors.Red));
-        ExposedTextBox field = new() { Backgrounds = mine };
-        UiRoot root = new() { Style = new UiStyle { FieldBackground = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
-        root.AddLayer(new Column { Children = { field } });
-
-        Assert.That(field.ResolvedBackground(), Is.SameAs(mine.Normal));
-    }
-
-    [Test]
     public void APlainBackgroundAssignedToTheField_BeatsTheStyle()
     {
         SolidDrawable plain = new(Colors.Red);
         ExposedTextBox field = new() { Background = plain };
-        UiRoot root = new() { Style = new UiStyle { FieldBackground = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
+        UiRoot root = new() { Style = new UiStyle { Field = new FieldAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Blue)) } } };
         root.AddLayer(new Column { Children = { field } });
         root.Focus(field);
 
@@ -482,12 +471,12 @@ public class TextBoxTests
     }
 
     [Test]
-    public void WithNoBackgroundsOfItsOwn_AFieldTakesTheStylesAndThenTheDefault()
+    public void WithoutAStyleOfItsOwn_AFieldTakesTheStylesAndThenTheBuiltInOne()
     {
         StateDrawables styled = new(new SolidDrawable(Colors.Blue));
         ExposedTextBox fromStyle = new();
         ExposedTextBox fromDefault = new();
-        UiRoot styledRoot = new() { Style = new UiStyle { FieldBackground = styled } };
+        UiRoot styledRoot = new() { Style = new UiStyle { Field = new FieldAppearance { Background = styled } } };
         styledRoot.AddLayer(new Column { Children = { fromStyle } });
         UiRoot plainRoot = new();
         plainRoot.AddLayer(new Column { Children = { fromDefault } });
@@ -495,7 +484,7 @@ public class TextBoxTests
         Assert.Multiple(() =>
         {
             Assert.That(fromStyle.ResolvedBackground(), Is.SameAs(styled.Normal));
-            Assert.That(fromDefault.ResolvedBackground(), Is.SameAs(TextBox.DefaultBackground.Normal));
+            Assert.That(fromDefault.ResolvedBackground(), Is.SameAs(FieldAppearance.DefaultBackground.Normal));
         });
     }
 

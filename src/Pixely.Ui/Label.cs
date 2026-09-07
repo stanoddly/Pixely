@@ -24,8 +24,7 @@ public sealed class Label : Element
     private string _content;
     private IFont? _font;
     private TextRole _role = TextRole.Body;
-    private Color? _color;
-    private StateColors? _foregrounds;
+    private TextEmphasis _emphasis = TextEmphasis.Normal;
     private TextSpriteAsset? _sprite;
     private IFont? _spriteFont;
 
@@ -101,30 +100,20 @@ public sealed class Label : Element
     }
 
     /// <summary>
-    /// An explicit colour, or null to take one from the control above this label and the style.
-    /// Set, it still loses to a disabled state; <see cref="Foregrounds"/> is how a label says otherwise.
+    /// How much this text stands out, resolved against the style. Ignored inside a control that
+    /// colours its own content — a <see cref="Button"/> — since what a button's text looks like is
+    /// the button's answer to give.
     /// </summary>
-    public Color? Color
+    public TextEmphasis Emphasis
     {
-        get => _color;
-        set => SetPaintProperty(ref _color, value);
+        get => _emphasis;
+        set => SetPaintProperty(ref _emphasis, value);
     }
 
     /// <summary>
-    /// A colour per state, resolved against the nearest <see cref="IVisualStateSource"/> above this
-    /// label — or against nothing but its own enablement when there is none. The way to give one
-    /// label a look the control it sits in does not offer. Named as <see cref="Button.Foregrounds"/>
-    /// is, since the two hold the same thing for the same reason.
-    /// </summary>
-    public StateColors? Foregrounds
-    {
-        get => _foregrounds;
-        set => SetPaintProperty(ref _foregrounds, value);
-    }
-
-    /// <summary>
-    /// What this label paints in. An explicit colour wins, except over a disabled state, which is
-    /// the precedence <see cref="TextBox"/> already applies to its own.
+    /// The colour of the control this label sits in, or the style's plain text colour when it sits
+    /// in none. A label has no colour of its own: what text looks like is the theme's to decide,
+    /// and which control it belongs to is what selects between the theme's answers.
     /// </summary>
     private Color ResolvedColor
     {
@@ -136,26 +125,12 @@ public sealed class Label : Element
             // an enabled button and this label leaves that button reporting Normal.
             VisualState state = !IsEffectivelyEnabled ? VisualState.Disabled : source?.VisualState ?? VisualState.Normal;
 
-            if (_foregrounds != null)
+            if (source != null)
             {
-                return _foregrounds.Resolve(state);
+                return source.ContentForeground.Resolve(state);
             }
 
-            UiStyle? style = OwnerRoot?.Style;
-
-            if (state == VisualState.Disabled)
-            {
-                return source?.ContentForeground.Resolve(VisualState.Disabled)
-                    ?? style?.DisabledForeground
-                    ?? UiStyle.DefaultDisabledForeground;
-            }
-
-            if (_color != null)
-            {
-                return _color.Value;
-            }
-
-            return source?.ContentForeground.Resolve(state) ?? style?.Foreground ?? UiStyle.DefaultForeground;
+            return Style.Text.Resolve(_emphasis, state != VisualState.Disabled);
         }
     }
 
@@ -222,13 +197,13 @@ public sealed class Label : Element
             return _font;
         }
 
-        UiStyle? style = OwnerRoot?.Style;
+        UiStyle style = Style;
 
         IFont? font = _role switch
         {
-            TextRole.Title => style?.Title,
-            TextRole.Small => style?.Small,
-            _ => style?.Body
+            TextRole.Title => style.Title,
+            TextRole.Small => style.Small,
+            _ => style.Body
         };
 
         return font ?? throw new InvalidOperationException(

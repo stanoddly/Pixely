@@ -13,11 +13,8 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 {
     private static readonly Color Background = new(22, 25, 31, 255);
     private static readonly Color Panel = new(42, 50, 63, 255);
-    private static readonly Color Accent = new(233, 138, 76, 255);
     private static readonly Color HealthBack = new(60, 32, 32, 255);
     private static readonly Color HealthFill = new(94, 191, 122, 255);
-    private static readonly Color Caption = new(150, 162, 180, 255);
-    private static readonly Color Value = new(236, 241, 247, 255);
 
     private const int BarWidth = 240;
 
@@ -34,9 +31,9 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
     public ScoreboardView(ScoreboardViewModel viewModel)
         : base(viewModel)
     {
-        _score = new Label { Color = Value };
-        _lives = new Label { Color = Value };
-        _elapsed = new Label { Color = Value };
+        _score = new Label ();
+        _lives = new Label ();
+        _elapsed = new Label ();
 
         _healthFill = new Column
         {
@@ -47,7 +44,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
         _gameOver = new Label("GAME OVER")
         {
             Role = TextRole.Title,
-            Color = Accent,
+            Emphasis = TextEmphasis.Accent,
             IsVisible = false
         };
 
@@ -67,7 +64,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Height = Sizing.Grow(),
             Children =
             {
-                new Label("Scoreboard") { Role = TextRole.Title, Color = Accent },
+                new Label("Scoreboard") { Role = TextRole.Title, Emphasis = TextEmphasis.Accent },
 
                 new Column(gap: 10)
                 {
@@ -86,7 +83,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
                 {
                     Children =
                     {
-                        new Label("Health") { Color = Caption },
+                        new Label("Health") { Emphasis = TextEmphasis.Muted },
 
                         // A fixed-width track holding a fill whose width the view model drives.
                         // Changing that width re-arranges; it never re-measures.
@@ -144,7 +141,7 @@ public sealed class ScoreboardView : UiView<ScoreboardViewModel>
             Width = Sizing.Grow(),
             Children =
             {
-                new Label(caption) { Color = Caption, Width = Sizing.Fixed(90) },
+                new Label(caption) { Emphasis = TextEmphasis.Muted, Width = Sizing.Fixed(90) },
                 value
             }
         };

@@ -13,9 +13,6 @@ public sealed class SettingsView : UiView<SettingsViewModel>
 {
     private static readonly Color Background = new(28, 30, 34, 255);
     private static readonly Color Panel = new(42, 50, 63, 255);
-    private static readonly Color Accent = new(233, 138, 76, 255);
-    private static readonly Color Caption = new(150, 162, 180, 255);
-    private static readonly Color Value = new(235, 238, 242, 255);
 
     private const int FieldWidth = 240;
 
@@ -46,7 +43,7 @@ public sealed class SettingsView : UiView<SettingsViewModel>
         _scale = Field(new NumberBox<float>(formatProvider: CultureInfo.InvariantCulture));
         _scale.ValueCommitted += value => ViewModel.Scale = value;
 
-        _summary = new Label { Color = Value };
+        _summary = new Label ();
 
         // The caption is kept and written to rather than replaced. Re-measuring still happens —
         // the text changed width — but no element is allocated and nothing is reparented.
@@ -65,8 +62,8 @@ public sealed class SettingsView : UiView<SettingsViewModel>
             Padding = new Thickness(28),
             Children =
             {
-                new Label("Settings") { Role = TextRole.Title, Color = Accent },
-                new Label("Click a field to edit. Enter or clicking away commits a valid value; Escape cancels.") { Color = Caption },
+                new Label("Settings") { Role = TextRole.Title, Emphasis = TextEmphasis.Accent },
+                new Label("Click a field to edit. Enter or clicking away commits a valid value; Escape cancels.") { Emphasis = TextEmphasis.Muted },
 
                 new Column(gap: 10)
                 {
@@ -139,7 +136,7 @@ public sealed class SettingsView : UiView<SettingsViewModel>
         {
             Children =
             {
-                new Label(caption) { Color = Caption, Width = Sizing.Fixed(70) },
+                new Label(caption) { Emphasis = TextEmphasis.Muted, Width = Sizing.Fixed(70) },
                 field
             }
         };

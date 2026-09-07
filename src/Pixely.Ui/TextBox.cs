@@ -21,23 +21,11 @@ namespace Pixely.Ui;
 /// </remarks>
 public class TextBox : Element, IPointerTarget, IFocusTarget
 {
-    /// <summary>
-    /// Used when neither the field nor the root's <see cref="UiStyle"/> supplies one, so a field is
-    /// visible and shows that it is focused without any setup.
-    /// </summary>
-    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new Color(28, 32, 40, 255)))
-    {
-        Focused = new SolidDrawable(new Color(38, 44, 55, 255)),
-        Disabled = new SolidDrawable(new Color(32, 34, 38, 255))
-    };
-
     private const int CaretWidth = 1;
 
     private readonly IFont? _font;
 
     private string _text = string.Empty;
-    private Color? _color;
-    private StateDrawables? _backgrounds;
     private TextEditingBuffer? _editor;
 
     // How far the text is slid left so the caret stays in view. Paint owns it: it is the only place
@@ -69,28 +57,11 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         }
     }
 
-    /// <summary>The text colour, or null to take the one from the root's <see cref="UiStyle"/>.</summary>
-    public Color? Color
-    {
-        get => _color;
-        set => SetPaintProperty(ref _color, value);
-    }
-
     /// <summary>What is on screen: the edit while there is one, and the value otherwise.</summary>
     public string DisplayText => _editor?.Text ?? _text;
 
     /// <summary>Whether an edit is in progress.</summary>
     public bool IsEditing => _editor != null;
-
-    /// <summary>
-    /// Backgrounds for this field alone. When null the inherited <see cref="Element.Background"/> is
-    /// used for every state if it was set, and the root style's otherwise.
-    /// </summary>
-    public StateDrawables? Backgrounds
-    {
-        get => _backgrounds;
-        set => SetPaintProperty(ref _backgrounds, value);
-    }
 
     /// <summary>
     /// Focused rather than hovered: a field shows which one the typing goes to, and a pointer resting
@@ -109,22 +80,11 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         }
     }
 
-    protected override Drawable? EffectiveBackground
-    {
-        get
-        {
-            if (_backgrounds != null)
-            {
-                return _backgrounds.Resolve(VisualState);
-            }
-
-            // A plain Background assigned through the inherited property means one look for every
-            // state. Honouring it is what keeps that property from accepting a value and then quietly
-            // doing nothing on this one element.
-            return base.EffectiveBackground
-                ?? (OwnerRoot?.Style?.FieldBackground ?? DefaultBackground).Resolve(VisualState);
-        }
-    }
+    // A plain Background assigned through the inherited property means one look for every state.
+    // Honouring it is what keeps that property from accepting a value and then quietly doing
+    // nothing on this one element.
+    protected override Drawable? EffectiveBackground =>
+        base.EffectiveBackground ?? Style.Field.Background.Resolve(VisualState);
 
     /// <summary>Whether a candidate may be typed, including the half-finished states on the way.</summary>
     protected virtual bool AcceptsEdit(string candidate) => true;
@@ -311,19 +271,11 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         InvalidatePaint();
     }
 
-    private Color SelectionColor() => OwnerRoot?.Style?.Selection ?? UiStyle.DefaultSelection;
+    private Color SelectionColor() => Style.Field.Selection;
 
-    private Color ForegroundColor()
-    {
-        if (!IsEffectivelyEnabled)
-        {
-            return OwnerRoot?.Style?.DisabledForeground ?? UiStyle.DefaultDisabledForeground;
-        }
+    private Color ForegroundColor() => IsEffectivelyEnabled ? Style.Field.Foreground : Style.Field.Disabled;
 
-        return _color ?? OwnerRoot?.Style?.Foreground ?? UiStyle.DefaultForeground;
-    }
-
-    private Color CaretColor() => OwnerRoot?.Style?.Caret ?? ForegroundColor();
+    private Color CaretColor() => Style.Field.Caret ?? ForegroundColor();
 
     /// <summary>
     /// How far to slide the text left so the caret is inside the content. Only ever as far as it has
@@ -365,7 +317,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
     private IFont ResolveFont() =>
         _font
-        ?? OwnerRoot?.Style?.Body
+        ?? Style.Body
         ?? throw new InvalidOperationException(
             $"A {nameof(TextBox)} without an explicit Font needs a UiStyle with a Body font on the UiRoot it belongs to. " +
             "Set UiRoot.Style, or construct the field with a font.");
