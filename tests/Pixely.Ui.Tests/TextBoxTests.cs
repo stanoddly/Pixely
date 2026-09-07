@@ -342,13 +342,14 @@ public class TextBoxTests
     }
 
     [Test]
-    public void WithNoClipboard_CopyAndPasteDoNothing()
+    public void WithTheRootsDefaultClipboard_CopyAndPasteDoNothing()
     {
         TextBox field = new() { Text = "hello" };
         UiRoot root = Rooted(field);
         root.Focus(field);
 
-        Assert.That(field.Clipboard, Is.Null, "a field is given one, rather than finding one of its own");
+        Assert.That(root.Clipboard, Is.SameAs(NullClipboardService.Instance),
+            "a root nobody handed a clipboard leaves the shortcuts with nowhere to go");
     }
 
     [Test]

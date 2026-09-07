@@ -421,7 +421,7 @@ public sealed class TextEditingTests
     }
 
     [Test]
-    public void WithNoClipboard_CutStillDeletesAndCopyDoesNothing()
+    public void WithTheNullClipboard_CutStillDeletesAndCopyDoesNothing()
     {
         TextEditingBuffer cut = Selected("hello", 0, 2);
         TextEditingBuffer copied = Selected("hello", 0, 2);
@@ -479,7 +479,7 @@ public sealed class TextEditingTests
         bool shift = false,
         bool ctrl = false,
         IClipboardService? clipboard = null) =>
-        TextEditingCommands.HandleKey(buffer, scancode, shift, ctrl, clipboard);
+        TextEditingCommands.HandleKey(buffer, scancode, shift, ctrl, clipboard ?? NullClipboardService.Instance);
 
     private static TextEditingBuffer Selected(string text, int anchor, int caret) =>
         new(text) { SelectionAnchor = anchor, CursorPosition = caret };
