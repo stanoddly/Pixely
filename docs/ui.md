@@ -108,7 +108,7 @@ Write a custom `ILayout` when allocation is the thing that differs. `ILayoutHost
 
 `Label`, `Button`, `Image`, `TextBox`, `NumberBox<T>` and `ClipBorder` are the built-in leaves and wrappers. Everything else is composition: a panel is an `Element` with a `Background` and a `Layout`.
 
-Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background.
+Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable`, `BorderDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background. `BorderDrawable` takes a colour, a `Thickness` and an optional inner `Drawable` to fill what is left, so a border around a nine-patch is one drawable rather than two nested elements. It clamps its own edges: a thickness wider than the element paints an outline that swallows it rather than one that spills outside.
 
 A custom element overrides `MeasureContent` and `PaintContent`. Drawing content and having children are independent — `MeasureContent` can measure intrinsic content against `MeasureChildren` — so set `MaxChildCount` only to say what the element actually accepts. `Divider` below sets zero because it is a leaf, not because it paints:
 
