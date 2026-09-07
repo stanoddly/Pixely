@@ -49,12 +49,12 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void ControlAndC_ReachTheClipboardTheFieldWasGiven()
+    public void ControlAndC_ReachesTheRootsClipboard()
     {
         TextBox field = new() { Text = "hello" };
         RecordingClipboard clipboard = new();
-        field.Clipboard = clipboard;
         UiRoot root = Rooted(field);
+        root.Clipboard = clipboard;
         root.Focus(field);
 
         root.KeyPressed(Scancode.A, Held(Scancode.LeftCtrl));
@@ -64,12 +64,11 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void ControlAndV_PasteFromTheClipboardTheFieldWasGiven()
+    public void ControlAndV_PastesFromTheRootsClipboard()
     {
         TextBox field = new();
-        RecordingClipboard clipboard = new() { Text = "pasted" };
-        field.Clipboard = clipboard;
         UiRoot root = Rooted(field);
+        root.Clipboard = new RecordingClipboard { Text = "pasted" };
         root.Focus(field);
 
         root.KeyPressed(Scancode.V, Held(Scancode.LeftCtrl));
@@ -78,7 +77,7 @@ public sealed class TextBoxModifierTests
     }
 
     [Test]
-    public void WithNoClipboard_CutStillDeletesAndPasteDoesNothing()
+    public void WithTheRootsDefaultClipboard_CutStillDeletesAndPasteDoesNothing()
     {
         TextBox field = new() { Text = "hello" };
         UiRoot root = Rooted(field);

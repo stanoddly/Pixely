@@ -92,6 +92,13 @@ public sealed class UiRoot
         }
     }
 
+    /// <summary>
+    /// The clipboard every <see cref="TextBox"/> under this root reaches unless it was given one of
+    /// its own. Defaults to <see cref="NullClipboardService"/>, which leaves copy and paste inert;
+    /// <c>UseUi</c> replaces it with the application's.
+    /// </summary>
+    public IClipboardService Clipboard { get; set; } = NullClipboardService.Instance;
+
     public Vector2Int ViewportSize => _viewportSize;
 
     public IReadOnlyList<Element> Layers => _layers;

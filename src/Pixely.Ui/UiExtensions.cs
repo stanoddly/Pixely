@@ -54,8 +54,12 @@ public static class UiExtensions
         }
 
         // The style is optional: an application that gives every label an explicit font needs none.
+        // The clipboard is not: every application registers one, and a missing one should be loud
+        // rather than showing up as fields that quietly will not paste.
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
-            new ScopedUiRoot(viewScope, new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default }));
+            new ScopedUiRoot(
+                viewScope,
+                new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>() }));
 
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(

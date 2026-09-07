@@ -57,12 +57,6 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         }
     }
 
-    /// <summary>
-    /// The clipboard the copy, cut and paste shortcuts reach. Null leaves them inert: cut still
-    /// deletes, because that is the field's own business, but nothing is copied or pasted.
-    /// </summary>
-    public IClipboardService? Clipboard { get; set; }
-
     /// <summary>What is on screen: the edit while there is one, and the value otherwise.</summary>
     public string DisplayText => _editor?.Text ?? _text;
 
@@ -202,7 +196,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
             return false;
         }
 
-        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, Clipboard);
+        TextEditingOutcome outcome = TextEditingCommands.HandleKey(_editor, scancode, keyboard.Shift, keyboard.Ctrl, OwnerRoot?.Clipboard ?? NullClipboardService.Instance);
 
         switch (outcome)
         {

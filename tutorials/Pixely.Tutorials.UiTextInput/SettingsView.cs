@@ -1,6 +1,5 @@
 using System.Globalization;
 using Pixely.Gpu;
-using Pixely.Input;
 using Pixely.Ui;
 
 namespace Pixely.Tutorials.UiTextInput;
@@ -17,8 +16,6 @@ public sealed class SettingsView : UiView<SettingsViewModel>
 
     private const int FieldWidth = 240;
 
-    private readonly IClipboardService _clipboard;
-
     private readonly TextBox _name;
     private readonly NumberBox<int> _width;
     private readonly NumberBox<int> _height;
@@ -27,11 +24,9 @@ public sealed class SettingsView : UiView<SettingsViewModel>
     private readonly Label _lockCaption;
     private readonly Button _lock;
 
-    public SettingsView(SettingsViewModel viewModel, IClipboardService clipboard)
+    public SettingsView(SettingsViewModel viewModel)
         : base(viewModel)
     {
-        _clipboard = clipboard;
-
         _name = Field(new TextBox());
         _name.Committed += text => ViewModel.Name = text;
 
@@ -125,10 +120,6 @@ public sealed class SettingsView : UiView<SettingsViewModel>
         where TBox : TextBox
     {
         box.Width = Sizing.Fixed(FieldWidth);
-
-        // Copy and paste do nothing until a field is given somewhere to put the text. Cut still
-        // deletes the selection, since deleting is the part that does not need a clipboard.
-        box.Clipboard = _clipboard;
         return box;
     }
 

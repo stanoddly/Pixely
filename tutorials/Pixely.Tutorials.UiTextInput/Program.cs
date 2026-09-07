@@ -63,9 +63,7 @@ static class Program
 
         using IPixelyApp pixelyApp = builder.Build();
 
-        SettingsView view = new(
-            pixelyApp.ServiceProvider.GetRequiredService<SettingsViewModel>(),
-            pixelyApp.ServiceProvider.GetRequiredService<IClipboardService>());
+        SettingsView view = new(pixelyApp.ServiceProvider.GetRequiredService<SettingsViewModel>());
 
         pixelyApp.ServiceProvider.GetUiRoot().AddView(view);
 
