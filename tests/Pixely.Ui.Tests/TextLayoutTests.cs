@@ -27,7 +27,7 @@ public class TextLayoutTests
 
         Vector2Int size = Layout.MeasureUnbounded(label);
 
-        Assert.That(size, Is.EqualTo(new Vector2Int(0, 0)));
+        Assert.That(size, Is.EqualTo(Vector2Int.Zero));
         Assert.That(font.MeasureCount, Is.EqualTo(0));
     }
 

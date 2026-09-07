@@ -20,7 +20,7 @@ public readonly record struct Vector2Int(int X, int Y)
 
     public static Vector2Int operator *(Vector2Int left, int right) => new Vector2Int(left.X * right, left.Y * right);
 
-    public static Vector2 Zero { get; } = default;
+    public static Vector2Int Zero { get; } = default;
 
     public override string ToString() => $"({X}, {Y})";
 }
