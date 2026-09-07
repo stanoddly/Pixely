@@ -292,4 +292,4 @@ A view says which root it belongs to by overriding `IUiView.ViewScope`, so regis
 
 - `Pixely.Tutorials.UiBoxes` — layout and sizing on their own.
 - `Pixely.Tutorials.UiScoreboard` — a view model driving a tree that is built once.
-- `Pixely.Tutorials.UiTextInput` — editable fields, focus and the clipboard.
+- `Pixely.Tutorials.UiTextInput` — editable fields and focus.
