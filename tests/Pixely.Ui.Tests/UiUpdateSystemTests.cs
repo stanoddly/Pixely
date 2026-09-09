@@ -73,13 +73,15 @@ public class UiUpdateSystemTests
     }
 
     [Test]
-    public void TheUpdatablesRunInOrder()
+    public void TheSystemsRunInOrderAndJoinTheUpdatablesByBeingRegistered()
     {
         List<string> calls = new();
 
+        // Registered late first, so passing cannot be an accident of registration order — which is
+        // not a guarantee anyway, since the registry sorts with an unstable sort.
         PixelyAppBuilder builder = new();
-        builder.AddSingleton<UiUpdateSystem>(_ => new UiUpdateSystem(new UiRoot(), () => Recording(calls, "late"), () => false, 10));
-        builder.AddSingleton<UiUpdateSystem>(_ => new UiUpdateSystem(new UiRoot(), () => Recording(calls, "early"), () => true, -10));
+        builder.AddSingleton<UiUpdateSystem>(_ => new UiUpdateSystem(new UiRoot(), () => Recording(calls, "late"), () => RecordingVisible(calls, "late visible"), 10));
+        builder.AddSingleton<UiUpdateSystem>(_ => new UiUpdateSystem(new UiRoot(), () => Recording(calls, "early"), () => RecordingVisible(calls, "early visible"), -10));
 
         ServiceProvider provider = builder.BuildServiceProvider();
 
@@ -88,7 +90,7 @@ public class UiUpdateSystemTests
             updatable.Update();
         }
 
-        Assert.That(calls, Is.EqualTo(new[] { "early" }), "the visible one ran, and the hidden one did not");
+        Assert.That(calls, Is.EqualTo(new[] { "early visible", "early", "late visible", "late" }));
     }
 
     [Test]
@@ -123,10 +125,21 @@ public class UiUpdateSystemTests
         });
     }
 
+    /// <summary>
+    /// Records that a delegate was reached, and answers so that nothing is built: a zero viewport
+    /// for the size, and visible for the visibility, so both delegates of both systems are reached.
+    /// </summary>
     private static Vector2Int Recording(List<string> calls, string name)
     {
         calls.Add(name);
         return new Vector2Int(0, 0);
+    }
+
+    /// <inheritdoc cref="Recording(List{string}, string)"/>
+    private static bool RecordingVisible(List<string> calls, string name)
+    {
+        calls.Add(name);
+        return true;
     }
 
     /// <summary>
