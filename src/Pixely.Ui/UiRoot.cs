@@ -519,9 +519,12 @@ public sealed class UiRoot
 
     private bool Rebuild()
     {
-
-        Rectangle viewport = new(0, 0, _viewportSize.X, _viewportSize.Y);
-        Constraints constraints = Constraints.Tight(_viewportSize);
+        // Captured at entry and used for everything below, including what is recorded at the end. A
+        // callback further down can call SetViewportSize, and recording the field as it stands then
+        // would claim this geometry was built for a viewport it never saw.
+        Vector2Int viewportSize = _viewportSize;
+        Rectangle viewport = new(0, 0, viewportSize.X, viewportSize.Y);
+        Constraints constraints = Constraints.Tight(viewportSize);
 
         _paintContext.Reset(viewport);
 
@@ -559,7 +562,7 @@ public sealed class UiRoot
 
         _layersChanged = false;
         IsPaintDirty = false;
-        PaintedViewportSize = _viewportSize;
+        PaintedViewportSize = viewportSize;
         return true;
     }
 
