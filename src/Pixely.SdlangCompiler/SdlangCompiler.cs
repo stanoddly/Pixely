@@ -154,6 +154,20 @@ public class SdlangCompiler
         _ => throw new ArgumentException($"Unsupported shader format: {format}")
     };
 
+    // SDL GPU expects the Vulkan binding of a resource to be its D3D register index and its descriptor
+    // set to be the register space, and a sampled texture to share the binding of its sampler, which is
+    // one combined image sampler descriptor. Slang only assumes that mapping when every register class
+    // has a shift, so a zero shift for each class states the mapping the shaders already rely on. Without
+    // it Slang warns about every register that has no explicit Vulkan binding, and about the texture and
+    // its sampler landing on the same slot.
+    private static readonly string[] VulkanBindingShifts =
+    [
+        "-fvk-b-shift", "0", "all",
+        "-fvk-t-shift", "0", "all",
+        "-fvk-s-shift", "0", "all",
+        "-fvk-u-shift", "0", "all"
+    ];
+
     private static readonly Dictionary<ShaderFormatDto, List<string>> CommandLineOptions = new()
     {
         { ShaderFormatDto.SpirV, [] },
@@ -204,7 +218,7 @@ public class SdlangCompiler
         List<string> args =
         [
             filePath.FullName,
-            "-warnings-disable", "39001,39013,39029",
+            .. VulkanBindingShifts,
             "-target", target
         ];
         args.AddRange(CommandLineOptions[format]);
@@ -233,7 +247,7 @@ public class SdlangCompiler
         List<string> args =
         [
             filePath.FullName,
-            "-warnings-disable", "39001,39013,39029",
+            .. VulkanBindingShifts,
             "-target", "spirv",
             "-no-codegen",
             "-reflection-json", reflectionFile.FullName
