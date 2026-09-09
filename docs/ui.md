@@ -53,6 +53,26 @@ A layer is measured against the viewport and arranged to it, so its own `Width`,
 
 A layer does not block the pointer by being on top. Only an `IPointerTarget` is hit-tested at all, so a modal backdrop has to be one; an ordinary panel over a button lets the button through. A target that declines a button does not fall through to a UI target beneath it either — the event is simply left unconsumed for whatever is outside the UI.
 
+## When the tree is built
+
+`UseUi` registers a system that builds the tree in the update phase, before anything renders. Building is not a passive walk: it raises pointer enter and leave as layout moves under a stationary pointer, raises focus lost when a focused element leaves the tree, and runs every custom element, layout and drawable in it. A renderer may not raise those — the renderers sharing a frame all read domain data over one command buffer and are entitled to it not changing underneath them — so the UI renderer only paints what the build already produced.
+
+`updateOrder` says when, relative to the other updatables. Lower runs first, and it defaults to `10_000` so the UI builds after ordinary order-0 game systems and views sync against the state this frame produced. Equal orders are unspecified rather than registration order. A system that runs after the build and dirties the UI has its change shown on the next frame, not this one.
+
+```csharp
+builder.UseUi(updateOrder: 500);
+```
+
+The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
+
+A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
+
+If the render context draws into something other than the window — a same-format colour target of a different size — pass `viewportSource` so the build lays out against that instead of the window:
+
+```csharp
+builder.UseUi<MyRenderContext>(default, viewportSource: () => new Vector2Int(640, 360));
+```
+
 ## Sizing
 
 `Sizing` is per axis, set through `Element.Width` and `Element.Height`:

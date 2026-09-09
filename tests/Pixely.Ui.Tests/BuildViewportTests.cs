@@ -40,6 +40,26 @@ public class BuildViewportTests
         });
     }
 
+    [Test]
+    public void BuildVersion_RisesOnABuildAndStandsStillWhenNothingChanged()
+    {
+        UiRoot root = new();
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.AddLayer(new Element { Width = Sizing.Fixed(10), Height = Sizing.Fixed(10) });
+
+        ulong beforeFirstBuild = root.BuildVersion;
+        root.Update();
+        ulong afterFirstBuild = root.BuildVersion;
+        root.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforeFirstBuild, Is.EqualTo(0ul), "an unbuilt root has no build to report");
+            Assert.That(afterFirstBuild, Is.EqualTo(1ul));
+            Assert.That(root.BuildVersion, Is.EqualTo(afterFirstBuild), "a clean root does not build again");
+        });
+    }
+
     /// <summary>
     /// A built root with the pointer parked over a target that resizes the viewport when it is told
     /// the pointer left. Growing the spacer is what pushes the target out from under the pointer.

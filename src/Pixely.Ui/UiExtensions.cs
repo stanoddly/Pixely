@@ -17,9 +17,11 @@ public static class UiExtensions
         this PixelyAppBuilder appBuilder,
         int order = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        int updateOrder = 10_000,
+        Func<Vector2Int>? viewportSource = null)
     {
-        return UseUi<BasicRenderContext>(appBuilder, default, order, inputOrder, clearTarget);
+        return UseUi<BasicRenderContext>(appBuilder, default, order, inputOrder, clearTarget, updateOrder, viewportSource);
     }
 
     public static PixelyAppBuilder UseUi(
@@ -27,17 +29,30 @@ public static class UiExtensions
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        int updateOrder = 10_000,
+        Func<Vector2Int>? viewportSource = null)
     {
-        return UseUi<BasicRenderContext>(appBuilder, viewScope, order, inputOrder, clearTarget);
+        return UseUi<BasicRenderContext>(appBuilder, viewScope, order, inputOrder, clearTarget, updateOrder, viewportSource);
     }
 
+    /// <param name="updateOrder">
+    /// When the tree is built relative to the other updatables, lower first. Defaults late, so the
+    /// UI builds after ordinary order-0 game systems and views sync against the state this frame
+    /// produced. Equal orders are unspecified, not registration order.
+    /// </param>
+    /// <param name="viewportSource">
+    /// The size to lay out against, when the render context draws into something other than the
+    /// window. Defaults to the window's render size, which is what the swapchain is.
+    /// </param>
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        int updateOrder = 10_000,
+        Func<Vector2Int>? viewportSource = null)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
@@ -71,6 +86,12 @@ public static class UiExtensions
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
 
+        appBuilder.AddSingleton<UiUpdateSystem>(provider =>
+        {
+            (UiRoot root, Window window) = ResolveUpdateTargets(provider, viewScope);
+            return new UiUpdateSystem(root, viewportSource ?? (() => WindowViewport(window)), () => window.IsVisible, updateOrder);
+        });
+
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
             UiRenderer<TRenderContext>.Create(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
@@ -84,6 +105,26 @@ public static class UiExtensions
                 provider.GetWindow(viewScope)));
 
         return appBuilder;
+    }
+
+    /// <summary>
+    /// The root and window one scope's update system drives. Extracted so the scope lookup is
+    /// observable to a test: the system itself holds only closures, and nothing can tell from
+    /// outside which window they captured.
+    /// </summary>
+    internal static (UiRoot Root, Window Window) ResolveUpdateTargets(ServiceProvider provider, ViewScope viewScope)
+    {
+        // The scope has to be threaded through: GetWindow's viewScope parameter is defaulted, so
+        // dropping it compiles and silently binds every window's UI to the first one.
+        return (ScopedUiRoot.GetRequired(provider, viewScope).Root, provider.GetWindow(viewScope));
+    }
+
+    // Read once. Two reads are two SDL calls, and a resize between them pairs a width from one
+    // state with a height from another.
+    private static Vector2Int WindowViewport(Window window)
+    {
+        ShortSize size = window.RenderSizeInPixels;
+        return new Vector2Int(size.Width, size.Height);
     }
 
     /// <summary>
