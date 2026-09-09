@@ -747,6 +747,28 @@ public class SdlangCompilerTests
     }
 
     [Test]
+    public void CompileShader_ValidFragmentShaderWithBindings_PairsTextureAndSamplerOnOneSpirVBinding()
+    {
+        string shaderPath = Path.Combine(_testDir, "spirv_bindings.slang");
+        File.WriteAllText(shaderPath, ValidFragmentShaderWithBindings);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        Dictionary<string, SpirVBinding> bindings = SpirVBindings.Read(
+            Path.Combine(_testDir, ".generated", "spirv_bindings.fragment.spv"));
+
+        Assert.Multiple(() =>
+        {
+            // SDL GPU binds a sampled texture and its sampler as one combined image sampler descriptor,
+            // so both have to land on the binding named by their register index, in the space's set.
+            Assert.That(bindings["albedo"], Is.EqualTo(new SpirVBinding(2, 0)));
+            Assert.That(bindings["albedoSampler"], Is.EqualTo(new SpirVBinding(2, 0)));
+            Assert.That(bindings["FragmentUniforms"], Is.EqualTo(new SpirVBinding(3, 0)));
+        });
+    }
+
+    [Test]
     public void CompileShader_ValidComputeShaderWithBindings_CreatesComputeMetadata()
     {
         string shaderPath = Path.Combine(_testDir, "valid_compute.slang");
