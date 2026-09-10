@@ -4,21 +4,25 @@ using System.Runtime.CompilerServices;
 namespace Pixely.Observations;
 
 /// <summary>
-/// An append-only log of entries that readers drain at their own pace through their own cursors.
-/// Appending never calls a reader. An entry is dropped once every cursor has passed it, so the log is bounded
-/// by the slowest reader rather than by how long the run lasts.
+/// An append-only log of entries that readers drain at their own pace. Appending never calls a reader. An entry
+/// is dropped once every reader has passed it, so the log is bounded by the slowest reader rather than by how
+/// long the run lasts.
 /// </summary>
+/// <remarks>
+/// The log is storage and nothing else: it is reached through an <see cref="ObservationWriter{TEntry}"/> or an
+/// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job.
+/// </remarks>
 /// <typeparam name="TEntry">
 /// The single entry type of this log; the log never looks inside it. Carry several kinds of entry in one log
 /// by making it a tagged type. A value type keeps appending free of allocation, which is why the entries a
 /// game appends every frame should be one.
 /// </typeparam>
-public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservationWriter<TEntry>
+public sealed class ObservationLog<TEntry>
 {
     private const int InitialCapacity = 16;
 
     private readonly int _maximumCapacity;
-    private readonly List<ObservationCursor<TEntry>> _cursors = new();
+    private readonly List<ObservationReader<TEntry>> _readers = new();
     private TEntry[] _entries;
     private int _head;
     private int _count;
@@ -26,9 +30,9 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
     private long _nextSequence;
 
     /// <param name="maximumCapacity">
-    /// How many entries the log may retain before <see cref="Append"/> throws. The buffer starts small and grows
-    /// towards this bound, so it is a stall detector rather than a working size: pick a number far past any
-    /// legitimate burst, knowing a slot costs the size of <typeparamref name="TEntry"/>.
+    /// How many entries the log may retain before appending throws. The buffer starts small and grows towards
+    /// this bound, so it is a stall detector rather than a working size: pick a number far past any legitimate
+    /// burst, knowing a slot costs the size of <typeparamref name="TEntry"/>.
     /// </param>
     public ObservationLog(int maximumCapacity)
     {
@@ -37,7 +41,7 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
         _entries = new TEntry[Math.Min(InitialCapacity, maximumCapacity)];
     }
 
-    public void Append(in TEntry entry)
+    internal void Append(in TEntry entry)
     {
         if (_count == _maximumCapacity)
         {
@@ -51,16 +55,9 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
         Trim();
     }
 
-    public ObservationCursor<TEntry> CreateCursor(string name = "unnamed")
+    internal bool TryRead(ObservationReader<TEntry> reader, [MaybeNullWhen(false)] out TEntry entry)
     {
-        ObservationCursor<TEntry> cursor = new ObservationCursor<TEntry>(this, name, _nextSequence);
-        _cursors.Add(cursor);
-        return cursor;
-    }
-
-    internal bool TryRead(ObservationCursor<TEntry> cursor, [MaybeNullWhen(false)] out TEntry entry)
-    {
-        int offset = checked((int)(cursor.NextSequence - _firstSequence));
+        int offset = checked((int)(reader.NextSequence - _firstSequence));
         if (offset >= _count)
         {
             entry = default;
@@ -68,14 +65,21 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
         }
 
         entry = _entries[PhysicalIndex(offset)];
-        cursor.NextSequence++;
+        reader.NextSequence++;
         Trim();
         return true;
     }
 
-    internal void RemoveCursor(ObservationCursor<TEntry> cursor)
+    // A reader starts after the last appended entry, so it sees only what is appended from now on.
+    internal void AddReader(ObservationReader<TEntry> reader)
     {
-        _cursors.Remove(cursor);
+        reader.NextSequence = _nextSequence;
+        _readers.Add(reader);
+    }
+
+    internal void RemoveReader(ObservationReader<TEntry> reader)
+    {
+        _readers.Remove(reader);
         Trim();
     }
 
@@ -93,7 +97,7 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
         }
 
         // Only worth clearing when a slot can keep an object alive; the check folds away for the rest. A cleared
-        // slot is past every cursor, so nothing reads it back before an append overwrites it.
+        // slot is past every reader, so nothing reads it back before an append overwrites it.
         if (RuntimeHelpers.IsReferenceOrContainsReferences<TEntry>())
         {
             for (int i = 0; i < removeCount; i++)
@@ -110,11 +114,11 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
     private long SlowestSequence()
     {
         long slowest = _nextSequence;
-        foreach (ObservationCursor<TEntry> cursor in _cursors)
+        foreach (ObservationReader<TEntry> reader in _readers)
         {
-            if (cursor.NextSequence < slowest)
+            if (reader.NextSequence < slowest)
             {
-                slowest = cursor.NextSequence;
+                slowest = reader.NextSequence;
             }
         }
 
@@ -147,15 +151,15 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
     {
         long slowest = SlowestSequence();
         List<string> stalled = new();
-        foreach (ObservationCursor<TEntry> cursor in _cursors)
+        foreach (ObservationReader<TEntry> reader in _readers)
         {
-            if (cursor.NextSequence == slowest)
+            if (reader.NextSequence == slowest)
             {
-                stalled.Add(cursor.Name);
+                stalled.Add(reader.Name);
             }
         }
 
         return $"Observation log reached its maximum capacity of {_maximumCapacity} entries. "
-            + $"Cursor '{string.Join("', '", stalled)}' stopped draining {_nextSequence - slowest} entries ago.";
+            + $"Reader '{string.Join("', '", stalled)}' stopped draining {_nextSequence - slowest} entries ago.";
     }
 }

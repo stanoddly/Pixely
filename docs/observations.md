@@ -1,13 +1,23 @@
 # Observations
 
-`ObservationLog<TEntry>` in `Pixely.Observations` is an append-only log of entries that readers drain at their
-own pace. Rules append; nothing is called back. A reader holds a cursor, reads when it suits its own point in
-the frame, and the log drops an entry once every cursor has passed it.
+`Pixely.Observations` is an append-only log of entries that readers drain at their own pace. Rules append;
+nothing is called back. A reader holds its own position, reads when it suits its own point in the frame, and
+the log drops an entry once every reader has passed it.
 
 Use it for a transition that two reads of game state one frame apart cannot derive: a unit that walked a path
 and arrived, one that appeared and was gone again, an action that resolved and was reversed inside the same
 frame. State answers what is true now, and a rule can resolve many transitions between two reads, so any
 "most recent transition" field is overwritten before a reader looks at it.
+
+Three types, each with one job:
+
+- `ObservationLog<TEntry>` is the storage. It is constructed and then handed to the other two; it has no other
+  public members.
+- `ObservationWriter<TEntry>` appends. It cannot read.
+- `ObservationReader<TEntry>` is one reader's position in the log. It cannot append.
+
+So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
+rule produced.
 
 ## The entry type
 
@@ -33,14 +43,14 @@ appends every frame.
 
 ## Writing
 
-Inject `IObservationWriter<TEntry>` where rules append, so a writer cannot read:
+Inject `ObservationWriter<TEntry>` where rules record what happened:
 
 ```csharp
 internal sealed class MoveMechanic
 {
-    private readonly IObservationWriter<Observation> _observations;
+    private readonly ObservationWriter<Observation> _observations;
 
-    internal MoveMechanic(IObservationWriter<Observation> observations) => _observations = observations;
+    internal MoveMechanic(ObservationWriter<Observation> observations) => _observations = observations;
 
     internal void Move(UnitId unit, TilePoint destination)
     {
@@ -52,17 +62,17 @@ internal sealed class MoveMechanic
 
 ## Reading
 
-Inject `IObservationLog<TEntry>`, create a cursor named after the reader, and drain it in the reader's own
-update. Dispose the cursor with the reader:
+Inject the log, construct a reader named after the consumer, and drain it in the consumer's own update. Dispose
+the reader with the consumer:
 
 ```csharp
 internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 {
-    private readonly ObservationCursor<Observation> _observations;
+    private readonly ObservationReader<Observation> _observations;
 
-    internal UnitSpritePresenter(IObservationLog<Observation> observations)
+    internal UnitSpritePresenter(ObservationLog<Observation> log)
     {
-        _observations = observations.CreateCursor(nameof(UnitSpritePresenter));
+        _observations = new ObservationReader<Observation>(log, nameof(UnitSpritePresenter));
     }
 
     public void Update()
@@ -77,13 +87,16 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 }
 ```
 
-A cursor starts positioned after the last appended entry, so a reader created part-way through a run sees
-only what is appended from then on. Cursors read independently: entries appended this frame may be drained by
+Each consumer constructs its own reader rather than being handed one, because every reader of a given log is
+the same closed type and the container resolves by type. Constructing it also lets the consumer name it.
+
+A reader starts positioned after the last appended entry, so a consumer created part-way through a run sees
+only what is appended from then on. Readers drain independently: entries appended this frame may be drained by
 one reader now and by another several frames later.
 
 Addressing an entry to a subset of readers is the game's business, not the log's. Carry the perceiver in
-`TEntry` and have the reader skip what it did not perceive. A reader bound to one participant should wrap its
-cursor once rather than repeat the check in every consumer.
+`TEntry` and have the reader skip what it did not perceive. A consumer bound to one participant should wrap its
+reader once rather than repeat the check in every place that drains.
 
 ## Bounds and stalls
 
@@ -92,22 +105,22 @@ so it settles at the high-water mark of its bursts and is reclaimed when the log
 
 Maximum capacity is a stall detector, not a working size. Pick a number far past any legitimate burst, knowing
 a slot costs the size of `TEntry`. A reader that stops draining holds the trim point where it stopped; once the
-log fills, `Append` throws and names the cursor that stopped and how far behind it is. Dropping the oldest
+log fills, appending throws and names the reader that stopped and how far behind it is. Dropping the oldest
 entry instead would hide exactly that failure.
 
 ```text
-Observation log reached its maximum capacity of 4096 entries. Cursor 'UnitSpritePresenter' stopped draining
+Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSpritePresenter' stopped draining
 4096 entries ago.
 ```
 
 ## Registration
 
-The log takes its capacity as a constructor argument, so register the instance and alias the two halves:
+Construct the log, then register it alongside a writer over it:
 
 ```csharp
-services.AddSingleton(new ObservationLog<Observation>(4096));
-services.AddAlias<IObservationWriter<Observation>, ObservationLog<Observation>>();
-services.AddAlias<IObservationLog<Observation>, ObservationLog<Observation>>();
+ObservationLog<Observation> log = new ObservationLog<Observation>(4096);
+services.AddSingleton(log);
+services.AddSingleton(new ObservationWriter<Observation>(log));
 ```
 
 Register it in the scope it belongs to. A log registered in a stage's child provider dies with that stage, and
