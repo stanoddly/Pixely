@@ -18,10 +18,9 @@ public static class UiExtensions
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        int updateOrder = 10_000,
-        Func<Vector2Int>? viewportSource = null)
+        int updateOrder = 10_000)
     {
-        return UseUi<BasicRenderContext>(appBuilder, default, order, inputOrder, clearTarget, updateOrder, viewportSource);
+        return UseUi<BasicRenderContext>(appBuilder, default, order, inputOrder, clearTarget, updateOrder);
     }
 
     public static PixelyAppBuilder UseUi(
@@ -30,10 +29,9 @@ public static class UiExtensions
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        int updateOrder = 10_000,
-        Func<Vector2Int>? viewportSource = null)
+        int updateOrder = 10_000)
     {
-        return UseUi<BasicRenderContext>(appBuilder, viewScope, order, inputOrder, clearTarget, updateOrder, viewportSource);
+        return UseUi<BasicRenderContext>(appBuilder, viewScope, order, inputOrder, clearTarget, updateOrder);
     }
 
     /// <param name="updateOrder">
@@ -41,18 +39,13 @@ public static class UiExtensions
     /// UI builds after ordinary order-0 game systems and views sync against the state this frame
     /// produced. Equal orders are unspecified, not registration order.
     /// </param>
-    /// <param name="viewportSource">
-    /// The size to lay out against, when the render context draws into something other than the
-    /// window. Defaults to the window's render size, which is what the swapchain is.
-    /// </param>
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
         int order = 10_000,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        int updateOrder = 10_000,
-        Func<Vector2Int>? viewportSource = null)
+        int updateOrder = 10_000)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
@@ -89,7 +82,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<UiUpdateSystem>(provider =>
         {
             (UiRoot root, Window window) = ResolveUpdateTargets(provider, viewScope);
-            return new UiUpdateSystem(root, viewportSource ?? (() => WindowViewport(window)), () => window.IsVisible, updateOrder);
+            return new UiUpdateSystem(root, () => WindowViewport(window), () => window.IsVisible, updateOrder);
         });
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>

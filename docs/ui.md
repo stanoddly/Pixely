@@ -67,11 +67,7 @@ The viewport event is raised by `SetViewportSize`, which the same system calls i
 
 A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
 
-If the render context draws into something other than the window — a same-format colour target of a different size — pass `viewportSource` so the build lays out against that instead of the window:
-
-```csharp
-builder.UseUi<MyRenderContext>(default, viewportSource: () => new Vector2Int(640, 360));
-```
+The build lays out against the window's render size. A render context whose colour target is a different size than the window is not supported: the UI is laid out for the window and the renderer refuses to draw it into a target of another size, so it stays blank.
 
 ## Sizing
 
