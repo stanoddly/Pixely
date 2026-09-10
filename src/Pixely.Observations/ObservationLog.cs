@@ -10,7 +10,8 @@ namespace Pixely.Observations;
 /// </summary>
 /// <remarks>
 /// The log is storage and nothing else: it is reached through an <see cref="ObservationWriter{TEntry}"/> or an
-/// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job.
+/// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job. It belongs to one frame
+/// loop and is not thread safe: appending, reading and constructing a reader must all happen on the same thread.
 /// </remarks>
 /// <typeparam name="TEntry">
 /// The single entry type of this log; the log never looks inside it. Carry several kinds of entry in one log
@@ -142,9 +143,12 @@ public sealed class ObservationLog<TEntry>
         _head = 0;
     }
 
+    // Wrapping by subtraction rather than by modulo, so a buffer whose head plus offset would pass int range
+    // still indexes correctly, and the hot path costs a compare instead of a division.
     private int PhysicalIndex(int offset)
     {
-        return (_head + offset) % _entries.Length;
+        int untilWrap = _entries.Length - _head;
+        return offset < untilWrap ? _head + offset : offset - untilWrap;
     }
 
     private string DescribeOverflow()

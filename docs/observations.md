@@ -19,6 +19,9 @@ Three types, each with one job:
 So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
 rule produced.
 
+The log belongs to one frame loop and is not thread safe. Appending, reading and constructing a reader all
+happen on the same thread.
+
 ## The entry type
 
 One log carries one entry type. To carry several kinds of entry in one order, make `TEntry` a tagged type; the
