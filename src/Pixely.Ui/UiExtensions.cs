@@ -15,8 +15,8 @@ public static class UiExtensions
     /// </summary>
     public static PixelyAppBuilder UseUi(
         this PixelyAppBuilder appBuilder,
-        int renderOrder = 10_000,
-        int updateOrder = 10_000,
+        int renderOrder = RenderOrders.Ui,
+        int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
@@ -26,8 +26,8 @@ public static class UiExtensions
     public static PixelyAppBuilder UseUi(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int renderOrder = 10_000,
-        int updateOrder = 10_000,
+        int renderOrder = RenderOrders.Ui,
+        int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
@@ -44,8 +44,8 @@ public static class UiExtensions
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int renderOrder = 10_000,
-        int updateOrder = 10_000,
+        int renderOrder = RenderOrders.Ui,
+        int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext

@@ -16,6 +16,8 @@ public class PerformanceTracker : IUpdatable, IDisposable
         _frameContext = frameContext;
     }
 
+    public int UpdateOrder => UpdateOrders.Diagnostics;
+
     public void Update()
     {
         double frameTime = _frameContext.TimeDelta64;

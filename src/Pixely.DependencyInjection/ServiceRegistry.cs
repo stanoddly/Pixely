@@ -5,16 +5,16 @@ namespace Pixely.DependencyInjection;
 public sealed class ServiceRegistry<TService> : IEnumerable<TService>
     where TService : class
 {
-    private readonly Comparison<TService>? _comparison;
+    private readonly Func<TService, int>? _orderKey;
     private readonly List<TService> _services = new();
     private readonly List<TService> _pendingAdditions = new();
     private int _activeEnumerationCount;
 
     public ulong Version { get; private set; }
 
-    internal ServiceRegistry(Comparison<TService>? comparison)
+    internal ServiceRegistry(Func<TService, int>? orderKey)
     {
-        _comparison = comparison;
+        _orderKey = orderKey;
     }
 
     public Enumerator GetEnumerator()
@@ -96,9 +96,9 @@ public sealed class ServiceRegistry<TService> : IEnumerable<TService>
             _services.AddRange(_pendingAdditions);
             _pendingAdditions.Clear();
 
-            if (_comparison != null)
+            if (_orderKey != null)
             {
-                _services.Sort(_comparison);
+                _services.StableSort(_orderKey);
             }
 
             Version++;

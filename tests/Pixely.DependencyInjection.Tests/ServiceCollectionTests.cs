@@ -894,22 +894,13 @@ public class ServiceCollectionTests
     }
 
     [Test]
-    public void AddRegistry_DoesNotReapplyComparisonWithoutPendingAdditions()
+    public void AddRegistry_DoesNotReapplyOrderKeyWithoutPendingAdditions()
     {
         MyServiceImpl first = new();
         AnotherServiceImpl second = new();
-        bool reverse = false;
+        int firstKey = 0;
         ServiceCollection collection = new();
-        collection.AddRegistry<IMyService>((left, right) =>
-        {
-            if (ReferenceEquals(left, right))
-            {
-                return 0;
-            }
-
-            bool leftIsFirst = ReferenceEquals(left, first);
-            return leftIsFirst == reverse ? 1 : -1;
-        });
+        collection.AddRegistry<IMyService>(service => ReferenceEquals(service, first) ? firstKey : 1);
         collection.AddSingleton<IMyService>(first);
         collection.AddSingleton<IMyService>(second);
         using ServiceProvider provider = collection.BuildServiceProvider();
@@ -917,9 +908,94 @@ public class ServiceCollectionTests
 
         Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { first, second }));
 
-        reverse = true;
+        firstKey = 2;
 
         Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { first, second }));
+    }
+
+    [Test]
+    public void AddRegistry_KeepsRegistrationOrderForEqualKeys()
+    {
+        ServiceCollection collection = new();
+        collection.AddRegistry<IMyService>(static _ => 0);
+
+        // Enough services that the sort cannot fall back to an insertion sort and pass by accident.
+        MyServiceImpl[] services = new MyServiceImpl[32];
+        for (int i = 0; i < services.Length; i++)
+        {
+            services[i] = new MyServiceImpl();
+            collection.AddSingleton<IMyService>(services[i]);
+        }
+
+        using ServiceProvider provider = collection.BuildServiceProvider();
+        ServiceRegistry<IMyService> registry = provider.GetRequiredService<ServiceRegistry<IMyService>>();
+
+        Assert.That(registry.ToArray(), Is.EqualTo(services));
+    }
+
+    [Test]
+    public void AddRegistry_OrdersByKeyAndKeepsRegistrationOrderWithin()
+    {
+        MyServiceImpl late = new();
+        MyServiceImpl earlyFirst = new();
+        MyServiceImpl earlySecond = new();
+        ServiceCollection collection = new();
+        collection.AddRegistry<IMyService>(service => ReferenceEquals(service, late) ? 1 : 0);
+        collection.AddSingleton<IMyService>(late);
+        collection.AddSingleton<IMyService>(earlyFirst);
+        collection.AddSingleton<IMyService>(earlySecond);
+        using ServiceProvider provider = collection.BuildServiceProvider();
+        ServiceRegistry<IMyService> registry = provider.GetRequiredService<ServiceRegistry<IMyService>>();
+
+        Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { earlyFirst, earlySecond, late }));
+    }
+
+    [Test]
+    public void AddRegistry_LaterAdditionDoesNotReorderPublishedServices()
+    {
+        ServiceCollection rootServices = new();
+        rootServices.AddRegistry<IMyService>(static _ => 0);
+        MyServiceImpl[] published = new MyServiceImpl[8];
+        for (int i = 0; i < published.Length; i++)
+        {
+            published[i] = new MyServiceImpl();
+            rootServices.AddSingleton<IMyService>(published[i]);
+        }
+
+        using ServiceProvider rootProvider = rootServices.BuildServiceProvider();
+        ServiceRegistry<IMyService> registry = rootProvider.GetRequiredService<ServiceRegistry<IMyService>>();
+        Assert.That(registry.ToArray(), Is.EqualTo(published));
+
+        AnotherServiceImpl added = new();
+        ServiceCollection childServices = rootProvider.CreateServiceCollection();
+        childServices.AddSingleton<IMyService>(added);
+        using ServiceProvider childProvider = childServices.BuildServiceProvider();
+
+        Assert.That(registry.ToArray(), Is.EqualTo(published.Append<IMyService>(added)));
+    }
+
+    [Test]
+    public void AddRegistry_RemovalDoesNotReorderRemainingServices()
+    {
+        ServiceCollection rootServices = new();
+        rootServices.AddRegistry<IMyService>(static _ => 0);
+        MyServiceImpl first = new();
+        MyServiceImpl third = new();
+        rootServices.AddSingleton<IMyService>(first);
+        rootServices.AddSingleton<IMyService>(third);
+
+        using ServiceProvider rootProvider = rootServices.BuildServiceProvider();
+        ServiceRegistry<IMyService> registry = rootProvider.GetRequiredService<ServiceRegistry<IMyService>>();
+
+        AnotherServiceImpl removed = new();
+        ServiceCollection childServices = rootProvider.CreateServiceCollection();
+        childServices.AddSingleton<IMyService>(removed);
+        ServiceProvider childProvider = childServices.BuildServiceProvider();
+        Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { first, third, removed }));
+
+        childProvider.Dispose();
+
+        Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { first, third }));
     }
 
     [Test]

@@ -13,7 +13,7 @@ public static class PencuilExtensions
 {
     public static PixelyAppBuilder UsePencuil(
         this PixelyAppBuilder appBuilder,
-        int order = 10_000,
+        int order = RenderOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
@@ -28,7 +28,7 @@ public static class PencuilExtensions
     public static PixelyAppBuilder UsePencuil(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int order = 10_000,
+        int order = RenderOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
     {
@@ -42,7 +42,7 @@ public static class PencuilExtensions
 
     public static PixelyAppBuilder UsePencuil<TRenderContext>(
         this PixelyAppBuilder appBuilder,
-        int order = 10_000,
+        int order = RenderOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext
@@ -58,7 +58,7 @@ public static class PencuilExtensions
     public static PixelyAppBuilder UsePencuil<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int order = 10_000,
+        int order = RenderOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false)
         where TRenderContext : IRenderContext

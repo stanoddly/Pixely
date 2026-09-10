@@ -205,6 +205,8 @@ internal class FontSystem: IFontSystem, IUpdatable
         }
     }
 
+    public int UpdateOrder => UpdateOrders.Maintenance;
+
     public void Update()
     {
         List<(string text, Font font)> keysToRemove = new();

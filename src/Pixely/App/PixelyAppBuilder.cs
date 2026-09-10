@@ -17,8 +17,8 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
-        AddRegistry<IRenderer<BasicRenderContext>>(static (left, right) => left.RenderOrder.CompareTo(right.RenderOrder));
-        AddRegistry<IUpdatable>(static (left, right) => left.UpdateOrder.CompareTo(right.UpdateOrder));
+        AddRegistry<IRenderer<BasicRenderContext>>(static renderer => renderer.RenderOrder);
+        AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
     }
 
     public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)

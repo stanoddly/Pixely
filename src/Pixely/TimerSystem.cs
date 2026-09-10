@@ -30,6 +30,8 @@ public class TimerSystem : IUpdatable
         _frameContext = frameContext;
     }
 
+    public int UpdateOrder => UpdateOrders.Default;
+
     public void Update()
     {
         _toRemove.Clear();

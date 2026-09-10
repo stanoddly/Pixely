@@ -243,15 +243,18 @@ public class ServiceCollection
     /// resolution activates them.
     /// </summary>
     /// <typeparam name="TService">The service role to track.</typeparam>
-    /// <param name="comparison">An optional comparison applied before each outermost registry iteration.</param>
-    public void AddRegistry<TService>(Comparison<TService>? comparison = null) where TService : class
+    /// <param name="orderKey">
+    /// An optional key the registry orders by, lowest first, applied when pending services are
+    /// published. Services with equal keys stay in registration order.
+    /// </param>
+    public void AddRegistry<TService>(Func<TService, int>? orderKey = null) where TService : class
     {
         if (IsRegistered<ServiceRegistry<TService>>())
         {
             return;
         }
 
-        ServiceRegistry<TService> registry = new(comparison);
+        ServiceRegistry<TService> registry = new(orderKey);
         AddSingleton(registry);
         OnActivated((instance, _) =>
         {

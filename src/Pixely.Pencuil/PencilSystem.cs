@@ -84,6 +84,8 @@ internal sealed class PencilSystem : IUpdatable
         });
     }
 
+    public int UpdateOrder => UpdateOrders.Ui;
+
     public void Update()
     {
         ShortSize renderSize = _window.RenderSizeInPixels;

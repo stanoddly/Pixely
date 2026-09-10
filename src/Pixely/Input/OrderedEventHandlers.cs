@@ -21,7 +21,7 @@ internal sealed class OrderedEventHandlers<TEventArgs>
     {
         if (_dirty)
         {
-            _handlers.Sort(static (left, right) => left.Order.CompareTo(right.Order));
+            _handlers.StableSort(static entry => entry.Order);
             _dirty = false;
         }
 
@@ -71,7 +71,7 @@ internal sealed class ViewScopedOrderedEventHandlers<TEventArgs>
     {
         if (_dirty)
         {
-            _handlers.Sort(static (left, right) => left.Order.CompareTo(right.Order));
+            _handlers.StableSort(static entry => entry.Order);
             _dirty = false;
         }
 

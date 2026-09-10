@@ -137,6 +137,9 @@ protected override void OnDetach()
 
 The handle must be stored to unregister later.
 
+Registered actions run inside the `UpdateOrders.Default` band, in the order they were added. See
+[frame-order.md](frame-order.md) for placing work before or after the framework's own systems.
+
 ## Sibling Components
 
 Sibling access requires `GameComponent`:
