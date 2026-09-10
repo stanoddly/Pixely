@@ -59,7 +59,7 @@ A layer does not block the pointer by being on top. Only an `IPointerTarget` is 
 
 `UseUi` takes one order per phase — `renderOrder`, `updateOrder`, `inputOrder` — and lower runs first in all three.
 
-`updateOrder` says when the tree is built relative to the other updatables. It defaults to `10_000` so the UI builds after ordinary order-0 game systems and views sync against the state this frame produced. Equal orders are unspecified rather than registration order. A system that runs after the build and dirties the UI has its change shown on the next frame, not this one.
+`updateOrder` says when the tree is built relative to the other updatables. It defaults to `UpdateOrders.Ui` so the UI builds after ordinary order-0 game systems and views sync against the state this frame produced. Updatables with an equal order run in registration order, see [frame-order.md](frame-order.md). A system that runs after the build and dirties the UI has its change shown on the next frame, not this one.
 
 ```csharp
 builder.UseUi(updateOrder: 500);

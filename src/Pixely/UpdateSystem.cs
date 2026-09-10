@@ -12,6 +12,8 @@ public class UpdateSystem: IUpdatable
     private DenseSlotMapStruct<Handle<UpdateTag>, Action> _updateActions = new();
     private List<Action> _temp = new();
 
+    public int UpdateOrder => UpdateOrders.Default;
+
     public void Update()
     {
         ReadOnlySpan<Action> actions = _updateActions.Values1;
