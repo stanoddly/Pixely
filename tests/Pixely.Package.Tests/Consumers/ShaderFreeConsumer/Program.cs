@@ -27,12 +27,12 @@ public static class ManagedWindowApiConsumer
     {
         builder.AddWindow(new ViewScope(1), new WindowConfig(Title: "Package consumer"));
         builder.AddSingleton<PackageRenderContextProvider>(PackageRenderContextProvider.Create);
-        builder.AddAlias<IRenderContextProvider<PackageRenderContext>, PackageRenderContextProvider>();
+        builder.AddAlias<RenderContextProvider<PackageRenderContext>, PackageRenderContextProvider>();
         builder.UseWindowRendering<PackageRenderContext>(new ViewScope(1));
     }
 }
 
-public sealed class PackageRenderContextProvider : IRenderContextProvider<PackageRenderContext>
+public sealed class PackageRenderContextProvider : RenderContextProvider<PackageRenderContext>
 {
     private PackageRenderContextProvider(GpuDevice gpuDevice)
     {
@@ -43,7 +43,7 @@ public sealed class PackageRenderContextProvider : IRenderContextProvider<Packag
         return new PackageRenderContextProvider(gpuDevice);
     }
 
-    public bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out PackageRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out PackageRenderContext? renderContext)
     {
         renderContext = null;
         return false;

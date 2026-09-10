@@ -81,10 +81,10 @@ public static class UiExtensions
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
 
-        appBuilder.AddSingleton<UiUpdateSystem>(provider =>
+        appBuilder.AddSingleton<UiUpdateSystem<TRenderContext>>(provider =>
         {
-            (UiRoot root, Window window) = ResolveUpdateTargets(provider, viewScope);
-            return new UiUpdateSystem(root, () => WindowViewport(window), () => window.IsVisible, updateOrder);
+            (UiRoot root, Window window, RenderContextProvider<TRenderContext> contextProvider) = ResolveUpdateTargets<TRenderContext>(provider, viewScope);
+            return new UiUpdateSystem<TRenderContext>(root, window, contextProvider, updateOrder);
         });
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
@@ -103,23 +103,21 @@ public static class UiExtensions
     }
 
     /// <summary>
-    /// The root and window one scope's update system drives. Extracted so the scope lookup is
+    /// What one scope's update system drives and lays out against. Extracted so the lookups are
     /// observable to a test: the system itself holds only closures, and nothing can tell from
-    /// outside which window they captured.
+    /// outside which window or provider they captured.
     /// </summary>
-    internal static (UiRoot Root, Window Window) ResolveUpdateTargets(ServiceProvider provider, ViewScope viewScope)
+    internal static (UiRoot Root, Window Window, RenderContextProvider<TRenderContext> ContextProvider) ResolveUpdateTargets<TRenderContext>(
+        ServiceProvider provider,
+        ViewScope viewScope)
+        where TRenderContext : IRenderContext
     {
         // The scope has to be threaded through: GetWindow's viewScope parameter is defaulted, so
         // dropping it compiles and silently binds every window's UI to the first one.
-        return (ScopedUiRoot.GetRequired(provider, viewScope).Root, provider.GetWindow(viewScope));
-    }
-
-    // Read once. Two reads are two SDL calls, and a resize between them pairs a width from one
-    // state with a height from another.
-    private static Vector2Int WindowViewport(Window window)
-    {
-        ShortSize size = window.RenderSizeInPixels;
-        return new Vector2Int(size.Width, size.Height);
+        return (
+            ScopedUiRoot.GetRequired(provider, viewScope).Root,
+            provider.GetWindow(viewScope),
+            provider.GetRequiredService<RenderContextProvider<TRenderContext>>());
     }
 
     /// <summary>

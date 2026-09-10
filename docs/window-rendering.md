@@ -64,14 +64,14 @@ builder
     .UseWindowRendering<GameRenderContext>();
 
 builder.AddSingleton<GameRenderContextProvider>(GameRenderContextProvider.Create);
-builder.AddAlias<IRenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
+builder.AddAlias<RenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
 ```
 
 The provider uses ordinary dependency injection, including static factory registration. It does not
 receive or resolve a window during construction:
 
 ```csharp
-public sealed class GameRenderContextProvider : IRenderContextProvider<GameRenderContext>
+public sealed class GameRenderContextProvider : RenderContextProvider<GameRenderContext>
 {
     private readonly GpuDevice _gpuDevice;
     private readonly DepthTarget _depthTarget;
@@ -89,7 +89,7 @@ public sealed class GameRenderContextProvider : IRenderContextProvider<GameRende
         return new GameRenderContextProvider(gpuDevice, depthTarget, camera);
     }
 
-    public bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
@@ -104,6 +104,21 @@ public sealed class GameRenderContextProvider : IRenderContextProvider<GameRende
     }
 }
 ```
+
+### Reporting the colour target size
+
+`GetColorTargetSize` says how big the colour target will be, without acquiring one. The default answers `window.RenderSizeInPixels`, which is correct whenever the context targets the swapchain.
+
+Override it when the context draws somewhere else, such as a low resolution texture that is scaled up:
+
+```csharp
+public override ShortSize GetColorTargetSize(Window window)
+{
+    return _offscreenTarget.Size;
+}
+```
+
+Systems that run in the update phase read this. They lay out against the target before any render context exists, so they cannot inspect one. `Pixely.Ui` builds its element tree this way. A provider that draws into a differently sized target and does not override this leaves the UI laid out for the window, and the UI renderer then refuses to draw it into a target of another size.
 
 Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state:
 

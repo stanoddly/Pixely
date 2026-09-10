@@ -3,7 +3,7 @@ using Pixely.Gpu;
 
 namespace Pixely.RenderOrchestration;
 
-internal sealed class BasicRenderContextProvider : IRenderContextProvider<BasicRenderContext>
+internal sealed class BasicRenderContextProvider : RenderContextProvider<BasicRenderContext>
 {
     private readonly GpuDevice _gpuDevice;
 
@@ -12,7 +12,7 @@ internal sealed class BasicRenderContextProvider : IRenderContextProvider<BasicR
         _gpuDevice = gpuDevice;
     }
 
-    public bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
