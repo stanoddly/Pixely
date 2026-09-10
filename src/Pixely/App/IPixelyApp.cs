@@ -8,4 +8,5 @@ public interface IPixelyApp : IDisposable
     ServiceProvider ServiceProvider { get; }
     T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class;
     int Run();
+    bool RunFrame();
 }
