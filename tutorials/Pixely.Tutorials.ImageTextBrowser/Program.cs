@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Pixely.App;
@@ -6,6 +5,7 @@ using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using Pixely.Text;
+using SDL;
 
 [assembly: SupportedOSPlatform("browser")]
 
@@ -26,19 +26,66 @@ public static class ImageTextProbe
 public static partial class Program
 {
     private static IPixelyApp? _app;
+    private static IntPtr _window;
 
     public static void Main()
     {
     }
 
+    /// <summary>
+    /// Everything that has to happen before the GPU device exists. JavaScript creates the device
+    /// itself, by calling SDL_CreateGPUDevice as a JSPI export: that call suspends the wasm stack
+    /// while the WebGPU adapter and device futures resolve, and a suspension can only unwind to a
+    /// promising export, which rules out any Mono frame underneath it. Nothing here blocks.
+    /// Returns an empty string on success and the failure text otherwise, because a managed
+    /// exception reaches JavaScript as an opaque marshalling error.
+    /// </summary>
     [JSExport]
-    public static string Start()
+    public static unsafe string BeginBoot()
     {
         try
         {
-            if (Boot.State() != 2)
+            if (SDL3.SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS) == false)
             {
-                return $"boot shim failed: {Boot.Error()}";
+                return $"SDL_Init failed: {SDL3.SDL_GetError()}";
+            }
+
+            // Pixely builds a GamepadService as part of its event service. Failure is not fatal:
+            // the browser may expose no gamepad support at all.
+            SDL3.SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD);
+
+            SDL_Window* window = SDL3.SDL_CreateWindow("Image and text", 640, 480, default);
+            if (window == null)
+            {
+                return $"SDL_CreateWindow failed: {SDL3.SDL_GetError()}";
+            }
+
+            _window = (IntPtr)window;
+            return string.Empty;
+        }
+        catch (Exception exception)
+        {
+            return exception.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Builds the application around the device JavaScript just created and the window
+    /// <see cref="BeginBoot"/> left behind.
+    /// </summary>
+    [JSExport]
+    public static unsafe string Start(IntPtr device)
+    {
+        try
+        {
+            if (device == IntPtr.Zero)
+            {
+                return $"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}";
+            }
+
+            if (SDL3.SDL_ClaimWindowForGPUDevice((SDL_GPUDevice*)device, (SDL_Window*)_window) == false)
+            {
+                return $"SDL_ClaimWindowForGPUDevice failed: {SDL3.SDL_GetError()}";
             }
 
             PixelyAppBuilder builder = new();
@@ -46,7 +93,7 @@ public static partial class Program
                 EnableSdlLogging: false,
                 EnableGpuValidation: false,
                 GpuBackend: GpuBackend.WebGpu,
-                AdoptedSdlHandles: new AdoptedSdlHandles(Boot.Device(), Boot.Window())));
+                AdoptedSdlHandles: new AdoptedSdlHandles(device, _window)));
 
             builder
                 .ConfigureContent(contentSourceBuilder =>
@@ -153,25 +200,4 @@ public static partial class Program
     {
         return _app!.GetRequiredService<GpuDevice>().Driver;
     }
-}
-
-/// <summary>
-/// The C shim that ran SDL_Init, SDL_CreateWindow, SDL_CreateGPUDevice and
-/// SDL_ClaimWindowForGPUDevice from JavaScript, before any managed frame existed.
-/// </summary>
-internal static class Boot
-{
-    [DllImport("pixelyboot", EntryPoint = "pixely_gpu_state")]
-    public static extern int State();
-
-    [DllImport("pixelyboot", EntryPoint = "pixely_gpu_device")]
-    public static extern IntPtr Device();
-
-    [DllImport("pixelyboot", EntryPoint = "pixely_gpu_window")]
-    public static extern IntPtr Window();
-
-    [DllImport("pixelyboot", EntryPoint = "pixely_gpu_error")]
-    private static extern IntPtr GetError();
-
-    public static string Error() => Marshal.PtrToStringUTF8(GetError()) ?? "(none)";
 }

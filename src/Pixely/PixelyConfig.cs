@@ -12,8 +12,8 @@ public enum GpuBackend
 /// <summary>
 /// SDL objects that were created outside Pixely and are handed to it instead of being created by
 /// <see cref="PixelyFactory"/>. The browser needs this: SDL's WebGPU backend suspends the wasm stack
-/// inside SDL_CreateGPUDevice, which no managed frame can survive, so the device and its window are
-/// created by a JavaScript-driven C shim before any managed code runs.
+/// inside SDL_CreateGPUDevice, which no managed frame can survive, so the browser host has
+/// JavaScript call SDL_CreateGPUDevice and hands the resulting device over.
 /// </summary>
 public sealed record AdoptedSdlHandles(IntPtr GpuDevice, IntPtr Window);
 

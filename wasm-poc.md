@@ -149,42 +149,39 @@ byte-identically. Wasm EH became the .NET default in .NET 8 and Emscripten moved
 
 `wasm.md` assumed an `emscripten_webgpu_get_device` escape hatch, where a device created before
 startup keeps the caller synchronous. **That hatch does not exist in this backend.** What
-replaces it is close in spirit though: the blocking calls live in a C shim entered from
-JavaScript, and managed code only reads the finished device.
+replaces it is close in spirit though: JavaScript calls `SDL_CreateGPUDevice` itself, and
+managed code only adopts the finished device.
 
-Shim: `<scratchpad>/shim/pixelyboot.c`, built by `<scratchpad>/build-shim.sh`. It runs
-`SDL_Init`, `SDL_CreateWindow`, `SDL_CreateGPUDevice` and `SDL_ClaimWindowForGPUDevice` into C
-globals and exposes `pixely_gpu_state/device/window/error/driver` getters that C# reads through
-`DllImport("pixelyboot")`.
+A JSPI suspension unwinds to the nearest `WebAssembly.promising` frame, and Mono's entry export
+is not promising, so nothing that starts in managed code can suspend. Called straight from
+JavaScript, `SDL_CreateGPUDevice` *is* that frame, with no Mono frame beneath it. Exporting it
+and naming it in `JSPI_EXPORTS` is the whole mechanism; no C of our own is involved.
+
+There are exactly four blocking sites in `SDL_gpu_webgpu.c`:
+`WEBGPU_INTERNAL_RequestAdapter` (:1662) and `WEBGPU_INTERNAL_RequestDevice` (:1762), both
+inside `SDL_CreateGPUDevice`; `WEBGPU_INTERNAL_WaitForFences` (:1971), which Pixely does not
+use; and `WEBGPU_WaitAndAcquireSwapchainTexture` (:4720), avoided by the non-blocking acquire in
+`Window.cs`. So `SDL_Init`, `SDL_CreateWindow` and `SDL_ClaimWindowForGPUDevice` stay in managed
+code, in the `BeginBoot` and `Start` exports.
 
 ```xml
-<EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=pixely_gpu_boot -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu</EmccExtraLDFlags>
-<NativeFileReference Include=".../pixelyboot.o" ScanForPInvokes="true" />
-<EmccExportedFunction Include="_pixely_gpu_boot" />
+<EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=SDL_CreateGPUDevice -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu</EmccExtraLDFlags>
+<EmccExportedFunction Include="_SDL_CreateGPUDevice" />
 ```
+
+`EmccExportedFunction` also forces the archive member into the link, since no managed code
+calls `SDL_CreateGPUDevice` any more.
 
 ```js
-// after dotnet.create() returns, so no Mono frame is below this call
-const state = await runtime.Module.wasmExports.pixely_gpu_boot();
-await runtime.runMain();
+const bootError = program.BeginBoot();
+// 64 is SDL_GPU_SHADERFORMAT_WGSL, 1 is debug mode, 0 is a NULL driver name; all plain
+// numbers, so no string marshalling is needed
+const device = await runtime.Module.wasmExports.SDL_CreateGPUDevice(64, 1, 0);
+const startError = program.Start(device);
 ```
 
-Proof, headless Chromium 153:
-
-```
-JS: pixely_gpu_boot returned 2
-STEP 1: shim state = 2
-STEP 2: video driver = emscripten
-STEP 3: window = 0x610cd8, device = 0x8733d8
-STEP 4: gpu driver via shim = webgpu
-STEP 5: gpu driver via managed P/Invoke = webgpu
-STEP 6: swapchain format = 4
-STEP 7: SDL_AcquireGPUCommandBuffer = 0xb2ede0
-STEP 8: SDL_SubmitGPUCommandBuffer = 1
-SDL PROBE PASS
-```
-
-No page errors, tab responsive throughout.
+`getAssemblyExports` has to run before the boot call now, because `BeginBoot` is a managed
+export.
 
 Further traps, all load-bearing:
 
@@ -194,21 +191,23 @@ Further traps, all load-bearing:
    `mono_download_assets` with `SuspendError: trying to suspend without
    WebAssembly.promising`. So the Asyncify and JSPI configurations want *opposite* EH settings.
 2. **A P/Invoke returning managed `bool` aborts Mono** at `method-builder-ilgen.c:631`, with or
-   without `[return: MarshalAs(UnmanagedType.U1)]`. Returning `byte` works. `ppy.SDL3-CS`'s
-   blittable `SDLBool` struct should be unaffected, but Pixely's own declarations need checking.
+   without `[return: MarshalAs(UnmanagedType.U1)]`. Returning `byte` works. `ppy.SDL3-CS` is
+   unaffected: `SDLBool` is a struct wrapping one `byte`, and its string-taking overloads such
+   as `SDL_CreateWindow(Utf8String, ...)` are managed wrappers over a `byte*` P/Invoke rather
+   than P/Invokes themselves.
 3. **`EmccExportedFunction` is the export knob.** The SDK sets `EXPORTED_FUNCTIONS` explicitly
    (`BrowserWasmApp.targets:376`), so `EMSCRIPTEN_KEEPALIVE` alone does not put a symbol on
    `Module`. `Module.wasmExports.<name>` is the post-instrumentation, promising wrapper.
-4. `JSPI_EXPORTS` takes the bare wasm name (`pixely_gpu_boot`); `EXPORTED_FUNCTIONS` takes the
-   underscore-prefixed C name (`_pixely_gpu_boot`).
+4. `JSPI_EXPORTS` takes the bare wasm name (`SDL_CreateGPUDevice`); `EXPORTED_FUNCTIONS` takes
+   the underscore-prefixed C name (`_SDL_CreateGPUDevice`).
 5. emcc warns `-sJSPI (ASYNCIFY=2) is still experimental`. Harmless, but it needs suppressing
    in a warnings-as-errors build.
 
 ### Consequence for Pixely's architecture
 
-Device creation cannot happen inside a synchronous managed constructor. It must happen before
-managed code runs, and `PixelyFactory` must accept an already-created device rather than
-calling `SDL_CreateGPUDevice` itself. That is a real change to
+Device creation cannot happen inside a synchronous managed constructor. It has to be initiated
+from JavaScript, and `PixelyFactory` must accept an already-created device rather than calling
+`SDL_CreateGPUDevice` itself. That is a real change to
 `AddSingleton<GpuDevice, PixelyFactory>()`, and it belongs in the Phase 6 write-up as a
 correction to `wasm.md`'s claim that the synchronous DI graph survives untouched.
 
@@ -291,8 +290,7 @@ backend, driven by `requestAnimationFrame`.
 Screenshot: `<scratchpad>/pixely-triangle-browser.png`
 
 ```
-[webgpu] adapter ok: {}
-boot: pixely_gpu_boot returned 2
+boot: SDL_CreateGPUDevice returned 11586192
 gpu driver as Pixely sees it: webgpu
 frames rendered: 1
 frames rendered: 60
@@ -320,8 +318,8 @@ and 0 failed, against a 1216 baseline plus one new `webgpu` case in `GpuBackendS
   constructor.
 - **Device adoption.** `PixelyConfig` gained `AdoptedSdlHandles(IntPtr GpuDevice, IntPtr Window)`.
   When set, `PixelyFactory` wraps the existing handles instead of creating a device and window,
-  and skips `SDL_Init`/`SDL_Quit` because the shim owns that lifetime. One nullable property
-  gating three sites.
+  and skips `SDL_Init`/`SDL_Quit` because the browser host owns that lifetime. One nullable
+  property gating three sites.
 - **`Window.TryWaitAndAcquireSwapchainTexture`** uses the non-blocking
   `SDL_AcquireGPUSwapchainTexture` under `OperatingSystem.IsBrowser()`. The waiting form spins
   on `SDL_DelayNS`, which cannot suspend beneath a managed frame.

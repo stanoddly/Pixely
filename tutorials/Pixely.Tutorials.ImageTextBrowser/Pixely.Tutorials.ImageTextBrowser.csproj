@@ -17,7 +17,7 @@
         <WasmBuildNative>true</WasmBuildNative>
         <PixelyWasmScratch Condition="'$(PixelyWasmScratch)' == ''">$(PIXELY_WASM_WORK)</PixelyWasmScratch>
 
-        <EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=pixely_gpu_boot -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu -Wno-experimental</EmccExtraLDFlags>
+        <EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=SDL_CreateGPUDevice -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu -Wno-experimental</EmccExtraLDFlags>
         <WasmCachePath>$(PixelyWasmScratch)/emcache-sdk</WasmCachePath>
 
         <ContentSourceDirectory>$(MSBuildProjectDirectory)/../Pixely.Tutorials.ImageLoading/Content</ContentSourceDirectory>
@@ -87,11 +87,14 @@
         <NativeFileReference Include="$(PixelyWasmScratch)/SDL3.a" ScanForPInvokes="true" />
         <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_ttf.a" ScanForPInvokes="true" />
         <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_image.a" ScanForPInvokes="true" />
-        <NativeFileReference Include="$(PixelyWasmScratch)/shim/pixelyboot.o" ScanForPInvokes="true" />
     </ItemGroup>
 
     <ItemGroup>
-        <EmccExportedFunction Include="_pixely_gpu_boot" />
+        <!-- JavaScript calls SDL_CreateGPUDevice directly, so it has to be on Module.wasmExports:
+             EXPORTED_FUNCTIONS is set explicitly by the SDK and nothing else would put it there.
+             This is also what pulls the archive member into the link, since no managed code calls
+             it any more. -->
+        <EmccExportedFunction Include="_SDL_CreateGPUDevice" />
     </ItemGroup>
 
 </Project>

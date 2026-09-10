@@ -8,15 +8,25 @@ const runtime = await dotnet
     .withModuleConfig({ canvas: canvas })
     .create();
 
-// The boot shim has to be entered from JavaScript. Under JSPI only frames between the promising
-// export and the suspending import can be parked, and SDL_CreateGPUDevice parks inside SDL.
-const bootState = await runtime.Module.wasmExports.pixely_gpu_boot();
-console.log('boot: pixely_gpu_boot returned', bootState);
-
 const exports = await runtime.getAssemblyExports('Pixely.Tutorials.ImageTextBrowser.dll');
 const program = exports.Pixely.Tutorials.ImageTextBrowser.Program;
 
-const startError = program.Start();
+// SDL_Init, SDL_CreateWindow and SDL_ClaimWindowForGPUDevice never block, so they stay in managed
+// code. Only SDL_CreateGPUDevice suspends, waiting on the WebGPU adapter and device futures.
+const bootError = program.BeginBoot();
+if (bootError !== '') {
+    console.error('BeginBoot failed:', bootError);
+    throw new Error(bootError);
+}
+
+// Called from here rather than from managed code because under JSPI a suspension unwinds to the
+// nearest promising frame, and only the exports named in JSPI_EXPORTS are promising. Entered
+// straight from JavaScript, SDL_CreateGPUDevice is itself that frame, with no Mono frame beneath
+// it. The arguments are SDL_GPU_SHADERFORMAT_WGSL, debug mode, and a NULL driver name.
+const device = await runtime.Module.wasmExports.SDL_CreateGPUDevice(64, 1, 0);
+console.log('boot: SDL_CreateGPUDevice returned', device);
+
+const startError = program.Start(device);
 if (startError !== '') {
     console.error('Start failed:', startError);
     throw new Error(startError);

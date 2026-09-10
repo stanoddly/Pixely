@@ -47,11 +47,7 @@ native archives.
        <repo>/wasm/scripts/build-ttf.sh && <repo>/wasm/scripts/make-ttf.sh
        <repo>/wasm/scripts/build-image.sh && <repo>/wasm/scripts/make-image.sh
 
-3. **The boot shim.**
-
-       <repo>/wasm/scripts/build-shim.sh
-
-4. **The tutorials.**
+3. **The tutorials.**
 
        dotnet publish -c Release tutorials/Pixely.Tutorials.ImageTextBrowser
        dotnet publish -c Release tutorials/Pixely.Tutorials.TriangleBrowser
@@ -75,7 +71,7 @@ native archives.
 - **Vertex winding is load-bearing.** Reversing a quad's vertex order culls the triangles
   silently, with no validation message.
 
-## Why there is a C shim
+## Why JavaScript creates the GPU device
 
 `SDL_CreateGPUDevice` busy-waits on the WebGPU future and calls `emscripten_sleep`, so the wasm
 stack has to suspend. Asyncify cannot do it: it wraps every wasm export in a JS wrapper, which
@@ -83,15 +79,21 @@ destroys Mono's `cwrap` arities and function-table writes, and the runtime dies 
 JSPI can, because it wraps only the exports named in `JSPI_EXPORTS`.
 
 But a JSPI suspension unwinds to the nearest `WebAssembly.promising` frame, and Mono's entry
-export is not promising, so a call starting in managed code has no boundary to suspend to. The
-blocking calls therefore live in `shim/pixelyboot.c`, entered from JavaScript before managed
-code runs, and Pixely adopts the resulting device and window.
+export is not promising, so a call starting in managed code has no boundary to suspend to. So
+`SDL_CreateGPUDevice` is exported and named in `JSPI_EXPORTS`, and `main.js` calls it directly.
+Entered from JavaScript it is itself the promising frame, with no Mono frame beneath it. Pixely
+then adopts the device through `Program.Start`.
 
-Only device creation needs this. Per-frame rendering never suspends.
+Everything else stays in managed code. There are four blocking sites in the whole backend, and
+two of them are inside `SDL_CreateGPUDevice`; of the other two, `WEBGPU_INTERNAL_WaitForFences`
+is unused here and `WEBGPU_WaitAndAcquireSwapchainTexture` is avoided by the non-blocking
+acquire in `Window.cs`. `SDL_Init`, `SDL_CreateWindow` and `SDL_ClaimWindowForGPUDevice` never
+suspend, so they live in the `BeginBoot` and `Start` exports. Per-frame rendering never
+suspends either.
 
 The proper fix is upstream: if SDL's WebGPU backend accepted a preinitialized device, the way
-Emscripten's older WebGPU binding did through `Module.preinitializedWebGPUDevice`, no suspension
-would be needed and the shim would disappear.
+Emscripten's older WebGPU binding did through `Module.preinitializedWebGPUDevice`, nothing would
+have to suspend and JSPI would not be needed at all.
 
 ## The SDL patch
 
