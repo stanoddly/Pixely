@@ -182,7 +182,11 @@ public class Window : IDisposable
         }
     }
 
-    public bool IsVisible
+    /// <summary>
+    /// Whether the window is showing. Virtual so a test can answer without a display; SDL is the
+    /// only source in production.
+    /// </summary>
+    public virtual bool IsVisible
     {
         get
         {

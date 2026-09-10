@@ -81,10 +81,10 @@ public static class UiExtensions
                 provider.GetRequiredService<IKeyboardService>(),
                 provider.GetRequiredService<ITextInputService>()));
 
-        appBuilder.AddSingleton<UiUpdateSystem>(provider =>
+        appBuilder.AddSingleton<UiUpdateSystem<TRenderContext>>(provider =>
         {
             (UiRoot root, Window window, RenderContextProvider<TRenderContext> contextProvider) = ResolveUpdateTargets<TRenderContext>(provider, viewScope);
-            return new UiUpdateSystem(root, () => ColorTargetViewport(contextProvider, window), () => window.IsVisible, updateOrder);
+            return new UiUpdateSystem<TRenderContext>(root, window, contextProvider, updateOrder);
         });
 
         appBuilder.AddSingleton<IRenderer<TRenderContext>, UiRenderer<TRenderContext>>(provider =>
@@ -118,18 +118,6 @@ public static class UiExtensions
             ScopedUiRoot.GetRequired(provider, viewScope).Root,
             provider.GetWindow(viewScope),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>());
-    }
-
-    /// <summary>
-    /// The size the tree is laid out against: the colour target the renderer will draw into, which
-    /// is the window only when the context targets the swapchain. Asked of the provider rather than
-    /// the window because the provider is what decides the target.
-    /// </summary>
-    private static Vector2Int ColorTargetViewport<TRenderContext>(RenderContextProvider<TRenderContext> contextProvider, Window window)
-        where TRenderContext : IRenderContext
-    {
-        ShortSize size = contextProvider.GetColorTargetSize(window);
-        return new Vector2Int(size.Width, size.Height);
     }
 
     /// <summary>
