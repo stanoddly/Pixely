@@ -238,9 +238,11 @@ public class SdlangBuildIntegrationTests
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.vertex.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.vertex.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.vertex.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.vertex.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.fragment.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.fragment.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.fragment.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.fragment.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "copy_output.metadata.json")), Is.True);
         });
     }
@@ -265,9 +267,11 @@ public class SdlangBuildIntegrationTests
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.vertex.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.vertex.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.vertex.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.vertex.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.fragment.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.fragment.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.fragment.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.fragment.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "external_output.metadata.json")), Is.True);
         });
     }
@@ -296,16 +300,20 @@ public class SdlangBuildIntegrationTests
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.vertex.spv"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.vertex.dxil"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.vertex.metal"));
+            Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.vertex.wgsl"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.fragment.spv"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.fragment.dxil"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.fragment.metal"));
+            Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.fragment.wgsl"));
             Assert.That(resourceNames, Contains.Item("shaders/.generated/embedded_output.metadata.json"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.vertex.spv"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.vertex.dxil"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.vertex.metal"));
+            Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.vertex.wgsl"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.fragment.spv"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.fragment.dxil"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.fragment.metal"));
+            Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.fragment.wgsl"));
             Assert.That(resourceNames, Contains.Item("shaders/nested/.generated/embedded_nested.metadata.json"));
         });
     }
@@ -322,9 +330,11 @@ public class SdlangBuildIntegrationTests
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.vertex.spv"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.vertex.dxil"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.vertex.metal"));
+            Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.vertex.wgsl"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.fragment.spv"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.fragment.dxil"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.fragment.metal"));
+            Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.fragment.wgsl"));
             Assert.That(entryNames, Contains.Item("shaders/.generated/zip_output.metadata.json"));
         });
     }

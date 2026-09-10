@@ -37,7 +37,10 @@ public enum ShaderFormatDto
     Msl = 4,
 
     [EnumMember(Value = "metallib")]
-    MetalLib = 5
+    MetalLib = 5,
+
+    [EnumMember(Value = "wgsl")]
+    Wgsl = 6
 }
 
 public record ShaderInstanceDto(ShaderFormatDto Format, string Filename, string EntryPoint);

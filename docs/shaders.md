@@ -1,6 +1,6 @@
 # Shaders
 
-Guide to writing and using shaders with Pixely. Shaders are written in Slang and compiled to SPIR-V, DXIL, and MSL at build time.
+Guide to writing and using shaders with Pixely. Shaders are written in Slang and compiled to SPIR-V, DXIL, MSL, and WGSL at build time.
 
 ## File Structure
 
@@ -11,13 +11,17 @@ Content/shaders/
     ├── shader.vertex.spv
     ├── shader.vertex.dxil
     ├── shader.vertex.metal
+    ├── shader.vertex.wgsl
     ├── shader.fragment.spv
     ├── shader.fragment.dxil
     ├── shader.fragment.metal
+    ├── shader.fragment.wgsl
     └── shader.metadata.json
 ```
 
-Shaders are automatically compiled during build. The build system generates SPIR-V binaries for Vulkan, DXIL binaries for Direct3D 12, MSL source for Metal, and metadata files in the `.generated/` directory.
+Shaders are automatically compiled during build. The build system generates SPIR-V binaries for Vulkan, DXIL binaries for Direct3D 12, MSL source for Metal, WGSL source for WebGPU, and metadata files in the `.generated/` directory.
+
+WebGPU has no combined image sampler, so a WGSL sampler needs a binding of its own. SDL GPU reads a WGSL bind group layout back out of the shader text and requires the bindings of a group to be dense, with each sampled texture followed immediately by its sampler, then the storage textures, then the storage buffers. The compiler derives the WGSL binding of every resource and fails the build when the layout would leave a gap, because the alternative is a pipeline that only fails once it reaches a browser. In practice a stage may declare at most one sampled texture, and none beside a storage texture or storage buffer.
 
 ## Build Integration
 

@@ -301,6 +301,65 @@ public class SdlangCompilerTests
                                                          }
                                                          """;
 
+    private const string FragmentShaderWithTwoTextureSamplerPairs = """
+                                                                    struct FragmentInput {
+                                                                        float4 position : SV_Position;
+                                                                        float2 texCoord : TEXCOORD0;
+                                                                    };
+
+                                                                    struct VertexInput {
+                                                                        float3 position : POSITION;
+                                                                        float2 texCoord : TEXCOORD0;
+                                                                    };
+
+                                                                    Texture2D<float4> albedo : register(t0, space2);
+                                                                    SamplerState albedoSampler : register(s0, space2);
+                                                                    Texture2D<float4> normal : register(t1, space2);
+                                                                    SamplerState normalSampler : register(s1, space2);
+
+                                                                    [shader("vertex")]
+                                                                    FragmentInput vertexMain(VertexInput input) {
+                                                                        FragmentInput output;
+                                                                        output.position = float4(input.position, 1.0);
+                                                                        output.texCoord = input.texCoord;
+                                                                        return output;
+                                                                    }
+
+                                                                    [shader("fragment")]
+                                                                    float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                                        return albedo.Sample(albedoSampler, input.texCoord) + normal.Sample(normalSampler, input.texCoord);
+                                                                    }
+                                                                    """;
+
+    private const string FragmentShaderWithTextureAndStorageBuffer = """
+                                                                     struct FragmentInput {
+                                                                         float4 position : SV_Position;
+                                                                         float2 texCoord : TEXCOORD0;
+                                                                     };
+
+                                                                     struct VertexInput {
+                                                                         float3 position : POSITION;
+                                                                         float2 texCoord : TEXCOORD0;
+                                                                     };
+
+                                                                     Texture2D<float4> albedo : register(t0, space2);
+                                                                     SamplerState albedoSampler : register(s0, space2);
+                                                                     StructuredBuffer<float4> myData : register(t1, space2);
+
+                                                                     [shader("vertex")]
+                                                                     FragmentInput vertexMain(VertexInput input) {
+                                                                         FragmentInput output;
+                                                                         output.position = float4(input.position, 1.0);
+                                                                         output.texCoord = input.texCoord;
+                                                                         return output;
+                                                                     }
+
+                                                                     [shader("fragment")]
+                                                                     float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                                         return albedo.Sample(albedoSampler, input.texCoord) + myData[0];
+                                                                     }
+                                                                     """;
+
     private const string VertexShaderMismatchedSamplerIndex = """
                                                               struct VertexInput {
                                                                   float3 position : POSITION;
@@ -769,6 +828,47 @@ public class SdlangCompilerTests
     }
 
     [Test]
+    public void CompileShader_ValidFragmentShaderWithBindings_InterleavesTextureAndSamplerInWgsl()
+    {
+        string shaderPath = Path.Combine(_testDir, "wgsl_bindings.slang");
+        File.WriteAllText(shaderPath, ValidFragmentShaderWithBindings);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = File.ReadAllText(Path.Combine(_testDir, ".generated", "wgsl_bindings.fragment.wgsl"));
+
+        Assert.Multiple(() =>
+        {
+            // SDL GPU's WebGPU backend reads the bind group layout out of the WGSL text and expects each
+            // sampled texture to be followed immediately by its sampler, with no gap.
+            Assert.That(wgsl, Does.Match(@"@binding\(0\) @group\(2\) var albedo_\d+ : texture_2d<f32>"));
+            Assert.That(wgsl, Does.Match(@"@binding\(1\) @group\(2\) var albedoSampler_\d+ : sampler"));
+        });
+    }
+
+    [TestCase(FragmentShaderWithTwoTextureSamplerPairs, "normal")]
+    [TestCase(FragmentShaderWithTextureAndStorageBuffer, "myData")]
+    public void CompileShader_WgslBindingsWouldLeaveAGap_ThrowsValidationException(
+        string shaderContent,
+        string parameterName)
+    {
+        string shaderPath = CreateTemporaryShaderFile(shaderContent);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+
+        ShaderBindingValidationException? ex = Assert.Throws<ShaderBindingValidationException>(() =>
+            compiler.Compile([shaderPath], force: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex.Message, Does.Contain($"'{parameterName}'"));
+            Assert.That(ex.Message, Does.Contain("WGSL binding 1"));
+            Assert.That(ex.Message, Does.Contain("requires binding 2"));
+        });
+    }
+
+    [Test]
     public void CompileShader_ValidComputeShaderWithBindings_CreatesComputeMetadata()
     {
         string shaderPath = Path.Combine(_testDir, "valid_compute.slang");
@@ -1072,18 +1172,20 @@ public class SdlangCompilerTests
         {
             Assert.That(
                 shaders.Select(shader => shader.Format),
-                Is.EqualTo(new[] { ShaderFormatDto.SpirV, ShaderFormatDto.Dxil, ShaderFormatDto.Msl }));
+                Is.EqualTo(new[] { ShaderFormatDto.SpirV, ShaderFormatDto.Dxil, ShaderFormatDto.Msl, ShaderFormatDto.Wgsl }));
             Assert.That(
                 shaders.Select(shader => shader.EntryPoint),
                 Is.EqualTo(new[]
                 {
                     "main",
                     sourceEntryPoint,
-                    sourceEntryPoint == "main" ? "main_0" : sourceEntryPoint
+                    sourceEntryPoint == "main" ? "main_0" : sourceEntryPoint,
+                    sourceEntryPoint
                 }));
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.wgsl")), Is.True);
         });
     }
 }

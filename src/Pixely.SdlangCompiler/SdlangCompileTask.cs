@@ -10,7 +10,7 @@ namespace Pixely.SdlangCompiler;
 /// </summary>
 public class SdlangCompileTask : Microsoft.Build.Utilities.Task
 {
-    private static readonly string[] GeneratedShaderExtensions = ["spv", "dxil", "metal"];
+    private static readonly string[] GeneratedShaderExtensions = ["spv", "dxil", "metal", "wgsl"];
 
     /// <summary>
     /// The input shader file to compile. If empty or null, the task succeeds without compiling.

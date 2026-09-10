@@ -22,6 +22,27 @@ internal enum ResourceType
 
 internal record struct ResourceBinding(string Name, ResourceType Type, int Space, int Index);
 
+// The amount Slang adds to a D3D register index, per register class, to reach the binding it emits for a
+// Vulkan-style target. Slang only maps a register onto a binding at all once every class has a shift.
+internal readonly record struct VulkanBindingShifts(int ConstantBuffer, int ShaderResource, int Sampler, int UnorderedAccess)
+{
+    public string[] ToCommandLineArguments() =>
+    [
+        "-fvk-b-shift", ConstantBuffer.ToString(), "all",
+        "-fvk-t-shift", ShaderResource.ToString(), "all",
+        "-fvk-s-shift", Sampler.ToString(), "all",
+        "-fvk-u-shift", UnorderedAccess.ToString(), "all"
+    ];
+
+    public int ShiftFor(ResourceType resourceType) => resourceType switch
+    {
+        ResourceType.UniformBuffer => ConstantBuffer,
+        ResourceType.Sampler => Sampler,
+        ResourceType.ReadWriteStorageTexture or ResourceType.ReadWriteStorageBuffer => UnorderedAccess,
+        _ => ShaderResource
+    };
+}
+
 internal enum ShaderSourceKind
 {
     Graphics,
@@ -38,7 +59,7 @@ public class SdlangCompiler
     private const int MaxReflectionTraversalDepth = 64;
     private static readonly string SlangVersion = GetSlangVersion();
     private static readonly ShaderFormatDto[] AdditionalTargetFormats =
-        [ShaderFormatDto.Dxil, ShaderFormatDto.Msl];
+        [ShaderFormatDto.Dxil, ShaderFormatDto.Msl, ShaderFormatDto.Wgsl];
     private static readonly ShaderFormatDto[] TargetFormats =
         [ShaderFormatDto.SpirV, .. AdditionalTargetFormats];
 
@@ -48,7 +69,8 @@ public class SdlangCompiler
     {
         { ShaderFormatDto.SpirV, "spv" },
         { ShaderFormatDto.Dxil, "dxil" },
-        { ShaderFormatDto.Msl, "metal" }
+        { ShaderFormatDto.Msl, "metal" },
+        { ShaderFormatDto.Wgsl, "wgsl" }
     };
 
     /// <param name="slangCompilerPath">Path to the slangc executable to compile shaders with.</param>
@@ -151,6 +173,7 @@ public class SdlangCompiler
         ShaderFormatDto.SpirV => "spirv",
         ShaderFormatDto.Dxil => "dxil",
         ShaderFormatDto.Msl => "metal",
+        ShaderFormatDto.Wgsl => "wgsl",
         _ => throw new ArgumentException($"Unsupported shader format: {format}")
     };
 
@@ -160,19 +183,27 @@ public class SdlangCompiler
     // has a shift, so a zero shift for each class states the mapping the shaders already rely on. Without
     // it Slang warns about every register that has no explicit Vulkan binding, and about the texture and
     // its sampler landing on the same slot.
-    private static readonly string[] VulkanBindingShifts =
-    [
-        "-fvk-b-shift", "0", "all",
-        "-fvk-t-shift", "0", "all",
-        "-fvk-s-shift", "0", "all",
-        "-fvk-u-shift", "0", "all"
-    ];
+    private static readonly VulkanBindingShifts CombinedImageSamplerShifts = new(0, 0, 0, 0);
+
+    // WebGPU has no combined image sampler, so a sampler needs a binding of its own. Shifting samplers by
+    // one puts each one directly after its texture, which is the interleaved layout SDL GPU's WebGPU
+    // backend infers. ValidateWebGpuBindings rejects the shaders this cannot express.
+    private static readonly VulkanBindingShifts SeparateSamplerShifts = new(0, 0, 1, 0);
+
+    private static readonly Dictionary<ShaderFormatDto, VulkanBindingShifts> BindingShiftsByTarget = new()
+    {
+        { ShaderFormatDto.SpirV, CombinedImageSamplerShifts },
+        { ShaderFormatDto.Dxil, CombinedImageSamplerShifts },
+        { ShaderFormatDto.Msl, CombinedImageSamplerShifts },
+        { ShaderFormatDto.Wgsl, SeparateSamplerShifts }
+    };
 
     private static readonly Dictionary<ShaderFormatDto, List<string>> CommandLineOptions = new()
     {
         { ShaderFormatDto.SpirV, [] },
         { ShaderFormatDto.Dxil, ["-profile", "sm_6_0"] },
-        { ShaderFormatDto.Msl, [] }
+        { ShaderFormatDto.Msl, [] },
+        { ShaderFormatDto.Wgsl, [] }
     };
 
     private (FileInfo reflectionFile, FileInfo dependencyFile, List<ShaderInstanceDto> shaderInstances) CompileTargets(
@@ -218,7 +249,7 @@ public class SdlangCompiler
         List<string> args =
         [
             filePath.FullName,
-            .. VulkanBindingShifts,
+            .. BindingShiftsByTarget[format].ToCommandLineArguments(),
             "-target", target
         ];
         args.AddRange(CommandLineOptions[format]);
@@ -247,7 +278,7 @@ public class SdlangCompiler
         List<string> args =
         [
             filePath.FullName,
-            .. VulkanBindingShifts,
+            .. BindingShiftsByTarget[ShaderFormatDto.SpirV].ToCommandLineArguments(),
             "-target", "spirv",
             "-no-codegen",
             "-reflection-json", reflectionFile.FullName
@@ -943,7 +974,51 @@ public class SdlangCompiler
         }
 
         ValidateSamplerTexturePairings(stageName, bindings);
+        ValidateWebGpuBindings(stageName, bindings);
     }
+
+    // SDL GPU's WebGPU backend infers a bind group layout by scanning the WGSL text, and needs the bindings
+    // of a group to be dense, with each sampled texture immediately followed by its sampler, then the
+    // storage textures, then the storage buffers. Slang reaches a WGSL binding by adding a register class
+    // shift to the register index, which cannot express that layout for every shader, so the shaders it
+    // cannot express have to fail here instead of failing pipeline creation in the browser.
+    private static void ValidateWebGpuBindings(string stageName, List<ResourceBinding> bindings)
+    {
+        VulkanBindingShifts shifts = BindingShiftsByTarget[ShaderFormatDto.Wgsl];
+        int sampledTextureCount = bindings.Count(binding => binding.Type == ResourceType.SampledTexture);
+
+        foreach (ResourceBinding binding in bindings)
+        {
+            // The backend skips uniforms and hardcodes their group to four bindings, so their layout is free.
+            if (binding.Type == ResourceType.UniformBuffer)
+            {
+                continue;
+            }
+
+            int emittedBinding = binding.Index + shifts.ShiftFor(binding.Type);
+            int requiredBinding = GetWebGpuBinding(binding, sampledTextureCount);
+            if (emittedBinding != requiredBinding)
+            {
+                throw new ShaderBindingValidationException(
+                    $"Parameter '{binding.Name}' in {stageName} shader compiles to WGSL binding {emittedBinding} " +
+                    $"in group {binding.Space}, but SDL GPU's WebGPU backend requires binding {requiredBinding} " +
+                    "there. WGSL bindings interleave each sampled texture with its sampler and leave no gaps, " +
+                    "which the register shifts only express for a single sampled texture with no storage " +
+                    "texture or storage buffer beside it.");
+            }
+        }
+    }
+
+    private static int GetWebGpuBinding(ResourceBinding binding, int sampledTextureCount) => binding.Type switch
+    {
+        ResourceType.SampledTexture => 2 * binding.Index,
+        ResourceType.Sampler => 2 * binding.Index + 1,
+        // Read-only storage resources keep the order the read-only index space already gives them, moved
+        // past the sampler each sampled texture adds.
+        ResourceType.StorageTexture or ResourceType.StorageBuffer => sampledTextureCount + binding.Index,
+        // Read-write resources have a group to themselves, so their index is their binding.
+        _ => binding.Index
+    };
 
     private static void ValidateSamplerTexturePairings(string stageName, List<ResourceBinding> bindings)
     {

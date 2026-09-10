@@ -22,13 +22,17 @@ public enum ShaderFormat: uint
     Msl = SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_MSL,
     
     [EnumMember(Value = "metallib")]
-    MetalLib = SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_METALLIB
+    MetalLib = SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_METALLIB,
+
+    // SDL_GPU_SHADERFORMAT_WGSL, which ppy.SDL3-CS does not expose yet
+    [EnumMember(Value = "wgsl")]
+    Wgsl = 1u << 6
 }
 
 public readonly struct ShaderFormats
 {
     public static readonly ShaderFormats BinaryFormats = new ShaderFormats([ShaderFormat.Private, ShaderFormat.SpirV, ShaderFormat.Dxbc, ShaderFormat.Dxil, ShaderFormat.MetalLib]);
-    public static readonly ShaderFormats TextFormats = new ShaderFormats([ShaderFormat.Msl]);
+    public static readonly ShaderFormats TextFormats = new ShaderFormats([ShaderFormat.Msl, ShaderFormat.Wgsl]);
 
     private readonly uint _flags;
 

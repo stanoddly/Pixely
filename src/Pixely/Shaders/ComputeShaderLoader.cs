@@ -54,11 +54,16 @@ public class ComputeShaderLoader : IComputeShaderLoader
         ContentFile file = _contentSource.GetFile(filePath);
         using Stream stream = file.Open();
 
-        byte[] code = new byte[stream.Length];
-        stream.ReadExactly(code);
+        int codeSize = (int)stream.Length;
+        // SDL reads a text shader as a C string as well as by size, so the buffer needs a terminator that
+        // the size does not count.
+        bool isTextFormat = ShaderFormats.TextFormats.Contains(shaderInstance.Format);
+        byte[] code = new byte[isTextFormat ? codeSize + 1 : codeSize];
+        stream.ReadExactly(code.AsSpan(0, codeSize));
 
         return new ComputeShader(
             code,
+            codeSize,
             shaderInstance.EntryPoint,
             shaderInstance.Format,
             shaderMetadata.BindingLayout,

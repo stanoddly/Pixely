@@ -96,21 +96,23 @@ public sealed class GraphicsShaderProgramCompilerTests
             Assert.That(metadata.Fragment.BindingLayout.BindingCounts.NumSamplers, Is.EqualTo(1));
             Assert.That(
                 metadata.Vertex.Shaders.Select(shader => shader.EntryPoint),
-                Is.EqualTo(new[] { "main", "vertexMain", "vertexMain" }));
+                Is.EqualTo(new[] { "main", "vertexMain", "vertexMain", "vertexMain" }));
             Assert.That(
                 metadata.Fragment.Shaders.Select(shader => shader.EntryPoint),
-                Is.EqualTo(new[] { "main", "fragmentMain", "fragmentMain" }));
+                Is.EqualTo(new[] { "main", "fragmentMain", "fragmentMain", "fragmentMain" }));
             Assert.That(metadata.Vertex.Shaders.Select(shader => shader.Filename), Is.EqualTo(new[]
             {
                 "program.vertex.spv",
                 "program.vertex.dxil",
-                "program.vertex.metal"
+                "program.vertex.metal",
+                "program.vertex.wgsl"
             }));
             Assert.That(metadata.Fragment.Shaders.Select(shader => shader.Filename), Is.EqualTo(new[]
             {
                 "program.fragment.spv",
                 "program.fragment.dxil",
-                "program.fragment.metal"
+                "program.fragment.metal",
+                "program.fragment.wgsl"
             }));
         });
     }
