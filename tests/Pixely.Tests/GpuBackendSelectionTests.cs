@@ -16,6 +16,7 @@ public class GpuBackendSelectionTests
     [TestCase("vulkan", GpuBackend.Vulkan)]
     [TestCase("direct3d12", GpuBackend.Direct3D12)]
     [TestCase("metal", GpuBackend.Metal)]
+    [TestCase("webgpu", GpuBackend.WebGpu)]
     [TestCase(" VULKAN ", GpuBackend.Vulkan)]
     public void ResolveGpuBackend_WithSupportedEnvironmentOverride_UsesEnvironmentBackend(
         string environmentBackend,

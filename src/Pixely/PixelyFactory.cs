@@ -11,10 +11,13 @@ public class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
     internal const string GpuBackendEnvironmentVariable = "PIXELY_GRAPHICS";
+    // SDL_PROP_GPU_DEVICE_CREATE_SHADERS_WGSL_BOOLEAN, which ppy.SDL3-CS does not expose yet
+    private const string WgslShadersProperty = "SDL.gpu.device.create.shaders.wgsl";
 
     private readonly PixelyConfig _config;
     private Image? _taskbarIcon;
     private bool _initialized;
+    private bool _sdlOwnedElsewhere;
 
     public PixelyFactory(PixelyConfig config)
     {
@@ -25,6 +28,14 @@ public class PixelyFactory: IDisposable
     {
         if (_initialized)
         {
+            return;
+        }
+
+        // Whoever created the adopted handles already ran SDL_Init, and owns the shutdown too.
+        if (_config.AdoptedSdlHandles != null)
+        {
+            _initialized = true;
+            _sdlOwnedElsewhere = true;
             return;
         }
 
@@ -160,10 +171,19 @@ public class PixelyFactory: IDisposable
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
         }
 
+        // An adopted window was created and claimed for the adopted device by whoever handed the
+        // handles over, so neither call is repeated here.
         Pointer<SDL_Window> sdlWindow;
         unsafe
         {
-             sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
+            if (_config.AdoptedSdlHandles != null)
+            {
+                sdlWindow = (SDL_Window*)_config.AdoptedSdlHandles.Window;
+            }
+            else
+            {
+                sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
+            }
         }
 
         if (sdlWindow.IsNull)
@@ -171,11 +191,14 @@ public class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateWindow failed: {SDL3.SDL_GetError()}");
         }
 
-        unsafe
+        if (_config.AdoptedSdlHandles == null)
         {
-            if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
+            unsafe
             {
-                throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
+                if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
+                {
+                    throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
+                }
             }
         }
 
@@ -208,6 +231,14 @@ public class PixelyFactory: IDisposable
 
         EnsureSdlInitialized();
 
+        if (_config.AdoptedSdlHandles != null)
+        {
+            unsafe
+            {
+                return new GpuDevice((SDL_GPUDevice*)_config.AdoptedSdlHandles.GpuDevice);
+            }
+        }
+
         unsafe
         {
             SDL_PropertiesID props = SDL3.SDL_CreateProperties();
@@ -219,6 +250,7 @@ public class PixelyFactory: IDisposable
                 GpuBackend.Vulkan => "vulkan",
                 GpuBackend.Direct3D12 => "direct3d12",
                 GpuBackend.Metal => "metal",
+                GpuBackend.WebGpu => "webgpu",
                 _ => throw new ArgumentOutOfRangeException(nameof(_config.GpuBackend), gpuBackend, "Unknown GPU backend")
             };
             if (driverName != null)
@@ -227,11 +259,13 @@ public class PixelyFactory: IDisposable
             }
 
             bool advertiseSpirV = gpuBackend == GpuBackend.Vulkan ||
-                                  (gpuBackend == GpuBackend.Automatic && !OperatingSystem.IsMacOS());
+                                  (gpuBackend == GpuBackend.Automatic && !OperatingSystem.IsMacOS() && !OperatingSystem.IsBrowser());
             bool advertiseDxil = gpuBackend == GpuBackend.Direct3D12 ||
                                  (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsWindows());
             bool advertiseMsl = gpuBackend == GpuBackend.Metal ||
                                 (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsMacOS());
+            bool advertiseWgsl = gpuBackend == GpuBackend.WebGpu ||
+                                 (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsBrowser());
 
             if (advertiseSpirV)
             {
@@ -246,6 +280,11 @@ public class PixelyFactory: IDisposable
             if (advertiseMsl)
             {
                 SDL3.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+            }
+
+            if (advertiseWgsl)
+            {
+                SDL3.SDL_SetBooleanProperty(props, WgslShadersProperty, true);
             }
 
             if (advertiseSpirV)
@@ -291,9 +330,10 @@ public class PixelyFactory: IDisposable
             "vulkan" => GpuBackend.Vulkan,
             "direct3d12" => GpuBackend.Direct3D12,
             "metal" => GpuBackend.Metal,
+            "webgpu" => GpuBackend.WebGpu,
             _ => throw new InvalidOperationException(
                 $"Unsupported {GpuBackendEnvironmentVariable} value '{environmentBackend}'. " +
-                "Expected one of: automatic, vulkan, direct3d12, metal.")
+                "Expected one of: automatic, vulkan, direct3d12, metal, webgpu.")
         };
     }
 
@@ -357,7 +397,7 @@ public class PixelyFactory: IDisposable
         _taskbarIcon?.Dispose();
         _taskbarIcon = null;
 
-        if (!_initialized)
+        if (!_initialized || _sdlOwnedElsewhere)
         {
             return;
         }
