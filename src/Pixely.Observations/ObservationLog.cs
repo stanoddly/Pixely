@@ -128,13 +128,9 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
             return;
         }
 
-        int newCapacity = _entries.Length * 2;
-        while (newCapacity < requiredCapacity)
-        {
-            newCapacity *= 2;
-        }
-
-        TEntry[] newEntries = new TEntry[Math.Min(newCapacity, _maximumCapacity)];
+        // Doubling only while it stays under the bound, so the last step lands on the bound instead of overflowing.
+        int newCapacity = _entries.Length <= _maximumCapacity / 2 ? _entries.Length * 2 : _maximumCapacity;
+        TEntry[] newEntries = new TEntry[newCapacity];
         int untilWrap = Math.Min(_count, _entries.Length - _head);
         Array.Copy(_entries, _head, newEntries, 0, untilWrap);
         Array.Copy(_entries, 0, newEntries, untilWrap, _count - untilWrap);

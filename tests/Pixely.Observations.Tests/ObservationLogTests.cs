@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Pixely.Observations.Tests;
 
 public readonly record struct TestEntry(int Value);
@@ -233,6 +235,114 @@ public sealed class ObservationLogTests
 
         Assert.That(cursor.TryRead(out TestReferenceEntry? entry), Is.False);
         Assert.That(entry, Is.Null);
+    }
+
+    [Test]
+    public void Buffer_GrowsWhileWrappedPreservingOrder()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(1024);
+        ObservationCursor<TestEntry> cursor = log.CreateCursor();
+
+        // Drain ten entries first so the head sits mid-buffer and the retained entries wrap around the end,
+        // which is what makes growth copy them in two segments.
+        for (int i = 0; i < 10; i++)
+        {
+            log.Append(new TestEntry(i));
+            cursor.TryRead(out _);
+        }
+
+        int[] expected = Enumerable.Range(100, 20).ToArray();
+        foreach (int value in expected)
+        {
+            log.Append(new TestEntry(value));
+        }
+
+        Assert.That(Drain(cursor), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void DisposingOneCursor_KeepsTheEntriesAnotherStillNeeds()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
+        ObservationCursor<TestEntry> leaving = log.CreateCursor("leaving");
+        ObservationCursor<TestEntry> staying = log.CreateCursor("staying");
+
+        log.Append(new TestEntry(1));
+        log.Append(new TestEntry(2));
+        leaving.Dispose();
+
+        Assert.That(Drain(staying), Is.EqualTo(new[] { 1, 2 }));
+    }
+
+    [Test]
+    public void DisposingACursorTwice_IsHarmless()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
+        ObservationCursor<TestEntry> cursor = log.CreateCursor();
+        cursor.Dispose();
+
+        Assert.That(() => cursor.Dispose(), Throws.Nothing);
+    }
+
+    [Test]
+    public void Append_NamesEveryCursorTiedAtTheBack()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(4);
+        log.CreateCursor("presenter");
+        log.CreateCursor("audio");
+
+        for (int i = 0; i < 4; i++)
+        {
+            log.Append(new TestEntry(i));
+        }
+
+        Assert.That(() => log.Append(new TestEntry(4)),
+            Throws.InvalidOperationException.With.Message.Contains("presenter")
+                .And.Message.Contains("audio"));
+    }
+
+    [Test]
+    public void Append_SucceedsAgainOnceTheStalledCursorDrains()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(4);
+        ObservationCursor<TestEntry> stalled = log.CreateCursor("stalled");
+
+        for (int i = 0; i < 4; i++)
+        {
+            log.Append(new TestEntry(i));
+        }
+
+        Assert.That(() => log.Append(new TestEntry(4)), Throws.InvalidOperationException);
+        Assert.That(Drain(stalled), Is.EqualTo(new[] { 0, 1, 2, 3 }));
+
+        log.Append(new TestEntry(5));
+
+        Assert.That(Drain(stalled), Is.EqualTo(new[] { 5 }));
+    }
+
+    [Test]
+    public void Trimming_ReleasesAReferenceEntryOnceEveryCursorHasPassedIt()
+    {
+        ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
+        ObservationCursor<TestReferenceEntry> cursor = log.CreateCursor();
+
+        WeakReference reference = AppendAndDrainOne(log, cursor);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.That(reference.IsAlive, Is.False);
+    }
+
+    // The only strong reference lives in this frame, so returning drops it and leaves the log's slot as the
+    // one thing that could still keep the entry alive.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference AppendAndDrainOne(ObservationLog<TestReferenceEntry> log, ObservationCursor<TestReferenceEntry> cursor)
+    {
+        TestReferenceEntry entry = new TestReferenceEntry(1);
+        log.Append(entry);
+        cursor.TryRead(out TestReferenceEntry? _);
+        return new WeakReference(entry);
     }
 
     private static int[] Drain(ObservationCursor<TestEntry> cursor)
