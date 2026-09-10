@@ -411,3 +411,6 @@ FodyWeavers.xsd
 .tasks/
 .claude/
 .codex
+
+# Browser proof-of-concept build output
+/browser-bundle/

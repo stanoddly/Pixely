@@ -1,0 +1,8 @@
+set -e
+. ${PIXELY_WASM_WORK:-$HOME/.pixely-wasm}/emenv.sh
+SCRATCH=${PIXELY_WASM_WORK:-$HOME/.pixely-wasm}
+emcmake cmake -S "$SCRATCH/SDL_wgpu" -B "$SCRATCH/build-wasm" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSDL_SHARED=OFF -DSDL_STATIC=ON \
+  -DSDL_WEBGPU=ON -DSDL_WEBGPU_EMSCRIPTEN=ON \
+  -DSDL_EXAMPLES=ON -DSDL_TESTS=OFF -DSDL_INSTALL_TESTS=OFF 2>&1 | tail -60

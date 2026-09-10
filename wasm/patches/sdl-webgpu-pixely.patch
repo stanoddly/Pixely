@@ -1,0 +1,86 @@
+diff --git a/src/gpu/webgpu/SDL_gpu_webgpu.c b/src/gpu/webgpu/SDL_gpu_webgpu.c
+index 52e29db..7e78716 100644
+--- a/src/gpu/webgpu/SDL_gpu_webgpu.c
++++ b/src/gpu/webgpu/SDL_gpu_webgpu.c
+@@ -1393,7 +1393,7 @@ WEBGPU_INTERNAL_FenceCallback(WGPUQueueWorkDoneStatus status, WGPUStringView mes
+ static void
+ WEBGPU_INTERNAL_UncapturedErrorCallback(WGPUDevice const *device, WGPUErrorType type, WGPUStringView message, void *renderer, void *unused)
+ {
+-    SDL_LogError(SDL_LOG_CATEGORY_GPU, "WebGPU uncaptured error!\n%s", message.data);
++    SDL_LogError(SDL_LOG_CATEGORY_GPU, "WebGPU uncaptured error (type %d)!\n%.*s", (int)type, (int)message.length, message.data);
+ 
+     if (((WebGPURenderer *)renderer)->debugMode) {
+         SDL_assert_release(!"Uncaptured WebGPU error! SDL won't let me format this message though so check the console or smth");
+@@ -1420,7 +1420,7 @@ static void WEBGPU_INTERNAL_DeviceLostCallback(WGPUDevice const *device, WGPUDev
+     bool debugMode = ((WebGPURenderer *)renderer)->debugMode;
+ 
+     if (debugMode) {
+-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device has been lost.");
++        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device has been lost. reason=%d message=%.*s", (int)reason, (int)message.length, message.data);
+     }
+ 
+     if (((WebGPURenderer *)renderer)->shouldRecreateLostDevice && !((WebGPURenderer *)renderer)->destroyingSelf) {
+@@ -2165,6 +2165,8 @@ static Uint32 WEBGPU_INTERNAL_ParseBindGroupLayoutEntriesFromShader(const char *
+     const char *parsedEnd = NULL;
+ 
+     Uint32 keywordProgress = 0;
++    // PIXELY PATCH: whichever of @group / @binding was not matched first; see below.
++    const char *pendingKeyword = keywords[1];
+ 
+     char **hits = NULL;
+     Uint32 hitsCount = 0;
+@@ -2202,7 +2204,29 @@ static Uint32 WEBGPU_INTERNAL_ParseBindGroupLayoutEntriesFromShader(const char *
+             trimmedView = hackFix;
+         }
+ 
+-        char *token = SDL_strstr(trimmedView, keywords[keywordProgress]);
++        char *token;
++
++        if (keywordProgress == 0) {
++            // PIXELY PATCH: WGSL does not fix the order of a declaration's attributes, and Slang
++            // writes "@binding(n) @group(m) var", the opposite of what this parser assumed. Reading
++            // the two in a fixed order made the scan start at the texture's @group, pick up the
++            // *sampler's* @binding, and emit one merged entry, so the inferred layout lost the
++            // texture entirely. Start at whichever attribute comes first and require the other next.
++            char *groupToken = SDL_strstr(trimmedView, "@group");
++            char *bindingToken = SDL_strstr(trimmedView, "@binding");
++
++            if (groupToken == NULL || (bindingToken != NULL && bindingToken < groupToken)) {
++                token = bindingToken;
++                pendingKeyword = "@group";
++            } else {
++                token = groupToken;
++                pendingKeyword = "@binding";
++            }
++        } else if (keywordProgress == 1) {
++            token = SDL_strstr(trimmedView, pendingKeyword);
++        } else {
++            token = SDL_strstr(trimmedView, keywords[keywordProgress]);
++        }
+ 
+         if (token == NULL) {
+             keywordProgress = 0;
+@@ -3356,6 +3380,12 @@ static bool WEBGPU_AcquireSwapchainTexture(SDL_GPUCommandBuffer *commandBuffer,
+ {
+     WebGPUCommandBuffer *cmdBuf = (WebGPUCommandBuffer *)commandBuffer;
+ 
++    // PIXELY PATCH: reap finished command buffers here. Only WEBGPU_INTERNAL_HandlePendingDestroys
++    // decrements submittedCommandBufferCount, and the only caller was the busy-wait loop in
++    // WEBGPU_WaitAndAcquireSwapchainTexture. A caller using the non-blocking acquire therefore hit
++    // the frames-in-flight cap after maxFramesInFlight submissions and could never recover.
++    WEBGPU_INTERNAL_HandlePendingDestroys(cmdBuf->renderer);
++
+     if (cmdBuf->renderer->submittedCommandBufferCount >= cmdBuf->renderer->maxFramesInFlight) {
+         *swapchainTexture = NULL;
+         return true;
+@@ -5655,7 +5685,9 @@ static bool WEBGPU_WaitForSwapchain(SDL_GPURenderer *driverData, SDL_Window *win
+ 
+ static bool WEBGPU_Cancel(SDL_GPUCommandBuffer *commandBuffer)
+ {
+-    SDL_assert_release(!"WEBGPU_Cancel is unimplemented! Reason: I'm lazy.");
++    // PIXELY PATCH: the upstream body is an unconditional assertion. A caller that acquires a
++    // command buffer, finds no swapchain texture and drops the buffer takes that path every skipped
++    // frame. This leaks the command buffer rather than aborting; it is a stopgap, not a fix.
+     return true;
+ }
+ 
