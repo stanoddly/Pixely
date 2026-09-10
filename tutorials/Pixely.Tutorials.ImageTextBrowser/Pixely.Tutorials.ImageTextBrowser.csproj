@@ -1,0 +1,97 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+    <!--
+      Browser host that proves SDL3_image and SDL3_ttf work from managed code, not merely that they
+      link: it decodes a PNG through IImageLoader and rasterises text through IFontSystem, then
+      draws both. Kept out of Pixely.slnx for the same reasons as the Triangle browser host: net11.0,
+      the wasm-tools workload, and locally built native archives.
+    -->
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+        <WasmBuildNative>true</WasmBuildNative>
+        <PixelyWasmScratch Condition="'$(PixelyWasmScratch)' == ''">$(PIXELY_WASM_WORK)</PixelyWasmScratch>
+
+        <EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=pixely_gpu_boot -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu -Wno-experimental</EmccExtraLDFlags>
+        <WasmCachePath>$(PixelyWasmScratch)/emcache-sdk</WasmCachePath>
+
+        <ContentSourceDirectory>$(MSBuildProjectDirectory)/../Pixely.Tutorials.ImageLoading/Content</ContentSourceDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\..\src\Pixely.SdlangCompiler\Pixely.SdlangCompiler.csproj"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.props" />
+
+    <PropertyGroup>
+        <!-- The props file spells the task assembly path with the consuming project's
+             TargetFramework, which is net11.0 here. The task is a net10.0 build tool, so the path
+             is corrected between the two imports. -->
+        <SdlangCompilerAssembly>$(MSBuildProjectDirectory)/../../src/Pixely.SdlangCompiler/bin/$(Configuration)/net10.0/Pixely.SdlangCompiler.dll</SdlangCompilerAssembly>
+    </PropertyGroup>
+
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets" />
+
+    <ItemGroup>
+        <SdlangShader Include="..\Pixely.Tutorials.ImageLoading\Content\shaders\*.slang" />
+    </ItemGroup>
+
+    <!-- The browser has no filesystem for the content probe to walk, so every asset travels inside
+         the assembly and EmbeddedContentSource serves it. LogicalName is the virtual path. -->
+    <ItemGroup>
+        <EmbeddedResource Include="..\Pixely.Tutorials.ImageLoading\Content\images\sample.png"
+                          LogicalName="images/sample.png" />
+        <EmbeddedResource Include="..\Pixely.Tutorials.Hotbar\Content\fonts\GohuFont-Medium.ttf"
+                          LogicalName="fonts/GohuFont-Medium.ttf" />
+    </ItemGroup>
+
+    <!-- Generated shader files do not exist during project evaluation, so the resource list is
+         built after the compiler has run. Only WGSL and metadata are embedded. -->
+    <Target Name="EmbedShaderOutputs"
+            BeforeTargets="AssignTargetPaths"
+            DependsOnTargets="CompileSdlangShaders"
+            Condition="'$(NoBuild)' != 'true'">
+        <ItemGroup>
+            <_ShaderResource Include="@(SdlangShaderOutput)"
+                             Condition="'%(Extension)' == '.wgsl' Or '%(Extension)' == '.json'">
+                <ContentRelativePath>$([MSBuild]::MakeRelative('$(ContentSourceDirectory)', '%(FullPath)'))</ContentRelativePath>
+            </_ShaderResource>
+            <EmbeddedResource Include="@(_ShaderResource)">
+                <WithCulture>false</WithCulture>
+                <!-- Qualified, because this project also has static EmbeddedResource items that
+                     carry no ContentRelativePath and an unqualified %() would batch over them. -->
+                <LogicalName>$([System.String]::Copy('%(_ShaderResource.ContentRelativePath)').Replace('\', '/'))</LogicalName>
+            </EmbeddedResource>
+        </ItemGroup>
+    </Target>
+
+    <ItemGroup>
+        <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]!" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The P/Invoke module name is the archive's base name, so these file names are what make
+             DllImport("SDL3"), DllImport("SDL3_ttf") and DllImport("SDL3_image") resolve. -->
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3.a" ScanForPInvokes="true" />
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_ttf.a" ScanForPInvokes="true" />
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_image.a" ScanForPInvokes="true" />
+        <NativeFileReference Include="$(PixelyWasmScratch)/shim/pixelyboot.o" ScanForPInvokes="true" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmccExportedFunction Include="_pixely_gpu_boot" />
+    </ItemGroup>
+
+</Project>

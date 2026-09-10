@@ -1,0 +1,112 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+    <!--
+      Proof-of-concept browser host for the Triangle tutorial. It is deliberately kept out of
+      Pixely.slnx: it targets net11.0 and needs the wasm-tools workload plus a locally built SDL3,
+      neither of which the ordinary net10.0 solution build has.
+    -->
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+        <WasmBuildNative>true</WasmBuildNative>
+        <!-- Scaffolding: the patched SDL3 archive, the boot shim and the SDL_ttf stub all live in a
+             throwaway scratch directory rather than in the repository. Nothing here builds on a
+             machine that has not run the scripts in it, which is why this project is out of the
+             solution. Override the path on the command line to point at another one. -->
+        <PixelyWasmScratch Condition="'$(PixelyWasmScratch)' == ''">$(PIXELY_WASM_WORK)</PixelyWasmScratch>
+
+        <!--
+          SDL_CreateGPUDevice spins on the WebGPU future through SDL_DelayNS, which is
+          emscripten_sleep here, so the wasm stack has to suspend. -sASYNCIFY=1 wraps every wasm
+          export and breaks Mono's startup; -sJSPI wraps only the exports named in JSPI_EXPORTS, so
+          the runtime is untouched. emdawnwebgpu supplies the WebGPU implementation, which SDL3.a
+          does not contain.
+        -->
+        <EmccExtraLDFlags>-sJSPI -sJSPI_EXPORTS=pixely_gpu_boot -sALLOW_MEMORY_GROWTH=1 --use-port=emdawnwebgpu -Wno-experimental</EmccExtraLDFlags>
+
+        <!-- The SDK's own Emscripten cache is frozen and read-only, so an external port cannot
+             unpack into it. Any other path flips EM_FROZEN_CACHE to 0. -->
+        <WasmCachePath>$(PixelyWasmScratch)/emcache-sdk</WasmCachePath>
+
+        <ContentSourceDirectory>$(MSBuildProjectDirectory)/../Pixely.Tutorials.Triangle/Content</ContentSourceDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\..\src\Pixely.SdlangCompiler\Pixely.SdlangCompiler.csproj"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <!-- The renderer is the Triangle tutorial's own file, compiled as is. -->
+    <ItemGroup>
+        <Compile Include="..\Pixely.Tutorials.Triangle\TriangleRenderer.cs" Link="TriangleRenderer.cs" />
+    </ItemGroup>
+
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.props" />
+
+    <PropertyGroup>
+        <!-- The props file spells the task assembly path with the consuming project's
+             TargetFramework, which is net11.0 here. The task is a net10.0 build tool, so the path
+             is corrected between the two imports: the UsingTask in the targets file reads whatever
+             this property holds when it is evaluated. -->
+        <SdlangCompilerAssembly>$(MSBuildProjectDirectory)/../../src/Pixely.SdlangCompiler/bin/$(Configuration)/net10.0/Pixely.SdlangCompiler.dll</SdlangCompilerAssembly>
+    </PropertyGroup>
+
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets" />
+
+    <ItemGroup>
+        <SdlangShader Include="..\Pixely.Tutorials.Triangle\Content\shaders\*.slang" />
+    </ItemGroup>
+
+    <!-- Generated files do not exist during project evaluation, so the resource list is built after
+         the compiler has run. Only the WGSL instances and the metadata are embedded; the SPIR-V,
+         DXIL and MSL instances would be dead weight in the bundle. -->
+    <Target Name="EmbedShaderOutputs"
+            BeforeTargets="AssignTargetPaths"
+            DependsOnTargets="CompileSdlangShaders"
+            Condition="'$(NoBuild)' != 'true'">
+        <ItemGroup>
+            <_ShaderResource Include="@(SdlangShaderOutput)"
+                             Condition="'%(Extension)' == '.wgsl' Or '%(Extension)' == '.json'">
+                <ContentRelativePath>$([MSBuild]::MakeRelative('$(ContentSourceDirectory)', '%(FullPath)'))</ContentRelativePath>
+            </_ShaderResource>
+            <EmbeddedResource Include="@(_ShaderResource)">
+                <WithCulture>false</WithCulture>
+                <LogicalName>$([System.String]::Copy('%(ContentRelativePath)').Replace('\', '/'))</LogicalName>
+            </EmbeddedResource>
+        </ItemGroup>
+    </Target>
+
+    <ItemGroup>
+        <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]!" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The P/Invoke module name is the file's base name, so the archive has to be called
+             SDL3.a for ppy.SDL3-CS's DllImport("SDL3") to resolve. -->
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3.a" ScanForPInvokes="true" />
+        <NativeFileReference Include="$(PixelyWasmScratch)/shim/pixelyboot.o" ScanForPInvokes="true" />
+        <!-- Both built from source against the fork's own headers. The sdl3_ttf Emscripten port is
+             unusable here because it depends on the stock sdl3 port, which has no WebGPU backend
+             and would put a second SDL3 in the link. SDL3_ttf.a vendors freetype and harfbuzz, so
+             neither needs an Emscripten port here; see build-ttf.sh for why the ports are avoided. -->
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_ttf.a" ScanForPInvokes="true" />
+        <NativeFileReference Include="$(PixelyWasmScratch)/SDL3_image.a" ScanForPInvokes="true" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- EXPORTED_FUNCTIONS is set explicitly by the SDK, so EMSCRIPTEN_KEEPALIVE alone does not
+             put the shim entry point on Module. -->
+        <EmccExportedFunction Include="_pixely_gpu_boot" />
+    </ItemGroup>
+
+</Project>

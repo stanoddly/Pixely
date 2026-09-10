@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pixely image and text</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Without this the browser requests /favicon.ico and the console records a 404. -->
+    <link rel="icon" href="data:," />
+    <!-- Placeholders that OverrideHtmlAssetPlaceholders rewrites at publish time. -->
+    <link rel="preload" id="webassembly" />
+    <script type="importmap"></script>
+    <script type='module' src="main#[.{fingerprint}].js"></script>
+</head>
+
+<body style="margin:0;background:#202020">
+    <!-- SDL3's Emscripten video driver looks up "#canvas" by default, via
+         SDL_HINT_EMSCRIPTEN_CANVAS_SELECTOR. -->
+    <canvas id="canvas" width="640" height="480"></canvas>
+</body>
+
+</html>
