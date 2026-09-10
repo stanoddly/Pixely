@@ -9,7 +9,7 @@ and arrived, one that appeared and was gone again, an action that resolved and w
 frame. State answers what is true now, and a rule can resolve many transitions between two reads, so any
 "most recent transition" field is overwritten before a reader looks at it.
 
-Three types, each with one job:
+Three types carry the core roles:
 
 - `ObservationLog<TEntry>` is the storage. It is constructed and then handed to the other two; it has no other
   public members.
@@ -18,6 +18,9 @@ Three types, each with one job:
 
 So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
 rule produced.
+
+A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, reads through a reader of its own and hands on
+only what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
 
 The log belongs to one frame loop and is not thread safe. Appending, reading and constructing a reader all
 happen on the same thread.
@@ -82,7 +85,7 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
     {
         while (_observations.TryRead(out Observation observation))
         {
-            // skip what another participant perceived, then switch on the tag
+            // switch on the tag
         }
     }
 
@@ -97,9 +100,27 @@ A reader starts positioned after the last appended entry, so a consumer created 
 only what is appended from then on. Readers drain independently: entries appended this frame may be drained by
 one reader now and by another several frames later.
 
-Addressing an entry to a subset of readers is the game's business, not the log's. Carry the perceiver in
-`TEntry` and have the reader skip what it did not perceive. A consumer bound to one participant should wrap its
-reader once rather than repeat the check in every place that drains.
+### Reading as one participant
+
+Addressing an entry to a subset of readers is the game's business, not the log's: the log never looks inside
+`TEntry`. Carry the perceiver in the entry, implement `IObservationParticipation<TParticipantId>` on it, and a
+consumer bound to one participant reads through `ParticipantObservationReader<TEntry, TParticipantId>` instead
+of repeating the check in every place that drains.
+
+```csharp
+public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died)
+    : IObservationParticipation<ParticipantId>;
+```
+
+A positional `Perceiver` parameter already satisfies the interface, so implementing it adds no member.
+
+```csharp
+_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, nameof(UnitSpritePresenter));
+```
+
+`TryRead` then yields only the entries that participant perceived. The rest are drained and passed over rather
+than left behind, so a reader bound to a participant who perceives nothing for a while still lets the log trim.
+Dispose it with the consumer, as with any reader.
 
 ## Bounds and stalls
 
