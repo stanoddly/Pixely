@@ -102,6 +102,11 @@ public class GeometryPhase : IRenderer<GameRenderContext>
     private readonly IReadOnlyList<IGeometrySubrenderer> _subrenderers;
     private readonly GameRenderContextBuffers _buffers;
 
+    // Owned by the renderer so describing the pass every frame allocates nothing
+    private readonly Texture[] _gBufferTextures = new Texture[3];
+    private readonly ColorTargetSettings[] _gBufferSettings =
+        [ColorTargetSettings.Clear, ColorTargetSettings.Clear, ColorTargetSettings.Clear];
+
     public GeometryPhase(
         IEnumerable<IGeometrySubrenderer> subrenderers,
         GameRenderContextBuffers buffers)
@@ -112,12 +117,12 @@ public class GeometryPhase : IRenderer<GameRenderContext>
 
     public void Render(GameRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(_buffers.AlbedoBuffer.Texture)
-            .AddColorTarget(_buffers.NormalBuffer.Texture)
-            .AddColorTarget(_buffers.PositionBuffer.Texture)
-            .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
-            .Build();
+        _gBufferTextures[0] = _buffers.AlbedoBuffer.Texture;
+        _gBufferTextures[1] = _buffers.NormalBuffer.Texture;
+        _gBufferTextures[2] = _buffers.PositionBuffer.Texture;
+
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(
+            _gBufferTextures, _gBufferSettings, null, DepthBufferSettings.Default);
 
         foreach (IGeometrySubrenderer subrenderer in _subrenderers)
         {

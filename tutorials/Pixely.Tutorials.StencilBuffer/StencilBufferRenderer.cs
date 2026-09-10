@@ -29,20 +29,18 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
-            {
-                ClearColorValue = FColors.Black
-            })
-            .SetDepthBuffer(_depthStencilTexture, new DepthBufferSettings
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(
+            renderContext.SwapchainTexture,
+            new ColorTargetSettings { ClearColorValue = FColors.Black },
+            _depthStencilTexture,
+            new DepthBufferSettings
             {
                 StencilLoadOperation = LoadOperation.Clear,
                 StencilStoreOperation = StoreOperation.Store,
                 ClearStencilValue = 0,
                 DepthBufferLoadOperation = LoadOperation.Clear,
                 DepthBufferStoreOperation = StoreOperation.DontCare
-            })
-            .Build();
+            });
 
         // Draw 1: Write stencil mask with the small quad (magenta, but color write could be off — we keep it to show the mask area)
         renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);

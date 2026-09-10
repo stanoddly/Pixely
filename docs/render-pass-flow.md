@@ -25,10 +25,8 @@ public void Render(BasicRenderContext renderContext)
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);
 
     // 2. CREATE RenderPass
-    using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-        .AddColorTarget(renderContext.SwapchainTexture)
-        .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
-        .Build();
+    using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPass(
+        renderContext.SwapchainTexture, ColorTargetSettings.Clear);
 
     // 3. INSIDE RenderPass: Bind and draw
     renderPass.BindGraphicsPipeline(_graphicsPipeline);
@@ -94,21 +92,56 @@ Typical order inside a RenderPass:
 
 For multiple objects, rebind vertex buffers and push new uniforms between draws.
 
-## RenderPassBuilder
+## Creating a RenderPass
+
+`CommandBuffer.CreateRenderPass` takes the pass description directly. It allocates nothing, so it is
+what a renderer should call every frame:
 
 ```csharp
-new RenderPassBuilder(commandBuffer)
-    .AddColorTarget(texture)                              // Output texture
-    .SetSharedColorTargetSettings(ColorTargetSettings.Clear)  // Clear on start
-    .Build()
+// One color target
+using IRenderPass pass = commandBuffer.CreateRenderPass(texture, ColorTargetSettings.Clear);
+
+// One color target and a depth buffer
+using IRenderPass pass = commandBuffer.CreateRenderPass(
+    texture, ColorTargetSettings.Clear, depthBuffer, DepthBufferSettings.Default);
+
+// Depth only, no color target
+using IRenderPass pass = commandBuffer.CreateDepthOnlyRenderPass(depthBuffer, DepthBufferSettings.Default);
+
+// Several color targets for deferred rendering (G-buffer), from storage the caller owns
+using IRenderPass pass = commandBuffer.CreateRenderPass(
+    _gBufferTextures, _gBufferSettings, _depthBuffer, DepthBufferSettings.Default);
 ```
+
+The span overload takes one settings entry per color target, and at most `CommandBuffer.MaxColorTargets`
+(8, the point at which SDL itself rejects the pass) targets.
 
 **ColorTargetSettings options:**
 - `Clear` - Clear the target before rendering
 - `Load` - Keep existing contents
 - Others may exist for different load/store operations
 
-Add multiple color targets for deferred rendering (G-buffer).
+## RenderPassBuilder
+
+`RenderPassBuilder` collects the same description across several statements, for a pass composed
+conditionally or from a varying number of targets:
+
+```csharp
+RenderPassBuilder builder = new RenderPassBuilder(commandBuffer)
+    .AddColorTarget(_albedo)
+    .SetSharedColorTargetSettings(ColorTargetSettings.Clear);
+
+if (_depthEnabled)
+{
+    builder.SetDepthBuffer(_depthBuffer, DepthBufferSettings.Default);
+}
+
+using IRenderPass pass = builder.Build();
+```
+
+It is a class and allocates, so prefer `CreateRenderPass` in a per-frame render path. `Build()` resets
+the builder, which can then describe the next pass. Either give every color target its own settings,
+or set shared settings for all of them - mixing the two throws.
 
 ## Common Patterns
 

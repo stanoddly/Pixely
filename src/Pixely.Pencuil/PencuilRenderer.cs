@@ -163,10 +163,7 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
 
         _maxDepthValue = coloredRectangleInstructions.Count + textureRegionInstructions.Count;
 
-        using IRenderPass renderPass = new RenderPassBuilder(commandBuffer)
-            .AddColorTarget(_retainedTexture, _guiColorTargetSettings)
-            .SetDepthBuffer(_depthBuffer, DepthBufferSettings.Default)
-            .Build();
+        using IRenderPass renderPass = commandBuffer.CreateRenderPass(_retainedTexture, _guiColorTargetSettings, _depthBuffer, DepthBufferSettings.Default);
 
         commandBuffer.PushVertexUniformData(0, _viewProjection);
 
@@ -224,9 +221,7 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
 
     private void Clear(CommandBuffer commandBuffer)
     {
-        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
-            .AddColorTarget(_retainedTexture, _guiColorTargetSettings)
-            .Build();
+        using IRenderPass clearPass = commandBuffer.CreateRenderPass(_retainedTexture, _guiColorTargetSettings);
     }
 
     private void Present(CommandBuffer commandBuffer, Texture target)
@@ -235,9 +230,7 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
             ? ColorTargetSettings.Clear
             : new ColorTargetSettings { LoadOperation = LoadOperation.Load };
 
-        using IRenderPass presentPass = new RenderPassBuilder(commandBuffer)
-            .AddColorTarget(target, settings)
-            .Build();
+        using IRenderPass presentPass = commandBuffer.CreateRenderPass(target, settings);
 
         commandBuffer.PushVertexUniformData(0, _presentViewProjection);
         commandBuffer.PushVertexUniformData(1, Matrix4x4.Identity);
