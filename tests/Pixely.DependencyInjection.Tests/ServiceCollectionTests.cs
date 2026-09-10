@@ -975,6 +975,32 @@ public class ServiceCollectionTests
     }
 
     [Test]
+    public void AddRegistry_ChangedKeyTiesAgainstTheLastPublishedOrder()
+    {
+        MyServiceImpl first = new();
+        AnotherServiceImpl second = new();
+        int firstKey = 1;
+        ServiceCollection rootServices = new();
+        rootServices.AddRegistry<IMyService>(service => ReferenceEquals(service, first) ? firstKey : 0);
+        rootServices.AddSingleton<IMyService>(first);
+        rootServices.AddSingleton<IMyService>(second);
+
+        using ServiceProvider rootProvider = rootServices.BuildServiceProvider();
+        ServiceRegistry<IMyService> registry = rootProvider.GetRequiredService<ServiceRegistry<IMyService>>();
+        Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { second, first }));
+
+        // The tie is broken on the published order, not on registration order, so dropping first
+        // down to second's key leaves it where the previous publication put it.
+        firstKey = 0;
+        AnotherServiceImpl added = new();
+        ServiceCollection childServices = rootProvider.CreateServiceCollection();
+        childServices.AddSingleton<IMyService>(added);
+        using ServiceProvider childProvider = childServices.BuildServiceProvider();
+
+        Assert.That(registry.ToArray(), Is.EqualTo(new IMyService[] { second, first, added }));
+    }
+
+    [Test]
     public void AddRegistry_RemovalDoesNotReorderRemainingServices()
     {
         ServiceCollection rootServices = new();

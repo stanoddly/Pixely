@@ -255,9 +255,14 @@ read when pending services are published before an outermost iteration, and the 
 - Publishing a service added later never changes the relative order of services already published.
 - Removing a service never changes the relative order of the rest.
 
-A game may rely on these guarantees. Because keys are read at publication, a service that changes
-its key takes effect at the next publication and not before, so an iteration with nothing pending
-does not reorder the registry.
+A game may rely on these guarantees. They hold for a service that reports the same key every time it
+is read, which is what an order held in a field or returned as a constant does.
+
+Keys are read at publication, so a service that changes its key takes effect at the next publication
+and not before, and an iteration with nothing pending does not reorder the registry. A service that
+does change its key keeps its relative position against the services it now ties with, rather than
+moving back to where registration order would have put it, because the tie is broken on the order
+the last publication produced.
 
 The registry is enumerable but is not a list. Activated services remain pending until the next
 outermost iteration begins. Services activated during iteration are therefore excluded from that

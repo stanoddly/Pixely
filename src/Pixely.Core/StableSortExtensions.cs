@@ -3,14 +3,14 @@ using System.Runtime.InteropServices;
 namespace Pixely;
 
 /// <summary>
-/// Sorts by an integer key without allocating. Items whose keys are equal keep the relative order
-/// they already had, so a caller may sort the same list repeatedly without items drifting past each
-/// other.
+/// Sorts by an integer key. Items whose keys are equal keep the relative order they already had, so
+/// a caller may sort the same list repeatedly without items drifting past each other. Sorts of up to
+/// 1024 items allocate nothing; longer ones take a single array for the keys.
 /// </summary>
 public static class StableSortExtensions
 {
-    // A key is 8 bytes, so the cap is 8 KB of stack. Sorts larger than this are rare enough that
-    // one array costs nothing.
+    // A key is 8 bytes, so the cap is 8 KB of stack. Longer inputs take one array instead, which is
+    // rare enough to cost nothing.
     private const int StackKeyLimit = 1024;
 
     /// <summary>Sorts <paramref name="items"/> in place by <paramref name="orderKey"/>, lowest key first.</summary>

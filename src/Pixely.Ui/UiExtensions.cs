@@ -38,7 +38,7 @@ public static class UiExtensions
     /// <param name="updateOrder">
     /// When the tree is built relative to the other updatables, lower first. Defaults late, so the
     /// UI builds after ordinary order-0 game systems and views sync against the state this frame
-    /// produced. Equal orders are unspecified, not registration order.
+    /// produced. Updatables with an equal order run in registration order.
     /// </param>
     /// <param name="inputOrder">When the UI sees input relative to the other subscribers, lower first. Defaults early, so it takes events before the game does.</param>
     public static PixelyAppBuilder UseUi<TRenderContext>(

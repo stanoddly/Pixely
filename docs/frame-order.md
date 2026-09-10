@@ -63,8 +63,9 @@ public class DebugOverlayRenderer : IRenderer<BasicRenderContext>
 }
 ```
 
-`UseUi` and `UsePencuil` take `updateOrder` and `renderOrder` parameters if a game needs the UI
-somewhere other than its default band.
+`UseUi` takes `updateOrder` and `renderOrder` if a game needs the UI somewhere other than its
+default band. `UsePencuil` takes `order`, which is its render order; `PencilSystem` always builds at
+`UpdateOrders.Ui`.
 
 ## Input order is a separate axis
 

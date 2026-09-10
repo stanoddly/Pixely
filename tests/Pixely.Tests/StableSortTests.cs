@@ -61,7 +61,8 @@ public sealed class StableSortTests
     [TestCase(1025)]
     public void StableSort_MatchesAStableReferenceSortAtAnyLength(int count)
     {
-        // 1024 is where the key buffer moves off the stack, so the lengths around it are covered.
+        // 1024 is the longest input the key buffer still fits on the stack for, so the lengths on
+        // either side of it are covered.
         Random random = new(count);
         List<Item> items = new();
         for (int i = 0; i < count; i++)
