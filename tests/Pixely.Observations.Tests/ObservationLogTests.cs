@@ -14,7 +14,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -31,7 +31,7 @@ public sealed class ObservationLogTests
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
         writer.Append(new TestEntry(1));
 
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
         writer.Append(new TestEntry(2));
 
         Assert.That(Drain(reader), Is.EqualTo(new[] { 2 }));
@@ -62,7 +62,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(1024);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         // Far beyond the initial capacity of 16, without draining, forcing growth.
         int[] expected = Enumerable.Range(0, 100).ToArray();
@@ -79,7 +79,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(1024);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         // Drain ten entries first so the head sits mid-buffer and the retained entries wrap around the end,
         // which is what makes growth copy them in two segments.
@@ -103,7 +103,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(40);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         // Doubling from 16 would overshoot 40; the buffer has to stop at it and still keep order.
         int[] expected = Enumerable.Range(0, 40).ToArray();
@@ -142,7 +142,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         // Interleaving advances the head past the modulo boundary repeatedly.
         List<int> read = new();
@@ -161,7 +161,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(32);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         // With a single reader that keeps up, the log never fills no matter how many entries flow through it.
         for (int i = 0; i < 32 * 100; i++)
@@ -185,7 +185,7 @@ public sealed class ObservationLogTests
             writer.Append(new TestEntry(i));
         }
 
-        Assert.That(Drain(new ObservationReader<TestEntry>(log)), Is.Empty);
+        Assert.That(Drain(new ObservationReader<TestEntry>(log, "reader")), Is.Empty);
     }
 
     [Test]
@@ -282,7 +282,7 @@ public sealed class ObservationLogTests
     public void DisposingAReaderTwice_IsHarmless()
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
         reader.Dispose();
 
         Assert.That(() => reader.Dispose(), Throws.Nothing);
@@ -292,7 +292,7 @@ public sealed class ObservationLogTests
     public void DisposedReader_ThrowsOnRead()
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
         reader.Dispose();
 
         Assert.That(() => reader.TryRead(out _), Throws.TypeOf<ObjectDisposedException>());
@@ -302,7 +302,7 @@ public sealed class ObservationLogTests
     public void Reader_OnEmptyLogReturnsFalseAndTheDefaultEntry()
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "reader");
 
         Assert.That(reader.TryRead(out TestEntry entry), Is.False);
         Assert.That(entry, Is.EqualTo(default(TestEntry)));
@@ -313,7 +313,7 @@ public sealed class ObservationLogTests
     {
         ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
         ObservationWriter<TestReferenceEntry> writer = new ObservationWriter<TestReferenceEntry>(log);
-        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log);
+        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log, "reader");
         TestReferenceEntry first = new TestReferenceEntry(1);
         TestReferenceEntry second = new TestReferenceEntry(2);
 
@@ -330,7 +330,7 @@ public sealed class ObservationLogTests
     public void ReferenceEntry_OnEmptyLogReturnsFalseAndNull()
     {
         ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
-        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log);
+        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log, "reader");
 
         Assert.That(reader.TryRead(out TestReferenceEntry? entry), Is.False);
         Assert.That(entry, Is.Null);
@@ -340,7 +340,7 @@ public sealed class ObservationLogTests
     public void Trimming_ReleasesAReferenceEntryOnceEveryReaderHasPassedIt()
     {
         ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
-        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log);
+        ObservationReader<TestReferenceEntry> reader = new ObservationReader<TestReferenceEntry>(log, "reader");
 
         WeakReference reference = AppendAndDrainOne(log, reader);
         GC.Collect();
@@ -359,6 +359,26 @@ public sealed class ObservationLogTests
         new ObservationWriter<TestReferenceEntry>(log).Append(entry);
         reader.TryRead(out TestReferenceEntry? _);
         return new WeakReference(entry);
+    }
+
+    [Test]
+    public void Reader_NameMustBeUniqueWithinTheLog()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
+        new ObservationReader<TestEntry>(log, "presenter");
+
+        Assert.That(() => new ObservationReader<TestEntry>(log, "presenter"),
+            Throws.InvalidOperationException.With.Message.Contains("presenter"));
+    }
+
+    [Test]
+    public void Reader_NameIsFreeAgainOnceTheReaderIsDisposed()
+    {
+        ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
+        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        reader.Dispose();
+
+        Assert.That(() => new ObservationReader<TestEntry>(log, "presenter"), Throws.Nothing);
     }
 
     private static int[] Drain(ObservationReader<TestEntry> reader)

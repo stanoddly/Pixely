@@ -13,9 +13,11 @@ public sealed class ObservationReader<TEntry> : IDisposable
     private bool _disposed;
 
     /// <param name="name">
-    /// Identifies this reader when it stops draining and fills the log, so give it the reader's own name.
+    /// Identifies this reader, so give it the reader's own name. It must be unique within the log, because it
+    /// names the reader that stopped draining when the log fills, and it is what a log restored from a save
+    /// matches a reader against to put it back where it stopped.
     /// </param>
-    public ObservationReader(ObservationLog<TEntry> log, string name = "unnamed")
+    public ObservationReader(ObservationLog<TEntry> log, string name)
     {
         _log = log;
         Name = name;

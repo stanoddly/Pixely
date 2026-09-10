@@ -18,9 +18,10 @@ public sealed class ParticipantObservationReader<TEntry, TParticipantId> : IDisp
 
     /// <param name="participant">The participant whose entries this reader hands on; the rest are passed over.</param>
     /// <param name="name">
-    /// Identifies this reader when it stops draining and fills the log, so give it the consumer's own name.
+    /// Identifies this reader, so give it the consumer's own name. It carries the same rules as an
+    /// <see cref="ObservationReader{TEntry}"/> name.
     /// </param>
-    public ParticipantObservationReader(ObservationLog<TEntry> log, TParticipantId participant, string name = "unnamed")
+    public ParticipantObservationReader(ObservationLog<TEntry> log, TParticipantId participant, string name)
     {
         _reader = new ObservationReader<TEntry>(log, name);
         _participant = participant;

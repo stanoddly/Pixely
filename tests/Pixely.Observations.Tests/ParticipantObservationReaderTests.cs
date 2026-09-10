@@ -10,7 +10,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1);
+        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
 
         writer.Append(new ParticipantEntry(1, 10));
         writer.Append(new ParticipantEntry(2, 20));
@@ -59,7 +59,7 @@ public sealed class ParticipantObservationReaderTests
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
         writer.Append(new ParticipantEntry(1, 10));
 
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1);
+        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
         writer.Append(new ParticipantEntry(1, 20));
 
         Assert.That(Drain(reader), Is.EqualTo(new[] { 20 }));
@@ -70,7 +70,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1);
+        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
 
         writer.Append(new ParticipantEntry(2, 20));
 

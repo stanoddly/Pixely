@@ -22,6 +22,9 @@ rule produced.
 A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, reads through a reader of its own and hands on
 only what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
 
+A fifth, `ObservationSnapshot<TEntry>`, is the log and its readers as data, so a run can be saved and resumed.
+See [Saving and resuming](#saving-and-resuming).
+
 The log belongs to one frame loop and is not thread safe. Appending, reading and constructing a reader all
 happen on the same thread.
 
@@ -94,7 +97,9 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 ```
 
 Each consumer constructs its own reader rather than being handed one, because every reader of a given log is
-the same closed type and the container resolves by type. Constructing it also lets the consumer name it.
+the same closed type and the container resolves by type. Constructing it also lets the consumer name it. The
+name has to be unique within the log, because it identifies the reader in a stall message and in a save; see
+[Saving and resuming](#saving-and-resuming).
 
 A reader starts positioned after the last appended entry, so a consumer created part-way through a run sees
 only what is appended from then on. Readers drain independently: entries appended this frame may be drained by
@@ -137,9 +142,67 @@ Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSprite
 4096 entries ago.
 ```
 
+## Saving and resuming
+
+`ObservationSnapshot<TEntry>` is the whole log as data: the entries no reader has passed yet, the sequence
+number of the oldest of them, and where each reader had got to.
+
+```csharp
+ObservationSnapshot<Observation> snapshot = ObservationSnapshot<Observation>.Capture(log);
+```
+
+Capturing consumes nothing and moves no reader, so a save leaves the run it saved untouched.
+
+The log never looks inside `TEntry`, so it writes no bytes either. The snapshot is a record of a `long`, an
+`IReadOnlyList<TEntry>` and an `IReadOnlyDictionary<string, long>`, and the game writes it with the serializer
+it already uses. It round-trips through `System.Text.Json` as it stands, as long as `TEntry` does.
+
+On load, restore the log in place of constructing one. Consumers do not change: each still constructs its own
+reader under its own name, and the restored log puts that reader back where it stopped.
+
+```csharp
+ObservationLog<Observation> log = ObservationLog<Observation>.Restore(4096, snapshot);
+
+// in the consumer, the same line as on a first run
+_observations = new ObservationReader<Observation>(log, nameof(UnitSpritePresenter));
+```
+
+A reader name is an identity, then, not just a label in an error message. Constructing a second reader under a
+name the log already has throws. A name the snapshot does not know starts after the restored entries, which is
+what a consumer added since the save should do.
+
+`Restore` throws when the snapshot holds more entries than the maximum capacity allows, and when a reader
+position falls outside the entries the snapshot carries. A save that cannot be resumed as it was says so
+rather than dropping entries quietly.
+
+`ParticipantObservationReader<TEntry, TParticipantId>` resumes the same way, under its own name. Its position
+counts every entry its own reader drained, including the entries its participant did not perceive.
+
+### A reader that never comes back
+
+A saved position holds the trim point until its reader is constructed, exactly as the reader itself would.
+Order therefore does not matter on load: another consumer can drain everything before a reader is constructed,
+and that reader still resumes where it stopped.
+
+The cost is that a consumer dropped from the game keeps holding the log. Nothing ever claims its position, the
+log fills, and the message names it:
+
+```text
+Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSpritePresenter' was restored from a
+save but never constructed.
+```
+
+The snapshot is data, so drop that name before restoring:
+
+```csharp
+Dictionary<string, long> positions = new(snapshot.ReaderPositions);
+positions.Remove(nameof(UnitSpritePresenter));
+snapshot = snapshot with { ReaderPositions = positions };
+```
+
 ## Registration
 
-Construct the log, then register it alongside a writer over it:
+Construct the log, or restore it from a save, then register it alongside a writer over it:
 
 ```csharp
 ObservationLog<Observation> log = new ObservationLog<Observation>(4096);
