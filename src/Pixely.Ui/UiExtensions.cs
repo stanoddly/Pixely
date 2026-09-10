@@ -15,37 +15,39 @@ public static class UiExtensions
     /// </summary>
     public static PixelyAppBuilder UseUi(
         this PixelyAppBuilder appBuilder,
-        int order = 10_000,
+        int renderOrder = 10_000,
+        int updateOrder = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false,
-        int updateOrder = 10_000)
+        bool clearTarget = false)
     {
-        return UseUi<BasicRenderContext>(appBuilder, default, order, inputOrder, clearTarget, updateOrder);
+        return UseUi<BasicRenderContext>(appBuilder, default, renderOrder, updateOrder, inputOrder, clearTarget);
     }
 
     public static PixelyAppBuilder UseUi(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int order = 10_000,
+        int renderOrder = 10_000,
+        int updateOrder = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false,
-        int updateOrder = 10_000)
+        bool clearTarget = false)
     {
-        return UseUi<BasicRenderContext>(appBuilder, viewScope, order, inputOrder, clearTarget, updateOrder);
+        return UseUi<BasicRenderContext>(appBuilder, viewScope, renderOrder, updateOrder, inputOrder, clearTarget);
     }
 
+    /// <param name="renderOrder">When the UI is drawn relative to the other renderers, lower first. Defaults late, so it draws over the game.</param>
     /// <param name="updateOrder">
     /// When the tree is built relative to the other updatables, lower first. Defaults late, so the
     /// UI builds after ordinary order-0 game systems and views sync against the state this frame
     /// produced. Equal orders are unspecified, not registration order.
     /// </param>
+    /// <param name="inputOrder">When the UI sees input relative to the other subscribers, lower first. Defaults early, so it takes events before the game does.</param>
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
-        int order = 10_000,
+        int renderOrder = 10_000,
+        int updateOrder = 10_000,
         int inputOrder = -10_000,
-        bool clearTarget = false,
-        int updateOrder = 10_000)
+        bool clearTarget = false)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
@@ -89,7 +91,7 @@ public static class UiExtensions
             UiRenderer<TRenderContext>.Create(
                 ScopedUiRoot.GetRequired(provider, viewScope).Root,
                 viewScope,
-                order,
+                renderOrder,
                 clearTarget,
                 provider.GetRequiredService<GraphicsPipelineBuilder>(),
                 provider.GetRequiredService<GpuMemorySystem>(),

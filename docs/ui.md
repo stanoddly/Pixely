@@ -57,7 +57,9 @@ A layer does not block the pointer by being on top. Only an `IPointerTarget` is 
 
 `UseUi` registers a system that builds the tree in the update phase, before anything renders. Building is not a passive walk: it raises pointer enter and leave as layout moves under a stationary pointer, raises focus lost when a focused element leaves the tree, and runs every custom element, layout and drawable in it. A renderer may not raise those — the renderers sharing a frame all read domain data over one command buffer and are entitled to it not changing underneath them — so the UI renderer only paints what the build already produced.
 
-`updateOrder` says when, relative to the other updatables. Lower runs first, and it defaults to `10_000` so the UI builds after ordinary order-0 game systems and views sync against the state this frame produced. Equal orders are unspecified rather than registration order. A system that runs after the build and dirties the UI has its change shown on the next frame, not this one.
+`UseUi` takes one order per phase — `renderOrder`, `updateOrder`, `inputOrder` — and lower runs first in all three.
+
+`updateOrder` says when the tree is built relative to the other updatables. It defaults to `10_000` so the UI builds after ordinary order-0 game systems and views sync against the state this frame produced. Equal orders are unspecified rather than registration order. A system that runs after the build and dirties the UI has its change shown on the next frame, not this one.
 
 ```csharp
 builder.UseUi(updateOrder: 500);
