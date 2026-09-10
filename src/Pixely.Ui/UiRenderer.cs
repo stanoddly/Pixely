@@ -7,8 +7,10 @@ using Pixely.Shaders;
 namespace Pixely.Ui;
 
 /// <summary>
-/// Paints a <see cref="UiRoot"/> into a persistent texture and blits that texture over the frame.
-/// The texture is only repainted when the tree changed, so a static UI costs one quad per frame.
+/// Paints a built <see cref="IUiPaintSource"/> into a persistent texture and blits that texture over
+/// the frame. The texture is only repainted when the tree changed, so a static UI costs one quad per
+/// frame. The build itself belongs to <see cref="UiUpdateSystem"/>, which is why this holds a source
+/// rather than the root.
 /// </summary>
 internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, IDisposable
     where TRenderContext : IRenderContext
@@ -27,7 +29,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private readonly Sampler _sampler;
     private readonly GpuDevice _gpuDevice;
     private readonly TextureFormat _colorTargetFormat;
-    private readonly UiRoot _root;
+    private readonly IUiPaintSource _source;
     private readonly bool _clearTarget;
 
     // Solid fills sample this, which is what keeps colours and sprites on one pipeline.
@@ -36,6 +38,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private Texture _retainedTexture;
     private Matrix4x4 _viewProjection;
     private bool _retainedTextureDirty = true;
+    private ulong _paintedVersion;
 
     public int Order { get; }
     public ViewScope ViewScope { get; }
@@ -45,7 +48,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     /// so that constructing a renderer is assignment only.
     /// </summary>
     internal static UiRenderer<TRenderContext> Create(
-        UiRoot root,
+        IUiPaintSource source,
         ViewScope viewScope,
         int order,
         bool clearTarget,
@@ -101,18 +104,18 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat),
             colorTargetFormat);
 
-        return new UiRenderer<TRenderContext>(root, viewScope, order, clearTarget, gpuDevice, resources);
+        return new UiRenderer<TRenderContext>(source, viewScope, order, clearTarget, gpuDevice, resources);
     }
 
     private UiRenderer(
-        UiRoot root,
+        IUiPaintSource source,
         ViewScope viewScope,
         int order,
         bool clearTarget,
         GpuDevice gpuDevice,
         GpuResources resources)
     {
-        _root = root;
+        _source = source;
         ViewScope = viewScope;
         Order = order;
         _clearTarget = clearTarget;
@@ -143,26 +146,46 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         ShortSize targetSize = renderContext.ColorTarget.Size;
         ResizeRetainedTextureIfNeeded(targetSize);
 
-        _root.SetViewportSize(new Vector2Int(targetSize.Width, targetSize.Height));
+        Vector2Int target = new(targetSize.Width, targetSize.Height);
 
-        bool rebuilt = _root.Update();
-
-        // Instructions laid out for a different viewport would draw the previous frame's geometry
-        // at the new size, so the texture is cleared until a matching build lands.
-        if (_root.PaintedViewportSize != new Vector2Int(targetSize.Width, targetSize.Height))
+        if (IsStale(_source.PaintedViewportSize, _source.ViewportSize, target))
         {
             Clear(renderContext.CommandBuffer);
             Present(renderContext.CommandBuffer, renderContext.ColorTarget);
             return;
         }
 
-        if (rebuilt || _retainedTextureDirty)
+        if (NeedsRepaint(_source.BuildVersion, _paintedVersion, _retainedTextureDirty))
         {
             Paint(renderContext.CommandBuffer);
+            _paintedVersion = _source.BuildVersion;
             _retainedTextureDirty = false;
         }
 
         Present(renderContext.CommandBuffer, renderContext.ColorTarget);
+    }
+
+    /// <summary>
+    /// Whether the completed instructions describe geometry this frame cannot draw. Two questions,
+    /// and either one is enough. Did the build finish at the viewport it was asked for — a callback
+    /// can move the viewport after layout ran. And is that viewport still the target being drawn
+    /// into — a resize landing between the update phase and here breaks it. Either way the texture
+    /// is cleared until a matching build lands, because the projection is built from the target and
+    /// stretching the previous frame's geometry into it is worse than a blank one.
+    /// </summary>
+    internal static bool IsStale(Vector2Int paintedViewportSize, Vector2Int viewportSize, Vector2Int target)
+    {
+        return paintedViewportSize != viewportSize || paintedViewportSize != target;
+    }
+
+    /// <summary>
+    /// Whether the retained texture no longer shows what the source holds. Compared against the
+    /// build this renderer last painted rather than against whether a build just happened, so a
+    /// renderer that missed one still repaints instead of depending on having been its caller.
+    /// </summary>
+    internal static bool NeedsRepaint(ulong buildVersion, ulong paintedVersion, bool retainedTextureDirty)
+    {
+        return buildVersion != paintedVersion || retainedTextureDirty;
     }
 
     private void ResizeRetainedTextureIfNeeded(ShortSize newSize)
@@ -180,8 +203,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     private void Paint(CommandBuffer commandBuffer)
     {
-        IReadOnlyList<PaintInstruction> instructions = _root.Instructions;
-        IReadOnlyList<PaintBatch> batches = _root.Batches;
+        IReadOnlyList<PaintInstruction> instructions = _source.Instructions;
+        IReadOnlyList<PaintBatch> batches = _source.Batches;
 
         if (instructions.Count == 0)
         {

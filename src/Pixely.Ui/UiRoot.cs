@@ -6,7 +6,7 @@ namespace Pixely.Ui;
 /// Drives measure, arrange and paint for one viewport, and owns the state the renderer reads.
 /// Elements never run a layout pass on themselves, so the tree cannot be half-updated.
 /// </summary>
-public sealed class UiRoot
+public sealed class UiRoot : IUiPaintSource
 {
     private readonly PointerRouter _pointerRouter;
     private readonly PaintContext _paintContext = new();
@@ -51,6 +51,13 @@ public sealed class UiRoot
     internal Vector2Int PaintedViewportSize { get; private set; }
 
     internal bool IsPaintDirty { get; private set; } = true;
+
+    /// <summary>
+    /// Rises with every completed build. The renderer compares it against what it last painted, so a
+    /// renderer that missed a build still repaints rather than depending on having been the caller
+    /// that triggered it.
+    /// </summary>
+    internal ulong BuildVersion { get; private set; }
 
     internal IReadOnlyList<PaintInstruction> Instructions => _paintContext.Instructions;
 
@@ -519,9 +526,12 @@ public sealed class UiRoot
 
     private bool Rebuild()
     {
-
-        Rectangle viewport = new(0, 0, _viewportSize.X, _viewportSize.Y);
-        Constraints constraints = Constraints.Tight(_viewportSize);
+        // Captured at entry and used for everything below, including what is recorded at the end. A
+        // callback further down can call SetViewportSize, and recording the field as it stands then
+        // would claim this geometry was built for a viewport it never saw.
+        Vector2Int viewportSize = _viewportSize;
+        Rectangle viewport = new(0, 0, viewportSize.X, viewportSize.Y);
+        Constraints constraints = Constraints.Tight(viewportSize);
 
         _paintContext.Reset(viewport);
 
@@ -559,7 +569,8 @@ public sealed class UiRoot
 
         _layersChanged = false;
         IsPaintDirty = false;
-        PaintedViewportSize = _viewportSize;
+        PaintedViewportSize = viewportSize;
+        BuildVersion++;
         return true;
     }
 
@@ -608,4 +619,13 @@ public sealed class UiRoot
 
         return false;
     }
+
+    // Forwarded explicitly, all five of them together: four of the members are internal, an internal
+    // member cannot implicitly implement an interface one, and widening them is not available either
+    // because PaintInstruction and PaintBatch are internal types.
+    IReadOnlyList<PaintInstruction> IUiPaintSource.Instructions => Instructions;
+    IReadOnlyList<PaintBatch> IUiPaintSource.Batches => Batches;
+    Vector2Int IUiPaintSource.PaintedViewportSize => PaintedViewportSize;
+    Vector2Int IUiPaintSource.ViewportSize => ViewportSize;
+    ulong IUiPaintSource.BuildVersion => BuildVersion;
 }
