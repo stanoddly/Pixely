@@ -1,10 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Pixely.Observations;
 
 /// <summary>
 /// One reader's position in an <see cref="ObservationLog{TEntry}"/>. Dispose it when the reader goes away,
 /// otherwise it holds the log's trim point where it stopped and the log fills.
 /// </summary>
-public sealed class ObservationCursor<TEntry> : IDisposable where TEntry : struct
+public sealed class ObservationCursor<TEntry> : IDisposable
 {
     private readonly ObservationLog<TEntry> _log;
     private bool _disposed;
@@ -20,7 +22,7 @@ public sealed class ObservationCursor<TEntry> : IDisposable where TEntry : struc
 
     internal long NextSequence { get; set; }
 
-    public bool TryRead(out TEntry entry)
+    public bool TryRead([MaybeNullWhen(false)] out TEntry entry)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _log.TryRead(this, out entry);

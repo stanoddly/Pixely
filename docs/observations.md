@@ -1,6 +1,6 @@
 # Observations
 
-`ObservationLog<TEntry>` in `Pixely.Observations` is an append-only log of value entries that readers drain at their
+`ObservationLog<TEntry>` in `Pixely.Observations` is an append-only log of entries that readers drain at their
 own pace. Rules append; nothing is called back. A reader holds a cursor, reads when it suits its own point in
 the frame, and the log drops an entry once every cursor has passed it.
 
@@ -11,8 +11,8 @@ frame. State answers what is true now, and a rule can resolve many transitions b
 
 ## The entry type
 
-One log carries one entry type. To carry several kinds of entry in one order, make `TEntry` a tagged value
-type; the log never looks inside it.
+One log carries one entry type. To carry several kinds of entry in one order, make `TEntry` a tagged type; the
+log never looks inside it. A value type is the one to reach for, because appending it costs no allocation.
 
 ```csharp
 public readonly record struct UnitMovedEntry(UnitId Unit, TilePoint From, TilePoint To);
@@ -23,8 +23,13 @@ public enum ObservationKind { UnitMoved, UnitDied }
 public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died);
 ```
 
-Entries are past-tense records of ids and value types, never a live reference into game state. Nothing
-allocates per entry: the log stores `TEntry` in an array, `Append` takes it by `in`, and `TryRead` copies it out.
+Entries are past-tense records of ids and value types, never a live reference into game state. With a value
+entry nothing allocates per entry: the log stores `TEntry` inline in an array, `Append` takes it by `in`, and
+`TryRead` copies it out.
+
+`TEntry` may be a class where that suits the game better, and the log releases each slot as it trims so a
+drained entry is not held alive. It costs an allocation per append, so it does not belong on a path that
+appends every frame.
 
 ## Writing
 

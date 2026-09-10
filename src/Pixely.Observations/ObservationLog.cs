@@ -1,17 +1,19 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Pixely.Observations;
 
 /// <summary>
-/// An append-only log of value entries that readers drain at their own pace through their own cursors.
+/// An append-only log of entries that readers drain at their own pace through their own cursors.
 /// Appending never calls a reader. An entry is dropped once every cursor has passed it, so the log is bounded
 /// by the slowest reader rather than by how long the run lasts.
 /// </summary>
 /// <typeparam name="TEntry">
-/// The single entry type of this log. Carry several kinds of entry in one log by making this a tagged value
-/// type; the log never looks inside it.
+/// The single entry type of this log; the log never looks inside it. Carry several kinds of entry in one log
+/// by making it a tagged type. A value type keeps appending free of allocation, which is why the entries a
+/// game appends every frame should be one.
 /// </typeparam>
-public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservationWriter<TEntry> where TEntry : struct
+public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservationWriter<TEntry>
 {
     private const int InitialCapacity = 16;
 
@@ -56,7 +58,7 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
         return cursor;
     }
 
-    internal bool TryRead(ObservationCursor<TEntry> cursor, out TEntry entry)
+    internal bool TryRead(ObservationCursor<TEntry> cursor, [MaybeNullWhen(false)] out TEntry entry)
     {
         int offset = checked((int)(cursor.NextSequence - _firstSequence));
         if (offset >= _count)
@@ -90,12 +92,13 @@ public sealed class ObservationLog<TEntry> : IObservationLog<TEntry>, IObservati
             return;
         }
 
-        // Only worth clearing when a slot can keep an object alive; the check folds away for the rest.
+        // Only worth clearing when a slot can keep an object alive; the check folds away for the rest. A cleared
+        // slot is past every cursor, so nothing reads it back before an append overwrites it.
         if (RuntimeHelpers.IsReferenceOrContainsReferences<TEntry>())
         {
             for (int i = 0; i < removeCount; i++)
             {
-                _entries[PhysicalIndex(i)] = default;
+                _entries[PhysicalIndex(i)] = default!;
             }
         }
 

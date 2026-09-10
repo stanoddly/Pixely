@@ -2,6 +2,8 @@ namespace Pixely.Observations.Tests;
 
 public readonly record struct TestEntry(int Value);
 
+public sealed record TestReferenceEntry(int Value);
+
 [TestFixture]
 public sealed class ObservationLogTests
 {
@@ -204,6 +206,33 @@ public sealed class ObservationLogTests
     public void MaximumCapacity_MustBeAtLeastOne()
     {
         Assert.That(() => new ObservationLog<TestEntry>(0), Throws.TypeOf<ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void ReferenceEntry_ReadsBackTheAppendedInstancesInOrder()
+    {
+        ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
+        ObservationCursor<TestReferenceEntry> cursor = log.CreateCursor();
+        TestReferenceEntry first = new TestReferenceEntry(1);
+        TestReferenceEntry second = new TestReferenceEntry(2);
+
+        log.Append(first);
+        log.Append(second);
+
+        Assert.That(cursor.TryRead(out TestReferenceEntry? read), Is.True);
+        Assert.That(read, Is.SameAs(first));
+        Assert.That(cursor.TryRead(out read), Is.True);
+        Assert.That(read, Is.SameAs(second));
+    }
+
+    [Test]
+    public void ReferenceEntry_OnEmptyLogReturnsFalseAndNull()
+    {
+        ObservationLog<TestReferenceEntry> log = new ObservationLog<TestReferenceEntry>(64);
+        ObservationCursor<TestReferenceEntry> cursor = log.CreateCursor();
+
+        Assert.That(cursor.TryRead(out TestReferenceEntry? entry), Is.False);
+        Assert.That(entry, Is.Null);
     }
 
     private static int[] Drain(ObservationCursor<TestEntry> cursor)
