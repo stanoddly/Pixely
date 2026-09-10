@@ -187,7 +187,7 @@ public sealed class InventoryRenderer : IRenderer<BasicRenderContext>
 }
 ```
 
-The renderer registry preserves `IOrderable.Order` and executes each renderer only for its matching
+The renderer registry preserves `IRenderer<T>.RenderOrder` and executes each renderer only for its matching
 scope. A reusable renderer can receive its `ViewScope` through construction and be registered more
 than once.
 
@@ -235,7 +235,7 @@ application, use a scoped subscription when a handler belongs to another window:
 ```csharp
 keyboardService.SubscribeKeyDown(
     ViewScopes.Inventory,
-    priority: 0,
+    order: 0,
     eventArgs => HandleInventoryKey(eventArgs));
 ```
 

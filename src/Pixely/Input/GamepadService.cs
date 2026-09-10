@@ -53,12 +53,12 @@ public class GamepadService : IGamepadService
     private readonly GamepadStickEventArgs _stickEventArgs = new();
     private readonly GamepadTriggerEventArgs _triggerEventArgs = new();
 
-    private readonly PriorityEventHandlers<GamepadStickEventArgs> _leftStickMotionHandlers = new();
-    private readonly PriorityEventHandlers<GamepadStickEventArgs> _rightStickMotionHandlers = new();
-    private readonly PriorityEventHandlers<GamepadTriggerEventArgs> _leftTriggerMotionHandlers = new();
-    private readonly PriorityEventHandlers<GamepadTriggerEventArgs> _rightTriggerMotionHandlers = new();
-    private readonly PriorityEventHandlers<GamepadButtonEventArgs> _buttonPressHandlers = new();
-    private readonly PriorityEventHandlers<GamepadButtonEventArgs> _buttonReleaseHandlers = new();
+    private readonly OrderedEventHandlers<GamepadStickEventArgs> _leftStickMotionHandlers = new();
+    private readonly OrderedEventHandlers<GamepadStickEventArgs> _rightStickMotionHandlers = new();
+    private readonly OrderedEventHandlers<GamepadTriggerEventArgs> _leftTriggerMotionHandlers = new();
+    private readonly OrderedEventHandlers<GamepadTriggerEventArgs> _rightTriggerMotionHandlers = new();
+    private readonly OrderedEventHandlers<GamepadButtonEventArgs> _buttonPressHandlers = new();
+    private readonly OrderedEventHandlers<GamepadButtonEventArgs> _buttonReleaseHandlers = new();
 
     public IReadOnlyCollection<Gamepad> Gamepads => _gamepads.Values;
 
@@ -101,34 +101,34 @@ public class GamepadService : IGamepadService
     public event GamepadConnectionEventHandler? GamepadConnected;
     public event GamepadConnectionEventHandler? GamepadDisconnected;
 
-    public void SubscribeLeftStickMotion(int priority, InputEventHandler<GamepadStickEventArgs> handler)
+    public void SubscribeLeftStickMotion(int order, InputEventHandler<GamepadStickEventArgs> handler)
     {
-        _leftStickMotionHandlers.Add(priority, handler);
+        _leftStickMotionHandlers.Add(order, handler);
     }
 
-    public void SubscribeRightStickMotion(int priority, InputEventHandler<GamepadStickEventArgs> handler)
+    public void SubscribeRightStickMotion(int order, InputEventHandler<GamepadStickEventArgs> handler)
     {
-        _rightStickMotionHandlers.Add(priority, handler);
+        _rightStickMotionHandlers.Add(order, handler);
     }
 
-    public void SubscribeLeftTriggerMotion(int priority, InputEventHandler<GamepadTriggerEventArgs> handler)
+    public void SubscribeLeftTriggerMotion(int order, InputEventHandler<GamepadTriggerEventArgs> handler)
     {
-        _leftTriggerMotionHandlers.Add(priority, handler);
+        _leftTriggerMotionHandlers.Add(order, handler);
     }
 
-    public void SubscribeRightTriggerMotion(int priority, InputEventHandler<GamepadTriggerEventArgs> handler)
+    public void SubscribeRightTriggerMotion(int order, InputEventHandler<GamepadTriggerEventArgs> handler)
     {
-        _rightTriggerMotionHandlers.Add(priority, handler);
+        _rightTriggerMotionHandlers.Add(order, handler);
     }
 
-    public void SubscribeButtonPress(int priority, InputEventHandler<GamepadButtonEventArgs> handler)
+    public void SubscribeButtonPress(int order, InputEventHandler<GamepadButtonEventArgs> handler)
     {
-        _buttonPressHandlers.Add(priority, handler);
+        _buttonPressHandlers.Add(order, handler);
     }
 
-    public void SubscribeButtonRelease(int priority, InputEventHandler<GamepadButtonEventArgs> handler)
+    public void SubscribeButtonRelease(int order, InputEventHandler<GamepadButtonEventArgs> handler)
     {
-        _buttonReleaseHandlers.Add(priority, handler);
+        _buttonReleaseHandlers.Add(order, handler);
     }
 
     internal void SetupGamepads()

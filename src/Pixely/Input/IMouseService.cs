@@ -13,16 +13,16 @@ public interface IMouseService
 
     MouseState GetGlobalState();
 
-    void SubscribeButtonPress(int priority, InputEventHandler<MouseButtonEventArgs> handler);
-    void SubscribeButtonRelease(int priority, InputEventHandler<MouseButtonEventArgs> handler);
-    void SubscribeMotion(int priority, InputEventHandler<MouseMotionEventArgs> handler);
-    void SubscribeWheel(int priority, InputEventHandler<MouseWheelEventArgs> handler);
-    void SubscribeWindowEnter(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler);
-    void SubscribeWindowLeave(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler);
-    void SubscribeButtonPress(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler);
-    void SubscribeButtonRelease(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler);
-    void SubscribeMotion(ViewScope viewScope, int priority, InputEventHandler<MouseMotionEventArgs> handler);
-    void SubscribeWheel(ViewScope viewScope, int priority, InputEventHandler<MouseWheelEventArgs> handler);
-    void SubscribeWindowEnter(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler);
-    void SubscribeWindowLeave(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler);
+    void SubscribeButtonPress(int order, InputEventHandler<MouseButtonEventArgs> handler);
+    void SubscribeButtonRelease(int order, InputEventHandler<MouseButtonEventArgs> handler);
+    void SubscribeMotion(int order, InputEventHandler<MouseMotionEventArgs> handler);
+    void SubscribeWheel(int order, InputEventHandler<MouseWheelEventArgs> handler);
+    void SubscribeWindowEnter(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler);
+    void SubscribeWindowLeave(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler);
+    void SubscribeButtonPress(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler);
+    void SubscribeButtonRelease(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler);
+    void SubscribeMotion(ViewScope viewScope, int order, InputEventHandler<MouseMotionEventArgs> handler);
+    void SubscribeWheel(ViewScope viewScope, int order, InputEventHandler<MouseWheelEventArgs> handler);
+    void SubscribeWindowEnter(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler);
+    void SubscribeWindowLeave(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler);
 }

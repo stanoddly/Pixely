@@ -306,17 +306,17 @@ public class RenderCoordinatorTests
         private readonly string _name;
         private readonly List<string> _calls;
 
-        public TestRenderer(string name, List<string> calls, int order = 0, ViewScope viewScope = default)
+        public TestRenderer(string name, List<string> calls, int renderOrder = 0, ViewScope viewScope = default)
         {
             _name = name;
             _calls = calls;
-            Order = order;
+            RenderOrder = renderOrder;
             ViewScope = viewScope;
         }
 
         protected List<string> Calls => _calls;
 
-        public int Order { get; }
+        public int RenderOrder { get; }
 
         public ViewScope ViewScope { get; }
 
@@ -334,8 +334,8 @@ public class RenderCoordinatorTests
             string name,
             List<string> calls,
             Func<ServiceProvider> provider,
-            int order)
-            : base(name, calls, order)
+            int renderOrder)
+            : base(name, calls, renderOrder)
         {
             _provider = provider;
         }
@@ -356,8 +356,8 @@ public class RenderCoordinatorTests
             string name,
             List<string> calls,
             Func<ServiceProvider> parentProvider,
-            int order)
-            : base(name, calls, order)
+            int renderOrder)
+            : base(name, calls, renderOrder)
         {
             _parentProvider = parentProvider;
         }

@@ -13,10 +13,10 @@ public interface IGamepadService
     event GamepadConnectionEventHandler? GamepadConnected;
     event GamepadConnectionEventHandler? GamepadDisconnected;
 
-    void SubscribeLeftStickMotion(int priority, InputEventHandler<GamepadStickEventArgs> handler);
-    void SubscribeRightStickMotion(int priority, InputEventHandler<GamepadStickEventArgs> handler);
-    void SubscribeLeftTriggerMotion(int priority, InputEventHandler<GamepadTriggerEventArgs> handler);
-    void SubscribeRightTriggerMotion(int priority, InputEventHandler<GamepadTriggerEventArgs> handler);
-    void SubscribeButtonPress(int priority, InputEventHandler<GamepadButtonEventArgs> handler);
-    void SubscribeButtonRelease(int priority, InputEventHandler<GamepadButtonEventArgs> handler);
+    void SubscribeLeftStickMotion(int order, InputEventHandler<GamepadStickEventArgs> handler);
+    void SubscribeRightStickMotion(int order, InputEventHandler<GamepadStickEventArgs> handler);
+    void SubscribeLeftTriggerMotion(int order, InputEventHandler<GamepadTriggerEventArgs> handler);
+    void SubscribeRightTriggerMotion(int order, InputEventHandler<GamepadTriggerEventArgs> handler);
+    void SubscribeButtonPress(int order, InputEventHandler<GamepadButtonEventArgs> handler);
+    void SubscribeButtonRelease(int order, InputEventHandler<GamepadButtonEventArgs> handler);
 }

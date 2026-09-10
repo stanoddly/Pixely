@@ -34,7 +34,7 @@ public static class RenderingExtensions
     private static void ConfigureWindowRendering<TRenderContext>(ServiceCollection services, ViewScope viewScope)
         where TRenderContext : IRenderContext
     {
-        services.AddRegistry<IRenderer<TRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
+        services.AddRegistry<IRenderer<TRenderContext>>(static (left, right) => left.RenderOrder.CompareTo(right.RenderOrder));
         services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(
             provider.GetWindow(viewScope),
             provider.GetRequiredService<GpuMemorySystem>(),

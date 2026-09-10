@@ -17,13 +17,8 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
-        AddRegistry<IRenderer<BasicRenderContext>>(static (left, right) => left.Order.CompareTo(right.Order));
-        AddRegistry<IUpdatable>(static (left, right) =>
-        {
-            int leftOrder = left is IOrderable leftOrderable ? leftOrderable.Order : 0;
-            int rightOrder = right is IOrderable rightOrderable ? rightOrderable.Order : 0;
-            return leftOrder.CompareTo(rightOrder);
-        });
+        AddRegistry<IRenderer<BasicRenderContext>>(static (left, right) => left.RenderOrder.CompareTo(right.RenderOrder));
+        AddRegistry<IUpdatable>(static (left, right) => left.UpdateOrder.CompareTo(right.UpdateOrder));
     }
 
     public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)

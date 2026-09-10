@@ -34,12 +34,12 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
     private int _maxDepthValue;
     private bool _retainedTextureDirty;
 
-    public int Order { get; }
+    public int RenderOrder { get; }
     public ViewScope ViewScope { get; }
 
     internal PencuilRenderer(
         Pencuil pencuil,
-        int order,
+        int renderOrder,
         bool clearTarget,
         GraphicsPipelineBuilder graphicsPipelineBuilder,
         GpuMemorySystem gpuMemorySystem,
@@ -95,7 +95,7 @@ internal sealed class PencuilRenderer<TRenderContext> : IRenderer<TRenderContext
         _colorTargetFormat = colorTargetFormat;
         _pencil = pencil;
         _clearTarget = clearTarget;
-        Order = order;
+        RenderOrder = renderOrder;
 
         _sampler = gpuDevice.CreateSampler(SamplerConfig.PixelArt);
         _retainedTexture = gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat);

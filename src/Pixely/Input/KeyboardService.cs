@@ -28,8 +28,8 @@ public class KeyboardService : IKeyboardService
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly KeyEventArgs _keyEventArgs = new();
-    private readonly ViewScopedPriorityEventHandlers<KeyEventArgs> _keyDownHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<KeyEventArgs> _keyUpHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<KeyEventArgs> _keyDownHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<KeyEventArgs> _keyUpHandlers = new();
 
     public event InputEventHandler<KeyEventArgs> KeyDown
     {
@@ -43,24 +43,24 @@ public class KeyboardService : IKeyboardService
         remove => _keyUpHandlers.Remove(default, value);
     }
 
-    public void SubscribeKeyDown(int priority, InputEventHandler<KeyEventArgs> handler)
+    public void SubscribeKeyDown(int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyDownHandlers.Add(default, priority, handler);
+        _keyDownHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeKeyUp(int priority, InputEventHandler<KeyEventArgs> handler)
+    public void SubscribeKeyUp(int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyUpHandlers.Add(default, priority, handler);
+        _keyUpHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeKeyDown(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler)
+    public void SubscribeKeyDown(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyDownHandlers.Add(viewScope, priority, handler);
+        _keyDownHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeKeyUp(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler)
+    public void SubscribeKeyUp(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyUpHandlers.Add(viewScope, priority, handler);
+        _keyUpHandlers.Add(viewScope, order, handler);
     }
 
     internal KeyboardService(AppControl appControl)
