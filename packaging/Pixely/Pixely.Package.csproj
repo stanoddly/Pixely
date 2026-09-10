@@ -48,6 +48,7 @@
         <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Events\Pixely.Events.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <ProjectReference Include="..\..\src\Pixely.Observations\Pixely.Observations.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Pencuil\Pixely.Pencuil.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.ShaderCommon\Pixely.ShaderCommon.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Ui\Pixely.Ui.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />

@@ -12,6 +12,7 @@
     <Project Path="src/Pixely.Audio/Pixely.Audio.csproj" />
     <Project Path="src/Pixely.Collections/Pixely.Collections.csproj" />
     <Project Path="src/Pixely.Core/Pixely.Core.csproj" />
+    <Project Path="src/Pixely.Observations/Pixely.Observations.csproj" />
     <Project Path="src/Pixely.Componentize/Pixely.Componentize.csproj" />
     <Project Path="src/Pixely.Events/Pixely.Events.csproj" />
     <Project Path="src/Pixely.SdlangCompiler/Pixely.SdlangCompiler.csproj" />
@@ -27,6 +28,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
+    <Project Path="tests/Pixely.Observations.Tests/Pixely.Observations.Tests.csproj" />
     <Project Path="tests/Pixely.Componentize.Tests/Pixely.Componentize.Tests.csproj" />
     <Project Path="tests/Pixely.Content.Tests/Pixely.Content.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj" />
