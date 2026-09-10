@@ -20,22 +20,22 @@ internal sealed class FakeTextInputService : ITextInputService
     public InputEventHandler<TextInputEventArgs>? TextInputHandler { get; private set; }
 
     /// <summary>The scope and order it subscribed with.</summary>
-    public (ViewScope Scope, int Priority)? TextInputSubscription { get; private set; }
+    public (ViewScope Scope, int Order)? TextInputSubscription { get; private set; }
 
     public event InputEventHandler<TextInputEventArgs>? TextInput { add { } remove { } }
     public event InputEventHandler<TextEditingEventArgs>? TextEditing { add { } remove { } }
 
-    public void SubscribeTextInput(int priority, InputEventHandler<TextInputEventArgs> handler) { }
+    public void SubscribeTextInput(int order, InputEventHandler<TextInputEventArgs> handler) { }
 
-    public void SubscribeTextEditing(int priority, InputEventHandler<TextEditingEventArgs> handler) { }
+    public void SubscribeTextEditing(int order, InputEventHandler<TextEditingEventArgs> handler) { }
 
-    public void SubscribeTextInput(ViewScope viewScope, int priority, InputEventHandler<TextInputEventArgs> handler)
+    public void SubscribeTextInput(ViewScope viewScope, int order, InputEventHandler<TextInputEventArgs> handler)
     {
         TextInputHandler = handler;
-        TextInputSubscription = (viewScope, priority);
+        TextInputSubscription = (viewScope, order);
     }
 
-    public void SubscribeTextEditing(ViewScope viewScope, int priority, InputEventHandler<TextEditingEventArgs> handler) { }
+    public void SubscribeTextEditing(ViewScope viewScope, int order, InputEventHandler<TextEditingEventArgs> handler) { }
 }
 
 /// <summary>Keeps what subscribed to key presses, so a test can deliver one.</summary>
@@ -44,22 +44,22 @@ internal sealed class FakeKeyboardService : IKeyboardService
     public InputEventHandler<KeyEventArgs>? KeyDownHandler { get; private set; }
 
     /// <summary>The scope and order it subscribed with.</summary>
-    public (ViewScope Scope, int Priority)? KeyDownSubscription { get; private set; }
+    public (ViewScope Scope, int Order)? KeyDownSubscription { get; private set; }
 
     public event InputEventHandler<KeyEventArgs>? KeyDown { add { } remove { } }
     public event InputEventHandler<KeyEventArgs>? KeyUp { add { } remove { } }
 
-    public void SubscribeKeyDown(int priority, InputEventHandler<KeyEventArgs> handler) { }
+    public void SubscribeKeyDown(int order, InputEventHandler<KeyEventArgs> handler) { }
 
-    public void SubscribeKeyUp(int priority, InputEventHandler<KeyEventArgs> handler) { }
+    public void SubscribeKeyUp(int order, InputEventHandler<KeyEventArgs> handler) { }
 
-    public void SubscribeKeyDown(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler)
+    public void SubscribeKeyDown(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
     {
         KeyDownHandler = handler;
-        KeyDownSubscription = (viewScope, priority);
+        KeyDownSubscription = (viewScope, order);
     }
 
-    public void SubscribeKeyUp(ViewScope viewScope, int priority, InputEventHandler<KeyEventArgs> handler) { }
+    public void SubscribeKeyUp(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler) { }
 }
 
 /// <inheritdoc cref="SilentKeyboardService"/>
@@ -76,16 +76,16 @@ internal sealed class SilentMouseService : IMouseService
 
     public MouseState GetGlobalState() => default;
 
-    public void SubscribeButtonPress(int priority, InputEventHandler<MouseButtonEventArgs> handler) { }
-    public void SubscribeButtonRelease(int priority, InputEventHandler<MouseButtonEventArgs> handler) { }
-    public void SubscribeMotion(int priority, InputEventHandler<MouseMotionEventArgs> handler) { }
-    public void SubscribeWheel(int priority, InputEventHandler<MouseWheelEventArgs> handler) { }
-    public void SubscribeWindowEnter(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
-    public void SubscribeWindowLeave(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
-    public void SubscribeButtonPress(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler) { }
-    public void SubscribeButtonRelease(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler) { }
-    public void SubscribeMotion(ViewScope viewScope, int priority, InputEventHandler<MouseMotionEventArgs> handler) { }
-    public void SubscribeWheel(ViewScope viewScope, int priority, InputEventHandler<MouseWheelEventArgs> handler) { }
-    public void SubscribeWindowEnter(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
-    public void SubscribeWindowLeave(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
+    public void SubscribeButtonPress(int order, InputEventHandler<MouseButtonEventArgs> handler) { }
+    public void SubscribeButtonRelease(int order, InputEventHandler<MouseButtonEventArgs> handler) { }
+    public void SubscribeMotion(int order, InputEventHandler<MouseMotionEventArgs> handler) { }
+    public void SubscribeWheel(int order, InputEventHandler<MouseWheelEventArgs> handler) { }
+    public void SubscribeWindowEnter(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
+    public void SubscribeWindowLeave(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
+    public void SubscribeButtonPress(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler) { }
+    public void SubscribeButtonRelease(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler) { }
+    public void SubscribeMotion(ViewScope viewScope, int order, InputEventHandler<MouseMotionEventArgs> handler) { }
+    public void SubscribeWheel(ViewScope viewScope, int order, InputEventHandler<MouseWheelEventArgs> handler) { }
+    public void SubscribeWindowEnter(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
+    public void SubscribeWindowLeave(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
 }

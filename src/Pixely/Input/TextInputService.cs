@@ -23,8 +23,8 @@ public class TextInputService : ITextInputService
 
     private readonly TextInputEventArgs _textInputEventArgs = new();
     private readonly TextEditingEventArgs _textEditingEventArgs = new();
-    private readonly ViewScopedPriorityEventHandlers<TextInputEventArgs> _textInputHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<TextEditingEventArgs> _textEditingHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<TextInputEventArgs> _textInputHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<TextEditingEventArgs> _textEditingHandlers = new();
 
     public bool IsActiveFor(ViewScope viewScope = default)
     {
@@ -47,24 +47,24 @@ public class TextInputService : ITextInputService
         remove => _textEditingHandlers.Remove(default, value);
     }
 
-    public void SubscribeTextInput(int priority, InputEventHandler<TextInputEventArgs> handler)
+    public void SubscribeTextInput(int order, InputEventHandler<TextInputEventArgs> handler)
     {
-        _textInputHandlers.Add(default, priority, handler);
+        _textInputHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeTextEditing(int priority, InputEventHandler<TextEditingEventArgs> handler)
+    public void SubscribeTextEditing(int order, InputEventHandler<TextEditingEventArgs> handler)
     {
-        _textEditingHandlers.Add(default, priority, handler);
+        _textEditingHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeTextInput(ViewScope viewScope, int priority, InputEventHandler<TextInputEventArgs> handler)
+    public void SubscribeTextInput(ViewScope viewScope, int order, InputEventHandler<TextInputEventArgs> handler)
     {
-        _textInputHandlers.Add(viewScope, priority, handler);
+        _textInputHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeTextEditing(ViewScope viewScope, int priority, InputEventHandler<TextEditingEventArgs> handler)
+    public void SubscribeTextEditing(ViewScope viewScope, int order, InputEventHandler<TextEditingEventArgs> handler)
     {
-        _textEditingHandlers.Add(viewScope, priority, handler);
+        _textEditingHandlers.Add(viewScope, order, handler);
     }
 
     public void Start(ViewScope viewScope = default)

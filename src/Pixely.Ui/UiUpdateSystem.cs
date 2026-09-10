@@ -8,7 +8,7 @@ namespace Pixely.Ui;
 /// layout and drawable in the tree. A renderer may not run those, because the renderers sharing a
 /// frame are entitled to domain data that does not change underneath them.
 /// </summary>
-internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable, IOrderable
+internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable
     where TRenderContext : IRenderContext
 {
     private readonly UiRoot _root;
@@ -20,10 +20,10 @@ internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable, IOrderable
         _root = root;
         _window = window;
         _contextProvider = contextProvider;
-        Order = updateOrder;
+        UpdateOrder = updateOrder;
     }
 
-    public int Order { get; }
+    public int UpdateOrder { get; }
 
     public void Update()
     {

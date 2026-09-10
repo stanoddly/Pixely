@@ -59,13 +59,16 @@ public class MeshSubrenderer
 Create an interface for the subrenderers composed by a specific renderer:
 
 ```csharp
-public interface IGeometrySubrenderer : IOrderable
+public interface IGeometrySubrenderer
 {
+    int Order => 0;
     void Render(CommandBuffer commandBuffer, IRenderPass renderPass);
 }
 ```
 
-Inherit from `IOrderable` (from Pixely) to control execution order.
+Declare an order member on the interface to control execution order. Pixely does not supply a shared
+ordering interface: `IRenderer<T>` carries its own `RenderOrder` and `IUpdatable` its own
+`UpdateOrder`, so a subrenderer interface names the order for its own phase.
 
 ### Implementing the Interface
 
@@ -76,7 +79,7 @@ public class MeshSubrenderer : IGeometrySubrenderer
     private readonly MeshBufferService _bufferService;
     private readonly Camera _camera;
 
-    public int Order => 100; // From IOrderable
+    public int Order => 100;
 
     public MeshSubrenderer(GraphicsPipeline graphicsPipeline, MeshBufferService bufferService, Camera camera)
     {
@@ -134,7 +137,7 @@ public class GeometryPhase : IRenderer<GameRenderContext>
 ## Key Points
 
 - **Don't create RenderPass**: Subrenderers receive an existing RenderPass from the parent
-- **IOrderable**: Use this interface to control execution order (lower numbers execute first)
+- **Order member**: Declare one on the subrenderer interface to control execution order (lower numbers execute first)
 - **IEnumerable injection**: Parent renderer can accept `IEnumerable<IYourSubrenderer>` and order them in the constructor
 - **Shared render targets**: All subrenderers draw into the same outputs within a single RenderPass
 - **One RenderPass disposal**: The parent manages RenderPass lifetime, not the subrenderers

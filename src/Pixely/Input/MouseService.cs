@@ -111,12 +111,12 @@ public class MouseService : IMouseService
     private readonly MouseWheelEventArgs _wheelEventArgs = new();
     private readonly MouseWindowPresenceEventArgs _windowPresenceEventArgs = new();
 
-    private readonly ViewScopedPriorityEventHandlers<MouseButtonEventArgs> _buttonPressHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<MouseButtonEventArgs> _buttonReleaseHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<MouseMotionEventArgs> _motionHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<MouseWheelEventArgs> _wheelHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<MouseWindowPresenceEventArgs> _windowEnterHandlers = new();
-    private readonly ViewScopedPriorityEventHandlers<MouseWindowPresenceEventArgs> _windowLeaveHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseButtonEventArgs> _buttonPressHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseButtonEventArgs> _buttonReleaseHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseMotionEventArgs> _motionHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseWheelEventArgs> _wheelHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseWindowPresenceEventArgs> _windowEnterHandlers = new();
+    private readonly ViewScopedOrderedEventHandlers<MouseWindowPresenceEventArgs> _windowLeaveHandlers = new();
 
     internal MouseService(WindowRegistry windowRegistry)
     {
@@ -184,64 +184,64 @@ public class MouseService : IMouseService
         remove => _windowLeaveHandlers.Remove(default, value);
     }
 
-    public void SubscribeButtonPress(int priority, InputEventHandler<MouseButtonEventArgs> handler)
+    public void SubscribeButtonPress(int order, InputEventHandler<MouseButtonEventArgs> handler)
     {
-        _buttonPressHandlers.Add(default, priority, handler);
+        _buttonPressHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeButtonRelease(int priority, InputEventHandler<MouseButtonEventArgs> handler)
+    public void SubscribeButtonRelease(int order, InputEventHandler<MouseButtonEventArgs> handler)
     {
-        _buttonReleaseHandlers.Add(default, priority, handler);
+        _buttonReleaseHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeMotion(int priority, InputEventHandler<MouseMotionEventArgs> handler)
+    public void SubscribeMotion(int order, InputEventHandler<MouseMotionEventArgs> handler)
     {
-        _motionHandlers.Add(default, priority, handler);
+        _motionHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeWheel(int priority, InputEventHandler<MouseWheelEventArgs> handler)
+    public void SubscribeWheel(int order, InputEventHandler<MouseWheelEventArgs> handler)
     {
-        _wheelHandlers.Add(default, priority, handler);
+        _wheelHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeWindowEnter(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler)
+    public void SubscribeWindowEnter(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler)
     {
-        _windowEnterHandlers.Add(default, priority, handler);
+        _windowEnterHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeWindowLeave(int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler)
+    public void SubscribeWindowLeave(int order, InputEventHandler<MouseWindowPresenceEventArgs> handler)
     {
-        _windowLeaveHandlers.Add(default, priority, handler);
+        _windowLeaveHandlers.Add(default, order, handler);
     }
 
-    public void SubscribeButtonPress(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler)
+    public void SubscribeButtonPress(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler)
     {
-        _buttonPressHandlers.Add(viewScope, priority, handler);
+        _buttonPressHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeButtonRelease(ViewScope viewScope, int priority, InputEventHandler<MouseButtonEventArgs> handler)
+    public void SubscribeButtonRelease(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler)
     {
-        _buttonReleaseHandlers.Add(viewScope, priority, handler);
+        _buttonReleaseHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeMotion(ViewScope viewScope, int priority, InputEventHandler<MouseMotionEventArgs> handler)
+    public void SubscribeMotion(ViewScope viewScope, int order, InputEventHandler<MouseMotionEventArgs> handler)
     {
-        _motionHandlers.Add(viewScope, priority, handler);
+        _motionHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeWheel(ViewScope viewScope, int priority, InputEventHandler<MouseWheelEventArgs> handler)
+    public void SubscribeWheel(ViewScope viewScope, int order, InputEventHandler<MouseWheelEventArgs> handler)
     {
-        _wheelHandlers.Add(viewScope, priority, handler);
+        _wheelHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeWindowEnter(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler)
+    public void SubscribeWindowEnter(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler)
     {
-        _windowEnterHandlers.Add(viewScope, priority, handler);
+        _windowEnterHandlers.Add(viewScope, order, handler);
     }
 
-    public void SubscribeWindowLeave(ViewScope viewScope, int priority, InputEventHandler<MouseWindowPresenceEventArgs> handler)
+    public void SubscribeWindowLeave(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler)
     {
-        _windowLeaveHandlers.Add(viewScope, priority, handler);
+        _windowLeaveHandlers.Add(viewScope, order, handler);
     }
 
     internal void OnMouseWindowPresenceEvent(
@@ -252,7 +252,7 @@ public class MouseService : IMouseService
         _windowPresenceEventArgs.IsInWindow = isInWindow;
         _windowPresenceEventArgs.Timestamp = windowEvent.timestamp;
 
-        ViewScopedPriorityEventHandlers<MouseWindowPresenceEventArgs> handlers = isInWindow
+        ViewScopedOrderedEventHandlers<MouseWindowPresenceEventArgs> handlers = isInWindow
             ? _windowEnterHandlers
             : _windowLeaveHandlers;
 

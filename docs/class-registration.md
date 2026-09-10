@@ -259,12 +259,7 @@ published service generation changes, allowing consumers to avoid rescanning an 
 Pending additions do not affect it until an outermost iteration publishes them.
 
 ```csharp
-services.AddRegistry<IUpdatable>(static (left, right) =>
-{
-    int leftOrder = left is IOrderable leftOrderable ? leftOrderable.Order : 0;
-    int rightOrder = right is IOrderable rightOrderable ? rightOrderable.Order : 0;
-    return leftOrder.CompareTo(rightOrder);
-});
+services.AddRegistry<IUpdatable>(static (left, right) => left.UpdateOrder.CompareTo(right.UpdateOrder));
 services.AddSingleton<PlayerController>();
 
 ServiceRegistry<IUpdatable> registry =

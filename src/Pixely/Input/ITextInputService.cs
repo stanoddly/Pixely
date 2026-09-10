@@ -9,8 +9,8 @@ public interface ITextInputService
     event InputEventHandler<TextInputEventArgs> TextInput;
     event InputEventHandler<TextEditingEventArgs> TextEditing;
 
-    void SubscribeTextInput(int priority, InputEventHandler<TextInputEventArgs> handler);
-    void SubscribeTextEditing(int priority, InputEventHandler<TextEditingEventArgs> handler);
-    void SubscribeTextInput(ViewScope viewScope, int priority, InputEventHandler<TextInputEventArgs> handler);
-    void SubscribeTextEditing(ViewScope viewScope, int priority, InputEventHandler<TextEditingEventArgs> handler);
+    void SubscribeTextInput(int order, InputEventHandler<TextInputEventArgs> handler);
+    void SubscribeTextEditing(int order, InputEventHandler<TextEditingEventArgs> handler);
+    void SubscribeTextInput(ViewScope viewScope, int order, InputEventHandler<TextInputEventArgs> handler);
+    void SubscribeTextEditing(ViewScope viewScope, int order, InputEventHandler<TextEditingEventArgs> handler);
 }

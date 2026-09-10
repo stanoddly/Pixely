@@ -40,7 +40,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private bool _retainedTextureDirty = true;
     private ulong _paintedVersion;
 
-    public int Order { get; }
+    public int RenderOrder { get; }
     public ViewScope ViewScope { get; }
 
     /// <summary>
@@ -50,7 +50,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     internal static UiRenderer<TRenderContext> Create(
         IUiPaintSource source,
         ViewScope viewScope,
-        int order,
+        int renderOrder,
         bool clearTarget,
         GraphicsPipelineBuilder graphicsPipelineBuilder,
         GpuMemorySystem gpuMemorySystem,
@@ -104,20 +104,20 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat),
             colorTargetFormat);
 
-        return new UiRenderer<TRenderContext>(source, viewScope, order, clearTarget, gpuDevice, resources);
+        return new UiRenderer<TRenderContext>(source, viewScope, renderOrder, clearTarget, gpuDevice, resources);
     }
 
     private UiRenderer(
         IUiPaintSource source,
         ViewScope viewScope,
-        int order,
+        int renderOrder,
         bool clearTarget,
         GpuDevice gpuDevice,
         GpuResources resources)
     {
         _source = source;
         ViewScope = viewScope;
-        Order = order;
+        RenderOrder = renderOrder;
         _clearTarget = clearTarget;
         _gpuDevice = gpuDevice;
 

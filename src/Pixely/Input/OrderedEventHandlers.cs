@@ -1,14 +1,14 @@
 namespace Pixely.Input;
 
-internal sealed class PriorityEventHandlers<TEventArgs>
+internal sealed class OrderedEventHandlers<TEventArgs>
     where TEventArgs : ConsumableInputEventArgs
 {
-    private readonly List<(int Priority, InputEventHandler<TEventArgs> Handler)> _handlers = new();
+    private readonly List<(int Order, InputEventHandler<TEventArgs> Handler)> _handlers = new();
     private bool _dirty;
 
-    public void Add(int priority, InputEventHandler<TEventArgs> handler)
+    public void Add(int order, InputEventHandler<TEventArgs> handler)
     {
-        _handlers.Add((priority, handler));
+        _handlers.Add((order, handler));
         _dirty = true;
     }
 
@@ -21,7 +21,7 @@ internal sealed class PriorityEventHandlers<TEventArgs>
     {
         if (_dirty)
         {
-            _handlers.Sort(static (left, right) => left.Priority.CompareTo(right.Priority));
+            _handlers.Sort(static (left, right) => left.Order.CompareTo(right.Order));
             _dirty = false;
         }
 
@@ -39,21 +39,21 @@ internal sealed class PriorityEventHandlers<TEventArgs>
     }
 }
 
-internal sealed class ViewScopedPriorityEventHandlers<TEventArgs>
+internal sealed class ViewScopedOrderedEventHandlers<TEventArgs>
     where TEventArgs : ConsumableInputEventArgs
 {
     private readonly List<(
         ViewScope ViewScope,
-        int Priority,
+        int Order,
         InputEventHandler<TEventArgs> Handler)> _handlers = new();
     private bool _dirty;
 
     public void Add(
         ViewScope viewScope,
-        int priority,
+        int order,
         InputEventHandler<TEventArgs> handler)
     {
-        _handlers.Add((viewScope, priority, handler));
+        _handlers.Add((viewScope, order, handler));
         _dirty = true;
     }
 
@@ -71,7 +71,7 @@ internal sealed class ViewScopedPriorityEventHandlers<TEventArgs>
     {
         if (_dirty)
         {
-            _handlers.Sort(static (left, right) => left.Priority.CompareTo(right.Priority));
+            _handlers.Sort(static (left, right) => left.Order.CompareTo(right.Order));
             _dirty = false;
         }
 
