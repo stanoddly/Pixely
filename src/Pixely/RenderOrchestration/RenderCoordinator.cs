@@ -13,13 +13,13 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 {
     private readonly Window _window;
     private readonly GpuMemorySystem _gpuMemorySystem;
-    private readonly IRenderContextProvider<TRenderContext> _renderContextProvider;
+    private readonly RenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
 
     public RenderCoordinator(
         Window window,
         GpuMemorySystem gpuMemorySystem,
-        IRenderContextProvider<TRenderContext> renderContextProvider,
+        RenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers)
     {
         _window = window;

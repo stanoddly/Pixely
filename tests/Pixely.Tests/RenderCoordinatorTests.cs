@@ -28,7 +28,7 @@ public class RenderCoordinatorTests
         Assert.Multiple(() =>
         {
             Assert.That(builder.IsRegistered<Window>(), Is.True);
-            Assert.That(builder.IsRegistered<IRenderContextProvider<BasicRenderContext>>(), Is.True);
+            Assert.That(builder.IsRegistered<RenderContextProvider<BasicRenderContext>>(), Is.True);
         });
     }
 
@@ -137,7 +137,7 @@ public class RenderCoordinatorTests
         childCollection.UseWindowRendering<TestRenderContext>(viewScope);
         childCollection.AddSingleton(window);
         childCollection.AddSingleton(renderContextSource);
-        childCollection.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
+        childCollection.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         ServiceProvider child = childCollection.BuildServiceProvider();
 
         child.GetRequiredService<IRenderCoordinator>().Execute();
@@ -246,7 +246,7 @@ public class RenderCoordinatorTests
         builder.UseWindowRendering<TestRenderContext>(viewScope);
         builder.AddSingleton(CreateWindow(viewScope, 42));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
-        builder.AddAlias<IRenderContextProvider<TestRenderContext>, TestRenderContextSource>();
+        builder.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         builder.AddSingleton(new GpuMemorySystem(null!));
         builder.AddSingleton(calls);
         return builder;
@@ -266,13 +266,13 @@ public class RenderCoordinatorTests
         field.SetValue(window, value);
     }
 
-    private sealed class TestRenderContextSource : IRenderContextProvider<TestRenderContext>
+    private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>
     {
         public bool CanCreate { get; init; } = true;
         public TestRenderContext? LastRenderContext { get; private set; }
         public Window? LastWindow { get; private set; }
 
-        public bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
+        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
         {
             LastWindow = window;
             if (!CanCreate)

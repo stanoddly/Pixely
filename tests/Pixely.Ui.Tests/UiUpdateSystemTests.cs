@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using Pixely.App;
 using Pixely.DependencyInjection;
+using Pixely.RenderOrchestration;
 
 namespace Pixely.Ui.Tests;
 
@@ -98,23 +100,18 @@ public class UiUpdateSystemTests
     {
         ViewScope first = new(1);
         ViewScope second = new(2);
-
-        Window firstWindow = UninitialisedWindow(first, 1);
-        Window secondWindow = UninitialisedWindow(second, 2);
         UiRoot firstRoot = new();
         UiRoot secondRoot = new();
+        Window firstWindow = UninitialisedWindow(first, 1);
+        Window secondWindow = UninitialisedWindow(second, 2);
 
-        PixelyAppBuilder builder = new();
-        builder.AddRegistry<ScopedUiRoot>();
-        builder.AddSingleton(firstWindow);
-        builder.AddSingleton(secondWindow);
-        builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(first, firstRoot));
-        builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(second, secondRoot));
+        ServiceProvider provider = Resolvable(
+            new SizedContextProvider(new ShortSize(320, 240)),
+            (first, firstRoot, firstWindow),
+            (second, secondRoot, secondWindow));
 
-        ServiceProvider provider = builder.BuildServiceProvider();
-
-        (UiRoot resolvedFirstRoot, Window resolvedFirstWindow) = UiExtensions.ResolveUpdateTargets(provider, first);
-        (UiRoot resolvedSecondRoot, Window resolvedSecondWindow) = UiExtensions.ResolveUpdateTargets(provider, second);
+        (UiRoot resolvedFirstRoot, Window resolvedFirstWindow, _) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, first);
+        (UiRoot resolvedSecondRoot, Window resolvedSecondWindow, _) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, second);
 
         Assert.Multiple(() =>
         {
@@ -123,6 +120,67 @@ public class UiUpdateSystemTests
             Assert.That(resolvedSecondRoot, Is.SameAs(secondRoot));
             Assert.That(resolvedSecondWindow, Is.SameAs(secondWindow));
         });
+    }
+
+    [Test]
+    public void TheViewportComesFromTheContextProvider_NotTheWindow()
+    {
+        ViewScope viewScope = new(1);
+        UiRoot root = new();
+        SizedContextProvider contextProvider = new(new ShortSize(640, 360));
+
+        ServiceProvider provider = Resolvable(contextProvider, (viewScope, root, UninitialisedWindow(viewScope, 1)));
+
+        (UiRoot _, Window window, RenderContextProvider<BasicRenderContext> resolved) =
+            UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, viewScope);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resolved, Is.SameAs(contextProvider));
+
+            // Reading it through the resolved provider is the whole point: an uninitialised window
+            // has no SDL size to give, so a viewport that came from the window could not answer.
+            Assert.That(resolved.GetColorTargetSize(window), Is.EqualTo(new ShortSize(640, 360)));
+        });
+    }
+
+    /// <summary>A provider that answers with a fixed colour target size and never creates a context.</summary>
+    private sealed class SizedContextProvider : RenderContextProvider<BasicRenderContext>
+    {
+        private readonly ShortSize _size;
+
+        internal SizedContextProvider(ShortSize size)
+        {
+            _size = size;
+        }
+
+        public override ShortSize GetColorTargetSize(Window window)
+        {
+            return _size;
+        }
+
+        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+        {
+            renderContext = null;
+            return false;
+        }
+    }
+
+    private static ServiceProvider Resolvable(
+        RenderContextProvider<BasicRenderContext> contextProvider,
+        params (ViewScope ViewScope, UiRoot Root, Window Window)[] scopes)
+    {
+        PixelyAppBuilder builder = new();
+        builder.AddRegistry<ScopedUiRoot>();
+        builder.AddSingleton<RenderContextProvider<BasicRenderContext>>(_ => contextProvider);
+
+        foreach ((ViewScope viewScope, UiRoot root, Window window) in scopes)
+        {
+            builder.AddSingleton(window);
+            builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(viewScope, root));
+        }
+
+        return builder.BuildServiceProvider();
     }
 
     /// <summary>
