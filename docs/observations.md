@@ -19,8 +19,8 @@ Three types carry the core roles:
 So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
 rule produced.
 
-A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, reads through a reader of its own and hands on
-only what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
+A fourth, `ParticipantObservationReader<TEntry>`, reads through a reader of its own and hands on only what one
+participant perceived. See [Reading as one participant](#reading-as-one-participant).
 
 A fifth, `ObservationSnapshot<TEntry>`, is the log and its readers as data, so a run can be saved and resumed.
 See [Saving and resuming](#saving-and-resuming).
@@ -39,7 +39,7 @@ public readonly record struct UnitDiedEntry(UnitId Unit);
 
 public enum ObservationKind { UnitMoved, UnitDied }
 
-public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died);
+public readonly record struct Observation(ObservationKind Kind, string Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died);
 ```
 
 Entries are past-tense records of ids and value types, never a live reference into game state. With a value
@@ -99,7 +99,8 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 Each consumer constructs its own reader rather than being handed one, because every reader of a given log is
 the same closed type and the container resolves by type. Constructing it also lets the consumer name it. The
 name has to be unique within the log, because it identifies the reader in a stall message and in a save; see
-[Saving and resuming](#saving-and-resuming).
+[Saving and resuming](#saving-and-resuming). A participant reader adds the participant to it, so one consumer type
+can read for several participants under one name.
 
 A reader starts positioned after the last appended entry, so a consumer created part-way through a run sees
 only what is appended from then on. Readers drain independently: entries appended this frame may be drained by
@@ -108,20 +109,29 @@ one reader now and by another several frames later.
 ### Reading as one participant
 
 Addressing an entry to a subset of readers is the game's business, not the log's: the log never looks inside
-`TEntry`. Carry the perceiver in the entry, implement `IObservationParticipation<TParticipantId>` on it, and a
-consumer bound to one participant reads through `ParticipantObservationReader<TEntry, TParticipantId>` instead
-of repeating the check in every place that drains.
+`TEntry`. Carry the perceiver in the entry, implement `IObservationParticipation` on it, and a consumer bound to
+one participant reads through `ParticipantObservationReader<TEntry>` instead of repeating the check in every
+place that drains.
 
 ```csharp
-public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died)
-    : IObservationParticipation<ParticipantId>;
+public readonly record struct Observation(ObservationKind Kind, string Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died)
+    : IObservationParticipation;
 ```
 
 A positional `Perceiver` parameter already satisfies the interface, so implementing it adds no member.
 
+A participant is a 12 character `Base40Encoding` string, so the game encodes its own id once and carries the
+string from then on. The fixed width and alphabet are what let the participant be part of a reader's name and of
+a save without escaping. Constructing a reader with anything else throws; the log never looks inside `TEntry`,
+so an entry whose perceiver is malformed is not caught and simply never matches.
+
 ```csharp
-_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, nameof(UnitSpritePresenter));
+string participant = Base40Encoding.Encode(faction.Id);
+_observations = new ParticipantObservationReader<Observation>(log, participant, nameof(UnitSpritePresenter));
 ```
+
+The reader is named `UnitSpritePresenter:<participant>`, so a second presenter for another participant needs no
+name of its own.
 
 `TryRead` then yields only the entries that participant perceived. The rest are drained and passed over rather
 than left behind, so a reader bound to a participant who perceives nothing for a while still lets the log trim.
@@ -144,8 +154,8 @@ Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSprite
 
 ## Saving and resuming
 
-`ObservationSnapshot<TEntry>` is the whole log as data: the entries no reader has passed yet, the sequence
-number of the oldest of them, and where each reader had got to.
+`ObservationSnapshot<TEntry>` is the whole log as data: the entries no reader has passed yet and how many of
+them each reader had already read.
 
 ```csharp
 ObservationSnapshot<Observation> snapshot = ObservationSnapshot<Observation>.Capture(log);
@@ -153,9 +163,10 @@ ObservationSnapshot<Observation> snapshot = ObservationSnapshot<Observation>.Cap
 
 Capturing consumes nothing and moves no reader, so a save leaves the run it saved untouched.
 
-The log never looks inside `TEntry`, so it writes no bytes either. The snapshot is a record of a `long`, an
-`IReadOnlyList<TEntry>` and an `IReadOnlyDictionary<string, long>`, and the game writes it with the serializer
-it already uses. It round-trips through `System.Text.Json` as it stands, as long as `TEntry` does.
+The log never looks inside `TEntry`, so it writes no bytes either. The snapshot is a record of an
+`IReadOnlyList<TEntry>` and an `IReadOnlyDictionary<string, int>`, and the game writes it with the serializer it
+already uses. A position is an offset into the saved entries: 0 means the reader had read none of them, the count
+means all of them. Sequence numbers never leave the log, so a restored log counts from zero. It round-trips through `System.Text.Json` as it stands, as long as `TEntry` does.
 
 On load, restore the log in place of constructing one. Consumers do not change: each still constructs its own
 reader under its own name, and the restored log puts that reader back where it stopped.
@@ -172,11 +183,11 @@ name the log already has throws. A name the snapshot does not know starts after 
 what a consumer added since the save should do.
 
 `Restore` throws when the snapshot holds more entries than the maximum capacity allows, and when a reader
-position falls outside the entries the snapshot carries. A save that cannot be resumed as it was says so
+position is negative or past the end of the entries. A save that cannot be resumed as it was says so
 rather than dropping entries quietly.
 
-`ParticipantObservationReader<TEntry, TParticipantId>` resumes the same way, under its own name. Its position
-counts every entry its own reader drained, including the entries its participant did not perceive.
+`ParticipantObservationReader<TEntry>` resumes the same way, under its composed name. Its position counts every
+entry its own reader drained, including the entries its participant did not perceive.
 
 ### A reader that never comes back
 
@@ -195,7 +206,7 @@ save but never constructed.
 The snapshot is data, so drop that name before restoring:
 
 ```csharp
-Dictionary<string, long> positions = new(snapshot.ReaderPositions);
+Dictionary<string, int> positions = new(snapshot.ReaderPositions);
 positions.Remove(nameof(UnitSpritePresenter));
 snapshot = snapshot with { ReaderPositions = positions };
 ```

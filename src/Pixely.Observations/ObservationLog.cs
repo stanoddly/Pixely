@@ -53,10 +53,11 @@ public sealed class ObservationLog<TEntry>
             _entries[i] = snapshot.Entries[i];
         }
 
+        // Sequence numbers never leave the log, so a restored one counts from zero and a saved position, an
+        // offset into the saved entries, is already a sequence number.
         _count = snapshot.Entries.Count;
-        _firstSequence = snapshot.FirstSequence;
-        _nextSequence = snapshot.FirstSequence + snapshot.Entries.Count;
-        foreach (KeyValuePair<string, long> position in snapshot.ReaderPositions)
+        _nextSequence = snapshot.Entries.Count;
+        foreach (KeyValuePair<string, int> position in snapshot.ReaderPositions)
         {
             _restoredPositions.Add(position.Key, position.Value);
         }
@@ -74,21 +75,18 @@ public sealed class ObservationLog<TEntry>
     public static ObservationLog<TEntry> Restore(int maximumCapacity, ObservationSnapshot<TEntry> snapshot)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumCapacity, 1);
-        ArgumentOutOfRangeException.ThrowIfNegative(snapshot.FirstSequence);
         if (snapshot.Entries.Count > maximumCapacity)
         {
             throw new ArgumentOutOfRangeException(nameof(snapshot),
                 $"The snapshot holds {snapshot.Entries.Count} entries, more than the maximum capacity of {maximumCapacity}.");
         }
 
-        long nextSequence = snapshot.FirstSequence + snapshot.Entries.Count;
-        foreach (KeyValuePair<string, long> position in snapshot.ReaderPositions)
+        foreach (KeyValuePair<string, int> position in snapshot.ReaderPositions)
         {
-            if (position.Value < snapshot.FirstSequence || position.Value > nextSequence)
+            if (position.Value < 0 || position.Value > snapshot.Entries.Count)
             {
                 throw new ArgumentOutOfRangeException(nameof(snapshot),
-                    $"The snapshot holds sequence numbers {snapshot.FirstSequence} to {nextSequence}, "
-                    + $"so reader '{position.Key}' cannot resume at {position.Value}.");
+                    $"The snapshot holds {snapshot.Entries.Count} entries, so reader '{position.Key}' cannot have read {position.Value} of them.");
             }
         }
 
@@ -141,8 +139,6 @@ public sealed class ObservationLog<TEntry>
         _readers.Add(reader);
     }
 
-    internal long FirstSequence => _firstSequence;
-
     internal TEntry[] CopyRetainedEntries()
     {
         TEntry[] entries = new TEntry[_count];
@@ -156,12 +152,17 @@ public sealed class ObservationLog<TEntry>
 
     // A reader restored from an earlier save but not yet constructed still holds the log, so it belongs in the
     // next save as much as a reader that is here.
-    internal Dictionary<string, long> CopyReaderPositions()
+    internal Dictionary<string, int> CopyReaderPositions()
     {
-        Dictionary<string, long> positions = new(_restoredPositions);
+        Dictionary<string, int> positions = new();
+        foreach (KeyValuePair<string, long> restored in _restoredPositions)
+        {
+            positions.Add(restored.Key, checked((int)(restored.Value - _firstSequence)));
+        }
+
         foreach (ObservationReader<TEntry> reader in _readers)
         {
-            positions.Add(reader.Name, reader.NextSequence);
+            positions.Add(reader.Name, checked((int)(reader.NextSequence - _firstSequence)));
         }
 
         return positions;

@@ -11,19 +11,27 @@ namespace Pixely.Observations;
 /// The entries other participants perceived are drained and passed over rather than left behind, which is what
 /// keeps a reader bound to a quiet participant from holding the log's trim point and filling it.
 /// </remarks>
-public sealed class ParticipantObservationReader<TEntry, TParticipantId> : IDisposable where TEntry : IObservationParticipation<TParticipantId>
+public sealed class ParticipantObservationReader<TEntry> : IDisposable where TEntry : IObservationParticipation
 {
     private readonly ObservationReader<TEntry> _reader;
-    private readonly TParticipantId _participant;
+    private readonly string _participant;
 
-    /// <param name="participant">The participant whose entries this reader hands on; the rest are passed over.</param>
-    /// <param name="name">
-    /// Identifies this reader, so give it the consumer's own name. It carries the same rules as an
-    /// <see cref="ObservationReader{TEntry}"/> name.
+    /// <param name="participant">
+    /// The participant whose entries this reader hands on; the rest are passed over. It has to be a 12 character
+    /// <see cref="Base40Encoding"/> string, which is what lets it be part of the reader's name.
     /// </param>
-    public ParticipantObservationReader(ObservationLog<TEntry> log, TParticipantId participant, string name)
+    /// <param name="name">
+    /// Names the consumer. The reader is named after it and the participant together, so one consumer type may
+    /// read for several participants on the same log.
+    /// </param>
+    public ParticipantObservationReader(ObservationLog<TEntry> log, string participant, string name)
     {
-        _reader = new ObservationReader<TEntry>(log, name);
+        if (!Base40Encoding.TryDecode(participant, out ulong _))
+        {
+            throw new ArgumentException($"Participant '{participant}' is not a 12 character base-40 string.", nameof(participant));
+        }
+
+        _reader = new ObservationReader<TEntry>(log, $"{name}:{participant}");
         _participant = participant;
     }
 
@@ -31,7 +39,7 @@ public sealed class ParticipantObservationReader<TEntry, TParticipantId> : IDisp
     {
         while (_reader.TryRead(out entry))
         {
-            if (EqualityComparer<TParticipantId>.Default.Equals(entry.Perceiver, _participant))
+            if (string.Equals(entry.Perceiver, _participant, StringComparison.Ordinal))
             {
                 return true;
             }
