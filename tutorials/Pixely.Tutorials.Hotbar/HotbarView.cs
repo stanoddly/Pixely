@@ -1,7 +1,6 @@
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Sprites;
-using Pixely.Text;
 using Pixely.Ui;
 
 namespace Pixely.Tutorials.Hotbar;
@@ -22,11 +21,9 @@ public sealed class HotbarView : UiView<HotbarViewModel>
     private readonly HotbarSlot[] _slots;
     private readonly Label _label;
 
-    public HotbarView(HotbarViewModel viewModel, IFontSystem fontSystem, ITextureLoader textureLoader)
+    public HotbarView(HotbarViewModel viewModel, ITextureLoader textureLoader)
         : base(viewModel)
     {
-        Font font = fontSystem.Load("fonts/GohuFont-Medium.ttf", 14);
-
         _slots = new HotbarSlot[HotbarViewModel.SlotCount];
         for (int i = 0; i < _slots.Length; i++)
         {
@@ -41,7 +38,8 @@ public sealed class HotbarView : UiView<HotbarViewModel>
 
         // Anchored above whichever slot is hovered, and hidden until one is. The label is not in the
         // view model: which slot the pointer is on is a fact about the tree, not about the game.
-        _label = new Label(font) { IsVisible = false };
+        // No font is passed: the label takes it from the root's UiStyle.
+        _label = new Label { IsVisible = false };
     }
 
     protected override Element Build()

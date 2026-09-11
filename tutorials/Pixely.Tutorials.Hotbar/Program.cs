@@ -2,6 +2,7 @@ using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
+using Pixely.Text;
 using Pixely.Ui;
 
 namespace Pixely.Tutorials.Hotbar;
@@ -21,6 +22,7 @@ static class Program
             .UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
 
         builder.UseUi();
+        builder.AddSingleton<UiStyle>(provider => new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14)));
         builder.AddSingleton(new HotbarViewModel());
         builder.AddSingleton<IUiView, HotbarView>();
 
