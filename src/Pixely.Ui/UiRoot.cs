@@ -52,12 +52,16 @@ public sealed class UiRoot : IUiPaintSource
 
     internal bool IsPaintDirty { get; private set; } = true;
 
-    /// <summary>
-    /// Rises with every completed build. The renderer compares it against what it last painted, so a
-    /// renderer that missed a build still repaints rather than depending on having been the caller
-    /// that triggered it.
-    /// </summary>
+    /// <summary>Rises with every completed build, whether or not it changed what is painted.</summary>
     internal ulong BuildVersion { get; private set; }
+
+    /// <summary>
+    /// Rises with every build whose instructions differ from the build before it. The renderer
+    /// compares it against what it last painted, so a renderer that missed a build still repaints
+    /// rather than depending on having been the caller that triggered it, and a build that changed
+    /// nothing visible costs no repaint.
+    /// </summary>
+    internal ulong PaintVersion { get; private set; }
 
     internal IReadOnlyList<PaintInstruction> Instructions => _paintContext.Instructions;
 
@@ -499,8 +503,7 @@ public sealed class UiRoot : IUiPaintSource
     }
 
     /// <summary>
-    /// Brings the tree up to date if anything changed. Returns true when the instruction list was
-    /// rebuilt, so the caller knows the retained texture needs repainting.
+    /// Brings the tree up to date if anything changed. Returns true when a build ran.
     /// </summary>
     public bool Update()
     {
@@ -565,7 +568,11 @@ public sealed class UiRoot : IUiPaintSource
             layer.Paint(_paintContext);
         }
 
-        PaintBatcher.Build(_paintContext.Instructions, _batches);
+        if (_paintContext.Complete())
+        {
+            PaintBatcher.Build(_paintContext.Instructions, _batches);
+            PaintVersion++;
+        }
 
         _layersChanged = false;
         IsPaintDirty = false;
@@ -627,5 +634,5 @@ public sealed class UiRoot : IUiPaintSource
     IReadOnlyList<PaintBatch> IUiPaintSource.Batches => Batches;
     Vector2Int IUiPaintSource.PaintedViewportSize => PaintedViewportSize;
     Vector2Int IUiPaintSource.ViewportSize => ViewportSize;
-    ulong IUiPaintSource.BuildVersion => BuildVersion;
+    ulong IUiPaintSource.PaintVersion => PaintVersion;
 }

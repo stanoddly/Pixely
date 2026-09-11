@@ -18,5 +18,5 @@ internal interface IUiPaintSource
 
     Vector2Int ViewportSize { get; }
 
-    ulong BuildVersion { get; }
+    ulong PaintVersion { get; }
 }
