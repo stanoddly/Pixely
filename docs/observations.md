@@ -11,8 +11,8 @@ frame. State answers what is true now, and a rule can resolve many transitions b
 
 Three types carry the core roles:
 
-- `ObservationLog<TEntry>` is the storage. It is constructed and then handed to the other two; it has no other
-  public members.
+- `ObservationLog<TEntry>` is the storage. It is constructed and then handed to the writer, and it creates the
+  readers; it has no other public members.
 - `ObservationWriter<TEntry>` appends. It cannot read.
 - `ObservationReader<TEntry>` is one reader's position in the log. It cannot append.
 
@@ -25,7 +25,7 @@ what one participant perceived. See [Reading as one participant](#reading-as-one
 A fifth, `ObservationSnapshot<TEntry>`, is the log and its readers as data, so a run can be saved and resumed.
 See [Saving and resuming](#saving-and-resuming).
 
-The log belongs to one frame loop and is not thread safe. Appending, reading and constructing a reader all
+The log belongs to one frame loop and is not thread safe. Appending, reading and creating a reader all
 happen on the same thread.
 
 ## The entry type
@@ -71,7 +71,7 @@ internal sealed class MoveMechanic
 
 ## Reading
 
-Inject the log, construct a reader named after the consumer, and drain it in the consumer's own update. Dispose
+Inject the log, create a reader named after the consumer, and drain it in the consumer's own update. Dispose
 the reader with the consumer:
 
 ```csharp
@@ -81,7 +81,7 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 
     internal UnitSpritePresenter(ObservationLog<Observation> log)
     {
-        _observations = new ObservationReader<Observation>(log, nameof(UnitSpritePresenter));
+        _observations = log.CreateReader(nameof(UnitSpritePresenter));
     }
 
     public void Update()
@@ -96,8 +96,8 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 }
 ```
 
-Each consumer constructs its own reader rather than being handed one, because every reader of a given log is
-the same closed type and the container resolves by type. Constructing it also lets the consumer name it. The
+Each consumer creates its own reader rather than being handed one, because every reader of a given log is the
+same closed type and the container resolves by type. Creating it also lets the consumer name it. The
 name has to be unique within the log, because it identifies the reader in a stall message and in a save; see
 [Saving and resuming](#saving-and-resuming).
 
@@ -120,7 +120,7 @@ public readonly record struct Observation(ObservationKind Kind, ParticipantId Pe
 A positional `Perceiver` parameter already satisfies the interface, so implementing it adds no member.
 
 ```csharp
-_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, $"{nameof(UnitSpritePresenter)}:{participant}");
+_observations = log.CreateParticipantReader(participant, $"{nameof(UnitSpritePresenter)}:{participant}");
 ```
 
 The name follows the same rules as any reader's, and the participant is not part of it unless the game puts it
@@ -162,18 +162,18 @@ The log never looks inside `TEntry`, so it writes no bytes either. The snapshot 
 already uses. A position is an offset into the saved entries: 0 means the reader had read none of them, the count
 means all of them. Sequence numbers never leave the log, so a restored log counts from zero. It round-trips through `System.Text.Json` as it stands, as long as `TEntry` does.
 
-On load, restore the log in place of constructing one. Consumers do not change: each still constructs its own
+On load, restore the log in place of constructing one. Consumers do not change: each still creates its own
 reader under its own name, and the restored log puts that reader back where it stopped.
 
 ```csharp
 ObservationLog<Observation> log = ObservationLog<Observation>.Restore(4096, snapshot);
 
 // in the consumer, the same line as on a first run
-_observations = new ObservationReader<Observation>(log, nameof(UnitSpritePresenter));
+_observations = log.CreateReader(nameof(UnitSpritePresenter));
 ```
 
-A reader name is an identity, then, not just a label in an error message. Constructing a second reader under a
-name the log already has throws. A name the snapshot does not know starts after the restored entries, which is
+A reader name is an identity, then, not just a label in an error message. Creating a second reader under a name
+the log already has throws. A name the snapshot does not know starts after the restored entries, which is
 what a consumer added since the save should do.
 
 `Restore` throws when the snapshot holds more entries than the maximum capacity allows, and when a reader
@@ -185,8 +185,8 @@ counts every entry it drained, including the entries its participant did not per
 
 ### A reader that never comes back
 
-A saved position holds the trim point until its reader is constructed, exactly as the reader itself would.
-Order therefore does not matter on load: another consumer can drain everything before a reader is constructed,
+A saved position holds the trim point until its reader is created, exactly as the reader itself would. Order
+therefore does not matter on load: another consumer can drain everything before a reader is created,
 and that reader still resumes where it stopped.
 
 The cost is that a consumer dropped from the game keeps holding the log. Nothing ever claims its position, the
@@ -194,7 +194,7 @@ log fills, and the message names it:
 
 ```text
 Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSpritePresenter' was restored from a
-save but never constructed.
+save but never created.
 ```
 
 The snapshot is data, so drop that name before restoring:

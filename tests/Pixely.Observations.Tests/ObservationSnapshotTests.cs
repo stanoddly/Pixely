@@ -8,7 +8,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        ObservationReader<TestEntry> reader = log.CreateReader("presenter");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -25,8 +25,8 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> fast = new ObservationReader<TestEntry>(log, "fast");
-        new ObservationReader<TestEntry>(log, "slow");
+        ObservationReader<TestEntry> fast = log.CreateReader("fast");
+        log.CreateReader("slow");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -42,7 +42,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        ObservationReader<TestEntry> reader = log.CreateReader("presenter");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -57,7 +57,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        ObservationReader<TestEntry> reader = log.CreateReader("presenter");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -74,7 +74,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        ObservationReader<TestEntry> reader = log.CreateReader("presenter");
 
         // Ten drained entries push the head mid-buffer, so the retained ones wrap around the end.
         for (int i = 0; i < 10; i++)
@@ -99,7 +99,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(log, "presenter");
+        ObservationReader<TestEntry> reader = log.CreateReader("presenter");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -109,7 +109,7 @@ public sealed class ObservationSnapshotTests
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Roundtrip(ObservationSnapshot<TestEntry>.Capture(log)));
 
         // The consumer's load path is the same code as its first run.
-        ObservationReader<TestEntry> restoredReader = new ObservationReader<TestEntry>(restored, "presenter");
+        ObservationReader<TestEntry> restoredReader = restored.CreateReader("presenter");
 
         Assert.That(Drain(restoredReader), Is.EqualTo(new[] { 2, 3 }));
     }
@@ -119,8 +119,8 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(log);
-        ObservationReader<TestEntry> fast = new ObservationReader<TestEntry>(log, "fast");
-        new ObservationReader<TestEntry>(log, "slow");
+        ObservationReader<TestEntry> fast = log.CreateReader("fast");
+        log.CreateReader("slow");
 
         writer.Append(new TestEntry(1));
         writer.Append(new TestEntry(2));
@@ -128,19 +128,19 @@ public sealed class ObservationSnapshotTests
 
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, ObservationSnapshot<TestEntry>.Capture(log));
 
-        Assert.That(Drain(new ObservationReader<TestEntry>(restored, "fast")), Is.Empty);
-        Assert.That(Drain(new ObservationReader<TestEntry>(restored, "slow")), Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(Drain(restored.CreateReader("fast")), Is.Empty);
+        Assert.That(Drain(restored.CreateReader("slow")), Is.EqualTo(new[] { 1, 2 }));
     }
 
     [Test]
     public void RestoredLog_KeepsAppendingAfterWhatItHeld()
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(64);
-        new ObservationReader<TestEntry>(log, "presenter");
+        log.CreateReader("presenter");
         new ObservationWriter<TestEntry>(log).Append(new TestEntry(1));
 
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, ObservationSnapshot<TestEntry>.Capture(log));
-        ObservationReader<TestEntry> restoredReader = new ObservationReader<TestEntry>(restored, "presenter");
+        ObservationReader<TestEntry> restoredReader = restored.CreateReader("presenter");
         new ObservationWriter<TestEntry>(restored).Append(new TestEntry(2));
 
         Assert.That(Drain(restoredReader), Is.EqualTo(new[] { 1, 2 }));
@@ -150,11 +150,11 @@ public sealed class ObservationSnapshotTests
     public void RestoredLog_TrimsBehindItsRestoredReaders()
     {
         ObservationLog<TestEntry> log = new ObservationLog<TestEntry>(4);
-        new ObservationReader<TestEntry>(log, "presenter");
+        log.CreateReader("presenter");
         new ObservationWriter<TestEntry>(log).Append(new TestEntry(1));
 
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(4, ObservationSnapshot<TestEntry>.Capture(log));
-        ObservationReader<TestEntry> restoredReader = new ObservationReader<TestEntry>(restored, "presenter");
+        ObservationReader<TestEntry> restoredReader = restored.CreateReader("presenter");
         ObservationWriter<TestEntry> restoredWriter = new ObservationWriter<TestEntry>(restored);
 
         // A restored log that kept the entries but not the trim point would fill after three more appends.
@@ -173,7 +173,7 @@ public sealed class ObservationSnapshotTests
         ObservationSnapshot<TestEntry> snapshot = Snapshot(new[] { 1, 2 }, ("presenter", 0));
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, snapshot);
 
-        ObservationReader<TestEntry> latecomer = new ObservationReader<TestEntry>(restored, "latecomer");
+        ObservationReader<TestEntry> latecomer = restored.CreateReader("latecomer");
         new ObservationWriter<TestEntry>(restored).Append(new TestEntry(3));
 
         Assert.That(Drain(latecomer), Is.EqualTo(new[] { 3 }));
@@ -187,11 +187,11 @@ public sealed class ObservationSnapshotTests
 
         // Another reader drains everything first, which would trim the presenter's entries away if a position
         // held nothing back until its reader appeared.
-        ObservationReader<TestEntry> latecomer = new ObservationReader<TestEntry>(restored, "latecomer");
+        ObservationReader<TestEntry> latecomer = restored.CreateReader("latecomer");
         new ObservationWriter<TestEntry>(restored).Append(new TestEntry(3));
         Drain(latecomer);
 
-        Assert.That(Drain(new ObservationReader<TestEntry>(restored, "presenter")), Is.EqualTo(new[] { 1, 2, 3 }));
+        Assert.That(Drain(restored.CreateReader("presenter")), Is.EqualTo(new[] { 1, 2, 3 }));
     }
 
     [Test]
@@ -208,7 +208,7 @@ public sealed class ObservationSnapshotTests
 
         Assert.That(() => writer.Append(new TestEntry(4)),
             Throws.InvalidOperationException.With.Message.Contains("presenter")
-                .And.Message.Contains("never constructed"));
+                .And.Message.Contains("never created"));
     }
 
     [Test]
@@ -261,14 +261,14 @@ public sealed class ObservationSnapshotTests
         ObservationSnapshot<TestEntry> snapshot = Snapshot(Enumerable.Range(0, 100).ToArray(), ("presenter", 0));
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(1024, snapshot);
 
-        Assert.That(Drain(new ObservationReader<TestEntry>(restored, "presenter")), Is.EqualTo(Enumerable.Range(0, 100)));
+        Assert.That(Drain(restored.CreateReader("presenter")), Is.EqualTo(Enumerable.Range(0, 100)));
     }
 
     [Test]
     public void Capture_OfARestoredLogCountsFromItsOwnEntries()
     {
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1, 2, 3 }, ("presenter", 1)));
-        ObservationReader<TestEntry> reader = new ObservationReader<TestEntry>(restored, "presenter");
+        ObservationReader<TestEntry> reader = restored.CreateReader("presenter");
         reader.TryRead(out _);
 
         ObservationSnapshot<TestEntry> snapshot = ObservationSnapshot<TestEntry>.Capture(restored);
@@ -283,7 +283,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "presenter");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "presenter");
 
         writer.Append(new ParticipantEntry(1, 10));
         writer.Append(new ParticipantEntry(2, 20));
@@ -292,7 +292,7 @@ public sealed class ObservationSnapshotTests
 
         ObservationLog<ParticipantEntry> restored = ObservationLog<ParticipantEntry>.Restore(64, ObservationSnapshot<ParticipantEntry>.Capture(log));
         ParticipantObservationReader<ParticipantEntry, int> restoredReader =
-            new ParticipantObservationReader<ParticipantEntry, int>(restored, 1, "presenter");
+            restored.CreateParticipantReader(1, "presenter");
 
         Assert.That(restoredReader.TryRead(out ParticipantEntry entry), Is.True);
         Assert.That(entry.Value, Is.EqualTo(30));

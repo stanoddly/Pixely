@@ -12,7 +12,7 @@ namespace Pixely.Observations;
 /// The log is storage and nothing else: it is reached through an <see cref="ObservationWriter{TEntry}"/> or an
 /// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job, and through an
 /// <see cref="ObservationSnapshot{TEntry}"/> when a run is saved. It belongs to one frame
-/// loop and is not thread safe: appending, reading and constructing a reader must all happen on the same thread.
+/// loop and is not thread safe: appending, reading and creating a reader must all happen on the same thread.
 /// </remarks>
 /// <typeparam name="TEntry">
 /// The single entry type of this log; the log never looks inside it. Carry several kinds of entry in one log
@@ -65,8 +65,8 @@ public sealed class ObservationLog<TEntry>
 
     /// <summary>
     /// Restores a log holding what <see cref="ObservationSnapshot{TEntry}.Capture"/> took from a saved run.
-    /// Each reader goes back to where it stopped as it is constructed, matched by name, so a consumer builds
-    /// its reader exactly as it does on a first run.
+    /// Each reader goes back to where it stopped as it is created, matched by name, so a consumer creates its
+    /// reader exactly as it does on a first run.
     /// </summary>
     /// <param name="maximumCapacity">
     /// As for the constructor, and at least as large as the snapshot. Lowering it below what a saved run held
@@ -122,21 +122,23 @@ public sealed class ObservationLog<TEntry>
         return true;
     }
 
-    internal void AddCursor(ObservationCursor<TEntry> cursor)
+    internal ObservationCursor<TEntry> CreateCursor(string name)
     {
         foreach (ObservationCursor<TEntry> existing in _cursors)
         {
-            if (existing.Name == cursor.Name)
+            if (existing.Name == name)
             {
-                throw new InvalidOperationException($"The log already has a reader named '{cursor.Name}'. "
+                throw new InvalidOperationException($"The log already has a reader named '{name}'. "
                     + "A name identifies a reader when the log fills and when a saved run is restored, so it has to be unique.");
             }
         }
 
         // A reader restored from a save resumes where it stopped; any other starts after the last appended
         // entry, so it sees only what is appended from now on.
-        cursor.NextSequence = _restoredPositions.Remove(cursor.Name, out long restored) ? restored : _nextSequence;
+        ObservationCursor<TEntry> cursor = new ObservationCursor<TEntry>(this, name);
+        cursor.NextSequence = _restoredPositions.Remove(name, out long restored) ? restored : _nextSequence;
         _cursors.Add(cursor);
+        return cursor;
     }
 
     internal TEntry[] CopyRetainedEntries()
@@ -278,7 +280,7 @@ public sealed class ObservationLog<TEntry>
 
         if (unrestored.Count > 0)
         {
-            message += $" Reader '{string.Join("', '", unrestored)}' was restored from a save but never constructed.";
+            message += $" Reader '{string.Join("', '", unrestored)}' was restored from a save but never created.";
         }
 
         return message;

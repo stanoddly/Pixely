@@ -8,22 +8,18 @@ namespace Pixely.Observations;
 /// that drains.
 /// </summary>
 /// <remarks>
-/// The entries other participants perceived are drained and passed over rather than left behind, which is what
-/// keeps a reader bound to a quiet participant from holding the log's trim point and filling it.
+/// Create it with <see cref="ObservationLogExtensions.CreateParticipantReader{TEntry,TParticipantId}"/>. The
+/// entries other participants perceived are drained and passed over rather than left behind, which is what keeps
+/// a reader bound to a quiet participant from holding the log's trim point and filling it.
 /// </remarks>
 public sealed class ParticipantObservationReader<TEntry, TParticipantId> : IDisposable where TEntry : IObservationParticipation<TParticipantId>
 {
     private readonly ObservationCursor<TEntry> _cursor;
     private readonly TParticipantId _participant;
 
-    /// <param name="participant">The participant whose entries this reader hands on; the rest are passed over.</param>
-    /// <param name="name">
-    /// Identifies this reader, under the same rules as an <see cref="ObservationReader{TEntry}"/> name. One
-    /// consumer type reading for several participants gives each reader a name that says which.
-    /// </param>
-    public ParticipantObservationReader(ObservationLog<TEntry> log, TParticipantId participant, string name)
+    internal ParticipantObservationReader(ObservationCursor<TEntry> cursor, TParticipantId participant)
     {
-        _cursor = new ObservationCursor<TEntry>(log, name);
+        _cursor = cursor;
         _participant = participant;
     }
 

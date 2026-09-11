@@ -3,8 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 namespace Pixely.Observations;
 
 /// <summary>
-/// What the log tracks for one reader: its name and how far it has read. Each public reader owns one, so the log
-/// sees every kind of reader the same way.
+/// What the log tracks for one reader: its name and how far it has read. The log creates it, each public reader
+/// owns one, and so the log sees every kind of reader the same way.
 /// </summary>
 internal sealed class ObservationCursor<TEntry>
 {
@@ -15,7 +15,6 @@ internal sealed class ObservationCursor<TEntry>
     {
         _log = log;
         Name = name;
-        log.AddCursor(this);
     }
 
     internal string Name { get; }

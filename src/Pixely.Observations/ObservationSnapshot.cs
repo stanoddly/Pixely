@@ -6,7 +6,7 @@ namespace Pixely.Observations;
 /// to <see cref="ObservationLog{TEntry}.Restore"/> on load.
 /// </summary>
 /// <remarks>
-/// A restored log puts each reader back where it stopped as the reader is constructed, matching it by name, so
+/// A restored log puts each reader back where it stopped as the reader is created, matching it by name, so
 /// a consumer's load path is the same code as its first run.
 /// </remarks>
 /// <param name="Entries">The retained entries, oldest first.</param>

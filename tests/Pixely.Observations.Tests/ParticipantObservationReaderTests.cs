@@ -10,7 +10,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "reader");
 
         writer.Append(new ParticipantEntry(1, 10));
         writer.Append(new ParticipantEntry(2, 20));
@@ -25,8 +25,8 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> first = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "first");
-        ParticipantObservationReader<ParticipantEntry, int> second = new ParticipantObservationReader<ParticipantEntry, int>(log, 2, "second");
+        ParticipantObservationReader<ParticipantEntry, int> first = log.CreateParticipantReader(1, "first");
+        ParticipantObservationReader<ParticipantEntry, int> second = log.CreateParticipantReader(2, "second");
 
         writer.Append(new ParticipantEntry(1, 10));
         writer.Append(new ParticipantEntry(2, 20));
@@ -40,7 +40,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(8);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "quiet");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "quiet");
 
         // Nothing here is this reader's, and draining it still has to free every slot or the log fills.
         for (int i = 0; i < 8 * 10; i++)
@@ -59,7 +59,7 @@ public sealed class ParticipantObservationReaderTests
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
         writer.Append(new ParticipantEntry(1, 10));
 
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "reader");
         writer.Append(new ParticipantEntry(1, 20));
 
         Assert.That(Drain(reader), Is.EqualTo(new[] { 20 }));
@@ -70,7 +70,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "reader");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "reader");
 
         writer.Append(new ParticipantEntry(2, 20));
 
@@ -83,7 +83,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(4);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        _ = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "presenter");
+        _ = log.CreateParticipantReader(1, "presenter");
 
         for (int i = 0; i < 4; i++)
         {
@@ -99,7 +99,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(4);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry, int> reader = new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "leaving");
+        ParticipantObservationReader<ParticipantEntry, int> reader = log.CreateParticipantReader(1, "leaving");
 
         for (int i = 0; i < 4; i++)
         {
@@ -116,10 +116,10 @@ public sealed class ParticipantObservationReaderTests
     public void Reader_NameMustBeUniqueAcrossBothKindsOfReader()
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
-        _ = new ObservationReader<ParticipantEntry>(log, "presenter");
+        _ = log.CreateReader("presenter");
 
-        Assert.That(() => new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "presenter"), Throws.InvalidOperationException);
-        Assert.That(() => new ParticipantObservationReader<ParticipantEntry, int>(log, 1, "presenter:1"), Throws.Nothing);
+        Assert.That(() => log.CreateParticipantReader(1, "presenter"), Throws.InvalidOperationException);
+        Assert.That(() => log.CreateParticipantReader(1, "presenter:1"), Throws.Nothing);
     }
 
     private static int[] Drain(ParticipantObservationReader<ParticipantEntry, int> reader)
