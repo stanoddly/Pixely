@@ -45,7 +45,7 @@ The policies are independent of file type. Generated shaders motivate the execut
 - [Embed generated shaders in an assembly](../tutorials/Pixely.Tutorials.EmbeddedContent/README.md)
 - [Publish content in a ZIP archive](../tutorials/Pixely.Tutorials.ZipContent/README.md)
 
-The embedded tutorial follows the policy used by `Pixely.Pencuil`. The ZIP tutorial follows the policy used by Nerudova: normal builds use a loose `Content` directory, while published builds use `Content.pk3`.
+The embedded tutorial follows the policy used by `Pixely.Ui`. The ZIP tutorial follows the policy used by Nerudova: normal builds use a loose `Content` directory, while published builds use `Content.pk3`.
 
 ## Publish without building
 

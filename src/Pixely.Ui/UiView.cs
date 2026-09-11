@@ -3,7 +3,7 @@ using System.Runtime.ExceptionServices;
 namespace Pixely.Ui;
 
 /// <summary>
-/// State a view renders, which announces when it has changed. Unlike Pencuil's dirty flag there is
+/// State a view renders, which announces when it has changed. Unlike a dirty flag there is
 /// nothing to poll: a retained tree only needs telling when to push new values into it.
 /// </summary>
 public interface IUiViewModel

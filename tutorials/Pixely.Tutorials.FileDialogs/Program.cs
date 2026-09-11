@@ -1,6 +1,8 @@
 using Pixely.App;
-using Pixely.Pencuil;
+using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Text;
+using Pixely.Ui;
 
 namespace Pixely.Tutorials.FileDialogs;
 
@@ -10,13 +12,18 @@ static class Program
     {
         PixelyAppBuilder builder = new();
         builder
-            .UsePencuil()
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-            .UseDefaultRendering(
-                new WindowConfig(Size: (960, 540), Title: "File Dialogs"));
+            .UseDefaultRendering(new WindowConfig(Size: (960, 540), Title: "File Dialogs"));
+
+        builder.UseUi();
+        builder.AddSingleton<UiStyle>(provider =>
+            new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 16))
+            {
+                Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255) }
+            });
 
         builder.AddSingleton(new FileDialogsViewModel());
-        builder.AddSingleton<IPencuilView, FileDialogsView>();
+        builder.AddSingleton<IUiView, FileDialogsView>();
 
         using IPixelyApp pixelyApp = builder.Build();
         return pixelyApp.Run();

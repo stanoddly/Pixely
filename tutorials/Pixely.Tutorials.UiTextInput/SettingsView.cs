@@ -5,9 +5,8 @@ using Pixely.Ui;
 namespace Pixely.Tutorials.UiTextInput;
 
 /// <summary>
-/// The retained counterpart of <c>Pixely.Tutorials.TextInput</c>. The immediate-mode version passes
-/// each value in and out of a <c>TextField</c> call every build; here the fields are elements that
-/// hold their own edit, and the view only hears about one when it commits.
+/// The fields are elements that hold their own edit, and the view only hears about one when it
+/// commits. Nothing is passed in and out of a call every build, as an immediate-mode field would need.
 /// </summary>
 public sealed class SettingsView : UiView<SettingsViewModel>
 {

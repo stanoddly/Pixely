@@ -25,13 +25,13 @@ work relative to them instead of guessing.
 | --- | --- | --- |
 | `UpdateOrders.Diagnostics` | -20 000 | `PerformanceTracker` |
 | `UpdateOrders.Default` | 0 | `TimerSystem`, `UpdateSystem` |
-| `UpdateOrders.Ui` | 10 000 | `UiUpdateSystem<T>` (Pixely.Ui), `PencilSystem` (Pencuil) |
+| `UpdateOrders.Ui` | 10 000 | `UiUpdateSystem<T>` (Pixely.Ui) |
 | `UpdateOrders.Maintenance` | 20 000 | `FontSystem` |
 
 | Constant | Value | Draws there |
 | --- | --- | --- |
 | `RenderOrders.Default` | 0 | nothing by default, the band a game draws in |
-| `RenderOrders.Ui` | 10 000 | `UiRenderer<T>`, `PencuilRenderer<T>` |
+| `RenderOrders.Ui` | 10 000 | `UiRenderer<T>` |
 
 Components that register with `UpdateSystem` run inside `UpdateOrders.Default`, in the order they
 called `Add`.
@@ -64,11 +64,10 @@ public class DebugOverlayRenderer : IRenderer<BasicRenderContext>
 ```
 
 `UseUi` takes `updateOrder` and `renderOrder` if a game needs the UI somewhere other than its
-default band. `UsePencuil` takes `order`, which is its render order; `PencilSystem` always builds at
-`UpdateOrders.Ui`.
+default band.
 
 ## Input order is a separate axis
 
 Mouse, keyboard and text input handlers are ordered by the `order` argument passed to their
 `Subscribe` call, not by `UpdateOrder`. That order decides who sees an event first and therefore who
-can consume it. Pencuil subscribes at `-10 000` so its controls get the click before the game does.
+can consume it. `UseUi` subscribes at `-10 000` so its controls get the click before the game does.

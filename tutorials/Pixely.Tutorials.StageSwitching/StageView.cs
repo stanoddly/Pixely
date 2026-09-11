@@ -1,14 +1,16 @@
 using Pixely.Gpu;
-using Pixely.Pencuil;
+using Pixely.Ui;
 
 namespace Pixely.Tutorials.StageSwitching;
 
-public class StageView : IPencuilView, IDisposable
+/// <summary>
+/// Owned by a stage. Disposing the stage disposes this view, and the container's callbacks take it
+/// off the root at the same time, which is why loading another stage swaps the panel.
+/// </summary>
+public sealed class StageView : UiView, IDisposable
 {
     private readonly string _name;
     private readonly Color _color;
-    private bool _dirty = true;
-
 
     public StageView(string name, Color color)
     {
@@ -22,21 +24,26 @@ public class StageView : IPencuilView, IDisposable
         Console.WriteLine($"StageView disposed: {_name}");
     }
 
-    public bool ConsumeDirty()
+    protected override Element BuildRoot()
     {
-        bool dirty = _dirty;
-        _dirty = false;
-        return dirty;
+        return new Overlay
+        {
+            Children =
+            {
+                new Column
+                {
+                    Background = new SolidDrawable(_color),
+                    Width = Sizing.Fixed(400),
+                    Height = Sizing.Fixed(300),
+                    HorizontalAlignment = Alignment.Center,
+                    VerticalAlignment = Alignment.Center,
+                    Offset = new Vector2Int(0, 40)
+                }
+            }
+        };
     }
 
-    public void Build(Pencil pencil)
+    protected override void Synchronize()
     {
-        int panelWidth = 400;
-        int panelHeight = 300;
-        int x = pencil.Center.X - panelWidth / 2;
-        int y = pencil.Center.Y - panelHeight / 2 + 40;
-
-        pencil.MoveTo(x, y);
-        pencil.Rectangle(panelWidth, panelHeight, _color);
     }
 }

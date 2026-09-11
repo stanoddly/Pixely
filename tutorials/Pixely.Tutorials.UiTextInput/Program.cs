@@ -8,10 +8,9 @@ using Pixely.Ui;
 namespace Pixely.Tutorials.UiTextInput;
 
 /// <summary>
-/// Editable fields in a retained UI. The immediate-mode version of this tutorial lives in
-/// <c>Pixely.Tutorials.TextInput</c>; the difference is that a field here is an element holding its
-/// own edit, so nothing is passed by reference through a build that runs every frame. Focus belongs
-/// to the root, which tells the field when it has it.
+/// Editable fields in a retained UI. A field is an element holding its own edit, so nothing is
+/// passed by reference through a build that runs every frame. Focus belongs to the root, which
+/// tells the field when it has it.
 /// </summary>
 static class Program
 {

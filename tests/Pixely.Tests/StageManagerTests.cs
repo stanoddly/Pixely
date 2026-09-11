@@ -1,6 +1,5 @@
 using Pixely.App;
 using Pixely.DependencyInjection;
-using Pixely.Pencuil;
 
 namespace Pixely.Tests;
 
@@ -18,12 +17,12 @@ public class StageManagerTests
     [Test]
     public void Load_DoesNotApplyImmediately()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
 
         Assert.That(ViewNames(viewRegistry), Is.Empty);
@@ -32,12 +31,12 @@ public class StageManagerTests
     [Test]
     public void Load_AppliesOnPendingTransition()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -47,16 +46,16 @@ public class StageManagerTests
     [Test]
     public void Load_MultipleBeforePendingTransition_LastWins()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("first"));
+            services.AddSingleton<IStageView>(new TestView("first"));
         });
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("second"));
+            services.AddSingleton<IStageView>(new TestView("second"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -66,12 +65,12 @@ public class StageManagerTests
     [Test]
     public void Reload_BeforePendingLoadIsApplied_Throws()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
 
         Assert.Throws<InvalidOperationException>(() => stageManager.Reload());
@@ -83,7 +82,7 @@ public class StageManagerTests
     [Test]
     public void Reload_RebuildsLastAppliedStageAtPendingTransition()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
         List<TestView> createdViews = new();
 
@@ -91,7 +90,7 @@ public class StageManagerTests
         {
             TestView view = new("stage");
             createdViews.Add(view);
-            services.AddSingleton<IPencuilView>(view);
+            services.AddSingleton<IStageView>(view);
         });
         stageManager.ApplyPendingTransition();
 
@@ -130,18 +129,18 @@ public class StageManagerTests
     [Test]
     public void Reload_AfterPendingLoad_ReplacesItWithActiveStage()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("active"));
+            services.AddSingleton<IStageView>(new TestView("active"));
         });
         stageManager.ApplyPendingTransition();
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("pending"));
+            services.AddSingleton<IStageView>(new TestView("pending"));
         });
         stageManager.Reload();
         stageManager.ApplyPendingTransition();
@@ -152,19 +151,19 @@ public class StageManagerTests
     [Test]
     public void Load_AfterPendingReload_ReplacesItWithLoadedStage()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("active"));
+            services.AddSingleton<IStageView>(new TestView("active"));
         });
         stageManager.ApplyPendingTransition();
 
         stageManager.Reload();
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("loaded"));
+            services.AddSingleton<IStageView>(new TestView("loaded"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -200,18 +199,18 @@ public class StageManagerTests
     [Test]
     public void Load_DisposesPreviousStageOnPendingTransition()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("first"));
+            services.AddSingleton<IStageView>(new TestView("first"));
         });
         stageManager.ApplyPendingTransition();
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("second"));
+            services.AddSingleton<IStageView>(new TestView("second"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -221,12 +220,12 @@ public class StageManagerTests
     [Test]
     public void ApplyPendingTransition_WithNoPending_DoesNothing()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -238,12 +237,12 @@ public class StageManagerTests
     [Test]
     public void Dispose_DisposesActiveStage()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -255,12 +254,12 @@ public class StageManagerTests
     [Test]
     public void Dispose_ClearsPendingLoad()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
 
         stageManager.Dispose();
@@ -286,12 +285,12 @@ public class StageManagerTests
     [Test]
     public void Load_RegistersStageServicesViaParentCallbacksOnPendingTransition()
     {
-        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IPencuilView> viewRegistry);
+        ServiceProvider root = BuildRootProvider(out ServiceRegistry<IStageView> viewRegistry);
         StageManager stageManager = new(root);
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("stage"));
+            services.AddSingleton<IStageView>(new TestView("stage"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -309,7 +308,7 @@ public class StageManagerTests
         TestConfig? resolved = null;
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(sp =>
+            services.AddSingleton<IStageView>(sp =>
             {
                 resolved = sp.GetRequiredService<TestConfig>();
                 return new TestView("stage");
@@ -336,7 +335,7 @@ public class StageManagerTests
 
         stageManager.Load(services =>
         {
-            services.AddSingleton<IPencuilView>(new TestView("next"));
+            services.AddSingleton<IStageView>(new TestView("next"));
         });
         stageManager.ApplyPendingTransition();
 
@@ -344,36 +343,37 @@ public class StageManagerTests
     }
 
     private static ServiceProvider BuildRootProvider(
-        out ServiceRegistry<IPencuilView> viewRegistry)
+        out ServiceRegistry<IStageView> viewRegistry)
     {
         ServiceCollection rootCollection = new();
-        rootCollection.AddRegistry<IPencuilView>();
+        rootCollection.AddRegistry<IStageView>();
         ServiceProvider provider = rootCollection.BuildServiceProvider();
-        viewRegistry = provider.GetRequiredService<ServiceRegistry<IPencuilView>>();
+        viewRegistry = provider.GetRequiredService<ServiceRegistry<IStageView>>();
         return provider;
     }
 
-    private static string[] ViewNames(ServiceRegistry<IPencuilView> viewRegistry)
+    private static string[] ViewNames(ServiceRegistry<IStageView> viewRegistry)
     {
         List<string> names = new();
-        foreach (IPencuilView view in viewRegistry)
+        foreach (IStageView view in viewRegistry)
         {
             names.Add(((TestView)view).Name);
         }
         return names.ToArray();
     }
 
-    private sealed class TestView : IPencuilView
+    private interface IStageView
+    {
+        string Name { get; }
+    }
+
+    private sealed class TestView : IStageView
     {
         public string Name { get; }
         public TestView(string name)
         {
             Name = name;
         }
-
-        public bool ConsumeDirty() => false;
-
-        public void Build(Pencil pencil) { }
     }
 
     private sealed class DisposableService : IDisposable
