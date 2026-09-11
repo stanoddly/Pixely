@@ -1,11 +1,11 @@
 namespace Pixely.Observations.Tests;
 
-public readonly record struct ParticipantEntry(string Perceiver, int Value) : IObservationParticipation;
+public readonly record struct ParticipantEntry(ParticipantId Perceiver, int Value) : IObservationParticipation<ParticipantId>;
 
 public static class Participants
 {
-    public static readonly string One = Base40Encoding.Encode(1);
-    public static readonly string Two = Base40Encoding.Encode(2);
+    public static readonly ParticipantId One = new ParticipantId(1);
+    public static readonly ParticipantId Two = new ParticipantId(2);
 }
 
 [TestFixture]
@@ -16,7 +16,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "reader");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "reader");
 
         writer.Append(new ParticipantEntry(Participants.One, 10));
         writer.Append(new ParticipantEntry(Participants.Two, 20));
@@ -31,8 +31,8 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> first = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "first");
-        ParticipantObservationReader<ParticipantEntry> second = new ParticipantObservationReader<ParticipantEntry>(log, Participants.Two, "second");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> first = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "first");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> second = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.Two, "second");
 
         writer.Append(new ParticipantEntry(Participants.One, 10));
         writer.Append(new ParticipantEntry(Participants.Two, 20));
@@ -46,7 +46,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(8);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "quiet");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "quiet");
 
         // Nothing here is this reader's, and draining it still has to free every slot or the log fills.
         for (int i = 0; i < 8 * 10; i++)
@@ -65,7 +65,7 @@ public sealed class ParticipantObservationReaderTests
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
         writer.Append(new ParticipantEntry(Participants.One, 10));
 
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "reader");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "reader");
         writer.Append(new ParticipantEntry(Participants.One, 20));
 
         Assert.That(Drain(reader), Is.EqualTo(new[] { 20 }));
@@ -76,7 +76,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "reader");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "reader");
 
         writer.Append(new ParticipantEntry(Participants.Two, 20));
 
@@ -89,7 +89,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(4);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        _ = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "presenter");
+        _ = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "presenter");
 
         for (int i = 0; i < 4; i++)
         {
@@ -105,7 +105,7 @@ public sealed class ParticipantObservationReaderTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(4);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "leaving");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "leaving");
 
         for (int i = 0; i < 4; i++)
         {
@@ -119,12 +119,26 @@ public sealed class ParticipantObservationReaderTests
     }
 
     [Test]
-    public void Reader_RejectsAParticipantThatIsNotBase40()
+    public void ParticipantId_PrintsAsTwelveBase40CharactersAndRejectsWhatCannot()
     {
-        ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
+        Assert.That(new ParticipantId(1).ToString(), Is.EqualTo("000000000001"));
+        Assert.That(() => new ParticipantId(ulong.MaxValue), Throws.TypeOf<ArgumentOutOfRangeException>());
+    }
 
-        Assert.That(() => new ParticipantObservationReader<ParticipantEntry>(log, "player one", "presenter"), Throws.ArgumentException);
-        Assert.That(() => new ParticipantObservationReader<ParticipantEntry>(log, "1", "presenter"), Throws.ArgumentException);
+    [Test]
+    public void Reader_IsNamedAfterTheConsumerAndTheParticipant()
+    {
+        ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(4);
+        ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
+        _ = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "presenter");
+
+        for (int i = 0; i < 4; i++)
+        {
+            writer.Append(new ParticipantEntry(Participants.Two, i));
+        }
+
+        Assert.That(() => writer.Append(new ParticipantEntry(Participants.Two, 4)),
+            Throws.InvalidOperationException.With.Message.Contains("'presenter:000000000001'"));
     }
 
     [Test]
@@ -134,13 +148,13 @@ public sealed class ParticipantObservationReaderTests
 
         Assert.That(() =>
         {
-            new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "brain");
-            new ParticipantObservationReader<ParticipantEntry>(log, Participants.Two, "brain");
+            new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "brain");
+            new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.Two, "brain");
         }, Throws.Nothing);
-        Assert.That(() => new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "brain"), Throws.InvalidOperationException);
+        Assert.That(() => new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "brain"), Throws.InvalidOperationException);
     }
 
-    private static int[] Drain(ParticipantObservationReader<ParticipantEntry> reader)
+    private static int[] Drain(ParticipantObservationReader<ParticipantEntry, ParticipantId> reader)
     {
         List<int> values = new();
         while (reader.TryRead(out ParticipantEntry entry))

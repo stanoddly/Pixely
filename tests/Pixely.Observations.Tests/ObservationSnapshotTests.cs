@@ -283,7 +283,7 @@ public sealed class ObservationSnapshotTests
     {
         ObservationLog<ParticipantEntry> log = new ObservationLog<ParticipantEntry>(64);
         ObservationWriter<ParticipantEntry> writer = new ObservationWriter<ParticipantEntry>(log);
-        ParticipantObservationReader<ParticipantEntry> reader = new ParticipantObservationReader<ParticipantEntry>(log, Participants.One, "presenter");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> reader = new ParticipantObservationReader<ParticipantEntry, ParticipantId>(log, Participants.One, "presenter");
 
         writer.Append(new ParticipantEntry(Participants.One, 10));
         writer.Append(new ParticipantEntry(Participants.Two, 20));
@@ -291,8 +291,8 @@ public sealed class ObservationSnapshotTests
         reader.TryRead(out _);
 
         ObservationLog<ParticipantEntry> restored = ObservationLog<ParticipantEntry>.Restore(64, ObservationSnapshot<ParticipantEntry>.Capture(log));
-        ParticipantObservationReader<ParticipantEntry> restoredReader =
-            new ParticipantObservationReader<ParticipantEntry>(restored, Participants.One, "presenter");
+        ParticipantObservationReader<ParticipantEntry, ParticipantId> restoredReader =
+            new ParticipantObservationReader<ParticipantEntry, ParticipantId>(restored, Participants.One, "presenter");
 
         Assert.That(restoredReader.TryRead(out ParticipantEntry entry), Is.True);
         Assert.That(entry.Value, Is.EqualTo(30));

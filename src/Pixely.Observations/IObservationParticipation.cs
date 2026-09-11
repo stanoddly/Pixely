@@ -1,15 +1,16 @@
 namespace Pixely.Observations;
 
 /// <summary>
-/// An entry that names the participant who perceived it, so a <see cref="ParticipantObservationReader{TEntry}"/>
-/// can hand its consumer only the entries one participant perceived. Implement it on the entry type of a log
-/// whose entries are addressed that way.
+/// An entry that names the participant who perceived it, so a
+/// <see cref="ParticipantObservationReader{TEntry,TParticipantId}"/> can hand its consumer only the entries one
+/// participant perceived. Implement it on the entry type of a log whose entries are addressed that way.
 /// </summary>
-public interface IObservationParticipation
+/// <typeparam name="TParticipantId">
+/// The game's participant identifier, its own or <see cref="ParticipantId"/>. Two are the same participant when
+/// they are equal, and its <c>ToString()</c> has to be stable and unique because it becomes part of a reader's
+/// name.
+/// </typeparam>
+public interface IObservationParticipation<out TParticipantId>
 {
-    /// <summary>
-    /// The participant that perceived this entry, as a 12 character <see cref="Base40Encoding"/> string. Two
-    /// entries name the same participant when the strings are equal.
-    /// </summary>
-    string Perceiver { get; }
+    TParticipantId Perceiver { get; }
 }

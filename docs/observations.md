@@ -19,8 +19,8 @@ Three types carry the core roles:
 So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
 rule produced.
 
-A fourth, `ParticipantObservationReader<TEntry>`, reads through a reader of its own and hands on only what one
-participant perceived. See [Reading as one participant](#reading-as-one-participant).
+A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, reads through a reader of its own and hands on
+only what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
 
 A fifth, `ObservationSnapshot<TEntry>`, is the log and its readers as data, so a run can be saved and resumed.
 See [Saving and resuming](#saving-and-resuming).
@@ -39,7 +39,7 @@ public readonly record struct UnitDiedEntry(UnitId Unit);
 
 public enum ObservationKind { UnitMoved, UnitDied }
 
-public readonly record struct Observation(ObservationKind Kind, string Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died);
+public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died);
 ```
 
 Entries are past-tense records of ids and value types, never a live reference into game state. With a value
@@ -109,29 +109,28 @@ one reader now and by another several frames later.
 ### Reading as one participant
 
 Addressing an entry to a subset of readers is the game's business, not the log's: the log never looks inside
-`TEntry`. Carry the perceiver in the entry, implement `IObservationParticipation` on it, and a consumer bound to
-one participant reads through `ParticipantObservationReader<TEntry>` instead of repeating the check in every
-place that drains.
+`TEntry`. Carry the perceiver in the entry, implement `IObservationParticipation<TParticipantId>` on it, and a
+consumer bound to one participant reads through `ParticipantObservationReader<TEntry, TParticipantId>` instead
+of repeating the check in every place that drains.
 
 ```csharp
-public readonly record struct Observation(ObservationKind Kind, string Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died)
-    : IObservationParticipation;
+public readonly record struct Observation(ObservationKind Kind, ParticipantId Perceiver, UnitMovedEntry Moved, UnitDiedEntry Died)
+    : IObservationParticipation<ParticipantId>;
 ```
 
 A positional `Perceiver` parameter already satisfies the interface, so implementing it adds no member.
 
-A participant is a 12 character `Base40Encoding` string, so the game encodes its own id once and carries the
-string from then on. The fixed width and alphabet are what let the participant be part of a reader's name and of
-a save without escaping. Constructing a reader with anything else throws; the log never looks inside `TEntry`,
-so an entry whose perceiver is malformed is not caught and simply never matches.
+`TParticipantId` is the game's choice. Two values are the same participant when they are equal, and `ToString()`
+has to be stable across runs and unique across participants, because the reader is named after the consumer and
+the participant together: `UnitSpritePresenter:000000000001`. `ParticipantId` is the library's ready-made one, a
+`ulong` that prints as a fixed 12 character `Base40Encoding` string, so it sits in a name and in a save without
+escaping. A game with an id type of its own uses that instead.
 
 ```csharp
-string participant = Base40Encoding.Encode(faction.Id);
-_observations = new ParticipantObservationReader<Observation>(log, participant, nameof(UnitSpritePresenter));
+_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, nameof(UnitSpritePresenter));
 ```
 
-The reader is named `UnitSpritePresenter:<participant>`, so a second presenter for another participant needs no
-name of its own.
+A second presenter for another participant needs no name of its own.
 
 `TryRead` then yields only the entries that participant perceived. The rest are drained and passed over rather
 than left behind, so a reader bound to a participant who perceives nothing for a while still lets the log trim.
@@ -186,7 +185,7 @@ what a consumer added since the save should do.
 position is negative or past the end of the entries. A save that cannot be resumed as it was says so
 rather than dropping entries quietly.
 
-`ParticipantObservationReader<TEntry>` resumes the same way, under its composed name. Its position counts every
+`ParticipantObservationReader<TEntry, TParticipantId>` resumes the same way, under its composed name. Its position counts every
 entry its own reader drained, including the entries its participant did not perceive.
 
 ### A reader that never comes back
