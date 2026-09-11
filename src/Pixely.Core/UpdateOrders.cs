@@ -13,7 +13,7 @@ public static class UpdateOrders
     /// <summary>What an updatable runs at when it does not choose. Used by <c>TimerSystem</c> and <c>UpdateSystem</c>.</summary>
     public const int Default = 0;
 
-    /// <summary>UI tree building, after the game has settled the state the UI reads. Used by Pixely.Ui and Pencuil.</summary>
+    /// <summary>UI tree building, after the game has settled the state the UI reads. Used by Pixely.Ui.</summary>
     public const int Ui = 10_000;
 
     /// <summary>Housekeeping that must see the finished frame, such as trimming caches. Used by <c>FontSystem</c>.</summary>

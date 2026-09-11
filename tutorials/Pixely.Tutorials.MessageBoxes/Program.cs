@@ -1,6 +1,8 @@
 using Pixely.App;
-using Pixely.Pencuil;
+using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Text;
+using Pixely.Ui;
 
 namespace Pixely.Tutorials.MessageBoxes;
 
@@ -12,12 +14,17 @@ static class Program
         {
             PixelyAppBuilder builder = new();
             builder
-                .UsePencuil()
                 .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-                .UseDefaultRendering(
-                    new WindowConfig(Size: (960, 540), Title: "Message Box"));
+                .UseDefaultRendering(new WindowConfig(Size: (960, 540), Title: "Message Box"));
 
-            builder.AddSingleton<IPencuilView, MessageBoxView>();
+            builder.UseUi();
+            builder.AddSingleton<UiStyle>(provider =>
+                new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 16))
+                {
+                    Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255) }
+                });
+
+            builder.AddSingleton<IUiView, MessageBoxView>();
 
             using IPixelyApp pixelyApp = builder.Build();
             return pixelyApp.Run();

@@ -1,80 +1,61 @@
 using Pixely.Gpu;
-using Pixely.Pencuil;
-using Pixely.Text;
+using Pixely.Ui;
 
 namespace Pixely.Tutorials.MessageBoxes;
 
-public class MessageBoxView : IPencuilView
+/// <summary>
+/// Buttons only, and no view model: nothing here changes after the tree is built, so the view
+/// derives from <see cref="UiView"/> directly and has nothing to synchronise.
+/// </summary>
+public sealed class MessageBoxView : UiView
 {
     private const int ButtonWidth = 260;
     private const int ButtonHeight = 44;
-    private const int ButtonGap = 12;
 
     private static readonly Color BackgroundColor = new(28, 30, 34, 255);
-    private static readonly Color TextColor = new(235, 238, 242, 255);
 
     private readonly Window _window;
-    private readonly Font _font;
-    private bool _dirty = true;
 
-    public MessageBoxView(WindowRegistry windowRegistry, IFontSystem fontSystem)
+    public MessageBoxView(WindowRegistry windowRegistry)
     {
         _window = windowRegistry.GetWindow();
-        _font = fontSystem.Load("fonts/GohuFont-Medium.ttf", 16);
     }
 
-    public bool ConsumeDirty()
+    protected override Element BuildRoot()
     {
-        bool dirty = _dirty;
-        _dirty = false;
-        return dirty;
-    }
-
-    public void Build(Pencil pencil)
-    {
-        pencil.MoveTo(0, 0);
-        pencil.Rectangle(pencil.BottomRight.X, pencil.BottomRight.Y, BackgroundColor);
-
-        int x = pencil.Center.X - ButtonWidth / 2;
-        int y = 60;
-
-        DrawLabel(pencil, x, y, "Parented to the window");
-        y += 28;
+        Column column = new(gap: 12)
+        {
+            HorizontalAlignment = Alignment.Center,
+            Margin = new Thickness(0, 60, 0, 0),
+            Children = { new Label("Parented to the window") }
+        };
 
         foreach (MessageBoxSeverity severity in Enum.GetValues<MessageBoxSeverity>())
         {
-            pencil.MoveTo(x, y);
-            if (pencil.Button(severity.ToString(), _font, ButtonWidth, ButtonHeight))
-            {
-                _window.ShowModalMessageBox(severity, "Pixely", $"A {severity} message box parented to the window.");
-            }
-
-            y += ButtonHeight + ButtonGap;
+            column.Children.Add(Action(severity.ToString(), () =>
+                _window.ShowModalMessageBox(severity, "Pixely", $"A {severity} message box parented to the window.")));
         }
 
-        y += 20;
-        DrawLabel(pencil, x, y, "Without a window");
-        y += 28;
-
-        pencil.MoveTo(x, y);
-        if (pencil.Button("Windowless", _font, ButtonWidth, ButtonHeight))
-        {
-            MessageBox.Show(MessageBoxSeverity.Information, "Pixely", "A message box shown without a parent window.");
-        }
-
-        y += ButtonHeight + ButtonGap * 2;
+        column.Children.Add(new Label("Without a window") { Margin = new Thickness(0, 20, 0, 0) });
+        column.Children.Add(Action("Windowless", () =>
+            MessageBox.Show(MessageBoxSeverity.Information, "Pixely", "A message box shown without a parent window.")));
 
         // throwing here escapes Run and is caught by the handler in Program.Main
-        pencil.MoveTo(x, y);
-        if (pencil.Button("Throw a fatal error", _font, ButtonWidth, ButtonHeight))
-        {
-            throw new PixelyException("This exception escapes the frame loop.");
-        }
+        Button fatal = Action("Throw a fatal error", () => throw new PixelyException("This exception escapes the frame loop."));
+        fatal.Margin = new Thickness(0, 12, 0, 0);
+        column.Children.Add(fatal);
+
+        return new Overlay { Background = new SolidDrawable(BackgroundColor), Children = { column } };
     }
 
-    private void DrawLabel(Pencil pencil, int x, int y, string text)
+    protected override void Synchronize()
     {
-        pencil.MoveTo(x, y);
-        pencil.Text(text, _font, TextColor);
+    }
+
+    private static Button Action(string text, Action onClick)
+    {
+        Button button = new(text) { Width = Sizing.Fixed(ButtonWidth), Height = Sizing.Fixed(ButtonHeight) };
+        button.Clicked += onClick;
+        return button;
     }
 }
