@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Pixely.Observations.Tests;
 
 [TestFixture]
@@ -127,9 +129,11 @@ public sealed class ObservationSnapshotTests
         Drain(fast);
 
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, ObservationSnapshot<TestEntry>.Capture(log));
+        ObservationReader<TestEntry> restoredFast = restored.CreateReader("fast");
+        ObservationReader<TestEntry> restoredSlow = restored.CreateReader("slow");
 
-        Assert.That(Drain(restored.CreateReader("fast")), Is.Empty);
-        Assert.That(Drain(restored.CreateReader("slow")), Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(Drain(restoredFast), Is.Empty);
+        Assert.That(Drain(restoredSlow), Is.EqualTo(new[] { 1, 2 }));
     }
 
     [Test]
@@ -219,6 +223,35 @@ public sealed class ObservationSnapshotTests
     }
 
     [Test]
+    public void SavedReader_NobodyCreatedIsDroppedBeforeTheCapacityCheck()
+    {
+        // The save was taken with the log full and its only reader at the start; that reader is gone now.
+        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(2, Snapshot(new[] { 1, 2 }, ("gone-for-good", 0)));
+
+        Assert.That(() => new ObservationWriter<TestEntry>(restored).Append(new TestEntry(3)), Throws.Nothing);
+    }
+
+    [Test]
+    public void SavedReader_NobodyCreatedIsDroppedByAReadThatFindsNothing()
+    {
+        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1 }, ("presenter", 1), ("gone-for-good", 0)));
+        ObservationReader<TestEntry> presenter = restored.CreateReader("presenter");
+
+        Assert.That(presenter.TryRead(out _), Is.False);
+        Assert.That(ObservationSnapshot<TestEntry>.Capture(restored).ReaderPositions.Keys, Is.EquivalentTo(new[] { "presenter" }));
+    }
+
+    [Test]
+    public void DisposingAReaderDuringComposition_KeepsTheOtherSavedReaders()
+    {
+        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1, 2 }, ("leaving", 0), ("presenter", 0)));
+
+        restored.CreateReader("leaving").Dispose();
+
+        Assert.That(Drain(restored.CreateReader("presenter")), Is.EqualTo(new[] { 1, 2 }));
+    }
+
+    [Test]
     public void Capture_BeforeTheFirstFrameCarriesASavedReaderNobodyCreatedYet()
     {
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1 }, ("presenter", 0)));
@@ -294,10 +327,10 @@ public sealed class ObservationSnapshotTests
         return new ObservationSnapshot<TestEntry>(values.Select(value => new TestEntry(value)).ToArray(), readers.ToDictionary(reader => reader.Name, reader => reader.Position));
     }
 
-    // Serializing the snapshot is the game's job, so this stands in for whatever serializer it uses.
+    // Serializing the snapshot is the game's job; the doc promises it works with System.Text.Json as it stands.
     private static ObservationSnapshot<TestEntry> Roundtrip(ObservationSnapshot<TestEntry> snapshot)
     {
-        return new ObservationSnapshot<TestEntry>(snapshot.Entries.ToArray(), snapshot.ReaderPositions.ToDictionary(position => position.Key, position => position.Value));
+        return JsonSerializer.Deserialize<ObservationSnapshot<TestEntry>>(JsonSerializer.Serialize(snapshot))!;
     }
 
     private static int[] Drain(ObservationReader<TestEntry> reader)

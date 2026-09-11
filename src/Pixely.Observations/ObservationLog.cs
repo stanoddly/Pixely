@@ -97,6 +97,7 @@ public sealed class ObservationLog<TEntry>
 
     internal void Append(in TEntry entry)
     {
+        Resume();
         if (_count == _maximumCapacity)
         {
             throw new InvalidOperationException(DescribeOverflow());
@@ -111,6 +112,7 @@ public sealed class ObservationLog<TEntry>
 
     internal bool TryRead(ObservationCursor<TEntry> cursor, [MaybeNullWhen(false)] out TEntry entry)
     {
+        Resume();
         int offset = checked((int)(cursor.NextSequence - _firstSequence));
         if (offset >= _count)
         {
@@ -178,16 +180,23 @@ public sealed class ObservationLog<TEntry>
         Trim();
     }
 
-    private void Trim()
+    // The first append or read means the run is composed, so a saved reader nobody created belongs to a consumer
+    // that is gone; keeping it would hold the trim point for good. It runs before the capacity check and before
+    // an empty read returns, so a dropped reader frees the log on that very call.
+    private void Resume()
     {
-        if (!_resumed)
+        if (_resumed)
         {
-            // The first append or read means the run is composed, so a saved reader nobody created belongs to a
-            // consumer that is gone; keeping it would hold the trim point for good.
-            _resumed = true;
-            _cursors.RemoveAll(static cursor => !cursor.Claimed);
+            return;
         }
 
+        _resumed = true;
+        _cursors.RemoveAll(static cursor => !cursor.Claimed);
+        Trim();
+    }
+
+    private void Trim()
+    {
         if (_count == 0)
         {
             return;
