@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Pixely.Gpu;
 using Pixely.Sprites;
 
@@ -11,11 +12,16 @@ namespace Pixely.Ui;
 /// </summary>
 public sealed class PaintContext
 {
-    private readonly List<PaintInstruction> _instructions = new();
+    private List<PaintInstruction> _instructions = new();
+    private List<PaintInstruction> _completedInstructions = new();
     private readonly List<Rectangle> _clipStack = new();
     private int _generation;
 
-    internal IReadOnlyList<PaintInstruction> Instructions => _instructions;
+    /// <summary>
+    /// The last completed build, which is what the renderer paints. The working list is never
+    /// exposed, so a build that throws partway leaves the previous frame in place.
+    /// </summary>
+    internal IReadOnlyList<PaintInstruction> Instructions => _completedInstructions;
 
     /// <summary>The clip every emitted quad is currently restricted to.</summary>
     public Rectangle CurrentClip => _clipStack.Count == 0 ? default : _clipStack[^1];
@@ -28,6 +34,17 @@ public sealed class PaintContext
         _clipStack.Clear();
         _clipStack.Add(viewport);
         _generation++;
+    }
+
+    /// <summary>
+    /// Promotes the working list to the completed one. Returns whether it differs from the build
+    /// before it, which is what lets a rebuild that changed nothing visible skip the repaint.
+    /// </summary>
+    internal bool Complete()
+    {
+        bool changed = !CollectionsMarshal.AsSpan(_instructions).SequenceEqual(CollectionsMarshal.AsSpan(_completedInstructions));
+        (_instructions, _completedInstructions) = (_completedInstructions, _instructions);
+        return changed;
     }
 
     /// <summary>

@@ -4,6 +4,8 @@
 
 What that buys is measure and arrange, which are cached per subtree: a clean subtree asked for the same size and the same position returns what it already holds. Painting is not incremental — any rebuild walks every visible element and produces the instruction list afresh. So a change costs the layout of the path it invalidated plus a full repaint, not a full rebuild.
 
+A rebuild that produces the same instruction list as the previous one does not repaint the retained texture. Textures passed to the paint context are compared by reference and treated as immutable; to show new pixels, pass a new texture.
+
 Neither replaces the other. Pencuil suits UI that is mostly a function of state that changes every frame anyway — debug overlays, editors, anything where writing the build is cheaper than keeping references. `Pixely.Ui` suits UI that outlives the frame: menus, HUDs, dialogs, anything with focus, text editing or a pointer gesture that spans frames.
 
 ## Layout of the library

@@ -8,7 +8,7 @@ namespace Pixely.Ui;
 
 /// <summary>
 /// Paints a built <see cref="IUiPaintSource"/> into a persistent texture and blits that texture over
-/// the frame. The texture is only repainted when the tree changed, so a static UI costs one quad per
+/// the frame. The texture is only repainted when the instructions changed, so a static UI costs one quad per
 /// frame. The build itself belongs to <see cref="UiUpdateSystem"/>, which is why this holds a source
 /// rather than the root.
 /// </summary>
@@ -151,14 +151,17 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         if (IsStale(_source.PaintedViewportSize, _source.ViewportSize, target))
         {
             Clear(renderContext.CommandBuffer);
+            // The catch-up build may paint the same quads and leave PaintVersion where it is, so
+            // the cleared texture has to ask for its repaint itself.
+            _retainedTextureDirty = true;
             Present(renderContext.CommandBuffer, renderContext.ColorTarget);
             return;
         }
 
-        if (NeedsRepaint(_source.BuildVersion, _paintedVersion, _retainedTextureDirty))
+        if (NeedsRepaint(_source.PaintVersion, _paintedVersion, _retainedTextureDirty))
         {
             Paint(renderContext.CommandBuffer);
-            _paintedVersion = _source.BuildVersion;
+            _paintedVersion = _source.PaintVersion;
             _retainedTextureDirty = false;
         }
 
@@ -180,12 +183,12 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     /// <summary>
     /// Whether the retained texture no longer shows what the source holds. Compared against the
-    /// build this renderer last painted rather than against whether a build just happened, so a
-    /// renderer that missed one still repaints instead of depending on having been its caller.
+    /// paint version this renderer last painted rather than against whether a build just happened,
+    /// so a renderer that missed one still repaints instead of depending on having been its caller.
     /// </summary>
-    internal static bool NeedsRepaint(ulong buildVersion, ulong paintedVersion, bool retainedTextureDirty)
+    internal static bool NeedsRepaint(ulong paintVersion, ulong paintedVersion, bool retainedTextureDirty)
     {
-        return buildVersion != paintedVersion || retainedTextureDirty;
+        return paintVersion != paintedVersion || retainedTextureDirty;
     }
 
     private void ResizeRetainedTextureIfNeeded(ShortSize newSize)

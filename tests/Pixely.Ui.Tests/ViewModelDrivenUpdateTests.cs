@@ -105,6 +105,87 @@ public class ViewModelDrivenUpdateTests
         Assert.That(root.Instructions[0].Area, Is.EqualTo(first), "returning to a previous state reproduces it exactly");
     }
 
+    [Test]
+    public void PaintVersion_StandsStill_WhenARebuildPaintsTheSameQuads()
+    {
+        Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
+        UiRoot root = Run(new Column { Children = { button } });
+        root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Fill)) } };
+        root.Update();
+
+        ulong painted = root.PaintVersion;
+        ulong built = root.BuildVersion;
+
+        // Hover invalidates paint, but the style resolves the same drawable for both states.
+        root.PointerMoved(new Vector2Int(10, 10));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.Update(), Is.True, "the hover still rebuilds");
+            Assert.That(root.BuildVersion, Is.EqualTo(built + 1));
+            Assert.That(root.PaintVersion, Is.EqualTo(painted), "but identical quads need no repaint");
+        });
+    }
+
+    [Test]
+    public void PaintVersion_Rises_WhenAQuadChanges()
+    {
+        MeasuredBox box = new(20, 20) { Background = new SolidDrawable(Fill) };
+        UiRoot root = Run(new Column { Children = { box } });
+        ulong painted = root.PaintVersion;
+
+        box.Background = new SolidDrawable(new Color(200, 40, 40, 255));
+        root.Update();
+
+        Assert.That(root.PaintVersion, Is.EqualTo(painted + 1));
+    }
+
+    [Test]
+    public void Instructions_KeepTheLastCompletedBuild_WhenABuildThrows()
+    {
+        ThrowingBox box = new() { Background = new SolidDrawable(Fill) };
+        UiRoot root = Run(new Column { Children = { box } });
+        PaintInstruction[] instructions = root.Instructions.ToArray();
+        PaintBatch[] batches = root.Batches.ToArray();
+        ulong painted = root.PaintVersion;
+
+        box.ThrowOnNextPaint = true;
+        box.Poke();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => root.Update(), Throws.InvalidOperationException);
+            Assert.That(root.Instructions, Is.EqualTo(instructions), "the half-painted list never replaces the completed one");
+            Assert.That(root.Batches, Is.EqualTo(batches));
+            Assert.That(root.PaintVersion, Is.EqualTo(painted));
+        });
+    }
+
+    private sealed class ThrowingBox : Element
+    {
+        public bool ThrowOnNextPaint { get; set; }
+
+        public ThrowingBox()
+        {
+            Width = Sizing.Fixed(20);
+            Height = Sizing.Fixed(20);
+        }
+
+        public void Poke() => InvalidatePaint();
+
+        protected override void PaintContent(PaintContext context)
+        {
+            if (ThrowOnNextPaint)
+            {
+                ThrowOnNextPaint = false;
+                // A quad the completed build does not have, so the working list differs from it
+                // and a root exposing the wrong list would show up.
+                context.FillRectangle(Bounds, Colors.Red);
+                throw new InvalidOperationException("paint failed");
+            }
+        }
+    }
+
     private static UiRoot Run(Element tree, int width = 100, int height = 100)
     {
         UiRoot root = new();
