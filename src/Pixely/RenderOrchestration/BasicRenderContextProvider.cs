@@ -3,7 +3,7 @@ using Pixely.Gpu;
 
 namespace Pixely.RenderOrchestration;
 
-internal sealed class BasicRenderContextProvider : RenderContextProvider<BasicRenderContext>
+public class BasicRenderContextProvider : RenderContextProvider<BasicRenderContext>
 {
     private readonly GpuDevice _gpuDevice;
 
