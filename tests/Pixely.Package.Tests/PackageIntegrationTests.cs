@@ -445,11 +445,6 @@ public class PackageIntegrationTests
             return "windows-x86_64";
         }
 
-        if (OperatingSystem.IsMacOS() && architecture == Architecture.X64)
-        {
-            return "macos-x86_64";
-        }
-
         if (OperatingSystem.IsMacOS() && architecture == Architecture.Arm64)
         {
             return "macos-aarch64";

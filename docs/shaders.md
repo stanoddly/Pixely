@@ -34,7 +34,7 @@ The package imports the shader build integration automatically. It compiles ever
 
 Generated shaders are runtime content. See [Content distribution](content-distribution.md) for the loose-directory, embedded-resource, and ZIP policies, with runnable tutorials for embedding generated shaders in an assembly and publishing content in a ZIP archive.
 
-Pixely provides the shader compiler for Linux x64/ARM64, Windows x64, and macOS x64/ARM64. Compilation uses the build host's compiler regardless of the application's target runtime. Custom compilation targets can use the compiler path exposed through `$(SlangCompilerPath)`.
+Pixely provides the shader compiler for Linux x64/ARM64, Windows x64, and macOS ARM64. Compilation uses the build host's compiler regardless of the application's target runtime. Custom compilation targets can use the compiler path exposed through `$(SlangCompilerPath)`.
 
 ### Custom compilation targets
 

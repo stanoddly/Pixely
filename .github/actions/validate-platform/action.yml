@@ -9,6 +9,10 @@ inputs:
     description: Whether to run package integration tests against the repository build
     required: false
     default: 'false'
+  full-solution:
+    description: Whether to also build the full solution including tutorials and benchmarks
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -18,13 +22,19 @@ runs:
       with:
         dotnet-version: '10.0.x'
 
-    - name: Build solution
+    # Dropping the tutorial and benchmark project lines from Pixely.slnx leaves a valid solution with empty folders,
+    # so new src and tests projects are validated without maintaining a second project list.
+    - name: Generate validation solution
       shell: bash
-      run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
+      run: grep -v -e 'Project Path="tutorials/' -e 'Project Path="benchmarks/' Pixely.slnx > Pixely.Validation.slnx
+
+    - name: Build libraries and tests
+      shell: bash
+      run: dotnet build Pixely.Validation.slnx -p:TreatWarningsAsErrors=true
 
     - name: Run tests
       shell: bash
-      run: dotnet test Pixely.slnx --no-build -p:TreatWarningsAsErrors=true
+      run: dotnet test Pixely.Validation.slnx --no-build -p:TreatWarningsAsErrors=true
 
     - name: Stop build servers
       shell: bash
@@ -48,3 +58,8 @@ runs:
       if: inputs['package-integration'] == 'true'
       shell: bash
       run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
+
+    - name: Build full solution
+      if: inputs['full-solution'] == 'true'
+      shell: bash
+      run: dotnet build Pixely.slnx -p:TreatWarningsAsErrors=true
