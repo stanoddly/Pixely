@@ -2,9 +2,11 @@
 
 `IInputAutomation` synchronously delivers synthetic mouse, keyboard, and text input through the ordinary Pixely input services. Existing view-scoped subscriptions, priorities, consumption, and device state apply to automated input. Handlers finish before an automation method returns.
 
-Resolve the application-lifetime service from the app:
+It is not registered by default. Register it on the builder, then resolve the application-lifetime service from the app:
 
 ```csharp
+builder.AddInputAutomation();
+
 IInputAutomation input = app.GetRequiredService<IInputAutomation>();
 ```
 

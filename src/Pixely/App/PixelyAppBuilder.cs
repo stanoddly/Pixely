@@ -59,9 +59,6 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<TextInputService, PixelyFactory>();
         AddAlias<ITextInputService, TextInputService>();
 
-        AddSingleton<InputAutomation, PixelyFactory>();
-        AddAlias<IInputAutomation, InputAutomation>();
-
         AddSingleton<ClipboardService>();
         AddAlias<IClipboardService, ClipboardService>();
 
