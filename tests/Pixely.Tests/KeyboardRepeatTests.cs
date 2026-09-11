@@ -14,7 +14,7 @@ public sealed class KeyboardRepeatTests
         List<bool> repeats = new();
         keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
 
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
+        KeyDown(keyboardService, Scancode.A);
 
         Assert.That(repeats, Is.EqualTo(new[] { false }));
     }
@@ -26,9 +26,9 @@ public sealed class KeyboardRepeatTests
         List<bool> repeats = new();
         keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
 
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
+        KeyDown(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
 
         Assert.That(repeats, Is.EqualTo(new[] { false, true, true }));
     }
@@ -40,10 +40,10 @@ public sealed class KeyboardRepeatTests
         List<bool> repeats = new();
         keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
 
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyUp(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
+        KeyDown(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
+        KeyUp(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
 
         Assert.That(repeats, Is.EqualTo(new[] { false, true, false }));
     }
@@ -55,9 +55,9 @@ public sealed class KeyboardRepeatTests
         bool? keyUpRepeat = null;
         keyboardService.SubscribeKeyUp(_view, 0, eventArgs => keyUpRepeat = eventArgs.Repeat);
 
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyUp(Scancode.A));
+        KeyDown(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
+        KeyUp(keyboardService, Scancode.A);
 
         Assert.That(keyUpRepeat, Is.False);
     }
@@ -75,19 +75,19 @@ public sealed class KeyboardRepeatTests
             }
         });
 
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
-        keyboardService.OnKeyEvent(_view, KeyDown(Scancode.A));
+        KeyDown(keyboardService, Scancode.A);
+        KeyDown(keyboardService, Scancode.A);
 
         Assert.That(pressedWhenRepeated, Is.EqualTo(new[] { true }));
     }
 
-    private static SDL_KeyboardEvent KeyDown(Scancode scancode)
+    private static void KeyDown(KeyboardService keyboardService, Scancode scancode)
     {
-        return new SDL_KeyboardEvent { down = true, scancode = (SDL_Scancode)scancode };
+        keyboardService.OnKeyEvent(_view, (SDL_KeyboardID)1, scancode, VirtualKey.A, true, 0);
     }
 
-    private static SDL_KeyboardEvent KeyUp(Scancode scancode)
+    private static void KeyUp(KeyboardService keyboardService, Scancode scancode)
     {
-        return new SDL_KeyboardEvent { down = false, scancode = (SDL_Scancode)scancode };
+        keyboardService.OnKeyEvent(_view, (SDL_KeyboardID)1, scancode, VirtualKey.A, false, 0);
     }
 }

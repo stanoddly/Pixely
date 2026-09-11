@@ -1,3 +1,5 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Pixely.Input;
 using SDL;
 
@@ -39,14 +41,14 @@ public class EventService
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.key.windowID, out Window window))
                     {
-                        _keyboardService.OnKeyEvent(window.ViewScope, evt.key);
+                        _keyboardService.OnKeyEvent(window.ViewScope, evt.key.which, (Scancode)evt.key.scancode, (VirtualKey)evt.key.key, evt.key.down, evt.key.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_KEY_UP)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.key.windowID, out Window window))
                     {
-                        _keyboardService.OnKeyEvent(window.ViewScope, evt.key);
+                        _keyboardService.OnKeyEvent(window.ViewScope, evt.key.which, (Scancode)evt.key.scancode, (VirtualKey)evt.key.key, evt.key.down, evt.key.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_GAMEPAD_ADDED)
@@ -73,56 +75,58 @@ public class EventService
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.button.windowID, out Window window))
                     {
-                        _mouseService.OnMouseButtonEvent(window.ViewScope, evt.button);
+                        _mouseService.OnMouseButtonEvent(window.ViewScope, evt.button.which, (MouseButton)evt.button.button, new Vector2(evt.button.x, evt.button.y), evt.button.down, evt.button.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.button.windowID, out Window window))
                     {
-                        _mouseService.OnMouseButtonEvent(window.ViewScope, evt.button);
+                        _mouseService.OnMouseButtonEvent(window.ViewScope, evt.button.which, (MouseButton)evt.button.button, new Vector2(evt.button.x, evt.button.y), evt.button.down, evt.button.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_MOUSE_MOTION)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.motion.windowID, out Window window))
                     {
-                        _mouseService.OnMouseMotionEvent(window.ViewScope, evt.motion);
+                        _mouseService.OnMouseMotionEvent(window.ViewScope, evt.motion.which, new Vector2(evt.motion.x, evt.motion.y), new Vector2(evt.motion.xrel, evt.motion.yrel), evt.motion.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_MOUSE_WHEEL)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.wheel.windowID, out Window window))
                     {
-                        _mouseService.OnMouseWheelEvent(window.ViewScope, evt.wheel);
+                        _mouseService.OnMouseWheelEvent(window.ViewScope, evt.wheel.which, new Vector2(evt.wheel.x, evt.wheel.y), new Vector2(evt.wheel.mouse_x, evt.wheel.mouse_y), evt.wheel.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_WINDOW_MOUSE_ENTER)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.window.windowID, out Window window))
                     {
-                        _mouseService.OnMouseWindowPresenceEvent(window.ViewScope, evt.window, true);
+                        _mouseService.OnMouseWindowPresenceEvent(window.ViewScope, true, evt.window.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_WINDOW_MOUSE_LEAVE)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.window.windowID, out Window window))
                     {
-                        _mouseService.OnMouseWindowPresenceEvent(window.ViewScope, evt.window, false);
+                        _mouseService.OnMouseWindowPresenceEvent(window.ViewScope, false, evt.window.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_TEXT_INPUT)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.text.windowID, out Window window))
                     {
-                        _textInputService.OnTextInputEvent(window.ViewScope, evt.text);
+                        string text = Marshal.PtrToStringUTF8((IntPtr)evt.text.text) ?? string.Empty;
+                        _textInputService.OnTextInputEvent(window.ViewScope, text, evt.text.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_TEXT_EDITING)
                 {
                     if (_windowRegistry.TryGetWindow((uint)evt.edit.windowID, out Window window))
                     {
-                        _textInputService.OnTextEditingEvent(window.ViewScope, evt.edit);
+                        string text = Marshal.PtrToStringUTF8((IntPtr)evt.edit.text) ?? string.Empty;
+                        _textInputService.OnTextEditingEvent(window.ViewScope, text, evt.edit.start, evt.edit.length, evt.edit.timestamp);
                     }
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
