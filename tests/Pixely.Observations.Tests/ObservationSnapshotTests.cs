@@ -180,39 +180,46 @@ public sealed class ObservationSnapshotTests
     }
 
     [Test]
-    public void RestoredReader_KeepsItsPlaceUntilItIsConstructed()
+    public void RestoredReaders_MayBeCreatedInAnyOrderBeforeTheFirstFrame()
     {
-        ObservationSnapshot<TestEntry> snapshot = Snapshot(new[] { 1, 2 }, ("presenter", 0));
+        ObservationSnapshot<TestEntry> snapshot = Snapshot(new[] { 1, 2 }, ("presenter", 0), ("brain", 2));
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, snapshot);
 
-        // Another reader drains everything first, which would trim the presenter's entries away if a position
-        // held nothing back until its reader appeared.
-        ObservationReader<TestEntry> latecomer = restored.CreateReader("latecomer");
-        new ObservationWriter<TestEntry>(restored).Append(new TestEntry(3));
-        Drain(latecomer);
+        ObservationReader<TestEntry> brain = restored.CreateReader("brain");
+        ObservationReader<TestEntry> presenter = restored.CreateReader("presenter");
 
-        Assert.That(Drain(restored.CreateReader("presenter")), Is.EqualTo(new[] { 1, 2, 3 }));
+        Assert.That(Drain(brain), Is.Empty);
+        Assert.That(Drain(presenter), Is.EqualTo(new[] { 1, 2 }));
     }
 
     [Test]
-    public void UnrestoredReader_FillsTheLogAndIsNamed()
+    public void SavedReader_NobodyCreatedByTheFirstAppendIsDropped()
     {
-        ObservationSnapshot<TestEntry> snapshot = Snapshot(new[] { 1 }, ("presenter", 0));
-        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(4, snapshot);
+        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(4, Snapshot(new[] { 1 }, ("gone-for-good", 0)));
         ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(restored);
 
-        for (int i = 0; i < 3; i++)
+        // A dropped reader no longer holds the trim point, so this never fills; and one created afterwards is new.
+        for (int i = 0; i < 100; i++)
         {
             writer.Append(new TestEntry(i));
         }
 
-        Assert.That(() => writer.Append(new TestEntry(4)),
-            Throws.InvalidOperationException.With.Message.Contains("presenter")
-                .And.Message.Contains("never created"));
+        Assert.That(Drain(restored.CreateReader("gone-for-good")), Is.Empty);
     }
 
     [Test]
-    public void Capture_CarriesAReaderThatWasNeverConstructedIntoTheNextSave()
+    public void SavedReader_NobodyCreatedByTheFirstReadIsDropped()
+    {
+        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1, 2 }, ("presenter", 0), ("gone-for-good", 0)));
+        ObservationReader<TestEntry> presenter = restored.CreateReader("presenter");
+
+        Drain(presenter);
+
+        Assert.That(ObservationSnapshot<TestEntry>.Capture(restored).ReaderPositions.Keys, Is.EquivalentTo(new[] { "presenter" }));
+    }
+
+    [Test]
+    public void Capture_BeforeTheFirstFrameCarriesASavedReaderNobodyCreatedYet()
     {
         ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(64, Snapshot(new[] { 1 }, ("presenter", 0)));
 
@@ -220,23 +227,6 @@ public sealed class ObservationSnapshotTests
 
         Assert.That(snapshot.ReaderPositions["presenter"], Is.EqualTo(0));
         Assert.That(snapshot.Entries, Is.EqualTo(new[] { new TestEntry(1) }));
-    }
-
-    [Test]
-    public void DroppingAReaderFromTheSnapshot_LetsTheRestoredLogTrim()
-    {
-        ObservationSnapshot<TestEntry> snapshot = Snapshot(new[] { 1 }, ("gone-for-good", 0));
-        ObservationSnapshot<TestEntry> withoutIt = snapshot with { ReaderPositions = new Dictionary<string, int>() };
-
-        ObservationLog<TestEntry> restored = ObservationLog<TestEntry>.Restore(4, withoutIt);
-        ObservationWriter<TestEntry> writer = new ObservationWriter<TestEntry>(restored);
-
-        for (int i = 0; i < 100; i++)
-        {
-            writer.Append(new TestEntry(i));
-        }
-
-        Assert.Pass();
     }
 
     [Test]

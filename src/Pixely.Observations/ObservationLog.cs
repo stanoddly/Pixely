@@ -25,7 +25,7 @@ public sealed class ObservationLog<TEntry>
 
     private readonly int _maximumCapacity;
     private readonly List<ObservationCursor<TEntry>> _cursors = new();
-    private readonly Dictionary<string, long> _restoredPositions = new();
+    private bool _resumed = true;
     private TEntry[] _entries;
     private int _head;
     private int _count;
@@ -57,16 +57,18 @@ public sealed class ObservationLog<TEntry>
         // offset into the saved entries, is already a sequence number.
         _count = snapshot.Entries.Count;
         _nextSequence = snapshot.Entries.Count;
+        _resumed = false;
         foreach (KeyValuePair<string, int> position in snapshot.ReaderPositions)
         {
-            _restoredPositions.Add(position.Key, position.Value);
+            _cursors.Add(new ObservationCursor<TEntry>(this, position.Key) { NextSequence = position.Value });
         }
     }
 
     /// <summary>
     /// Restores a log holding what <see cref="ObservationSnapshot{TEntry}.Capture"/> took from a saved run.
     /// Each reader goes back to where it stopped as it is created, matched by name, so a consumer creates its
-    /// reader exactly as it does on a first run.
+    /// reader exactly as it does on a first run. A saved reader nobody has created by the first append or read
+    /// is dropped then, since readers are created when the run is composed and both start the first frame.
     /// </summary>
     /// <param name="maximumCapacity">
     /// As for the constructor, and at least as large as the snapshot. Lowering it below what a saved run held
@@ -126,17 +128,24 @@ public sealed class ObservationLog<TEntry>
     {
         foreach (ObservationCursor<TEntry> existing in _cursors)
         {
-            if (existing.Name == name)
+            if (existing.Name != name)
             {
-                throw new InvalidOperationException($"The log already has a reader named '{name}'. "
-                    + "A name identifies a reader when the log fills and when a saved run is restored, so it has to be unique.");
+                continue;
             }
+
+            // A reader restored from a save is waiting for its consumer, and resumes where it stopped.
+            if (!existing.Claimed)
+            {
+                existing.Claimed = true;
+                return existing;
+            }
+
+            throw new InvalidOperationException($"The log already has a reader named '{name}'. "
+                + "A name identifies a reader when the log fills and when a saved run is restored, so it has to be unique.");
         }
 
-        // A reader restored from a save resumes where it stopped; any other starts after the last appended
-        // entry, so it sees only what is appended from now on.
-        ObservationCursor<TEntry> cursor = new ObservationCursor<TEntry>(this, name);
-        cursor.NextSequence = _restoredPositions.Remove(name, out long restored) ? restored : _nextSequence;
+        // Any other reader starts after the last appended entry, so it sees only what is appended from now on.
+        ObservationCursor<TEntry> cursor = new ObservationCursor<TEntry>(this, name) { NextSequence = _nextSequence, Claimed = true };
         _cursors.Add(cursor);
         return cursor;
     }
@@ -152,16 +161,9 @@ public sealed class ObservationLog<TEntry>
         return entries;
     }
 
-    // A reader restored from an earlier save but not yet constructed still holds the log, so it belongs in the
-    // next save as much as a reader that is here.
     internal Dictionary<string, int> CopyReaderPositions()
     {
         Dictionary<string, int> positions = new();
-        foreach (KeyValuePair<string, long> restored in _restoredPositions)
-        {
-            positions.Add(restored.Key, checked((int)(restored.Value - _firstSequence)));
-        }
-
         foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
             positions.Add(cursor.Name, checked((int)(cursor.NextSequence - _firstSequence)));
@@ -178,6 +180,14 @@ public sealed class ObservationLog<TEntry>
 
     private void Trim()
     {
+        if (!_resumed)
+        {
+            // The first append or read means the run is composed, so a saved reader nobody created belongs to a
+            // consumer that is gone; keeping it would hold the trim point for good.
+            _resumed = true;
+            _cursors.RemoveAll(static cursor => !cursor.Claimed);
+        }
+
         if (_count == 0)
         {
             return;
@@ -212,14 +222,6 @@ public sealed class ObservationLog<TEntry>
             if (cursor.NextSequence < slowest)
             {
                 slowest = cursor.NextSequence;
-            }
-        }
-
-        foreach (long position in _restoredPositions.Values)
-        {
-            if (position < slowest)
-            {
-                slowest = position;
             }
         }
 
@@ -263,24 +265,10 @@ public sealed class ObservationLog<TEntry>
             }
         }
 
-        List<string> unrestored = new();
-        foreach (KeyValuePair<string, long> position in _restoredPositions)
-        {
-            if (position.Value == slowest)
-            {
-                unrestored.Add(position.Key);
-            }
-        }
-
         string message = $"Observation log reached its maximum capacity of {_maximumCapacity} entries.";
         if (stalled.Count > 0)
         {
             message += $" Reader '{string.Join("', '", stalled)}' stopped draining {_nextSequence - slowest} entries ago.";
-        }
-
-        if (unrestored.Count > 0)
-        {
-            message += $" Reader '{string.Join("', '", unrestored)}' was restored from a save but never created.";
         }
 
         return message;

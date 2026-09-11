@@ -21,6 +21,9 @@ internal sealed class ObservationCursor<TEntry>
 
     internal long NextSequence { get; set; }
 
+    // False for a cursor restored from a save until the consumer it belongs to creates its reader.
+    internal bool Claimed { get; set; }
+
     internal bool TryRead(object owner, [MaybeNullWhen(false)] out TEntry entry)
     {
         ObjectDisposedException.ThrowIf(_disposed, owner);

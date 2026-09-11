@@ -12,8 +12,7 @@ namespace Pixely.Observations;
 /// <param name="Entries">The retained entries, oldest first.</param>
 /// <param name="ReaderPositions">
 /// How many of <paramref name="Entries"/> each reader had already read, by reader name: 0 means none of them,
-/// the count means all of them. A name the restored log is never asked for holds the trim point, the same as a
-/// reader that stopped draining: drop it from here when the consumer it belonged to is gone for good.
+/// the count means all of them. A name no reader claims by the restored log's first append or read is dropped.
 /// </param>
 public sealed record ObservationSnapshot<TEntry>(IReadOnlyList<TEntry> Entries, IReadOnlyDictionary<string, int> ReaderPositions)
 {

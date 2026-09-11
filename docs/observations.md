@@ -173,8 +173,8 @@ _observations = log.CreateReader(nameof(UnitSpritePresenter));
 ```
 
 A reader name is an identity, then, not just a label in an error message. Creating a second reader under a name
-the log already has throws. A name the snapshot does not know starts after the restored entries, which is
-what a consumer added since the save should do.
+the log already has throws. A name the snapshot does not know starts after the restored entries, which is what
+a consumer added since the save should do.
 
 `Restore` throws when the snapshot holds more entries than the maximum capacity allows, and when a reader
 position is negative or past the end of the entries. A save that cannot be resumed as it was says so
@@ -185,25 +185,11 @@ counts every entry it drained, including the entries its participant did not per
 
 ### A reader that never comes back
 
-A saved position holds the trim point until its reader is created, exactly as the reader itself would. Order
-therefore does not matter on load: another consumer can drain everything before a reader is created,
-and that reader still resumes where it stopped.
-
-The cost is that a consumer dropped from the game keeps holding the log. Nothing ever claims its position, the
-log fills, and the message names it:
-
-```text
-Observation log reached its maximum capacity of 4096 entries. Reader 'UnitSpritePresenter' was restored from a
-save but never created.
-```
-
-The snapshot is data, so drop that name before restoring:
-
-```csharp
-Dictionary<string, int> positions = new(snapshot.ReaderPositions);
-positions.Remove(nameof(UnitSpritePresenter));
-snapshot = snapshot with { ReaderPositions = positions };
-```
+A saved position holds the trim point until its reader is created, so order does not matter on load: consumers
+create their readers in whatever order the container resolves them. The first append or read after `Restore`
+marks the run as composed, and a saved position nobody has claimed by then is dropped. A consumer removed from
+the game therefore needs no pruning of the save, and a consumer created lazily after the first frame starts
+after the last entry, as a new one does, rather than at its saved place.
 
 ## Registration
 
