@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <SlangVersion>2026.17.0</SlangVersion>
+        <SlangVersion>2026.17.1</SlangVersion>
         <SlangToolSourceDirectory>$(SlangDxcToolchainRoot)$(SlangPlatform)/</SlangToolSourceDirectory>
         <SlangCompilerExeName>slangc</SlangCompilerExeName>
         <SlangCompilerExeName Condition="$([MSBuild]::IsOSPlatform('Windows'))">slangc.exe</SlangCompilerExeName>

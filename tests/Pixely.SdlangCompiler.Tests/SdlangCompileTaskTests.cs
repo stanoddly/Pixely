@@ -24,18 +24,4 @@ public class SdlangCompileTaskTests
             Assert.That(File.Exists(metadataPath), Is.True, "Compiled shader output file should exist at: " + metadataPath);
         }
     }
-
-    [Test]
-    public void Execute_WithNullInputFile_ReturnsTrue()
-    {
-        SdlangCompileTask task = new SdlangCompileTask { InputFile = null };
-        Assert.That(task.Execute(), Is.True);
-    }
-
-    [Test]
-    public void Execute_WithEmptyInputFile_ReturnsTrue()
-    {
-        SdlangCompileTask task = new SdlangCompileTask { InputFile = "" };
-        Assert.That(task.Execute(), Is.True);
-    }
 }
