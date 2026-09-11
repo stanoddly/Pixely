@@ -27,3 +27,4 @@ jobs:
         with:
           runtime: linux-arm64
           package-integration: 'true'
+          full-solution: 'true'

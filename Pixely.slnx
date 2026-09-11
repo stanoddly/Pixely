@@ -74,6 +74,7 @@
     <Project Path="tutorials/Pixely.Tutorials.MultiWindow/Pixely.Tutorials.MultiWindow.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.MultiWindowTextInput/Pixely.Tutorials.MultiWindowTextInput.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Audio/Pixely.Tutorials.Audio.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.ComputeShader/Pixely.Tutorials.ComputeShader.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.ZipContent/Pixely.Tutorials.ZipContent.csproj" />
   </Folder>
 </Solution>

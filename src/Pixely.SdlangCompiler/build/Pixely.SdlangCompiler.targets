@@ -8,7 +8,7 @@
     <Target Name="ValidateSlangToolchain">
         <Error Text="SlangDxcBundle.Toolchain did not expose SlangDxcToolchainRoot."
                Condition="'$(SlangDxcToolchainRoot)' == ''" />
-        <Error Text="Unsupported platform for Slang shader compiler. Supported: Linux x64, Linux ARM64, Windows x64, macOS x64, macOS ARM64."
+        <Error Text="Unsupported platform for Slang shader compiler. Supported: Linux x64, Linux ARM64, Windows x64, macOS ARM64."
                Condition="'$(SlangPlatform)' == ''" />
         <Error Text="Slang tool directory does not exist: $(SlangToolSourceDirectory)"
                Condition="!Exists('$(SlangToolSourceDirectory)')" />
