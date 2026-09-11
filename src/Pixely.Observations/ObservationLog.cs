@@ -10,8 +10,9 @@ namespace Pixely.Observations;
 /// </summary>
 /// <remarks>
 /// The log is storage and nothing else: it is reached through an <see cref="ObservationWriter{TEntry}"/> or an
-/// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job. It belongs to one frame
-/// loop and is not thread safe: appending, reading and constructing a reader must all happen on the same thread.
+/// <see cref="ObservationReader{TEntry}"/>, so neither role can do the other's job, and through an
+/// <see cref="ObservationSnapshot{TEntry}"/> when a run is saved. It belongs to one frame
+/// loop and is not thread safe: appending, reading and creating a reader must all happen on the same thread.
 /// </remarks>
 /// <typeparam name="TEntry">
 /// The single entry type of this log; the log never looks inside it. Carry several kinds of entry in one log
@@ -23,7 +24,8 @@ public sealed class ObservationLog<TEntry>
     private const int InitialCapacity = 16;
 
     private readonly int _maximumCapacity;
-    private readonly List<ObservationReader<TEntry>> _readers = new();
+    private readonly List<ObservationCursor<TEntry>> _cursors = new();
+    private bool _resumed = true;
     private TEntry[] _entries;
     private int _head;
     private int _count;
@@ -42,8 +44,60 @@ public sealed class ObservationLog<TEntry>
         _entries = new TEntry[Math.Min(InitialCapacity, maximumCapacity)];
     }
 
+    private ObservationLog(int maximumCapacity, ObservationSnapshot<TEntry> snapshot)
+    {
+        _maximumCapacity = maximumCapacity;
+        _entries = new TEntry[Math.Max(Math.Min(InitialCapacity, maximumCapacity), snapshot.Entries.Count)];
+        for (int i = 0; i < snapshot.Entries.Count; i++)
+        {
+            _entries[i] = snapshot.Entries[i];
+        }
+
+        // Sequence numbers never leave the log, so a restored one counts from zero and a saved position, an
+        // offset into the saved entries, is already a sequence number.
+        _count = snapshot.Entries.Count;
+        _nextSequence = snapshot.Entries.Count;
+        _resumed = false;
+        foreach (KeyValuePair<string, int> position in snapshot.ReaderPositions)
+        {
+            _cursors.Add(new ObservationCursor<TEntry>(this, position.Key) { NextSequence = position.Value });
+        }
+    }
+
+    /// <summary>
+    /// Restores a log holding what <see cref="ObservationSnapshot{TEntry}.Capture"/> took from a saved run.
+    /// Each reader goes back to where it stopped as it is created, matched by name, so a consumer creates its
+    /// reader exactly as it does on a first run. A saved reader nobody has created by the first append or read
+    /// is dropped then, since readers are created when the run is composed and both start the first frame.
+    /// </summary>
+    /// <param name="maximumCapacity">
+    /// As for the constructor, and at least as large as the snapshot. Lowering it below what a saved run held
+    /// is what makes a load throw rather than silently drop entries.
+    /// </param>
+    public static ObservationLog<TEntry> Restore(int maximumCapacity, ObservationSnapshot<TEntry> snapshot)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumCapacity, 1);
+        if (snapshot.Entries.Count > maximumCapacity)
+        {
+            throw new ArgumentOutOfRangeException(nameof(snapshot),
+                $"The snapshot holds {snapshot.Entries.Count} entries, more than the maximum capacity of {maximumCapacity}.");
+        }
+
+        foreach (KeyValuePair<string, int> position in snapshot.ReaderPositions)
+        {
+            if (position.Value < 0 || position.Value > snapshot.Entries.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(snapshot),
+                    $"The snapshot holds {snapshot.Entries.Count} entries, so reader '{position.Key}' cannot have read {position.Value} of them.");
+            }
+        }
+
+        return new ObservationLog<TEntry>(maximumCapacity, snapshot);
+    }
+
     internal void Append(in TEntry entry)
     {
+        Resume();
         if (_count == _maximumCapacity)
         {
             throw new InvalidOperationException(DescribeOverflow());
@@ -56,9 +110,10 @@ public sealed class ObservationLog<TEntry>
         Trim();
     }
 
-    internal bool TryRead(ObservationReader<TEntry> reader, [MaybeNullWhen(false)] out TEntry entry)
+    internal bool TryRead(ObservationCursor<TEntry> cursor, [MaybeNullWhen(false)] out TEntry entry)
     {
-        int offset = checked((int)(reader.NextSequence - _firstSequence));
+        Resume();
+        int offset = checked((int)(cursor.NextSequence - _firstSequence));
         if (offset >= _count)
         {
             entry = default;
@@ -66,21 +121,77 @@ public sealed class ObservationLog<TEntry>
         }
 
         entry = _entries[PhysicalIndex(offset)];
-        reader.NextSequence++;
+        cursor.NextSequence++;
         Trim();
         return true;
     }
 
-    // A reader starts after the last appended entry, so it sees only what is appended from now on.
-    internal void AddReader(ObservationReader<TEntry> reader)
+    internal ObservationCursor<TEntry> CreateCursor(string name)
     {
-        reader.NextSequence = _nextSequence;
-        _readers.Add(reader);
+        foreach (ObservationCursor<TEntry> existing in _cursors)
+        {
+            if (existing.Name != name)
+            {
+                continue;
+            }
+
+            // A reader restored from a save is waiting for its consumer, and resumes where it stopped.
+            if (!existing.Claimed)
+            {
+                existing.Claimed = true;
+                return existing;
+            }
+
+            throw new InvalidOperationException($"The log already has a reader named '{name}'. "
+                + "A name identifies a reader when the log fills and when a saved run is restored, so it has to be unique.");
+        }
+
+        // Any other reader starts after the last appended entry, so it sees only what is appended from now on.
+        ObservationCursor<TEntry> cursor = new ObservationCursor<TEntry>(this, name) { NextSequence = _nextSequence, Claimed = true };
+        _cursors.Add(cursor);
+        return cursor;
     }
 
-    internal void RemoveReader(ObservationReader<TEntry> reader)
+    internal TEntry[] CopyRetainedEntries()
     {
-        _readers.Remove(reader);
+        TEntry[] entries = new TEntry[_count];
+        for (int i = 0; i < _count; i++)
+        {
+            entries[i] = _entries[PhysicalIndex(i)];
+        }
+
+        return entries;
+    }
+
+    internal Dictionary<string, int> CopyReaderPositions()
+    {
+        Dictionary<string, int> positions = new();
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
+        {
+            positions.Add(cursor.Name, checked((int)(cursor.NextSequence - _firstSequence)));
+        }
+
+        return positions;
+    }
+
+    internal void RemoveCursor(ObservationCursor<TEntry> cursor)
+    {
+        _cursors.Remove(cursor);
+        Trim();
+    }
+
+    // The first append or read means the run is composed, so a saved reader nobody created belongs to a consumer
+    // that is gone; keeping it would hold the trim point for good. It runs before the capacity check and before
+    // an empty read returns, so a dropped reader frees the log on that very call.
+    private void Resume()
+    {
+        if (_resumed)
+        {
+            return;
+        }
+
+        _resumed = true;
+        _cursors.RemoveAll(static cursor => !cursor.Claimed);
         Trim();
     }
 
@@ -115,11 +226,11 @@ public sealed class ObservationLog<TEntry>
     private long SlowestSequence()
     {
         long slowest = _nextSequence;
-        foreach (ObservationReader<TEntry> reader in _readers)
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
-            if (reader.NextSequence < slowest)
+            if (cursor.NextSequence < slowest)
             {
-                slowest = reader.NextSequence;
+                slowest = cursor.NextSequence;
             }
         }
 
@@ -155,15 +266,20 @@ public sealed class ObservationLog<TEntry>
     {
         long slowest = SlowestSequence();
         List<string> stalled = new();
-        foreach (ObservationReader<TEntry> reader in _readers)
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
-            if (reader.NextSequence == slowest)
+            if (cursor.NextSequence == slowest)
             {
-                stalled.Add(reader.Name);
+                stalled.Add(cursor.Name);
             }
         }
 
-        return $"Observation log reached its maximum capacity of {_maximumCapacity} entries. "
-            + $"Reader '{string.Join("', '", stalled)}' stopped draining {_nextSequence - slowest} entries ago.";
+        string message = $"Observation log reached its maximum capacity of {_maximumCapacity} entries.";
+        if (stalled.Count > 0)
+        {
+            message += $" Reader '{string.Join("', '", stalled)}' stopped draining {_nextSequence - slowest} entries ago.";
+        }
+
+        return message;
     }
 }

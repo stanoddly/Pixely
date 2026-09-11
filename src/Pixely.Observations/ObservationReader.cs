@@ -7,39 +7,19 @@ namespace Pixely.Observations;
 /// their own pace, each through its own instance. Dispose it when the reader goes away, otherwise it holds the
 /// log's trim point where it stopped and the log fills.
 /// </summary>
+/// <remarks>Create it with <see cref="ObservationLogExtensions.CreateReader{TEntry}"/>.</remarks>
 public sealed class ObservationReader<TEntry> : IDisposable
 {
-    private readonly ObservationLog<TEntry> _log;
-    private bool _disposed;
+    private readonly ObservationCursor<TEntry> _cursor;
 
-    /// <param name="name">
-    /// Identifies this reader when it stops draining and fills the log, so give it the reader's own name.
-    /// </param>
-    public ObservationReader(ObservationLog<TEntry> log, string name = "unnamed")
+    internal ObservationReader(ObservationCursor<TEntry> cursor)
     {
-        _log = log;
-        Name = name;
-        log.AddReader(this);
+        _cursor = cursor;
     }
 
-    public string Name { get; }
+    public string Name => _cursor.Name;
 
-    internal long NextSequence { get; set; }
+    public bool TryRead([MaybeNullWhen(false)] out TEntry entry) => _cursor.TryRead(this, out entry);
 
-    public bool TryRead([MaybeNullWhen(false)] out TEntry entry)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _log.TryRead(this, out entry);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _log.RemoveReader(this);
-    }
+    public void Dispose() => _cursor.Dispose();
 }
