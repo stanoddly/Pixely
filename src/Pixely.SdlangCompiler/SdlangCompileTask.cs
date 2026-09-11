@@ -13,9 +13,10 @@ public class SdlangCompileTask : Microsoft.Build.Utilities.Task
     private static readonly string[] GeneratedShaderExtensions = ["spv", "dxil", "metal"];
 
     /// <summary>
-    /// The input shader file to compile. If empty or null, the task succeeds without compiling.
+    /// The input shader file to compile.
     /// </summary>
-    public string? InputFile { get; set; }
+    [Required]
+    public string InputFile { get; set; } = "";
 
     /// <summary>
     /// Path to the slangc executable. Slang is build-time tooling, so it is located through this
@@ -34,11 +35,6 @@ public class SdlangCompileTask : Microsoft.Build.Utilities.Task
     public override bool Execute()
     {
         GeneratedFiles = [];
-
-        if (string.IsNullOrEmpty(InputFile))
-        {
-            return true;
-        }
 
         if (string.IsNullOrEmpty(SlangCompilerPath))
         {
