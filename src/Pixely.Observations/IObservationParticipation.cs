@@ -6,9 +6,7 @@ namespace Pixely.Observations;
 /// participant perceived. Implement it on the entry type of a log whose entries are addressed that way.
 /// </summary>
 /// <typeparam name="TParticipantId">
-/// The game's participant identifier, its own or <see cref="ParticipantId"/>. Two are the same participant when
-/// they are equal, and its <c>ToString()</c> has to be stable and unique because it becomes part of a reader's
-/// name.
+/// The game's own participant identifier. Two are the same participant when they are equal.
 /// </typeparam>
 public interface IObservationParticipation<out TParticipantId>
 {

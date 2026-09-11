@@ -9,8 +9,7 @@ namespace Pixely.Observations;
 /// </summary>
 public sealed class ObservationReader<TEntry> : IDisposable
 {
-    private readonly ObservationLog<TEntry> _log;
-    private bool _disposed;
+    private readonly ObservationCursor<TEntry> _cursor;
 
     /// <param name="name">
     /// Identifies this reader, so give it the reader's own name. It must be unique within the log, because it
@@ -19,29 +18,12 @@ public sealed class ObservationReader<TEntry> : IDisposable
     /// </param>
     public ObservationReader(ObservationLog<TEntry> log, string name)
     {
-        _log = log;
-        Name = name;
-        log.AddReader(this);
+        _cursor = new ObservationCursor<TEntry>(log, name);
     }
 
-    public string Name { get; }
+    public string Name => _cursor.Name;
 
-    internal long NextSequence { get; set; }
+    public bool TryRead([MaybeNullWhen(false)] out TEntry entry) => _cursor.TryRead(this, out entry);
 
-    public bool TryRead([MaybeNullWhen(false)] out TEntry entry)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _log.TryRead(this, out entry);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _log.RemoveReader(this);
-    }
+    public void Dispose() => _cursor.Dispose();
 }

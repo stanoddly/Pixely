@@ -24,7 +24,7 @@ public sealed class ObservationLog<TEntry>
     private const int InitialCapacity = 16;
 
     private readonly int _maximumCapacity;
-    private readonly List<ObservationReader<TEntry>> _readers = new();
+    private readonly List<ObservationCursor<TEntry>> _cursors = new();
     private readonly Dictionary<string, long> _restoredPositions = new();
     private TEntry[] _entries;
     private int _head;
@@ -107,9 +107,9 @@ public sealed class ObservationLog<TEntry>
         Trim();
     }
 
-    internal bool TryRead(ObservationReader<TEntry> reader, [MaybeNullWhen(false)] out TEntry entry)
+    internal bool TryRead(ObservationCursor<TEntry> cursor, [MaybeNullWhen(false)] out TEntry entry)
     {
-        int offset = checked((int)(reader.NextSequence - _firstSequence));
+        int offset = checked((int)(cursor.NextSequence - _firstSequence));
         if (offset >= _count)
         {
             entry = default;
@@ -117,26 +117,26 @@ public sealed class ObservationLog<TEntry>
         }
 
         entry = _entries[PhysicalIndex(offset)];
-        reader.NextSequence++;
+        cursor.NextSequence++;
         Trim();
         return true;
     }
 
-    internal void AddReader(ObservationReader<TEntry> reader)
+    internal void AddCursor(ObservationCursor<TEntry> cursor)
     {
-        foreach (ObservationReader<TEntry> existing in _readers)
+        foreach (ObservationCursor<TEntry> existing in _cursors)
         {
-            if (existing.Name == reader.Name)
+            if (existing.Name == cursor.Name)
             {
-                throw new InvalidOperationException($"The log already has a reader named '{reader.Name}'. "
+                throw new InvalidOperationException($"The log already has a reader named '{cursor.Name}'. "
                     + "A name identifies a reader when the log fills and when a saved run is restored, so it has to be unique.");
             }
         }
 
         // A reader restored from a save resumes where it stopped; any other starts after the last appended
         // entry, so it sees only what is appended from now on.
-        reader.NextSequence = _restoredPositions.Remove(reader.Name, out long restored) ? restored : _nextSequence;
-        _readers.Add(reader);
+        cursor.NextSequence = _restoredPositions.Remove(cursor.Name, out long restored) ? restored : _nextSequence;
+        _cursors.Add(cursor);
     }
 
     internal TEntry[] CopyRetainedEntries()
@@ -160,17 +160,17 @@ public sealed class ObservationLog<TEntry>
             positions.Add(restored.Key, checked((int)(restored.Value - _firstSequence)));
         }
 
-        foreach (ObservationReader<TEntry> reader in _readers)
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
-            positions.Add(reader.Name, checked((int)(reader.NextSequence - _firstSequence)));
+            positions.Add(cursor.Name, checked((int)(cursor.NextSequence - _firstSequence)));
         }
 
         return positions;
     }
 
-    internal void RemoveReader(ObservationReader<TEntry> reader)
+    internal void RemoveCursor(ObservationCursor<TEntry> cursor)
     {
-        _readers.Remove(reader);
+        _cursors.Remove(cursor);
         Trim();
     }
 
@@ -205,11 +205,11 @@ public sealed class ObservationLog<TEntry>
     private long SlowestSequence()
     {
         long slowest = _nextSequence;
-        foreach (ObservationReader<TEntry> reader in _readers)
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
-            if (reader.NextSequence < slowest)
+            if (cursor.NextSequence < slowest)
             {
-                slowest = reader.NextSequence;
+                slowest = cursor.NextSequence;
             }
         }
 
@@ -253,11 +253,11 @@ public sealed class ObservationLog<TEntry>
     {
         long slowest = SlowestSequence();
         List<string> stalled = new();
-        foreach (ObservationReader<TEntry> reader in _readers)
+        foreach (ObservationCursor<TEntry> cursor in _cursors)
         {
-            if (reader.NextSequence == slowest)
+            if (cursor.NextSequence == slowest)
             {
-                stalled.Add(reader.Name);
+                stalled.Add(cursor.Name);
             }
         }
 

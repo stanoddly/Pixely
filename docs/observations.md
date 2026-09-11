@@ -19,8 +19,8 @@ Three types carry the core roles:
 So a rule holding a writer has no way to drain the log, and a reader has no way to record an observation no
 rule produced.
 
-A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, reads through a reader of its own and hands on
-only what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
+A fourth, `ParticipantObservationReader<TEntry, TParticipantId>`, holds a position of its own and hands on only
+what one participant perceived. See [Reading as one participant](#reading-as-one-participant).
 
 A fifth, `ObservationSnapshot<TEntry>`, is the log and its readers as data, so a run can be saved and resumed.
 See [Saving and resuming](#saving-and-resuming).
@@ -99,8 +99,7 @@ internal sealed class UnitSpritePresenter : IUpdatable, IDisposable
 Each consumer constructs its own reader rather than being handed one, because every reader of a given log is
 the same closed type and the container resolves by type. Constructing it also lets the consumer name it. The
 name has to be unique within the log, because it identifies the reader in a stall message and in a save; see
-[Saving and resuming](#saving-and-resuming). A participant reader adds the participant to it, so one consumer type
-can read for several participants under one name.
+[Saving and resuming](#saving-and-resuming).
 
 A reader starts positioned after the last appended entry, so a consumer created part-way through a run sees
 only what is appended from then on. Readers drain independently: entries appended this frame may be drained by
@@ -120,17 +119,13 @@ public readonly record struct Observation(ObservationKind Kind, ParticipantId Pe
 
 A positional `Perceiver` parameter already satisfies the interface, so implementing it adds no member.
 
-`TParticipantId` is the game's choice. Two values are the same participant when they are equal, and `ToString()`
-has to be stable across runs and unique across participants, because the reader is named after the consumer and
-the participant together: `UnitSpritePresenter:000000000001`. `ParticipantId` is the library's ready-made one, a
-`ulong` that prints as a fixed 12 character `Base40Encoding` string, so it sits in a name and in a save without
-escaping. A game with an id type of its own uses that instead.
-
 ```csharp
-_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, nameof(UnitSpritePresenter));
+_observations = new ParticipantObservationReader<Observation, ParticipantId>(log, participant, $"{nameof(UnitSpritePresenter)}:{participant}");
 ```
 
-A second presenter for another participant needs no name of its own.
+The name follows the same rules as any reader's, and the participant is not part of it unless the game puts it
+there. One consumer type reading for several participants on one log needs a name per participant, as above, and
+the game decides how the participant prints in it.
 
 `TryRead` then yields only the entries that participant perceived. The rest are drained and passed over rather
 than left behind, so a reader bound to a participant who perceives nothing for a while still lets the log trim.
@@ -185,8 +180,8 @@ what a consumer added since the save should do.
 position is negative or past the end of the entries. A save that cannot be resumed as it was says so
 rather than dropping entries quietly.
 
-`ParticipantObservationReader<TEntry, TParticipantId>` resumes the same way, under its composed name. Its position counts every
-entry its own reader drained, including the entries its participant did not perceive.
+`ParticipantObservationReader<TEntry, TParticipantId>` resumes the same way, under its own name. Its position
+counts every entry it drained, including the entries its participant did not perceive.
 
 ### A reader that never comes back
 

@@ -7,8 +7,4 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
-    </ItemGroup>
-
 </Project>
