@@ -42,29 +42,9 @@ public sealed class PaintContext
     /// </summary>
     internal bool Complete()
     {
-        bool changed = !SameInstructions(CollectionsMarshal.AsSpan(_instructions), CollectionsMarshal.AsSpan(_completedInstructions));
+        bool changed = !CollectionsMarshal.AsSpan(_instructions).SequenceEqual(CollectionsMarshal.AsSpan(_completedInstructions));
         (_instructions, _completedInstructions) = (_completedInstructions, _instructions);
         return changed;
-    }
-
-    // Textures are compared by reference, matching PaintBatcher, rather than through the generated
-    // record equality, which would honour an Equals override on a Texture subclass.
-    private static bool SameInstructions(ReadOnlySpan<PaintInstruction> a, ReadOnlySpan<PaintInstruction> b)
-    {
-        if (a.Length != b.Length)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < a.Length; i++)
-        {
-            if (!ReferenceEquals(a[i].Texture, b[i].Texture) || a[i].Area != b[i].Area || a[i].Clip != b[i].Clip || a[i].Uvs != b[i].Uvs || a[i].Tint != b[i].Tint)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /// <summary>
