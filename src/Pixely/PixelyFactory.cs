@@ -333,6 +333,12 @@ public class PixelyFactory: IDisposable
         return new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService);
     }
 
+    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation)
+    {
+        // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
+        return new InputAutomationConsole(inputAutomation, new StreamReader(Console.OpenStandardInput()), Console.Out);
+    }
+
     internal EventService CreateEventService(
         KeyboardService keyboardService,
         GamepadService gamepadService,

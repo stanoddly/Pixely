@@ -24,6 +24,7 @@ work relative to them instead of guessing.
 | Constant | Value | Runs there |
 | --- | --- | --- |
 | `UpdateOrders.Diagnostics` | -20 000 | `PerformanceTracker` |
+| `UpdateOrders.Input` | -10 000 | `InputAutomationConsole` (with `AddInputAutomation()`) |
 | `UpdateOrders.Default` | 0 | `TimerSystem`, `UpdateSystem` |
 | `UpdateOrders.Ui` | 10 000 | `UiUpdateSystem<T>` (Pixely.Ui) |
 | `UpdateOrders.Maintenance` | 20 000 | `FontSystem` |
