@@ -10,6 +10,9 @@ public static class UpdateOrders
     /// <summary>Frame instrumentation, before anything the frame does. Used by <c>PerformanceTracker</c>.</summary>
     public const int Diagnostics = -20_000;
 
+    /// <summary>Synthetic input from outside the process, after the frame's real events and before the game reads input. Used by <c>InputAutomationConsole</c>.</summary>
+    public const int Input = -10_000;
+
     /// <summary>What an updatable runs at when it does not choose. Used by <c>TimerSystem</c> and <c>UpdateSystem</c>.</summary>
     public const int Default = 0;
 

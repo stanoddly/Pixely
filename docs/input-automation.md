@@ -35,3 +35,33 @@ input.MouseUp(MouseButton.Left, new Vector2(200, 100));
 The default `ViewScope` targets the ordinary single-window application. Pass a scope explicitly for another registered window.
 
 Automated input affects Pixely's event-derived synthetic device state. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state.
+
+## Driving the app from standard input
+
+`AddInputAutomation()` also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+
+| Command | Calls |
+| --- | --- |
+| `mouse move <x> <y>` | `MouseMoveTo` |
+| `mouse moveby <dx> <dy>` | `MouseMoveBy` |
+| `mouse down <button> <x> <y>` | `MouseDown` |
+| `mouse up <button> <x> <y>` | `MouseUp` |
+| `mouse click <button> <x> <y>` | `MouseClick` |
+| `mouse wheel <dx> <dy> <x> <y>` | `MouseWheel` |
+| `key down <scancode>` | `KeyDown` |
+| `key up <scancode>` | `KeyUp` |
+| `key press <scancode>` | `KeyPress` |
+| `text <text>` | `TextInput` with the rest of the line |
+
+`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Commands always target the default `ViewScope`.
+
+A tool that cannot hold the pipe open, such as an LLM agent running one shell command at a time, drives the app through a file it appends to:
+
+```sh
+: > commands.txt
+tail -f commands.txt | dotnet run --project MyGame > replies.txt &
+printf 'key down LeftCtrl\nkey press E\nkey up LeftCtrl\n' >> commands.txt
+cat replies.txt
+```
+
+Keep logging off standard output while doing this; replies share the stream.

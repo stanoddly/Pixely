@@ -8,6 +8,7 @@ public static class InputAutomationExtensions
     {
         services.AddSingleton<InputAutomation, PixelyFactory>();
         services.AddAlias<IInputAutomation, InputAutomation>();
+        services.AddSingleton<InputAutomationConsole, PixelyFactory>();
         return services;
     }
 }
