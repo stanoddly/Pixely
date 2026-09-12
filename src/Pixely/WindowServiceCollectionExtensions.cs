@@ -21,7 +21,8 @@ public static class WindowServiceCollectionExtensions
                 provider.GetRequiredService<PixelyFrameContext>(),
                 config ?? new WindowConfig(),
                 provider.GetRequiredService<PlatformInfo>(),
-                provider.GetRequiredService<IImageLoader>()));
+                provider.GetRequiredService<IImageLoader>(),
+                provider.GetService<OffscreenRenderingConfig>()));
         return services;
     }
 }

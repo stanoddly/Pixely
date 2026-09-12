@@ -30,7 +30,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 
     public void Execute()
     {
-        if (!_renderContextProvider.CanRender(_window) || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
+        if (!_window.IsVisible || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
         {
             return;
         }

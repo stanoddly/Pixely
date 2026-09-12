@@ -386,7 +386,7 @@ public class Window : IDisposable
         }
     }
 
-    public bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
+    public virtual bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
         swapchainTexture = default!;
         uint width, height;

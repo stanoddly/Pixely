@@ -69,14 +69,15 @@ Keep logging off standard output while doing this; replies share the stream.
 
 ### Screenshots without a window
 
-`UseOffscreenRendering()` replaces `UseDefaultRendering()`. It keeps the window hidden and renders every frame into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at the `frameInterval` argument, 60 per second by default.
+`UseOffscreenRendering()` makes every window an `OffscreenWindow`: the SDL window stays hidden and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. It works with `UseDefaultRendering()` and with custom render contexts alike, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at the `frameInterval` argument, 60 per second by default.
 
 ```csharp
 builder
-    .UseOffscreenRendering(new WindowConfig(Size: (1280, 720)))
+    .UseDefaultRendering(new WindowConfig(Size: (1280, 720)))
+    .UseOffscreenRendering()
     .AddInputAutomation();
 ```
 
-`screenshot <path>` then captures the frame rendered after the command runs, writes it as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. The reply arrives after the replies of the other lines that ran in the same frame. The capture waits for the GPU, so that frame takes longer. Without `UseOffscreenRendering()` the command replies with an error, because a swapchain image cannot be read back.
+`screenshot <path>` then captures the frame rendered after the command runs, writes it as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. The reply arrives one frame later than the replies of the other lines that ran in the same frame. The capture waits for the GPU, so that frame takes longer. Without `UseOffscreenRendering()` the command replies with an error, because a swapchain image cannot be read back.
 
-The texture behind this is also available to code through `IFrameCapture`, and `IImageWriter` saves any `Image` as a PNG. Offscreen rendering serves one window; multi-window setups keep `UseDefaultRendering()`.
+The texture behind this is also available to code through `IFrameCapture`, and `IImageWriter` saves any `Image` as a PNG.

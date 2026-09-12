@@ -75,7 +75,8 @@ public class PixelyFactory: IDisposable
         PixelyFrameContext frameContext,
         WindowConfig config,
         PlatformInfo platformInfo,
-        IImageLoader imageLoader)
+        IImageLoader imageLoader,
+        OffscreenRenderingConfig? offscreen)
     {
         Window window = CreateWindow(
             viewScope,
@@ -89,8 +90,10 @@ public class PixelyFactory: IDisposable
             config.Transparent,
             config.Borderless,
             config.AlwaysOnTop,
-            config.InitiallyVisible,
-            config.CloseBehavior);
+            // An offscreen window never shows; its frames go to a texture.
+            config.InitiallyVisible && offscreen is null,
+            config.CloseBehavior,
+            offscreen);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -114,7 +117,8 @@ public class PixelyFactory: IDisposable
         bool borderless = false,
         bool alwaysOnTop = false,
         bool initiallyVisible = true,
-        WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication)
+        WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication,
+        OffscreenRenderingConfig? offscreen = null)
     {
         EnsureSdlInitialized();
 
@@ -189,6 +193,11 @@ public class PixelyFactory: IDisposable
             {
                 throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
             }
+        }
+
+        if (offscreen is not null)
+        {
+            return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, closeBehavior, offscreen.FrameInterval);
         }
 
         return new Window(
