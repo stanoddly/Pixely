@@ -54,7 +54,7 @@ Automated input affects Pixely's event-derived synthetic device state. It does n
 | `text <text>` | `TextInput` with the rest of the line |
 | `screenshot <path>` | Writes the next rendered frame as a PNG to the rest of the line, see below |
 
-`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` targets the window `UseOffscreenRendering()` was given, the default one unless a scope is passed.
+`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` targets the window `UseOffscreenRendering()` or `AddOffscreenWindow()` registered, the default scope unless one is passed.
 
 A tool that cannot hold the pipe open, such as an LLM agent running one shell command at a time, drives the app through a file it appends to:
 
@@ -69,15 +69,14 @@ Keep logging off standard output while doing this; replies share the stream.
 
 ### Screenshots without a window
 
-`UseOffscreenRendering()` makes every window an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. It works with `UseDefaultRendering()` and with custom render contexts alike, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at the `frameInterval` argument, 60 per second by default.
+`UseOffscreenRendering(size)` is `UseDefaultRendering()` with an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Only the size is configurable; the rest of `WindowConfig` is about the desktop. Custom render contexts use `AddOffscreenWindow(size)` with `UseWindowRendering<TRenderContext>()` instead; both work unchanged because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second.
 
 ```csharp
 builder
-    .UseDefaultRendering(new WindowConfig(Size: (1280, 720)))
-    .UseOffscreenRendering()
+    .UseOffscreenRendering((1280, 720))
     .AddInputAutomation();
 ```
 
 `screenshot <path>` then captures the frame rendered after the command runs, writes it as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. The reply arrives one frame later than the replies of the other lines that ran in the same frame. The capture waits for the GPU, so that frame takes longer. Without `UseOffscreenRendering()` the command replies with an error, because a swapchain image cannot be read back.
 
-The texture behind this is also available to code through `IFrameCapture`, resolved to the default window's view scope unless `UseOffscreenRendering(viewScope)` names another; call it from the frame loop only. `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.
+The texture behind this is also available to code through `IFrameCapture`, an alias of the offscreen window; call it from the frame loop only. `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.

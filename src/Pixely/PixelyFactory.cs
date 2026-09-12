@@ -75,8 +75,7 @@ public class PixelyFactory: IDisposable
         PixelyFrameContext frameContext,
         WindowConfig config,
         PlatformInfo platformInfo,
-        IImageLoader imageLoader,
-        OffscreenRenderingConfig? offscreen)
+        IImageLoader imageLoader)
     {
         Window window = CreateWindow(
             viewScope,
@@ -90,10 +89,8 @@ public class PixelyFactory: IDisposable
             config.Transparent,
             config.Borderless,
             config.AlwaysOnTop,
-            // An offscreen window never shows; its frames go to a texture.
-            config.InitiallyVisible && offscreen is null,
-            config.CloseBehavior,
-            offscreen);
+            config.InitiallyVisible,
+            config.CloseBehavior);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -102,6 +99,19 @@ public class PixelyFactory: IDisposable
         }
 
         return window;
+    }
+
+    internal OffscreenWindow CreateOffscreenWindow(
+        ViewScope viewScope,
+        GpuDevice gpuDevice,
+        PixelyFrameContext frameContext,
+        PlatformInfo platformInfo,
+        Size<uint>? size)
+    {
+        // Only the size matters: the SDL window is never shown, it just backs the GPU device, events and text input.
+        (uint width, uint height) = size ?? DefaultSize;
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, null, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 
     private Window CreateWindow(
@@ -117,22 +127,8 @@ public class PixelyFactory: IDisposable
         bool borderless = false,
         bool alwaysOnTop = false,
         bool initiallyVisible = true,
-        WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication,
-        OffscreenRenderingConfig? offscreen = null)
+        WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication)
     {
-        EnsureSdlInitialized();
-
-        string windowTitle;
-        if (title == null)
-        {
-            using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
-            windowTitle = process.ProcessName;
-        }
-        else
-        {
-            windowTitle = title;
-        }
-
         (uint width, uint height) = fullscreen ? (0, 0) : size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
         if (fullscreen)
@@ -165,6 +161,33 @@ public class PixelyFactory: IDisposable
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
         }
 
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, title, width, height, windowFlags);
+
+        return new Window(
+            viewScope,
+            sdlWindow,
+            gpuDevice.SdlGpuDevice,
+            sdlWindowId,
+            frameContext,
+            platformInfo,
+            closeBehavior);
+    }
+
+    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
+    {
+        EnsureSdlInitialized();
+
+        string windowTitle;
+        if (title == null)
+        {
+            using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
+            windowTitle = process.ProcessName;
+        }
+        else
+        {
+            windowTitle = title;
+        }
+
         Pointer<SDL_Window> sdlWindow;
         unsafe
         {
@@ -195,19 +218,7 @@ public class PixelyFactory: IDisposable
             }
         }
 
-        if (offscreen is not null)
-        {
-            return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, closeBehavior, offscreen.FrameInterval);
-        }
-
-        return new Window(
-            viewScope,
-            sdlWindow,
-            gpuDevice.SdlGpuDevice,
-            sdlWindowId,
-            frameContext,
-            platformInfo,
-            closeBehavior);
+        return (sdlWindow, sdlWindowId);
     }
 
     internal GpuDevice CreateGpuDevice()

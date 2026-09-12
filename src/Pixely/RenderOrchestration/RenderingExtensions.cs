@@ -31,22 +31,26 @@ public static class RenderingExtensions
         return services;
     }
 
-    /// <summary>
-    /// Keeps every window hidden and renders its frames into a texture that <see cref="IFrameCapture"/> can read back.
-    /// Frames are paced at <paramref name="frameInterval"/>, 60 per second by default, since there is no swapchain to wait on.
-    /// Combine with <see cref="UseDefaultRendering(ServiceCollection, WindowConfig?)"/> or <see cref="UseWindowRendering{TRenderContext}"/>.
-    /// </summary>
-    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, TimeSpan? frameInterval = null)
+    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, Size<uint>? size = null)
     {
-        return UseOffscreenRendering(services, default, frameInterval);
+        return UseOffscreenRendering(services, default, size);
     }
 
-    /// <summary><paramref name="viewScope"/> names the window <see cref="IFrameCapture"/> resolves to.</summary>
-    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, ViewScope viewScope, TimeSpan? frameInterval = null)
+    /// <summary>
+    /// Like <see cref="UseDefaultRendering(ServiceCollection, ViewScope, WindowConfig?)"/> with an <see cref="OffscreenWindow"/>: nothing is
+    /// shown, every frame is rendered into a texture that <see cref="IFrameCapture"/> can read back. Custom render contexts use
+    /// <see cref="WindowServiceCollectionExtensions.AddOffscreenWindow(ServiceCollection, ViewScope, Size{uint}?)"/> with <see cref="UseWindowRendering{TRenderContext}"/> instead.
+    /// </summary>
+    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, ViewScope viewScope, Size<uint>? size = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddSingleton(new OffscreenRenderingConfig(frameInterval ?? TimeSpan.FromSeconds(1.0 / 60)));
-        services.AddSingleton<IFrameCapture>(provider => (OffscreenWindow)provider.GetWindow(viewScope));
+        services.AddOffscreenWindow(viewScope, size);
+        if (!services.IsRegistered<RenderContextProvider<BasicRenderContext>>())
+        {
+            services.AddSingleton<RenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(provider =>
+                new BasicRenderContextProvider(provider.GetRequiredService<GpuDevice>()));
+        }
+        ConfigureWindowRendering<BasicRenderContext>(services, viewScope);
         return services;
     }
 

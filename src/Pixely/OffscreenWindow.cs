@@ -10,12 +10,14 @@ namespace Pixely;
 /// <summary>
 /// A hidden SDL window whose frames go to a texture instead of the swapchain, so nothing is presented and
 /// frames can be read back. Everything else, events, size, text input and the colour target format, still
-/// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at a fixed interval.
+/// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
 /// </summary>
 public sealed class OffscreenWindow : Window, IFrameCapture
 {
+    // Nobody watches these frames, so a modest constant rate is enough and keeps the frame loop off a full core.
+    public static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 30);
+
     private readonly GpuDevice _gpuDevice;
-    private readonly TimeSpan _frameInterval;
     // Requests made during a frame wait in _requested until that frame has been drawn, then move to _capturing
     // and are served from the texture at the next acquire, when it holds that frame.
     private List<Action<Image>> _requested = new();
@@ -30,17 +32,10 @@ public sealed class OffscreenWindow : Window, IFrameCapture
         uint sdlId,
         PixelyFrameContext frameContext,
         PlatformInfo platformInfo,
-        WindowCloseBehavior closeBehavior,
-        TimeSpan frameInterval)
+        WindowCloseBehavior closeBehavior)
         : base(viewScope, sdlWindow, gpuDevice.SdlGpuDevice, sdlId, frameContext, platformInfo, closeBehavior)
     {
-        if (frameInterval <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(frameInterval), frameInterval, "The frame interval must be positive.");
-        }
-
         _gpuDevice = gpuDevice;
-        _frameInterval = frameInterval;
     }
 
     // There is always a frame to draw, whether or not the SDL window is shown.
@@ -120,6 +115,6 @@ public sealed class OffscreenWindow : Window, IFrameCapture
         }
 
         // Never schedule into the past, otherwise a long frame would be followed by a burst of unpaced ones.
-        _nextFrameTimestamp = Math.Max(_nextFrameTimestamp, now) + (long)(_frameInterval.TotalSeconds * Stopwatch.Frequency);
+        _nextFrameTimestamp = Math.Max(_nextFrameTimestamp, now) + (long)(FrameInterval.TotalSeconds * Stopwatch.Frequency);
     }
 }
