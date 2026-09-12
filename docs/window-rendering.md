@@ -105,6 +105,8 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
+`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, registered by `AddOffscreenWindow()` or `UseOffscreenRendering()`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See input-automation.md.
+
 ### Reporting the colour target size
 
 `GetColorTargetSize` says how big the colour target will be, without acquiring one. The default answers `window.RenderSizeInPixels`, which is correct whenever the context targets the swapchain.

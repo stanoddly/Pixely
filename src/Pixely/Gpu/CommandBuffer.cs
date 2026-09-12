@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Pixely.Content;
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
 using SDL;
@@ -36,6 +37,63 @@ public class CommandBuffer: IDisposable
             SDL3.SDL_SubmitGPUCommandBuffer(SdlGpuCommandBuffer);
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
+    }
+
+    /// <summary>
+    /// Submits the recorded work, waits for the GPU to finish it and returns the pixels of the texture's first layer, tightly packed.
+    /// </summary>
+    public Image SubmitAndDownloadTexture(Texture texture)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        ThrowIfDisposed();
+        texture.ThrowIfDisposed();
+
+        PixelFormat pixelFormat = texture.Format.ToPixelFormat();
+        long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
+        if (layerSizeInBytes > int.MaxValue)
+        {
+            throw new NotSupportedException($"A {texture.Size.Width}x{texture.Size.Height} {texture.Format} layer is too large to download into one array.");
+        }
+
+        uint sizeInBytes = (uint)layerSizeInBytes;
+        byte[] pixels = new byte[sizeInBytes];
+
+        unsafe
+        {
+            SDL_GPUTransferBufferCreateInfo transferBufferCreateInfo = new SDL_GPUTransferBufferCreateInfo
+            {
+                usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
+                size = sizeInBytes
+            };
+            SDL_GPUTransferBuffer* transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(_gpuDevice.SdlGpuDevice, &transferBufferCreateInfo);
+            SdlError.ThrowOnNull(transferBuffer);
+
+            try
+            {
+                SDL_GPUTextureRegion source = new SDL_GPUTextureRegion { texture = texture.SdlGpuTexture, w = texture.Size.Width, h = texture.Size.Height, d = 1 };
+                SDL_GPUTextureTransferInfo destination = new SDL_GPUTextureTransferInfo { transfer_buffer = transferBuffer };
+
+                SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
+                SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
+                SDL3.SDL_EndGPUCopyPass(copyPass);
+
+                using (GpuFence fence = SubmitAndAcquireFence())
+                {
+                    _gpuDevice.WaitForFences([fence]);
+                }
+
+                byte* mapped = (byte*)SDL3.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer, false);
+                SdlError.ThrowOnNull(mapped);
+                new ReadOnlySpan<byte>(mapped, pixels.Length).CopyTo(pixels);
+                SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
+            }
+            finally
+            {
+                SDL3.SDL_ReleaseGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
+            }
+        }
+
+        return new RawImage(pixels, texture.Size, pixelFormat);
     }
 
     public GpuFence SubmitAndAcquireFence()

@@ -1,20 +1,25 @@
 using System.Globalization;
 using System.Numerics;
+using Pixely.Content;
 
 namespace Pixely.Input;
 
 /// <summary>
 /// Runs one line of the text command grammar against <see cref="IInputAutomation"/> and returns the reply line:
-/// <c>ok</c>, <c>error: ...</c> for a malformed line, or null for a blank or <c>#</c> comment line that gets no reply.
+/// <c>ok</c>, <c>error: ...</c> for a line that cannot run, or null for a blank or <c>#</c> comment line that gets no reply.
 /// Exceptions from input handlers propagate, the same as for real input.
 /// </summary>
 internal sealed class InputAutomationCommandInterpreter
 {
     private readonly IInputAutomation _automation;
+    private readonly Func<Image> _captureLastFrame;
+    private readonly IImageWriter _imageWriter;
 
-    public InputAutomationCommandInterpreter(IInputAutomation automation)
+    public InputAutomationCommandInterpreter(IInputAutomation automation, Func<Image> captureLastFrame, IImageWriter imageWriter)
     {
         _automation = automation;
+        _captureLastFrame = captureLastFrame;
+        _imageWriter = imageWriter;
     }
 
     public string? Execute(string line)
@@ -27,8 +32,7 @@ internal sealed class InputAutomationCommandInterpreter
 
         try
         {
-            Run(command);
-            return "ok";
+            return Run(command);
         }
         catch (FormatException exception)
         {
@@ -36,7 +40,7 @@ internal sealed class InputAutomationCommandInterpreter
         }
     }
 
-    private void Run(string command)
+    private string Run(string command)
     {
         string[] words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         switch (words)
@@ -71,8 +75,25 @@ internal sealed class InputAutomationCommandInterpreter
             case ["text", ..]:
                 _automation.TextInput(command["text".Length..].TrimStart());
                 break;
+            case ["screenshot", _, ..]:
+                return Screenshot(command["screenshot".Length..].Trim());
             default:
                 throw new FormatException($"unknown command '{command}'");
+        }
+
+        return "ok";
+    }
+
+    private string Screenshot(string path)
+    {
+        try
+        {
+            _imageWriter.SavePng(_captureLastFrame(), path);
+            return "ok";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return $"error: {exception.Message}";
         }
     }
 

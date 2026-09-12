@@ -24,4 +24,20 @@ public static class WindowServiceCollectionExtensions
                 provider.GetRequiredService<IImageLoader>()));
         return services;
     }
+
+    /// <summary>
+    /// Registers an <see cref="OffscreenWindow"/> as the default scope's <see cref="Window"/>. Only the size is configurable; nothing about it reaches the desktop.
+    /// </summary>
+    public static ServiceCollection AddOffscreenWindow(this ServiceCollection services, Size<uint>? size = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<OffscreenWindow>(provider =>
+            provider.GetRequiredService<PixelyFactory>().CreateOffscreenWindow(
+                provider.GetRequiredService<GpuDevice>(),
+                provider.GetRequiredService<PixelyFrameContext>(),
+                provider.GetRequiredService<PlatformInfo>(),
+                size));
+        services.AddAlias<Window, OffscreenWindow>();
+        return services;
+    }
 }

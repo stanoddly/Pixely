@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Pixely.Content;
 
 namespace Pixely.Input;
 
@@ -13,9 +14,9 @@ internal sealed class InputAutomationConsole : IUpdatable
     private readonly ConcurrentQueue<string> _pendingLines = new();
     private Thread? _readerThread;
 
-    internal InputAutomationConsole(IInputAutomation automation, TextReader input, TextWriter output)
+    internal InputAutomationConsole(IInputAutomation automation, Func<Image> captureLastFrame, IImageWriter imageWriter, TextReader input, TextWriter output)
     {
-        _interpreter = new InputAutomationCommandInterpreter(automation);
+        _interpreter = new InputAutomationCommandInterpreter(automation, captureLastFrame, imageWriter);
         _input = input;
         _output = output;
     }

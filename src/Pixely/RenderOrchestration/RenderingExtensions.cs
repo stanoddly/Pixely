@@ -31,6 +31,24 @@ public static class RenderingExtensions
         return services;
     }
 
+    /// <summary>
+    /// Like <see cref="UseDefaultRendering(ServiceCollection, WindowConfig?)"/> with an <see cref="OffscreenWindow"/>: nothing is shown and every
+    /// frame is rendered into a texture the window can read back. Custom render contexts use
+    /// <see cref="WindowServiceCollectionExtensions.AddOffscreenWindow"/> with <see cref="UseWindowRendering{TRenderContext}"/> instead.
+    /// </summary>
+    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, Size<uint>? size = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddOffscreenWindow(size);
+        if (!services.IsRegistered<RenderContextProvider<BasicRenderContext>>())
+        {
+            services.AddSingleton<RenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(provider =>
+                new BasicRenderContextProvider(provider.GetRequiredService<GpuDevice>()));
+        }
+        ConfigureWindowRendering<BasicRenderContext>(services, default);
+        return services;
+    }
+
     private static void ConfigureWindowRendering<TRenderContext>(ServiceCollection services, ViewScope viewScope)
         where TRenderContext : IRenderContext
     {
