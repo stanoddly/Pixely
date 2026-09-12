@@ -83,8 +83,8 @@ internal sealed class InputAutomationCommandInterpreter
             case ["text", ..]:
                 _automation.TextInput(command["text".Length..].TrimStart());
                 break;
-            case ["screenshot", string path]:
-                return Screenshot(path);
+            case ["screenshot", _, ..]:
+                return Screenshot(command["screenshot".Length..].Trim());
             default:
                 throw new FormatException($"unknown command '{command}'");
         }

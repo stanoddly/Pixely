@@ -44,7 +44,10 @@ public sealed class OffscreenWindow : Window, IFrameCapture
     }
 
     // There is always a frame to draw, whether or not the SDL window is shown.
-    public override bool IsVisible => true;
+    public override bool IsRenderable => true;
+
+    // The whole point is that nothing reaches the desktop, so showing is refused rather than passed to SDL.
+    public override bool Show() => false;
 
     public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
@@ -64,6 +67,13 @@ public sealed class OffscreenWindow : Window, IFrameCapture
     {
         ArgumentNullException.ThrowIfNull(onCaptured);
         _requested.Add(onCaptured);
+    }
+
+    public override void Dispose()
+    {
+        _colorTarget?.Dispose();
+        _colorTarget = null;
+        base.Dispose();
     }
 
     // Runs before the target is touched for the new frame, so a resize cannot replace the texture the captures wait on.

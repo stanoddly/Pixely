@@ -38,9 +38,15 @@ public static class RenderingExtensions
     /// </summary>
     public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, TimeSpan? frameInterval = null)
     {
+        return UseOffscreenRendering(services, default, frameInterval);
+    }
+
+    /// <summary><paramref name="viewScope"/> names the window <see cref="IFrameCapture"/> resolves to.</summary>
+    public static ServiceCollection UseOffscreenRendering(this ServiceCollection services, ViewScope viewScope, TimeSpan? frameInterval = null)
+    {
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton(new OffscreenRenderingConfig(frameInterval ?? TimeSpan.FromSeconds(1.0 / 60)));
-        services.AddSingleton<IFrameCapture>(provider => (OffscreenWindow)provider.GetWindow());
+        services.AddSingleton<IFrameCapture>(provider => (OffscreenWindow)provider.GetWindow(viewScope));
         return services;
     }
 

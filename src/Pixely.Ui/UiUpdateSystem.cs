@@ -27,10 +27,10 @@ internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable
 
     public void Update()
     {
-        // Visibility first, so a hidden window does not pay for a size call it will not use. Nothing
+        // Asked first, so a window nothing will draw does not pay for a size call it will not use. Nothing
         // skipped the build for it before this class existed either: the only caller of Update was
         // the renderer, which RenderCoordinator had already skipped.
-        if (!_window.IsVisible)
+        if (!_window.IsRenderable)
         {
             return;
         }

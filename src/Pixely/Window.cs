@@ -182,11 +182,8 @@ public class Window : IDisposable
         }
     }
 
-    /// <summary>
-    /// Whether the window is showing. Virtual so a test can answer without a display; SDL is the
-    /// only source in production.
-    /// </summary>
-    public virtual bool IsVisible
+    /// <summary>Whether the window is showing on the desktop.</summary>
+    public bool IsVisible
     {
         get
         {
@@ -197,7 +194,14 @@ public class Window : IDisposable
         }
     }
 
-    public bool Show()
+    /// <summary>
+    /// Whether frames can be rendered to the window right now. The render coordinator and update systems
+    /// that only work for the renderer skip their frame when this is false. A swapchain has no image for a
+    /// hidden window, so the default is <see cref="IsVisible"/>; a window that draws elsewhere overrides it.
+    /// </summary>
+    public virtual bool IsRenderable => IsVisible;
+
+    public virtual bool Show()
     {
         unsafe
         {
@@ -603,7 +607,7 @@ public class Window : IDisposable
         return ViewScope.GetHashCode();
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         ClearHitTestCallback();
         unsafe

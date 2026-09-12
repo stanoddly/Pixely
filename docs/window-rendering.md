@@ -105,7 +105,7 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
-`TryWaitAndAcquireSwapchainTexture` is virtual. `OffscreenWindow`, created when `UseOffscreenRendering()` is registered, overrides it to hand out a texture instead of a swapchain image, so a custom provider written against the window works offscreen unchanged. See input-automation.md.
+`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, created when `UseOffscreenRendering()` is registered, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See input-automation.md.
 
 ### Reporting the colour target size
 

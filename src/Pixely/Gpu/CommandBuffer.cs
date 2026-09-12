@@ -40,7 +40,7 @@ public class CommandBuffer: IDisposable
     }
 
     /// <summary>
-    /// Submits the recorded work, waits for the GPU to finish it and returns the texture's pixels, tightly packed.
+    /// Submits the recorded work, waits for the GPU to finish it and returns the pixels of the texture's first layer, tightly packed.
     /// </summary>
     public Image SubmitAndDownloadTexture(Texture texture)
     {
@@ -49,7 +49,13 @@ public class CommandBuffer: IDisposable
         texture.ThrowIfDisposed();
 
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
-        uint sizeInBytes = (uint)texture.SizeInBytes;
+        long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
+        if (layerSizeInBytes > int.MaxValue)
+        {
+            throw new NotSupportedException($"A {texture.Size.Width}x{texture.Size.Height} {texture.Format} layer is too large to download into one array.");
+        }
+
+        uint sizeInBytes = (uint)layerSizeInBytes;
         byte[] pixels = new byte[sizeInBytes];
 
         unsafe

@@ -12,11 +12,17 @@ internal class SdlImageWriter : IImageWriter
 
         (ushort width, ushort height) = image.Size;
         ReadOnlySpan<byte> pixels = image.Data;
-        int pitch = pixels.Length / height;
+        SDL_PixelFormat format = (SDL_PixelFormat)image.PixelFormat;
+        int pitch = width * SDL3.SDL_BYTESPERPIXEL(format);
+        // An indexed image would need a palette, which Image does not carry.
+        if (pitch == 0 || SDL3.SDL_ISPIXELFORMAT_INDEXED(format) || pixels.Length != (long)pitch * height)
+        {
+            throw new NotSupportedException($"Only tightly packed images in a non-planar, non-indexed pixel format can be saved, not {image.PixelFormat} with {pixels.Length} bytes for {width}x{height}.");
+        }
 
         fixed (byte* pixelsPointer = pixels)
         {
-            Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurfaceFrom(width, height, (SDL_PixelFormat)image.PixelFormat, (IntPtr)pixelsPointer, pitch);
+            Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurfaceFrom(width, height, format, (IntPtr)pixelsPointer, pitch);
             if (surface.IsNull)
             {
                 throw new InvalidOperationException($"SDL_CreateSurfaceFrom failed: {SDL3.SDL_GetError()}");

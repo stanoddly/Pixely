@@ -43,6 +43,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click Center 1 2", "error: unknown MouseButton 'Center'")]
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
     [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
+    [TestCase("screenshot", "error: unknown command 'screenshot'")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();
@@ -74,7 +75,7 @@ public sealed class InputAutomationCommandInterpreterTests
         List<string> replies = new();
         InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), frameCapture, imageWriter, replies.Add);
 
-        interpreter.Execute("screenshot /tmp/frame.png");
+        interpreter.Execute("screenshot  /tmp/my frames/frame.png ");
         Assert.That(replies, Is.Empty);
 
         RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
@@ -82,7 +83,7 @@ public sealed class InputAutomationCommandInterpreterTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(imageWriter.Saved, Is.EqualTo(new[] { (image, "/tmp/frame.png") }));
+            Assert.That(imageWriter.Saved, Is.EqualTo(new[] { (image, "/tmp/my frames/frame.png") }));
             Assert.That(replies, Is.EqualTo(new[] { "ok" }));
         });
     }
