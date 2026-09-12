@@ -1,4 +1,5 @@
 using System.Numerics;
+using Pixely.Content;
 using Pixely.Input;
 
 namespace Pixely.Tests;
@@ -10,7 +11,7 @@ public sealed class InputAutomationConsoleTests
     {
         List<(string Call, int ThreadId)> calls = new();
         StringWriter output = new();
-        InputAutomationConsole console = new(new RecordingAutomation(calls), new StringReader("key press A\n\nbogus\nkey press B\n"), output);
+        InputAutomationConsole console = new(new RecordingAutomation(calls), null, new NoImageWriter(), new StringReader("key press A\n\nbogus\nkey press B\n"), output);
 
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         while (calls.Count < 2 && DateTime.UtcNow < deadline)
@@ -31,12 +32,17 @@ public sealed class InputAutomationConsoleTests
     public void Update_WithEmptyInput_DoesNothing()
     {
         StringWriter output = new();
-        InputAutomationConsole console = new(new RecordingAutomation(new()), new StringReader(""), output);
+        InputAutomationConsole console = new(new RecordingAutomation(new()), null, new NoImageWriter(), new StringReader(""), output);
 
         console.Update();
         console.Update();
 
         Assert.That(output.ToString(), Is.Empty);
+    }
+
+    private sealed class NoImageWriter : IImageWriter
+    {
+        public void SavePng(Image image, string path) => throw new NotSupportedException();
     }
 
     private sealed class RecordingAutomation(List<(string Call, int ThreadId)> calls) : IInputAutomation

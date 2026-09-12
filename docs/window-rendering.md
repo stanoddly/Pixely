@@ -105,6 +105,10 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
+### Saying whether there is anything to render
+
+`CanRender` says whether the window has a colour target this frame. `RenderCoordinator` skips the frame when it is false, and so do update systems that only work for the renderer, such as the `Pixely.Ui` tree build. The default answers `window.IsVisible`, since a hidden window has no swapchain image. Override it when the context draws somewhere that exists regardless of the window, as `OffscreenRenderContextProvider` does.
+
 ### Reporting the colour target size
 
 `GetColorTargetSize` says how big the colour target will be, without acquiring one. The default answers `window.RenderSizeInPixels`, which is correct whenever the context targets the swapchain.

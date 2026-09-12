@@ -1,5 +1,8 @@
 using System.Numerics;
+using Pixely.Content;
+using Pixely.Gpu;
 using Pixely.Input;
+using Pixely.RenderOrchestration;
 
 namespace Pixely.Tests;
 
@@ -19,13 +22,14 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_DispatchesCommand(string line, string expectedCall)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation);
+        List<string> replies = new();
+        InputAutomationCommandInterpreter interpreter = new(automation, null, new RecordingImageWriter(), replies.Add);
 
-        string? reply = interpreter.Execute(line);
+        interpreter.Execute(line);
 
         Assert.Multiple(() =>
         {
-            Assert.That(reply, Is.EqualTo("ok"));
+            Assert.That(replies, Is.EqualTo(new[] { "ok" }));
             Assert.That(automation.Calls, Is.EqualTo(new[] { expectedCall }));
         });
     }
@@ -42,13 +46,14 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation);
+        List<string> replies = new();
+        InputAutomationCommandInterpreter interpreter = new(automation, null, new RecordingImageWriter(), replies.Add);
 
-        string? reply = interpreter.Execute(line);
+        interpreter.Execute(line);
 
         Assert.Multiple(() =>
         {
-            Assert.That(reply, Is.EqualTo(expectedReply));
+            Assert.That(replies, Is.EqualTo(expectedReply is null ? Array.Empty<string>() : new[] { expectedReply }));
             Assert.That(automation.Calls, Is.Empty);
         });
     }
@@ -56,9 +61,82 @@ public sealed class InputAutomationCommandInterpreterTests
     [Test]
     public void Execute_PropagatesAutomationFailure()
     {
-        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation());
+        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), null, new RecordingImageWriter(), _ => { });
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
+    }
+
+    [Test]
+    public void Execute_Screenshot_RepliesAfterTheFrameIsWritten()
+    {
+        FakeFrameCapture frameCapture = new();
+        RecordingImageWriter imageWriter = new();
+        List<string> replies = new();
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), frameCapture, imageWriter, replies.Add);
+
+        interpreter.Execute("screenshot /tmp/frame.png");
+        Assert.That(replies, Is.Empty);
+
+        RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
+        frameCapture.Complete(image);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(imageWriter.Saved, Is.EqualTo(new[] { (image, "/tmp/frame.png") }));
+            Assert.That(replies, Is.EqualTo(new[] { "ok" }));
+        });
+    }
+
+    [Test]
+    public void Execute_Screenshot_ReportsWriteFailure()
+    {
+        FakeFrameCapture frameCapture = new();
+        List<string> replies = new();
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), frameCapture, new ThrowingImageWriter(), replies.Add);
+
+        interpreter.Execute("screenshot /nope/frame.png");
+        frameCapture.Complete(new RawImage(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888));
+
+        Assert.That(replies, Is.EqualTo(new[] { "error: disk full" }));
+    }
+
+    [Test]
+    public void Execute_Screenshot_WithoutFrameCapture_Fails()
+    {
+        List<string> replies = new();
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), null, new RecordingImageWriter(), replies.Add);
+
+        interpreter.Execute("screenshot frame.png");
+
+        Assert.That(replies, Is.EqualTo(new[] { "error: screenshots need offscreen rendering, register it with UseOffscreenRendering()" }));
+    }
+
+    private sealed class FakeFrameCapture : IFrameCapture
+    {
+        private readonly List<Action<Image>> _requests = new();
+
+        public void CaptureNextFrame(Action<Image> onCaptured) => _requests.Add(onCaptured);
+
+        public void Complete(Image image)
+        {
+            foreach (Action<Image> request in _requests)
+            {
+                request(image);
+            }
+            _requests.Clear();
+        }
+    }
+
+    private sealed class RecordingImageWriter : IImageWriter
+    {
+        public List<(Image Image, string Path)> Saved { get; } = new();
+
+        public void SavePng(Image image, string path) => Saved.Add((image, path));
+    }
+
+    private sealed class ThrowingImageWriter : IImageWriter
+    {
+        public void SavePng(Image image, string path) => throw new IOException("disk full");
     }
 
     private sealed class RecordingAutomation : IInputAutomation

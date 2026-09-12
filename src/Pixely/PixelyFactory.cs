@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
+using Pixely.RenderOrchestration;
 using Pixely.Utilities;
 using SDL;
 
@@ -333,10 +334,10 @@ public class PixelyFactory: IDisposable
         return new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService);
     }
 
-    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation)
+    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation, IFrameCapture? frameCapture, IImageWriter imageWriter)
     {
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, new StreamReader(Console.OpenStandardInput()), Console.Out);
+        return new InputAutomationConsole(inputAutomation, frameCapture, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
     }
 
     internal EventService CreateEventService(
