@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Pixely.Content;
-using Pixely.RenderOrchestration;
 
 namespace Pixely.Input;
 
@@ -11,13 +10,15 @@ internal sealed class InputAutomationConsole : IUpdatable
 {
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
+    private readonly TextWriter _output;
     private readonly ConcurrentQueue<string> _pendingLines = new();
     private Thread? _readerThread;
 
-    internal InputAutomationConsole(IInputAutomation automation, IFrameCapture? frameCapture, IImageWriter imageWriter, TextReader input, TextWriter output)
+    internal InputAutomationConsole(IInputAutomation automation, Func<Image> captureLastFrame, IImageWriter imageWriter, TextReader input, TextWriter output)
     {
-        _interpreter = new InputAutomationCommandInterpreter(automation, frameCapture, imageWriter, output.WriteLine);
+        _interpreter = new InputAutomationCommandInterpreter(automation, captureLastFrame, imageWriter);
         _input = input;
+        _output = output;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
@@ -30,7 +31,11 @@ internal sealed class InputAutomationConsole : IUpdatable
         int pendingCount = _pendingLines.Count;
         for (int i = 0; i < pendingCount && _pendingLines.TryDequeue(out string? line); i++)
         {
-            _interpreter.Execute(line);
+            string? reply = _interpreter.Execute(line);
+            if (reply is not null)
+            {
+                _output.WriteLine(reply);
+            }
         }
     }
 

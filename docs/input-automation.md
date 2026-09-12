@@ -52,9 +52,9 @@ Automated input affects Pixely's event-derived synthetic device state. It does n
 | `key up <scancode>` | `KeyUp` |
 | `key press <scancode>` | `KeyPress` |
 | `text <text>` | `TextInput` with the rest of the line |
-| `screenshot <path>` | Writes the next rendered frame as a PNG to the rest of the line, see below |
+| `screenshot <path>` | Writes the last rendered frame as a PNG to the rest of the line, see below |
 
-`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` targets the window `UseOffscreenRendering()` or `AddOffscreenWindow()` registered, the default scope unless one is passed.
+`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` reads the offscreen window, which is always the default scope.
 
 A tool that cannot hold the pipe open, such as an LLM agent running one shell command at a time, drives the app through a file it appends to:
 
@@ -77,6 +77,6 @@ builder
     .AddInputAutomation();
 ```
 
-`screenshot <path>` then captures the frame rendered after the command runs, writes it as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. The reply arrives one frame later than the replies of the other lines that ran in the same frame. The capture waits for the GPU, so that frame takes longer. Without `UseOffscreenRendering()` the command replies with an error, because a swapchain image cannot be read back.
+`screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer. `AddInputAutomation()` requires the offscreen window, since a swapchain image cannot be read back.
 
-The texture behind this is also available to code through `IFrameCapture`, an alias of the offscreen window; call it from the frame loop only. `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.
+The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.

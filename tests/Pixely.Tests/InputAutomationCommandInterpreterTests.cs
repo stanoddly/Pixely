@@ -2,7 +2,6 @@ using System.Numerics;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
-using Pixely.RenderOrchestration;
 
 namespace Pixely.Tests;
 
@@ -22,14 +21,13 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_DispatchesCommand(string line, string expectedCall)
     {
         RecordingAutomation automation = new();
-        List<string> replies = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, null, new RecordingImageWriter(), replies.Add);
+        InputAutomationCommandInterpreter interpreter = new(automation, NoFrame, new RecordingImageWriter());
 
-        interpreter.Execute(line);
+        string? reply = interpreter.Execute(line);
 
         Assert.Multiple(() =>
         {
-            Assert.That(replies, Is.EqualTo(new[] { "ok" }));
+            Assert.That(reply, Is.EqualTo("ok"));
             Assert.That(automation.Calls, Is.EqualTo(new[] { expectedCall }));
         });
     }
@@ -47,14 +45,13 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();
-        List<string> replies = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, null, new RecordingImageWriter(), replies.Add);
+        InputAutomationCommandInterpreter interpreter = new(automation, NoFrame, new RecordingImageWriter());
 
-        interpreter.Execute(line);
+        string? reply = interpreter.Execute(line);
 
         Assert.Multiple(() =>
         {
-            Assert.That(replies, Is.EqualTo(expectedReply is null ? Array.Empty<string>() : new[] { expectedReply }));
+            Assert.That(reply, Is.EqualTo(expectedReply));
             Assert.That(automation.Calls, Is.Empty);
         });
     }
@@ -62,71 +59,45 @@ public sealed class InputAutomationCommandInterpreterTests
     [Test]
     public void Execute_PropagatesAutomationFailure()
     {
-        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), null, new RecordingImageWriter(), _ => { });
+        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), NoFrame, new RecordingImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
     }
 
     [Test]
-    public void Execute_Screenshot_RepliesAfterTheFrameIsWritten()
+    public void Execute_Screenshot_WritesTheLastFrame()
     {
-        FakeFrameCapture frameCapture = new();
-        RecordingImageWriter imageWriter = new();
-        List<string> replies = new();
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), frameCapture, imageWriter, replies.Add);
-
-        interpreter.Execute("screenshot  /tmp/my frames/frame.png ");
-        Assert.That(replies, Is.Empty);
-
         RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
-        frameCapture.Complete(image);
+        RecordingImageWriter imageWriter = new();
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), () => image, imageWriter);
+
+        string? reply = interpreter.Execute("screenshot  /tmp/my frames/frame.png ");
 
         Assert.Multiple(() =>
         {
+            Assert.That(reply, Is.EqualTo("ok"));
             Assert.That(imageWriter.Saved, Is.EqualTo(new[] { (image, "/tmp/my frames/frame.png") }));
-            Assert.That(replies, Is.EqualTo(new[] { "ok" }));
         });
     }
 
     [Test]
     public void Execute_Screenshot_ReportsWriteFailure()
     {
-        FakeFrameCapture frameCapture = new();
-        List<string> replies = new();
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), frameCapture, new ThrowingImageWriter(), replies.Add);
+        RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), () => image, new ThrowingImageWriter());
 
-        interpreter.Execute("screenshot /nope/frame.png");
-        frameCapture.Complete(new RawImage(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888));
-
-        Assert.That(replies, Is.EqualTo(new[] { "error: disk full" }));
+        Assert.That(interpreter.Execute("screenshot /nope/frame.png"), Is.EqualTo("error: disk full"));
     }
 
     [Test]
-    public void Execute_Screenshot_WithoutFrameCapture_Fails()
+    public void Execute_Screenshot_BeforeTheFirstFrame_Fails()
     {
-        List<string> replies = new();
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), null, new RecordingImageWriter(), replies.Add);
+        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), NoFrame, new RecordingImageWriter());
 
-        interpreter.Execute("screenshot frame.png");
-
-        Assert.That(replies, Is.EqualTo(new[] { "error: screenshots need offscreen rendering, register it with UseOffscreenRendering()" }));
+        Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: No frame has been rendered yet."));
     }
 
-    private sealed class FakeFrameCapture : IFrameCapture
-    {
-        private readonly List<Action<Image>> _requests = new();
-
-        public void CaptureNextFrame(Action<Image> onCaptured) => _requests.Add(onCaptured);
-
-        public void Complete(Image image)
-        {
-            foreach (Action<Image> request in _requests)
-            {
-                request(image);
-            }
-            _requests.Clear();
-        }
-    }
+    private static Image NoFrame() => throw new InvalidOperationException("No frame has been rendered yet.");
 
     private sealed class RecordingImageWriter : IImageWriter
     {

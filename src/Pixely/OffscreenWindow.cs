@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Pixely.Content;
 using Pixely.Gpu;
-using Pixely.RenderOrchestration;
 using Pixely.Utilities;
 using SDL;
 
@@ -12,16 +11,12 @@ namespace Pixely;
 /// frames can be read back. Everything else, events, size, text input and the colour target format, still
 /// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
 /// </summary>
-public sealed class OffscreenWindow : Window, IFrameCapture
+public sealed class OffscreenWindow : Window
 {
     // Nobody watches these frames, so a modest constant rate is enough and keeps the frame loop off a full core.
     public static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 30);
 
     private readonly GpuDevice _gpuDevice;
-    // Requests made during a frame wait in _requested until that frame has been drawn, then move to _capturing
-    // and are served from the texture at the next acquire, when it holds that frame.
-    private List<Action<Image>> _requested = new();
-    private List<Action<Image>> _capturing = new();
     private Texture? _colorTarget;
     private long _nextFrameTimestamp;
 
@@ -48,7 +43,6 @@ public sealed class OffscreenWindow : Window, IFrameCapture
     {
         ArgumentNullException.ThrowIfNull(commandBuffer);
         WaitForNextFrame();
-        ServeCaptures();
 
         // The swapchain format keeps every pipeline built against ColorTargetFormat valid.
         Texture colorTarget = GetColorTarget(RenderSizeInPixels, ColorTargetFormat);
@@ -58,10 +52,15 @@ public sealed class OffscreenWindow : Window, IFrameCapture
         return true;
     }
 
-    public void CaptureNextFrame(Action<Image> onCaptured)
+    /// <summary>Reads back the last rendered frame. Waits for the GPU, so the frame this runs in takes longer.</summary>
+    public Image CaptureLastFrame()
     {
-        ArgumentNullException.ThrowIfNull(onCaptured);
-        _requested.Add(onCaptured);
+        if (_colorTarget is not { } lastFrame)
+        {
+            throw new InvalidOperationException("No frame has been rendered yet.");
+        }
+
+        return _gpuDevice.AcquireCommandBuffer().SubmitAndDownloadTexture(lastFrame);
     }
 
     public override void Dispose()
@@ -69,22 +68,6 @@ public sealed class OffscreenWindow : Window, IFrameCapture
         _colorTarget?.Dispose();
         _colorTarget = null;
         base.Dispose();
-    }
-
-    // Runs before the target is touched for the new frame, so a resize cannot replace the texture the captures wait on.
-    private void ServeCaptures()
-    {
-        if (_capturing.Count > 0 && _colorTarget is { } lastFrame)
-        {
-            Image image = _gpuDevice.AcquireCommandBuffer().SubmitAndDownloadTexture(lastFrame);
-            foreach (Action<Image> onCaptured in _capturing)
-            {
-                onCaptured(image);
-            }
-            _capturing.Clear();
-        }
-
-        (_requested, _capturing) = (_capturing, _requested);
     }
 
     private Texture GetColorTarget(ShortSize size, TextureFormat format)

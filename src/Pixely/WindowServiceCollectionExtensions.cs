@@ -1,7 +1,6 @@
 using Pixely.Content;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
-using Pixely.RenderOrchestration;
 
 namespace Pixely;
 
@@ -26,27 +25,19 @@ public static class WindowServiceCollectionExtensions
         return services;
     }
 
-    public static ServiceCollection AddOffscreenWindow(this ServiceCollection services, Size<uint>? size = null)
-    {
-        return AddOffscreenWindow(services, default, size);
-    }
-
     /// <summary>
-    /// Registers an <see cref="OffscreenWindow"/> as the scope's <see cref="Window"/> and as <see cref="IFrameCapture"/>.
-    /// Only the size is configurable; nothing about it reaches the desktop.
+    /// Registers an <see cref="OffscreenWindow"/> as the default scope's <see cref="Window"/>. Only the size is configurable; nothing about it reaches the desktop.
     /// </summary>
-    public static ServiceCollection AddOffscreenWindow(this ServiceCollection services, ViewScope viewScope, Size<uint>? size = null)
+    public static ServiceCollection AddOffscreenWindow(this ServiceCollection services, Size<uint>? size = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<OffscreenWindow>(provider =>
             provider.GetRequiredService<PixelyFactory>().CreateOffscreenWindow(
-                viewScope,
                 provider.GetRequiredService<GpuDevice>(),
                 provider.GetRequiredService<PixelyFrameContext>(),
                 provider.GetRequiredService<PlatformInfo>(),
                 size));
         services.AddAlias<Window, OffscreenWindow>();
-        services.AddAlias<IFrameCapture, OffscreenWindow>();
         return services;
     }
 }

@@ -1,54 +1,46 @@
 using System.Globalization;
 using System.Numerics;
 using Pixely.Content;
-using Pixely.RenderOrchestration;
 
 namespace Pixely.Input;
 
 /// <summary>
-/// Runs one line of the text command grammar against <see cref="IInputAutomation"/> and sends one reply line per command:
-/// <c>ok</c>, or <c>error: ...</c> for a line that cannot run. Blank and <c>#</c> comment lines get no reply.
-/// A <c>screenshot</c> replies once the next frame has been rendered and written. Exceptions from input handlers propagate, the same as for real input.
+/// Runs one line of the text command grammar against <see cref="IInputAutomation"/> and returns the reply line:
+/// <c>ok</c>, <c>error: ...</c> for a line that cannot run, or null for a blank or <c>#</c> comment line that gets no reply.
+/// Exceptions from input handlers propagate, the same as for real input.
 /// </summary>
 internal sealed class InputAutomationCommandInterpreter
 {
     private readonly IInputAutomation _automation;
-    private readonly IFrameCapture? _frameCapture;
+    private readonly Func<Image> _captureLastFrame;
     private readonly IImageWriter _imageWriter;
-    private readonly Action<string> _reply;
 
-    public InputAutomationCommandInterpreter(IInputAutomation automation, IFrameCapture? frameCapture, IImageWriter imageWriter, Action<string> reply)
+    public InputAutomationCommandInterpreter(IInputAutomation automation, Func<Image> captureLastFrame, IImageWriter imageWriter)
     {
         _automation = automation;
-        _frameCapture = frameCapture;
+        _captureLastFrame = captureLastFrame;
         _imageWriter = imageWriter;
-        _reply = reply;
     }
 
-    public void Execute(string line)
+    public string? Execute(string line)
     {
         string command = line.TrimStart();
         if (command.Length == 0 || command[0] == '#')
         {
-            return;
+            return null;
         }
 
         try
         {
-            string? reply = Run(command);
-            if (reply is not null)
-            {
-                _reply(reply);
-            }
+            return Run(command);
         }
         catch (FormatException exception)
         {
-            _reply($"error: {exception.Message}");
+            return $"error: {exception.Message}";
         }
     }
 
-    // Returns the reply, or null when the command replies later on its own.
-    private string? Run(string command)
+    private string Run(string command)
     {
         string[] words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         switch (words)
@@ -92,26 +84,17 @@ internal sealed class InputAutomationCommandInterpreter
         return "ok";
     }
 
-    private string? Screenshot(string path)
+    private string Screenshot(string path)
     {
-        if (_frameCapture is null)
+        try
         {
-            return "error: screenshots need offscreen rendering, register it with UseOffscreenRendering()";
+            _imageWriter.SavePng(_captureLastFrame(), path);
+            return "ok";
         }
-
-        _frameCapture.CaptureNextFrame(image =>
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            try
-            {
-                _imageWriter.SavePng(image, path);
-                _reply("ok");
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _reply($"error: {exception.Message}");
-            }
-        });
-        return null;
+            return $"error: {exception.Message}";
+        }
     }
 
     private static Vector2 ParseVector(string x, string y)

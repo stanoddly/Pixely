@@ -98,11 +98,6 @@ public class PixelyAppBuilder : ServiceCollection
             AddSingleton<IImageLoader, SdlImageLoader>();
         }
 
-        if (!IsRegistered<IImageWriter>())
-        {
-            AddSingleton<IImageWriter, SdlImageWriter>();
-        }
-
         ServiceProvider serviceProvider = BuildServiceProvider();
         return new PixelyApp(serviceProvider);
     }
