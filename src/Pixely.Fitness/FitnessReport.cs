@@ -11,13 +11,19 @@ public sealed record FitnessResult(string Name, IReadOnlyList<string> Violations
 }
 
 /// <summary>
-/// Every fitness function's outcome, so one assertion reports the whole drift at once.
+/// Every fitness function's outcome, so one assertion reports the whole drift at once. Reports from
+/// several rule sets merge into one.
 /// </summary>
 public sealed class FitnessReport
 {
-    internal FitnessReport(IReadOnlyList<FitnessResult> results)
+    public FitnessReport(IReadOnlyList<FitnessResult> results)
     {
         Results = results;
+    }
+
+    public static FitnessReport Merge(params IEnumerable<FitnessReport> reports)
+    {
+        return new FitnessReport(reports.SelectMany(report => report.Results).ToArray());
     }
 
     public IReadOnlyList<FitnessResult> Results { get; }
