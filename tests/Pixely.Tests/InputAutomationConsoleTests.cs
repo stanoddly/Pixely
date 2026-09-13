@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.Input;
 
@@ -12,7 +11,7 @@ public sealed class InputAutomationConsoleTests
     {
         List<(string Call, int ThreadId)> calls = new();
         StringWriter output = new();
-        InputAutomationConsole console = new(new RecordingAutomation(calls), NoWindow(), new NoImageWriter(), new StringReader("key press A\n\nbogus\nkey press B\n"), output);
+        InputAutomationConsole console = new(new RecordingAutomation(calls), new WindowRegistry(), new NoImageWriter(), new StringReader("key press A\n\nbogus\nkey press B\n"), output);
 
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         while (calls.Count < 2 && DateTime.UtcNow < deadline)
@@ -33,7 +32,7 @@ public sealed class InputAutomationConsoleTests
     public void Update_WithEmptyInput_DoesNothing()
     {
         StringWriter output = new();
-        InputAutomationConsole console = new(new RecordingAutomation(new()), NoWindow(), new NoImageWriter(), new StringReader(""), output);
+        InputAutomationConsole console = new(new RecordingAutomation(new()), new WindowRegistry(), new NoImageWriter(), new StringReader(""), output);
 
         console.Update();
         console.Update();
@@ -41,7 +40,6 @@ public sealed class InputAutomationConsoleTests
         Assert.That(output.ToString(), Is.Empty);
     }
 
-    private static OffscreenWindow NoWindow() => (OffscreenWindow)RuntimeHelpers.GetUninitializedObject(typeof(OffscreenWindow));
 
     private sealed class NoImageWriter : IImageWriter
     {

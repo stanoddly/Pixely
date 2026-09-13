@@ -2,10 +2,10 @@
 
 `IInputAutomation` synchronously delivers synthetic mouse, keyboard, and text input through the ordinary Pixely input services. Existing view-scoped subscriptions, priorities, consumption, and device state apply to automated input. Handlers finish before an automation method returns.
 
-It is part of headless mode, see below. Register that on the builder, then resolve the application-lifetime service from the app:
+It comes with a headless window, see below. Register that on the builder, then resolve the application-lifetime service from the app:
 
 ```csharp
-builder.UseHeadless();
+builder.UseHeadlessRendering();
 
 IInputAutomation input = app.GetRequiredService<IInputAutomation>();
 ```
@@ -38,7 +38,7 @@ Automated input affects Pixely's event-derived synthetic device state. It does n
 
 ## Driving the app from standard input
 
-`UseHeadless()` also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+A headless window also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
 
 | Command | Calls |
 | --- | --- |
@@ -54,7 +54,7 @@ Automated input affects Pixely's event-derived synthetic device state. It does n
 | `text <text>` | `TextInput` with the rest of the line |
 | `screenshot <path>` | Writes the last rendered frame as a PNG to the rest of the line, see below |
 
-`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` reads the offscreen window, which is always the default scope.
+`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` reads the default scope's window.
 
 A tool that cannot hold the pipe open, such as an LLM agent running one shell command at a time, drives the app through a file it appends to:
 
@@ -69,16 +69,20 @@ Keep logging off standard output while doing this; replies share the stream.
 
 ### Headless mode and screenshots
 
-`UseHeadless(size)` makes the default scope's window an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Only the size is configurable; the rest of `WindowConfig` is about the desktop. Call it before the rendering registration, which stays whatever the game uses: `UseDefaultRendering()` keeps the headless window instead of creating its own (its `WindowConfig` is ignored), and `UseWindowRendering<TRenderContext>()` with a custom provider works unchanged because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. Headless mode covers the default scope only; windows registered for other scopes are ordinary desktop windows.
+`AddHeadlessWindow(viewScope, config)` is the headless counterpart of `AddWindow`, and `UseHeadlessRendering(viewScope, config)` of `UseDefaultRendering`. The window is an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom render contexts use `AddHeadlessWindow` with `UseWindowRendering<TRenderContext>()` and work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Every scope can be headless; the first headless window also registers `IInputAutomation` and the console. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second.
 
 ```csharp
+WindowConfig config = new(Size: (1280, 720), Title: "Hotbar");
 if (headless)
 {
-    builder.UseHeadless((1280, 720));
+    builder.UseHeadlessRendering(config);
 }
-builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
+else
+{
+    builder.UseDefaultRendering(config);
+}
 ```
 
-`screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer. A swapchain image cannot be read back, which is why screenshots exist only in headless mode.
+`screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer. `screenshot` reads the default scope's window and replies with an error when that window is not headless, since a swapchain image cannot be read back.
 
 The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.

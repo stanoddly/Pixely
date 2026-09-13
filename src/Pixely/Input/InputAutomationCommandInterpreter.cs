@@ -12,13 +12,13 @@ namespace Pixely.Input;
 internal sealed class InputAutomationCommandInterpreter
 {
     private readonly IInputAutomation _automation;
-    private readonly OffscreenWindow _offscreenWindow;
+    private readonly WindowRegistry _windowRegistry;
     private readonly IImageWriter _imageWriter;
 
-    public InputAutomationCommandInterpreter(IInputAutomation automation, OffscreenWindow offscreenWindow, IImageWriter imageWriter)
+    public InputAutomationCommandInterpreter(IInputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter)
     {
         _automation = automation;
-        _offscreenWindow = offscreenWindow;
+        _windowRegistry = windowRegistry;
         _imageWriter = imageWriter;
     }
 
@@ -86,9 +86,14 @@ internal sealed class InputAutomationCommandInterpreter
 
     private string Screenshot(string path)
     {
+        if (!_windowRegistry.TryGetWindow(out Window window) || window is not OffscreenWindow offscreenWindow)
+        {
+            return "error: the default window is not headless, register it with AddHeadlessWindow()";
+        }
+
         try
         {
-            _imageWriter.SavePng(_offscreenWindow.CaptureLastFrame(), path);
+            _imageWriter.SavePng(offscreenWindow.CaptureLastFrame(), path);
             return "ok";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)

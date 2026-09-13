@@ -101,15 +101,16 @@ public class PixelyFactory: IDisposable
     }
 
     internal OffscreenWindow CreateOffscreenWindow(
+        ViewScope viewScope,
         GpuDevice gpuDevice,
         PixelyFrameContext frameContext,
         PlatformInfo platformInfo,
-        Size<uint>? size)
+        WindowConfig config)
     {
-        // Only the size matters: the SDL window is never shown, it just backs the GPU device, events and text input.
-        (uint width, uint height) = size ?? DefaultSize;
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, null, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(default, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
+        // Only size and title matter: the SDL window is never shown, it just backs the GPU device, events and text input.
+        (uint width, uint height) = config.Size ?? DefaultSize;
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 
     private Window CreateWindow(
@@ -352,10 +353,10 @@ public class PixelyFactory: IDisposable
         return new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService);
     }
 
-    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation, OffscreenWindow offscreenWindow, IImageWriter imageWriter)
+    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation, WindowRegistry windowRegistry, IImageWriter imageWriter)
     {
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, offscreenWindow, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
+        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
     }
 
     internal EventService CreateEventService(

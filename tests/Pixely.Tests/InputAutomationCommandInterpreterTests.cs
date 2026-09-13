@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.Input;
 
@@ -21,7 +20,7 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_DispatchesCommand(string line, string expectedCall)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, NoWindow(), new NoImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(automation, new WindowRegistry(), new NoImageWriter());
 
         string? reply = interpreter.Execute(line);
 
@@ -42,10 +41,11 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
     [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
     [TestCase("screenshot", "error: unknown command 'screenshot'")]
+    [TestCase("screenshot frame.png", "error: the default window is not headless, register it with AddHeadlessWindow()")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, NoWindow(), new NoImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(automation, new WindowRegistry(), new NoImageWriter());
 
         string? reply = interpreter.Execute(line);
 
@@ -59,13 +59,10 @@ public sealed class InputAutomationCommandInterpreterTests
     [Test]
     public void Execute_PropagatesAutomationFailure()
     {
-        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), NoWindow(), new NoImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), new WindowRegistry(), new NoImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
     }
-
-    // Never initialised: nothing here runs the screenshot command, which is the only thing that touches the window.
-    private static OffscreenWindow NoWindow() => (OffscreenWindow)RuntimeHelpers.GetUninitializedObject(typeof(OffscreenWindow));
 
     private sealed class NoImageWriter : IImageWriter
     {
