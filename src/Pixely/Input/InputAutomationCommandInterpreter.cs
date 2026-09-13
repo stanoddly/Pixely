@@ -88,7 +88,7 @@ internal sealed class InputAutomationCommandInterpreter
     {
         if (!_windowRegistry.TryGetWindow(out Window window) || window is not OffscreenWindow offscreenWindow)
         {
-            return "error: the default window is not headless, register it with AddHeadlessWindow()";
+            return "error: no headless window for the default view scope";
         }
 
         try

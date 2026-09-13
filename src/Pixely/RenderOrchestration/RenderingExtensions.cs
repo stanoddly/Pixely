@@ -26,25 +26,6 @@ public static class RenderingExtensions
         return services;
     }
 
-    public static ServiceCollection UseHeadlessRendering(this ServiceCollection services, WindowConfig? config = null)
-    {
-        return UseHeadlessRendering(services, default, config);
-    }
-
-    /// <summary>
-    /// <see cref="UseDefaultRendering(ServiceCollection, ViewScope, WindowConfig?)"/> with a headless window: nothing is shown, every
-    /// frame is rendered into a texture the window can read back, and the app is driven through input automation. Custom render
-    /// contexts use <see cref="HeadlessWindowServiceCollectionExtensions.AddHeadlessWindow(ServiceCollection, ViewScope, WindowConfig?)"/>
-    /// with <see cref="UseWindowRendering{TRenderContext}"/> instead.
-    /// </summary>
-    public static ServiceCollection UseHeadlessRendering(this ServiceCollection services, ViewScope viewScope, WindowConfig? config = null)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        services.AddHeadlessWindow(viewScope, config);
-        AddDefaultRendering(services, viewScope);
-        return services;
-    }
-
     private static void AddDefaultRendering(ServiceCollection services, ViewScope viewScope)
     {
         if (!services.IsRegistered<RenderContextProvider<BasicRenderContext>>())

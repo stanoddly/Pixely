@@ -41,7 +41,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
     [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
     [TestCase("screenshot", "error: unknown command 'screenshot'")]
-    [TestCase("screenshot frame.png", "error: the default window is not headless, register it with AddHeadlessWindow()")]
+    [TestCase("screenshot frame.png", "error: no headless window for the default view scope")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();

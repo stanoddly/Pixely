@@ -76,6 +76,11 @@ public class PixelyFactory: IDisposable
         PlatformInfo platformInfo,
         IImageLoader imageLoader)
     {
+        if (_config.Headless)
+        {
+            return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
+        }
+
         Window window = CreateWindow(
             viewScope,
             gpuDevice,
@@ -100,7 +105,7 @@ public class PixelyFactory: IDisposable
         return window;
     }
 
-    internal OffscreenWindow CreateOffscreenWindow(
+    private OffscreenWindow CreateOffscreenWindow(
         ViewScope viewScope,
         GpuDevice gpuDevice,
         PixelyFrameContext frameContext,
@@ -348,13 +353,24 @@ public class PixelyFactory: IDisposable
         return new TextInputService(windowRegistry);
     }
 
-    internal InputAutomation CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService)
+    // Automation exists in headless mode only; a null result registers nothing.
+    internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService)
     {
-        return new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService);
+        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService) : null;
     }
 
-    internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation, WindowRegistry windowRegistry, IImageWriter imageWriter)
+    internal IImageWriter? CreateImageWriter()
     {
+        return _config.Headless ? new SdlImageWriter() : null;
+    }
+
+    internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter)
+    {
+        if (inputAutomation is null || imageWriter is null)
+        {
+            return null;
+        }
+
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
         return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
     }

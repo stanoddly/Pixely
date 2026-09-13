@@ -15,7 +15,8 @@ public sealed record PixelyConfig(
     GpuBackend GpuBackend = GpuBackend.Automatic,
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
-    bool DeliverActivatingMouseClicks = true);
+    bool DeliverActivatingMouseClicks = true,
+    bool Headless = false);
 #else
 public sealed record PixelyConfig(
     bool EnableSdlLogging = false,
@@ -23,5 +24,6 @@ public sealed record PixelyConfig(
     GpuBackend GpuBackend = GpuBackend.Automatic,
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
-    bool DeliverActivatingMouseClicks = true);
+    bool DeliverActivatingMouseClicks = true,
+    bool Headless = false);
 #endif
