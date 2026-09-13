@@ -24,7 +24,7 @@ A headless app reads command lines from the process's standard input and runs ea
 | `text <text>` | Text input with the rest of the line |
 | `screenshot <path>` | Writes the last rendered frame as a PNG to the rest of the line, see below |
 
-`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` reads the default scope's window.
+`<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. A command targets the default `ViewScope` unless it starts with `@<n>`, the value of the scope whose window it is for: `@7 mouse click Left 10 10`, `@7 screenshot shot.png`. A scope without a registered window is an error reply.
 
 A tool that cannot hold the pipe open, such as an LLM agent running one shell command at a time, drives the app through a file it appends to:
 

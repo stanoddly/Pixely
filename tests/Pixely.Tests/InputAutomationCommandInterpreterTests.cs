@@ -17,6 +17,10 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("key press Return", "down Return", "up Return")]
     [TestCase("text hello  world ", "text 'hello  world '")]
     [TestCase("text", "text ''")]
+    [TestCase("@0 key press Return", "down Return", "up Return")]
+    [TestCase("@7 key press Return", "7: down Return", "7: up Return")]
+    [TestCase("@7 mouse move 1 2", "7: motion <1, 2>")]
+    [TestCase("@7 text hi", "7: text 'hi'")]
     public void Execute_DispatchesCommand(string lines, params string[] expectedEvents)
     {
         (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
@@ -40,6 +44,10 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
     [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
     [TestCase("screenshot", "error: unknown command 'screenshot'")]
+    [TestCase("@x key press A", "error: invalid view scope 'x'")]
+    [TestCase("@7", "error: unknown command ''")]
+    [TestCase("@9 key press A", "error: no window for view scope 9")]
+    [TestCase("@9 screenshot frame.png", "error: no window for view scope 9")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
@@ -54,27 +62,36 @@ public sealed class InputAutomationCommandInterpreterTests
     }
 
     [Test]
-    public void Execute_PropagatesAutomationFailure()
+    public void Execute_PropagatesHandlerFailure()
     {
-        // No window is registered for the default scope, so every input command fails inside the automation.
-        InputAutomationCommandInterpreter interpreter = new(InputAutomationTests.CreateAutomation(new WindowRegistry()).Automation, new WindowRegistry(), new NoImageWriter());
+        WindowRegistry windowRegistry = new();
+        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
+        (InputAutomation automation, _, KeyboardService keyboardService, _) = InputAutomationTests.CreateAutomation(windowRegistry);
+        keyboardService.SubscribeKeyDown(0, _ => throw new InvalidOperationException("game broke"));
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
     }
 
     [Test]
-    public void Execute_Screenshot_WithoutDefaultWindow_Fails()
+    public void Execute_WithoutDefaultWindow_Fails()
     {
         WindowRegistry windowRegistry = new();
         InputAutomationCommandInterpreter interpreter = new(InputAutomationTests.CreateAutomation(windowRegistry).Automation, windowRegistry, new NoImageWriter());
 
-        Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: no window for the default view scope"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(interpreter.Execute("key press A"), Is.EqualTo("error: no window for view scope 0"));
+            Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: no window for view scope 0"));
+        });
     }
 
     private static (InputAutomationCommandInterpreter Interpreter, List<string> Events) CreateInterpreter()
     {
+        ViewScope secondary = new(7);
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
+        windowRegistry.Register(InputAutomationTests.CreateWindow(secondary, 43));
         (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService) = InputAutomationTests.CreateAutomation(windowRegistry);
 
         List<string> events = new();
@@ -85,6 +102,10 @@ public sealed class InputAutomationCommandInterpreterTests
         keyboardService.SubscribeKeyDown(0, eventArgs => events.Add($"down {eventArgs.Scancode}"));
         keyboardService.SubscribeKeyUp(0, eventArgs => events.Add($"up {eventArgs.Scancode}"));
         textInputService.SubscribeTextInput(0, eventArgs => events.Add($"text '{eventArgs.Text}'"));
+        mouseService.SubscribeMotion(secondary, 0, eventArgs => events.Add($"7: motion {eventArgs.Position}"));
+        keyboardService.SubscribeKeyDown(secondary, 0, eventArgs => events.Add($"7: down {eventArgs.Scancode}"));
+        keyboardService.SubscribeKeyUp(secondary, 0, eventArgs => events.Add($"7: up {eventArgs.Scancode}"));
+        textInputService.SubscribeTextInput(secondary, 0, eventArgs => events.Add($"7: text '{eventArgs.Text}'"));
 
         return (new InputAutomationCommandInterpreter(automation, windowRegistry, new NoImageWriter()), events);
     }
