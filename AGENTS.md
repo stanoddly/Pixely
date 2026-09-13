@@ -20,7 +20,7 @@
 - `docs/development-packages.md` - Consuming packages from the public development feed
 - `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
 - `docs/peach-architecture.md` - Peach architecture for games built on Pixely: project layout, Game/Frontend boundary, stages, systems, AI and scenario projects; shipped in the package under `docs/` and enforced by Pixely.Fitness
-- `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, adding other rule sets
+- `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, the Pixely conventions rule set, adding other rule sets
 
 ## Maintenance
 

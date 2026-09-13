@@ -43,6 +43,22 @@ private static IEnumerable<string> RuleNames() => Report.Results.Select(result =
 
 Evaluate once per fixture; the functions reflect over every production assembly.
 
+## Pixely conventions
+
+`PixelyConventions.Evaluate(options)` checks how a codebase uses Pixely, whatever architecture it follows. `PixelyConventionsOptions` takes the assemblies to scan; a Peach game takes them from its resolved options:
+
+```csharp
+FitnessReport report = FitnessReport.Merge(
+    PeachArchitecture.Evaluate(peach),
+    PixelyConventions.Evaluate(PixelyConventionsOptions.ForPeach(peach) with { FrameParticipantsAreRegistered = true }));
+```
+
+- `Pixely 01 RenderersTakeNoBuilders`: no constructor of an `IRenderer<T>` takes a `GraphicsPipelineBuilder`, `ShaderLoader`, `IShaderLoader` or `GpuMemorySystem`. `Create` builds pipelines and passes them in; a service that owns the buffers uploads geometry, so a renderer only renders.
+- `Pixely 02 VertexTypesMatchTheirElements`: an `IVertexType` struct has sequential or explicit layout, one field per `VertexElements` entry, and the entries add up to the struct's size.
+- `Pixely 03 FactoriesHideConstructors`: a type with a `public static Create` returning itself has no public constructor. Switched off by `FactoriesHideConstructors = false`.
+- `Pixely 04 GpuOwnersAreDisposable`: a type with a field holding a `GraphicsPipeline`, `ComputePipeline`, `Texture`, `GpuVertexBuffer`, `GpuIndexBuffer`, `GpuStorageBuffer`, `Sampler` or `GraphicsShaderProgram`, directly or in a collection, implements `IDisposable`. Switched off by `GpuOwnersAreDisposable = false`.
+- `Pixely 05 FrameParticipantsAreRegistered`: every class implementing `IUpdatable`, `IRenderer<T>` or `IEventHandler<T>` is registered by a registrar, a public static `Add*` or `Use*` extension method on `PixelyAppBuilder` or `ServiceCollection`, invoked with default arguments. Off by default, `FrameParticipantsAreRegistered = true` switches it on: a delegate factory typed by an interface and a registration outside any registrar both hide the concrete type and fail it.
+
 ## Other rule sets
 
-`FitnessReport` and `FitnessResult` are not tied to the Peach rules. Any function that returns `IReadOnlyList<string>` violations can be wrapped in a `FitnessResult` and collected into a `FitnessReport`, and `FitnessReport.Merge(reportA, reportB)` folds several reports into one assertion. `TypeGraph` holds the reflection helpers the Peach functions use, such as `DeclaredTypes`, `SignatureTypes` and `IsPublicSurface`, and is public for that purpose.
+`FitnessReport` and `FitnessResult` are not tied to either rule set. Any function that returns `IReadOnlyList<string>` violations can be wrapped in a `FitnessResult` and collected into a `FitnessReport`, and `FitnessReport.Merge(reportA, reportB)` folds several reports into one assertion. `TypeGraph` holds the reflection helpers the Peach functions use, such as `DeclaredTypes`, `SignatureTypes` and `IsPublicSurface`, and is public for that purpose.
