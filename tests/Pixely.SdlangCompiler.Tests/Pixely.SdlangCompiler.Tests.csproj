@@ -31,6 +31,11 @@
         <Using Include="NUnit.Framework" />
     </ItemGroup>
 
+    <!-- The Microsoft.Build packages carry no runtime assets for this target framework; inside MSBuild the host supplies them, so the tests borrow the SDK's copies. -->
+    <ItemGroup>
+        <None Include="$(MSBuildBinPath)/Microsoft.Build.Framework.dll;$(MSBuildBinPath)/Microsoft.Build.Utilities.Core.dll;$(MSBuildBinPath)/Microsoft.NET.StringTools.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    </ItemGroup>
+
     <ItemGroup>
         <Content Include="TestShaders\**\*.*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

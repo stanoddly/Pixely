@@ -48,7 +48,7 @@ public class SdlangCompileTask : Microsoft.Build.Utilities.Task
 
         try
         {
-            SdlangCompiler sdlangCompiler = new(SlangCompilerPath);
+            SdlangCompiler sdlangCompiler = new(SlangCompilerPath, Log);
             sdlangCompiler.Compile([InputFile], false);
             GeneratedFiles = GetGeneratedFiles(InputFile);
             return true;

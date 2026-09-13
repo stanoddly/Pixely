@@ -1,4 +1,6 @@
 using System.Reflection;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 
 namespace Pixely.SdlangCompiler.Tests;
 
@@ -12,6 +14,6 @@ internal static class SdlangCompilerTestFactory
         string compilerPath = compilerPathAttribute?.Value
             ?? throw new InvalidOperationException("SlangCompilerPath not found in assembly metadata");
 
-        return new SdlangCompiler(compilerPath);
+        return new SdlangCompiler(compilerPath, new TaskLoggingHelper(new NullBuildEngine(), nameof(SdlangCompileTask)));
     }
 }
