@@ -246,7 +246,7 @@ public class SdlangCompiler
                 FileName = _slangCompilerPath,
                 Arguments = string.Join(" ", args.Select(arg => arg.Contains(' ') ? $"\"{arg}\"" : arg)),
                 RedirectStandardInput = true,
-                RedirectStandardOutput = false,
+                RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             }
@@ -254,8 +254,16 @@ public class SdlangCompiler
 
         process.Start();
         process.StandardInput.Close();
+        // Read one stream asynchronously so slangc cannot block on a full pipe while the other is drained.
+        Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
         string standardError = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        string standardOutput = standardOutputTask.Result;
+
+        if (!string.IsNullOrWhiteSpace(standardOutput))
+        {
+            _log.LogMessage(MessageImportance.Low, standardOutput.Trim());
+        }
 
         if (process.ExitCode != 0)
         {
