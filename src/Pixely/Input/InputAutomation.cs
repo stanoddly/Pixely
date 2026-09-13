@@ -3,10 +3,15 @@ using SDL;
 
 namespace Pixely.Input;
 
-internal sealed class InputAutomation : IInputAutomation
+internal sealed class InputAutomation
 {
-    private const SDL_MouseID VirtualMouseId = (SDL_MouseID)0;
-    private const SDL_KeyboardID VirtualKeyboardId = (SDL_KeyboardID)0;
+    // Every scope gets its own virtual mouse and keyboard, so position, relative motion, buttons and keys held in one
+    // window never leak into another. SDL hands out small incrementing device ids and reserves the top ones
+    // (SDL_TOUCH_MOUSEID, SDL_PEN_MOUSEID), so the synthetic ids live in the middle of the range.
+    private const uint VirtualDeviceIdBase = 0x4000_0000;
+
+    private static SDL_MouseID VirtualMouseId(ViewScope viewScope) => (SDL_MouseID)unchecked(VirtualDeviceIdBase + (uint)viewScope.Value);
+    private static SDL_KeyboardID VirtualKeyboardId(ViewScope viewScope) => (SDL_KeyboardID)unchecked(VirtualDeviceIdBase + (uint)viewScope.Value);
 
     private readonly WindowRegistry _windowRegistry;
     private readonly MouseService _mouseService;
@@ -24,59 +29,59 @@ internal sealed class InputAutomation : IInputAutomation
     public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId, windowPosition, GetTimestamp());
+        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
     }
 
     public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseMoveBy(viewScope, VirtualMouseId, delta, GetTimestamp());
+        _mouseService.OnMouseMoveBy(viewScope, VirtualMouseId(viewScope), delta, GetTimestamp());
     }
 
     public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId, button, windowPosition, true, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
     }
 
     public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId, button, windowPosition, false, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
     }
 
     public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId, windowPosition, GetTimestamp());
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId, button, windowPosition, true, GetTimestamp());
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId, button, windowPosition, false, GetTimestamp());
+        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
     }
 
     public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnMouseWheelEvent(viewScope, VirtualMouseId, delta, windowPosition, GetTimestamp());
+        _mouseService.OnMouseWheelEvent(viewScope, VirtualMouseId(viewScope), delta, windowPosition, GetTimestamp());
     }
 
     public void KeyDown(Scancode scancode, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId, scancode, GetVirtualKey(scancode), true, GetTimestamp());
+        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, GetVirtualKey(scancode), true, GetTimestamp());
     }
 
     public void KeyUp(Scancode scancode, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId, scancode, GetVirtualKey(scancode), false, GetTimestamp());
+        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, GetVirtualKey(scancode), false, GetTimestamp());
     }
 
     public void KeyPress(Scancode scancode, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
         VirtualKey virtualKey = GetVirtualKey(scancode);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId, scancode, virtualKey, true, GetTimestamp());
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId, scancode, virtualKey, false, GetTimestamp());
+        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, virtualKey, true, GetTimestamp());
+        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, virtualKey, false, GetTimestamp());
     }
 
     public void TextInput(string text, ViewScope viewScope = default)

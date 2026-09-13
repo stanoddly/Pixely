@@ -398,7 +398,10 @@ public class GpuDevice : IDisposable
         {
             fixed (Pointer<SDL_GPUFence>* fencePointersPtr = fencePointers)
             {
-                SDL3.SDL_WaitForGPUFences(SdlGpuDevice, waitAll, (SDL_GPUFence**)fencePointersPtr, (uint)fences.Length);
+                if (!SDL3.SDL_WaitForGPUFences(SdlGpuDevice, waitAll, (SDL_GPUFence**)fencePointersPtr, (uint)fences.Length))
+                {
+                    throw new PixelyException($"SDL_WaitForGPUFences failed: {SDL3.SDL_GetError()}");
+                }
             }
         }
     }

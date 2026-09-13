@@ -105,6 +105,8 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
+`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See input-automation.md.
+
 ### Reporting the colour target size
 
 `GetColorTargetSize` says how big the colour target will be, without acquiring one. The default answers `window.RenderSizeInPixels`, which is correct whenever the context targets the swapchain.
@@ -139,8 +141,8 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-The framework coordinator passes its managed window to the provider for each frame, skips hidden
-windows, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
+The framework coordinator passes its managed window to the provider for each frame, skips windows
+whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
 registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
 and call the base implementation to submit its command buffer. Window registration, event routing

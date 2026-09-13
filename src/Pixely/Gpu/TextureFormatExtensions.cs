@@ -20,6 +20,20 @@ public static class TextureFormatExtensions
         return (long)width * height * info.BytesPerBlock * layerCount;
     }
 
+    /// <summary>
+    /// The CPU-side pixel layout of a texture's bytes, for formats SDL surfaces can hold. Throws for every other format.
+    /// </summary>
+    public static PixelFormat ToPixelFormat(this TextureFormat format)
+    {
+        PixelFormat pixelFormat = (PixelFormat)SDL.SDL3.SDL_GetPixelFormatFromGPUTextureFormat((SDL.SDL_GPUTextureFormat)format);
+        if (pixelFormat == PixelFormat.Unknown)
+        {
+            throw new NotSupportedException($"Texture format '{format}' has no CPU pixel format.");
+        }
+
+        return pixelFormat;
+    }
+
     private static FormatInfo GetFormatInfo(TextureFormat format) => format switch
     {
         // 1 byte per pixel

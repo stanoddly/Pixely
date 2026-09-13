@@ -92,6 +92,31 @@ public sealed class InputAutomationTests
     }
 
     [Test]
+    public void EachView_HasItsOwnMouseAndKeyboard()
+    {
+        ViewScope otherViewScope = new(8);
+        WindowRegistry windowRegistry = new();
+        windowRegistry.Register(CreateWindow(_viewScope, 42));
+        windowRegistry.Register(CreateWindow(otherViewScope, 43));
+        (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry);
+        List<(Vector2 Position, Vector2 RelativeMotion)> otherMotions = new();
+        mouseService.SubscribeMotion(otherViewScope, 0, eventArgs => otherMotions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
+        bool? ctrlPressedInOtherView = null;
+        keyboardService.SubscribeKeyDown(otherViewScope, 0, eventArgs => ctrlPressedInOtherView = eventArgs.Keyboard.IsPressed(Scancode.LeftCtrl));
+
+        automation.MouseMoveTo(new Vector2(100, 100), _viewScope);
+        automation.KeyDown(Scancode.LeftCtrl, _viewScope);
+        automation.MouseMoveBy(new Vector2(1, 1), otherViewScope);
+        automation.KeyDown(Scancode.A, otherViewScope);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(otherMotions, Is.EqualTo(new[] { (new Vector2(1, 1), new Vector2(1, 1)) }));
+            Assert.That(ctrlPressedInOtherView, Is.False);
+        });
+    }
+
+    [Test]
     public void InputForUnregisteredView_Throws()
     {
         (InputAutomation automation, _, _, _) = CreateAutomation();
@@ -105,6 +130,11 @@ public sealed class InputAutomationTests
     {
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(CreateWindow(_viewScope, 42));
+        return CreateAutomation(windowRegistry);
+    }
+
+    internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(WindowRegistry windowRegistry)
+    {
         MouseService mouseService = new(windowRegistry);
         KeyboardService keyboardService = new(new AppControl());
         TextInputService textInputService = new(windowRegistry);
@@ -112,7 +142,7 @@ public sealed class InputAutomationTests
         return (automation, mouseService, keyboardService, textInputService);
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
+    internal static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);

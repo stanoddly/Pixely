@@ -203,7 +203,7 @@ public class UiUpdateSystemTests
 
     /// <summary>
     /// A window that never reaches SDL. Constructed uninitialised, so only what is set here answers;
-    /// <see cref="Window.IsVisible"/> is overridden because SDL is otherwise its only source.
+    /// <see cref="Window.IsRenderable"/> is overridden because SDL is otherwise its only source.
     /// </summary>
     private sealed class TestWindow : Window
     {
@@ -217,7 +217,7 @@ public class UiUpdateSystemTests
 
         internal bool Visible { get; set; }
 
-        public override bool IsVisible => Visible;
+        public override bool IsRenderable => Visible;
     }
 
     private static Window FakeWindow(ViewScope viewScope, uint sdlId, bool visible = true)
