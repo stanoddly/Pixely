@@ -69,7 +69,7 @@ Keep logging off standard output while doing this; replies share the stream.
 
 ### Headless mode and screenshots
 
-`PixelyConfig.Headless` makes every window the app registers an `OffscreenWindow`, whatever registered it (`AddWindow`, `UseDefaultRendering`, a custom render context through `UseWindowRendering<TRenderContext>()`): the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. `IInputAutomation`, the console and `IImageWriter` are registered only in headless mode.
+`PixelyConfig.Headless` makes every window the app registers an `OffscreenWindow`, whether through `AddWindow` or `UseDefaultRendering`, and whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. `IInputAutomation`, the console and `IImageWriter` are registered only in headless mode.
 
 ```csharp
 builder.AddSingleton(new PixelyConfig(Headless: args.Contains("--headless")));
@@ -78,4 +78,4 @@ builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar")
 
 `screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer.
 
-The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.
+The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar, non-indexed `Image` as a PNG; `Build()` registers the SDL one unless the app registered its own.

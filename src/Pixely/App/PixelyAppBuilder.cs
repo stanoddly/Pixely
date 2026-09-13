@@ -67,7 +67,10 @@ public class PixelyAppBuilder : ServiceCollection
         // Headless mode only, see PixelyConfig.Headless; the factories return null otherwise.
         AddSingleton<InputAutomation, PixelyFactory>();
         AddAlias<IInputAutomation, InputAutomation>();
-        AddSingleton<IImageWriter, PixelyFactory>();
+        if (!IsRegistered<IImageWriter>())
+        {
+            AddSingleton<IImageWriter, PixelyFactory>();
+        }
         AddSingleton<InputAutomationConsole, PixelyFactory>();
 
         AddSingleton<GraphicsShaderProgramMetadataLoader>();

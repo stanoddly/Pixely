@@ -52,7 +52,10 @@ public sealed class OffscreenWindow : Window
         return true;
     }
 
-    /// <summary>Reads back the last rendered frame. Waits for the GPU, so the frame this runs in takes longer.</summary>
+    /// <summary>
+    /// Reads back the last rendered frame. Waits for the GPU, so the frame this runs in takes longer.
+    /// Frame thread only, like every other member of a window.
+    /// </summary>
     public Image CaptureLastFrame()
     {
         if (_colorTarget is not { } lastFrame)

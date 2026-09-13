@@ -23,13 +23,16 @@ public static class TextureFormatExtensions
     /// <summary>
     /// The CPU-side pixel layout of a texture's bytes, for formats SDL surfaces can hold. Throws for every other format.
     /// </summary>
-    public static PixelFormat ToPixelFormat(this TextureFormat format) => format switch
+    public static PixelFormat ToPixelFormat(this TextureFormat format)
     {
-        // SDL names packed formats from the most significant byte, so on little-endian machines the memory order is reversed.
-        TextureFormat.R8G8B8A8Unorm or TextureFormat.R8G8B8A8UnormSrgb => PixelFormat.Abgr8888,
-        TextureFormat.B8G8R8A8Unorm or TextureFormat.B8G8R8A8UnormSrgb => PixelFormat.Argb8888,
-        _ => throw new NotSupportedException($"Texture format '{format}' has no CPU pixel format.")
-    };
+        PixelFormat pixelFormat = (PixelFormat)SDL.SDL3.SDL_GetPixelFormatFromGPUTextureFormat((SDL.SDL_GPUTextureFormat)format);
+        if (pixelFormat == PixelFormat.Unknown)
+        {
+            throw new NotSupportedException($"Texture format '{format}' has no CPU pixel format.");
+        }
+
+        return pixelFormat;
+    }
 
     private static FormatInfo GetFormatInfo(TextureFormat format) => format switch
     {

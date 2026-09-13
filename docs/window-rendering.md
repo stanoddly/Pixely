@@ -141,8 +141,8 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-The framework coordinator passes its managed window to the provider for each frame, skips hidden
-windows, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
+The framework coordinator passes its managed window to the provider for each frame, skips windows
+whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
 registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
 and call the base implementation to submit its command buffer. Window registration, event routing

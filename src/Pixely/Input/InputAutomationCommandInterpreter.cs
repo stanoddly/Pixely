@@ -93,7 +93,8 @@ internal sealed class InputAutomationCommandInterpreter
 
         try
         {
-            _imageWriter.SavePng(offscreenWindow.CaptureLastFrame(), path);
+            using Image image = offscreenWindow.CaptureLastFrame();
+            _imageWriter.SavePng(image, path);
             return "ok";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
