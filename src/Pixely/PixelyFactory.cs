@@ -355,7 +355,7 @@ public class PixelyFactory: IDisposable
     internal InputAutomationConsole CreateInputAutomationConsole(InputAutomation inputAutomation, OffscreenWindow offscreenWindow, IImageWriter imageWriter)
     {
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, offscreenWindow.CaptureLastFrame, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
+        return new InputAutomationConsole(inputAutomation, offscreenWindow, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
     }
 
     internal EventService CreateEventService(

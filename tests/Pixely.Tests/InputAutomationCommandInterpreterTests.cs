@@ -1,6 +1,6 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Pixely.Content;
-using Pixely.Gpu;
 using Pixely.Input;
 
 namespace Pixely.Tests;
@@ -21,7 +21,7 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_DispatchesCommand(string line, string expectedCall)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, NoFrame, new RecordingImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(automation, NoWindow(), new NoImageWriter());
 
         string? reply = interpreter.Execute(line);
 
@@ -45,7 +45,7 @@ public sealed class InputAutomationCommandInterpreterTests
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, NoFrame, new RecordingImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(automation, NoWindow(), new NoImageWriter());
 
         string? reply = interpreter.Execute(line);
 
@@ -59,56 +59,17 @@ public sealed class InputAutomationCommandInterpreterTests
     [Test]
     public void Execute_PropagatesAutomationFailure()
     {
-        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), NoFrame, new RecordingImageWriter());
+        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), NoWindow(), new NoImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
     }
 
-    [Test]
-    public void Execute_Screenshot_WritesTheLastFrame()
+    // Never initialised: nothing here runs the screenshot command, which is the only thing that touches the window.
+    private static OffscreenWindow NoWindow() => (OffscreenWindow)RuntimeHelpers.GetUninitializedObject(typeof(OffscreenWindow));
+
+    private sealed class NoImageWriter : IImageWriter
     {
-        RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
-        RecordingImageWriter imageWriter = new();
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), () => image, imageWriter);
-
-        string? reply = interpreter.Execute("screenshot  /tmp/my frames/frame.png ");
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(reply, Is.EqualTo("ok"));
-            Assert.That(imageWriter.Saved, Is.EqualTo(new[] { (image, "/tmp/my frames/frame.png") }));
-        });
-    }
-
-    [Test]
-    public void Execute_Screenshot_ReportsWriteFailure()
-    {
-        RawImage image = new(new byte[4], new ShortSize(1, 1), PixelFormat.Abgr8888);
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), () => image, new ThrowingImageWriter());
-
-        Assert.That(interpreter.Execute("screenshot /nope/frame.png"), Is.EqualTo("error: disk full"));
-    }
-
-    [Test]
-    public void Execute_Screenshot_BeforeTheFirstFrame_Fails()
-    {
-        InputAutomationCommandInterpreter interpreter = new(new RecordingAutomation(), NoFrame, new RecordingImageWriter());
-
-        Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: No frame has been rendered yet."));
-    }
-
-    private static Image NoFrame() => throw new InvalidOperationException("No frame has been rendered yet.");
-
-    private sealed class RecordingImageWriter : IImageWriter
-    {
-        public List<(Image Image, string Path)> Saved { get; } = new();
-
-        public void SavePng(Image image, string path) => Saved.Add((image, path));
-    }
-
-    private sealed class ThrowingImageWriter : IImageWriter
-    {
-        public void SavePng(Image image, string path) => throw new IOException("disk full");
+        public void SavePng(Image image, string path) => throw new NotSupportedException();
     }
 
     private sealed class RecordingAutomation : IInputAutomation

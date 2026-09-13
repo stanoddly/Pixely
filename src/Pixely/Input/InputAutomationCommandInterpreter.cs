@@ -12,13 +12,13 @@ namespace Pixely.Input;
 internal sealed class InputAutomationCommandInterpreter
 {
     private readonly IInputAutomation _automation;
-    private readonly Func<Image> _captureLastFrame;
+    private readonly OffscreenWindow _offscreenWindow;
     private readonly IImageWriter _imageWriter;
 
-    public InputAutomationCommandInterpreter(IInputAutomation automation, Func<Image> captureLastFrame, IImageWriter imageWriter)
+    public InputAutomationCommandInterpreter(IInputAutomation automation, OffscreenWindow offscreenWindow, IImageWriter imageWriter)
     {
         _automation = automation;
-        _captureLastFrame = captureLastFrame;
+        _offscreenWindow = offscreenWindow;
         _imageWriter = imageWriter;
     }
 
@@ -88,7 +88,7 @@ internal sealed class InputAutomationCommandInterpreter
     {
         try
         {
-            _imageWriter.SavePng(_captureLastFrame(), path);
+            _imageWriter.SavePng(_offscreenWindow.CaptureLastFrame(), path);
             return "ok";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
