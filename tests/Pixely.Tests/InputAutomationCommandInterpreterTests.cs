@@ -1,4 +1,3 @@
-using System.Numerics;
 using Pixely.Content;
 using Pixely.Input;
 
@@ -6,28 +5,28 @@ namespace Pixely.Tests;
 
 public sealed class InputAutomationCommandInterpreterTests
 {
-    [TestCase("mouse move 320 180", "MouseMoveTo <320, 180>")]
-    [TestCase("mouse moveby 10 -5.5", "MouseMoveBy <10, -5.5>")]
-    [TestCase("mouse down left 1 2", "MouseDown Left <1, 2>")]
-    [TestCase("mouse up Right 1 2", "MouseUp Right <1, 2>")]
-    [TestCase("  mouse  click  Left  330 175", "MouseClick Left <330, 175>")]
-    [TestCase("mouse wheel 0 -1 330 175", "MouseWheel <0, -1> <330, 175>")]
-    [TestCase("key down LeftCtrl", "KeyDown LeftCtrl")]
-    [TestCase("key up e", "KeyUp E")]
-    [TestCase("key press Return", "KeyPress Return")]
-    [TestCase("text hello  world ", "TextInput 'hello  world '")]
-    [TestCase("text", "TextInput ''")]
-    public void Execute_DispatchesCommand(string line, string expectedCall)
+    [TestCase("mouse move 320 180", "motion <320, 180>")]
+    [TestCase("mouse moveby 10 -5.5", "motion <10, -5.5>")]
+    [TestCase("mouse down left 1 2", "press Left <1, 2>")]
+    // A release is only dispatched for a pressed button, so the line under test comes after its press.
+    [TestCase("mouse down Right 1 2\nmouse up Right 1 2", "press Right <1, 2>", "release Right <1, 2>")]
+    [TestCase("  mouse  click  Left  330 175", "motion <330, 175>", "press Left <330, 175>", "release Left <330, 175>")]
+    [TestCase("mouse wheel 0 -1 330 175", "wheel <0, -1> <330, 175>")]
+    [TestCase("key down LeftCtrl", "down LeftCtrl")]
+    [TestCase("key up e", "up E")]
+    [TestCase("key press Return", "down Return", "up Return")]
+    [TestCase("text hello  world ", "text 'hello  world '")]
+    [TestCase("text", "text ''")]
+    public void Execute_DispatchesCommand(string lines, params string[] expectedEvents)
     {
-        RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, new WindowRegistry(), new NoImageWriter());
+        (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
 
-        string? reply = interpreter.Execute(line);
+        List<string?> replies = lines.Split('\n').Select(interpreter.Execute).ToList();
 
         Assert.Multiple(() =>
         {
-            Assert.That(reply, Is.EqualTo("ok"));
-            Assert.That(automation.Calls, Is.EqualTo(new[] { expectedCall }));
+            Assert.That(replies, Is.All.EqualTo("ok"));
+            Assert.That(events, Is.EqualTo(expectedEvents));
         });
     }
 
@@ -44,60 +43,46 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("screenshot frame.png", "error: no headless window for the default view scope")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
-        RecordingAutomation automation = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, new WindowRegistry(), new NoImageWriter());
+        (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
 
         string? reply = interpreter.Execute(line);
 
         Assert.Multiple(() =>
         {
             Assert.That(reply, Is.EqualTo(expectedReply));
-            Assert.That(automation.Calls, Is.Empty);
+            Assert.That(events, Is.Empty);
         });
     }
 
     [Test]
     public void Execute_PropagatesAutomationFailure()
     {
-        InputAutomationCommandInterpreter interpreter = new(new ThrowingAutomation(), new WindowRegistry(), new NoImageWriter());
+        // No window is registered for the default scope, so every input command fails inside the automation.
+        InputAutomationCommandInterpreter interpreter = new(InputAutomationTests.CreateAutomation(new WindowRegistry()).Automation, new WindowRegistry(), new NoImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
+    }
+
+    private static (InputAutomationCommandInterpreter Interpreter, List<string> Events) CreateInterpreter()
+    {
+        WindowRegistry windowRegistry = new();
+        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
+        (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService) = InputAutomationTests.CreateAutomation(windowRegistry);
+
+        List<string> events = new();
+        mouseService.SubscribeMotion(0, eventArgs => events.Add($"motion {eventArgs.Position}"));
+        mouseService.SubscribeButtonPress(0, eventArgs => events.Add($"press {eventArgs.Button} {eventArgs.Position}"));
+        mouseService.SubscribeButtonRelease(0, eventArgs => events.Add($"release {eventArgs.Button} {eventArgs.Position}"));
+        mouseService.SubscribeWheel(0, eventArgs => events.Add($"wheel {eventArgs.Delta} {eventArgs.Position}"));
+        keyboardService.SubscribeKeyDown(0, eventArgs => events.Add($"down {eventArgs.Scancode}"));
+        keyboardService.SubscribeKeyUp(0, eventArgs => events.Add($"up {eventArgs.Scancode}"));
+        textInputService.SubscribeTextInput(0, eventArgs => events.Add($"text '{eventArgs.Text}'"));
+
+        return (new InputAutomationCommandInterpreter(automation, windowRegistry, new NoImageWriter()), events);
     }
 
     private sealed class NoImageWriter : IImageWriter
     {
         public void SavePng(Image image, string path) => throw new NotSupportedException();
-    }
-
-    private sealed class RecordingAutomation : IInputAutomation
-    {
-        public List<string> Calls { get; } = new();
-
-        public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default) => Calls.Add($"MouseMoveTo {windowPosition}");
-        public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default) => Calls.Add($"MouseMoveBy {delta}");
-        public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => Calls.Add($"MouseDown {button} {windowPosition}");
-        public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => Calls.Add($"MouseUp {button} {windowPosition}");
-        public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => Calls.Add($"MouseClick {button} {windowPosition}");
-        public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default) => Calls.Add($"MouseWheel {delta} {windowPosition}");
-        public void KeyDown(Scancode scancode, ViewScope viewScope = default) => Calls.Add($"KeyDown {scancode}");
-        public void KeyUp(Scancode scancode, ViewScope viewScope = default) => Calls.Add($"KeyUp {scancode}");
-        public void KeyPress(Scancode scancode, ViewScope viewScope = default) => Calls.Add($"KeyPress {scancode}");
-        public void TextInput(string text, ViewScope viewScope = default) => Calls.Add($"TextInput '{text}'");
-    }
-
-    private sealed class ThrowingAutomation : IInputAutomation
-    {
-        private static InvalidOperationException Failure => new("ViewScope 0 is not registered");
-
-        public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default) => throw Failure;
-        public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default) => throw Failure;
-        public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => throw Failure;
-        public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => throw Failure;
-        public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default) => throw Failure;
-        public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default) => throw Failure;
-        public void KeyDown(Scancode scancode, ViewScope viewScope = default) => throw Failure;
-        public void KeyUp(Scancode scancode, ViewScope viewScope = default) => throw Failure;
-        public void KeyPress(Scancode scancode, ViewScope viewScope = default) => throw Failure;
-        public void TextInput(string text, ViewScope viewScope = default) => throw Failure;
     }
 }

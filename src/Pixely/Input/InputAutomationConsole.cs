@@ -14,7 +14,7 @@ internal sealed class InputAutomationConsole : IUpdatable
     private readonly ConcurrentQueue<string> _pendingLines = new();
     private Thread? _readerThread;
 
-    internal InputAutomationConsole(IInputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, TextReader input, TextWriter output)
+    internal InputAutomationConsole(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, TextReader input, TextWriter output)
     {
         _interpreter = new InputAutomationCommandInterpreter(automation, windowRegistry, imageWriter);
         _input = input;

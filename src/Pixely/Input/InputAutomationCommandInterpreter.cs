@@ -5,17 +5,17 @@ using Pixely.Content;
 namespace Pixely.Input;
 
 /// <summary>
-/// Runs one line of the text command grammar against <see cref="IInputAutomation"/> and returns the reply line:
+/// Runs one line of the text command grammar against <see cref="InputAutomation"/> and returns the reply line:
 /// <c>ok</c>, <c>error: ...</c> for a line that cannot run, or null for a blank or <c>#</c> comment line that gets no reply.
 /// Exceptions from input handlers propagate, the same as for real input.
 /// </summary>
 internal sealed class InputAutomationCommandInterpreter
 {
-    private readonly IInputAutomation _automation;
+    private readonly InputAutomation _automation;
     private readonly WindowRegistry _windowRegistry;
     private readonly IImageWriter _imageWriter;
 
-    public InputAutomationCommandInterpreter(IInputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter)
+    public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter)
     {
         _automation = automation;
         _windowRegistry = windowRegistry;

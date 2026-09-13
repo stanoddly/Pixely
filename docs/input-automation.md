@@ -1,57 +1,27 @@
 # Input automation
 
-`IInputAutomation` synchronously delivers synthetic mouse, keyboard, and text input through the ordinary Pixely input services. Existing view-scoped subscriptions, priorities, consumption, and device state apply to automated input. Handlers finish before an automation method returns.
+Headless mode (`PixelyConfig.Headless`) runs the app without a display and lets an agent drive it through synthetic mouse, keyboard, and text input on standard input, and observe it through screenshots. Synthetic input goes through the ordinary Pixely input services, so existing view-scoped subscriptions, priorities, consumption, and device state apply to it. Handlers finish before the command's reply is written.
 
-It exists in headless mode only, see below. Turn that on, then resolve the application-lifetime service from the app:
-
-```csharp
-builder.AddSingleton(new PixelyConfig(Headless: true));
-
-IInputAutomation input = app.GetRequiredService<IInputAutomation>();
-```
-
-Mouse positions use logical coordinates relative to the target window's top-left corner. `MouseMoveTo` moves to a window position and derives the relative motion from the synthetic mouse's previous position. `MouseMoveBy` applies a delta to that previous position.
-
-```csharp
-input.MouseMoveTo(new Vector2(320, 180));
-input.MouseMoveBy(new Vector2(10, -5));
-input.MouseClick(MouseButton.Left, new Vector2(330, 175));
-input.MouseWheel(new Vector2(0, -1), new Vector2(330, 175));
-```
-
-Use explicit down and up calls for held input:
-
-```csharp
-input.KeyDown(Scancode.W);
-input.KeyUp(Scancode.W);
-
-input.MouseDown(MouseButton.Left, new Vector2(100, 100));
-input.MouseMoveTo(new Vector2(200, 100));
-input.MouseUp(MouseButton.Left, new Vector2(200, 100));
-```
-
-`KeyPress` dispatches a key down followed by a key up. `TextInput` delivers text directly and supports characters that do not have a corresponding keyboard scancode.
-
-The default `ViewScope` targets the ordinary single-window application. Pass a scope explicitly for another registered window.
+Mouse positions use logical coordinates relative to the target window's top-left corner. `mouse move` moves to a window position and derives the relative motion from the synthetic mouse's previous position; `mouse moveby` applies a delta to that position. `mouse click` dispatches a motion, a press and a release. `key press` dispatches a key down followed by a key up. `text` delivers text directly and supports characters that do not have a corresponding keyboard scancode.
 
 Automated input affects Pixely's event-derived synthetic device state. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state.
 
 ## Driving the app from standard input
 
-A headless app also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+A headless app reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
 
-| Command | Calls |
+| Command | Dispatches |
 | --- | --- |
-| `mouse move <x> <y>` | `MouseMoveTo` |
-| `mouse moveby <dx> <dy>` | `MouseMoveBy` |
-| `mouse down <button> <x> <y>` | `MouseDown` |
-| `mouse up <button> <x> <y>` | `MouseUp` |
-| `mouse click <button> <x> <y>` | `MouseClick` |
-| `mouse wheel <dx> <dy> <x> <y>` | `MouseWheel` |
-| `key down <scancode>` | `KeyDown` |
-| `key up <scancode>` | `KeyUp` |
-| `key press <scancode>` | `KeyPress` |
-| `text <text>` | `TextInput` with the rest of the line |
+| `mouse move <x> <y>` | Mouse motion to the position |
+| `mouse moveby <dx> <dy>` | Mouse motion by the delta |
+| `mouse down <button> <x> <y>` | Button press at the position |
+| `mouse up <button> <x> <y>` | Button release at the position |
+| `mouse click <button> <x> <y>` | Motion, press and release at the position |
+| `mouse wheel <dx> <dy> <x> <y>` | Wheel delta at the position |
+| `key down <scancode>` | Key down |
+| `key up <scancode>` | Key up |
+| `key press <scancode>` | Key down then key up |
+| `text <text>` | Text input with the rest of the line |
 | `screenshot <path>` | Writes the last rendered frame as a PNG to the rest of the line, see below |
 
 `<button>` is a `MouseButton` name and `<scancode>` a `Scancode` name, both case-insensitive. Numbers use invariant culture. Input commands always target the default `ViewScope`; `screenshot` reads the default scope's window.
@@ -69,7 +39,7 @@ Keep logging off standard output while doing this; replies share the stream.
 
 ### Headless mode and screenshots
 
-`PixelyConfig.Headless` makes every window the app registers an `OffscreenWindow`, whether through `AddWindow` or `UseDefaultRendering`, and whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. `IInputAutomation`, the console and `IImageWriter` are registered only in headless mode.
+`PixelyConfig.Headless` makes every window the app registers an `OffscreenWindow`, whether through `AddWindow` or `UseDefaultRendering`, and whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. The console and `IImageWriter` are registered only in headless mode.
 
 ```csharp
 builder.AddSingleton(new PixelyConfig(Headless: args.Contains("--headless")));

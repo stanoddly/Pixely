@@ -3,7 +3,7 @@ using SDL;
 
 namespace Pixely.Input;
 
-internal sealed class InputAutomation : IInputAutomation
+internal sealed class InputAutomation
 {
     private const SDL_MouseID VirtualMouseId = (SDL_MouseID)0;
     private const SDL_KeyboardID VirtualKeyboardId = (SDL_KeyboardID)0;

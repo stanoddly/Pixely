@@ -105,6 +105,11 @@ public sealed class InputAutomationTests
     {
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(CreateWindow(_viewScope, 42));
+        return CreateAutomation(windowRegistry);
+    }
+
+    internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(WindowRegistry windowRegistry)
+    {
         MouseService mouseService = new(windowRegistry);
         KeyboardService keyboardService = new(new AppControl());
         TextInputService textInputService = new(windowRegistry);
@@ -112,7 +117,7 @@ public sealed class InputAutomationTests
         return (automation, mouseService, keyboardService, textInputService);
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
+    internal static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
