@@ -174,13 +174,14 @@ public static partial class PeachArchitecture
         }
     }
 
-    // 8. Every type sits in a namespace the document names, or one the game declared on top.
+    // 8. Every type sits in a namespace the document names, or one the game declared on top with a justification. A namespace is reported
+    // once, not once per type.
     private static IReadOnlyList<string> TypesLiveInDocumentedNamespaces(PeachArchitectureOptions options)
     {
         Dictionary<Assembly, HashSet<string>> allowed = new Dictionary<Assembly, HashSet<string>>
         {
             [options.Game] = new[] { options.GameNamespace, options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.SystemsNamespace, options.ObservationsNamespace }
-                .Concat(options.ExtraGameNamespaces).ToHashSet(StringComparer.Ordinal),
+                .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal),
             [options.Frontend] = [options.FrontendNamespace, options.FormsNamespace],
             [options.Executable] = [options.ExecutableNamespace]
         };
@@ -189,11 +190,17 @@ public static partial class PeachArchitecture
             allowed[assembly] = [options.RootNamespaceOf(assembly)];
         }
 
-        return allowed
+        List<string> violations = allowed
             .SelectMany(pair => TypeGraph.DeclaredTypes(pair.Key).Where(type => !type.IsNested && !pair.Value.Contains(type.Namespace ?? string.Empty)))
-            .Select(type => type.FullName!)
+            .Select(type => type.Namespace ?? "(global)")
+            .Distinct()
             .Order(StringComparer.Ordinal)
-            .ToArray();
+            .Select(ns => $"{ns}: not in the document; move its types or list the namespace in ExtraGameNamespaces with a strong justification")
+            .ToList();
+        HashSet<string> populated = TypeGraph.DeclaredTypes(options.Game).Select(type => type.Namespace ?? string.Empty).ToHashSet(StringComparer.Ordinal);
+        violations.AddRange(options.ExtraGameNamespaces.Where(extra => string.IsNullOrWhiteSpace(extra.Justification)).Select(extra => $"{extra.Namespace}: listed in ExtraGameNamespaces without a justification"));
+        violations.AddRange(options.ExtraGameNamespaces.Where(extra => !populated.Contains(extra.Namespace)).Select(extra => $"{extra.Namespace}: listed in ExtraGameNamespaces but holds no types"));
+        return violations;
     }
 
     // 9. The frame is single threaded, so nothing hands work to another thread.

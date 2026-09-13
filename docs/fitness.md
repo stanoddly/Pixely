@@ -7,10 +7,13 @@
 The document fixes the names of everything, so the prefix is enough:
 
 ```csharp
-PeachArchitectureOptions options = new PeachArchitectureOptions("Foo", ExtraGameNamespaces: ["Foo.Game.Persistence"]);
+PeachArchitectureOptions options = new PeachArchitectureOptions("Foo")
+{
+    ExtraGameNamespaces = [new ExtraNamespace("Foo.Game.Persistence", "Saving to disk is neither State nor a Mechanic")]
+};
 ```
 
-- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names.
+- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification. Rule 08 reports a type outside the documented and listed namespaces, a listed namespace without a justification, and a listed namespace that holds no types.
 - `MechanicsHaveNoPublicConstructors`, `MechanicsTakeStateRootThroughConstructor` and `GameGrantsNoInternalAccess` are `init` properties that switch off hardened SHOULD rules. They default to true.
 
 From the prefix, rule 00 derives the rest and reports what it could not derive:

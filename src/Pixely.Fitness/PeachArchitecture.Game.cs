@@ -61,7 +61,7 @@ public static partial class PeachArchitecture
     private static IReadOnlyList<string> GamePublicTypesLiveInTheirNamespaces(PeachArchitectureOptions options)
     {
         HashSet<string> allowed = new[] { options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.ObservationsNamespace }
-            .Concat(options.ExtraGameNamespaces).ToHashSet(StringComparer.Ordinal);
+            .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal);
         return TypeGraph.DeclaredTypes(options.Game)
             .Where(type => type.IsPublic && !(allowed.Contains(type.Namespace ?? string.Empty) || type.Namespace == options.GameNamespace && TypeGraph.IsStatic(type)))
             .Select(type => type.FullName!)
