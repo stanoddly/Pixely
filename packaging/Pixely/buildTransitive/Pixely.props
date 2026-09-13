@@ -1,6 +1,7 @@
 <Project>
     <PropertyGroup>
         <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <PixelyDocsDirectory>$(MSBuildThisFileDirectory)..\docs\</PixelyDocsDirectory>
     </PropertyGroup>
 
     <ItemGroup>

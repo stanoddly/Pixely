@@ -38,6 +38,12 @@ made through AI pair-programming: botoddly contributes the implementation work,
 and stanoddly reviews, directs, and merges the changes through PRs. Earlier
 parts of the project were mostly written manually.
 
+## Documentation
+
+`docs/` is shipped inside the NuGet package. In a project that references
+Pixely, `dotnet msbuild -getProperty:PixelyDocsDirectory` prints where the
+package version's copy lives.
+
 ## License
 
 MIT.

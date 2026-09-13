@@ -17,8 +17,7 @@ public class PackageIntegrationTests
     private static readonly string[] RuntimeAssemblies =
     [
         "Pixely.PathFinding",
-        "Pixely.Architecture.Testing",
-        "Pixely.Architecture",
+        "Pixely.Fitness",
         "Pixely.Audio",
         "Pixely.Collections",
         "Pixely.Componentize",
@@ -134,6 +133,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.props"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.targets"));
             Assert.That(entries, Does.Contain("THIRD-PARTY-NOTICES.md"));
+            Assert.That(entries, Does.Contain("docs/peach-architecture.md"));
             Assert.That(entries, Does.Not.Contain("lib/net10.0/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Not.Contain("lib/net10.0/Pixely.DependencyInjection.Generator.dll"));
             Assert.That(entries.Any(entry => entry.StartsWith("tools/slang/", StringComparison.Ordinal)), Is.False);
