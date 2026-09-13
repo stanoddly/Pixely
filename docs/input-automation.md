@@ -2,10 +2,10 @@
 
 `IInputAutomation` synchronously delivers synthetic mouse, keyboard, and text input through the ordinary Pixely input services. Existing view-scoped subscriptions, priorities, consumption, and device state apply to automated input. Handlers finish before an automation method returns.
 
-It is not registered by default. Register it on the builder, then resolve the application-lifetime service from the app:
+It is part of headless mode, see below. Register that on the builder, then resolve the application-lifetime service from the app:
 
 ```csharp
-builder.AddInputAutomation();
+builder.UseHeadless();
 
 IInputAutomation input = app.GetRequiredService<IInputAutomation>();
 ```
@@ -38,7 +38,7 @@ Automated input affects Pixely's event-derived synthetic device state. It does n
 
 ## Driving the app from standard input
 
-`AddInputAutomation()` also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+`UseHeadless()` also reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command gets one reply line on standard output: `ok` or `error: <reason>` for a malformed line. Blank lines and lines starting with `#` are ignored and get no reply. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
 
 | Command | Calls |
 | --- | --- |
@@ -67,16 +67,18 @@ cat replies.txt
 
 Keep logging off standard output while doing this; replies share the stream.
 
-### Screenshots without a window
+### Headless mode and screenshots
 
-`UseOffscreenRendering(size)` is `UseDefaultRendering()` with an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Only the size is configurable; the rest of `WindowConfig` is about the desktop. Custom render contexts use `AddOffscreenWindow(size)` with `UseWindowRendering<TRenderContext>()` instead; both work unchanged because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second.
+`UseHeadless(size)` makes the default scope's window an `OffscreenWindow`: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Only the size is configurable; the rest of `WindowConfig` is about the desktop. Call it before the rendering registration, which stays whatever the game uses: `UseDefaultRendering()` keeps the headless window instead of creating its own (its `WindowConfig` is ignored), and `UseWindowRendering<TRenderContext>()` with a custom provider works unchanged because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. Headless mode covers the default scope only; windows registered for other scopes are ordinary desktop windows.
 
 ```csharp
-builder
-    .UseOffscreenRendering((1280, 720))
-    .AddInputAutomation();
+if (headless)
+{
+    builder.UseHeadless((1280, 720));
+}
+builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
 ```
 
-`screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer. `AddInputAutomation()` requires the offscreen window, since a swapchain image cannot be read back.
+`screenshot <path>` writes the last rendered frame as a PNG and replies `ok` once the file exists, or `error: <reason>` when it cannot be written. Commands run before that frame's render, so a screenshot in the same write as the commands it should show is one frame too early; send it in a later write, after their replies. The capture waits for the GPU, so that frame takes longer. A swapchain image cannot be read back, which is why screenshots exist only in headless mode.
 
 The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar `Image` as a PNG.

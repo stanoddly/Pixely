@@ -7,8 +7,8 @@ using SDL;
 namespace Pixely;
 
 /// <summary>
-/// A hidden SDL window whose frames go to a texture instead of the swapchain, so nothing is presented and
-/// frames can be read back. Everything else, events, size, text input and the colour target format, still
+/// The window of a <see cref="HeadlessExtensions.UseHeadless"/> app: a hidden SDL window whose frames go to a texture
+/// instead of the swapchain, so nothing is presented and frames can be read back. Everything else, events, size, text input and the colour target format, still
 /// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
 /// </summary>
 public sealed class OffscreenWindow : Window
