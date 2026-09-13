@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using Pixely.ShaderCommon;
 
 namespace Pixely.SdlangCompiler;
@@ -43,6 +45,7 @@ public class SdlangCompiler
         [ShaderFormatDto.SpirV, .. AdditionalTargetFormats];
 
     private readonly string _slangCompilerPath;
+    private readonly TaskLoggingHelper _log;
 
     private static readonly Dictionary<ShaderFormatDto, string> TargetsWithExtensions = new()
     {
@@ -52,7 +55,8 @@ public class SdlangCompiler
     };
 
     /// <param name="slangCompilerPath">Path to the slangc executable to compile shaders with.</param>
-    public SdlangCompiler(string slangCompilerPath)
+    /// <param name="log">MSBuild logger of the hosting task. Console output must not be used here: MSBuild redirects a task host's stdout and stderr into pipes that nothing reads, so a full pipe blocks the build forever.</param>
+    public SdlangCompiler(string slangCompilerPath, TaskLoggingHelper log)
     {
         if (!File.Exists(slangCompilerPath))
         {
@@ -60,6 +64,7 @@ public class SdlangCompiler
         }
 
         _slangCompilerPath = slangCompilerPath;
+        _log = log;
     }
 
     private static string GetSlangVersion()
@@ -78,41 +83,14 @@ public class SdlangCompiler
             throw new ShaderCompilationException("No filenames provided");
         }
 
-        List<FileInfo> paths = filenames.Select(f => new FileInfo(f)).ToList();
-        List<FileInfo> directories = paths.Where(p => Directory.Exists(p.FullName)).ToList();
-        List<FileInfo> files = paths.Where(p => !Directory.Exists(p.FullName)).ToList();
-
-        if (directories.Count > 0)
+        foreach (string filename in filenames)
         {
-            if (files.Count > 0)
+            FileInfo file = new FileInfo(filename);
+            if (!file.Exists)
             {
-                Console.WriteLine("Warning: Ignoring files on command line because directories are present:");
-                foreach (FileInfo file in files)
-                {
-                    Console.WriteLine($"  Ignored: {file.FullName}");
-                }
+                throw new ShaderCompilationException($"File {file.FullName} does not exist");
             }
-
-            foreach (FileInfo dir in directories)
-            {
-                FileInfo shaderFile = new FileInfo(Path.Combine(dir.FullName, "shader.slang"));
-                if (!shaderFile.Exists)
-                {
-                    throw new ShaderCompilationException($"File {shaderFile.FullName} does not exist");
-                }
-                CompileShader(shaderFile, force);
-            }
-        }
-        else
-        {
-            foreach (FileInfo file in files)
-            {
-                if (!file.Exists)
-                {
-                    throw new ShaderCompilationException($"File {file.FullName} does not exist");
-                }
-                CompileShader(file, force);
-            }
+            CompileShader(file, force);
         }
     }
 
@@ -259,7 +237,7 @@ public class SdlangCompiler
 
     private void ExecuteSlang(List<string> args, string operation)
     {
-        Console.WriteLine($"Executing {operation.ToLowerInvariant()}: {_slangCompilerPath} {string.Join(" ", args)}");
+        _log.LogMessage(MessageImportance.Low, $"Executing {operation.ToLowerInvariant()}: {_slangCompilerPath} {string.Join(" ", args)}");
 
         Process process = new Process
         {
@@ -268,7 +246,7 @@ public class SdlangCompiler
                 FileName = _slangCompilerPath,
                 Arguments = string.Join(" ", args.Select(arg => arg.Contains(' ') ? $"\"{arg}\"" : arg)),
                 RedirectStandardInput = true,
-                RedirectStandardOutput = false,
+                RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             }
@@ -276,8 +254,16 @@ public class SdlangCompiler
 
         process.Start();
         process.StandardInput.Close();
+        // Read one stream asynchronously so slangc cannot block on a full pipe while the other is drained.
+        Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
         string standardError = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        string standardOutput = standardOutputTask.Result;
+
+        if (!string.IsNullOrWhiteSpace(standardOutput))
+        {
+            _log.LogMessage(MessageImportance.Low, standardOutput.Trim());
+        }
 
         if (process.ExitCode != 0)
         {
@@ -288,9 +274,9 @@ public class SdlangCompiler
                 $"{operation} failed with exit code {process.ExitCode}:{Environment.NewLine}{diagnostic}");
         }
 
-        if (!string.IsNullOrEmpty(standardError))
+        if (!string.IsNullOrWhiteSpace(standardError))
         {
-            Console.Error.Write(standardError);
+            _log.LogWarning(standardError.Trim());
         }
     }
 
@@ -1604,11 +1590,11 @@ public class SdlangCompiler
         if (ShouldSkipCompilation(filePath, outputDir, force))
         {
             CleanupGeneratedFiles(parentDir, outputDir);
-            Console.WriteLine($"Skipping {filePath.FullName} (unchanged)");
+            _log.LogMessage(MessageImportance.Low, $"Skipping {filePath.FullName} (unchanged)");
             return;
         }
 
-        Console.WriteLine($"Result directory: {outputDir.FullName}");
+        _log.LogMessage(MessageImportance.Low, $"Result directory: {outputDir.FullName}");
 
         string filenameWithoutExt = Path.GetFileNameWithoutExtension(filePath.Name);
 
@@ -1618,7 +1604,7 @@ public class SdlangCompiler
         DirectoryInfo tempDir = Directory.CreateTempSubdirectory("ShaderPack_");
         try
         {
-            Console.WriteLine($"Intermediate results written to: {tempDir.FullName}");
+            _log.LogMessage(MessageImportance.Low, $"Intermediate results written to: {tempDir.FullName}");
 
             ShaderSourceKind shaderSourceKind = DiscoverShader(filePath, tempDir);
 
@@ -1700,7 +1686,7 @@ public class SdlangCompiler
         }
     }
 
-    private static void CleanupGeneratedFiles(DirectoryInfo sourceDirectory, DirectoryInfo outputDirectory)
+    private void CleanupGeneratedFiles(DirectoryInfo sourceDirectory, DirectoryInfo outputDirectory)
     {
         if (!outputDirectory.Exists)
         {
@@ -1756,7 +1742,7 @@ public class SdlangCompiler
                 generatedExtensions.Contains(generatedFile.Extension);
             if (isGeneratedFile && !expectedFilenames.Contains(generatedFile.Name))
             {
-                Console.WriteLine($"Removing obsolete shader output: {generatedFile.FullName}");
+                _log.LogMessage(MessageImportance.Low, $"Removing obsolete shader output: {generatedFile.FullName}");
                 generatedFile.Delete();
             }
         }
