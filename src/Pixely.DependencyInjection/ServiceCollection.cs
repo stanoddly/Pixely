@@ -8,6 +8,8 @@ public class ServiceCollection
     private readonly ServiceProvider? _parent;
     private readonly HashSet<int> _registeredTypeIds = new();
     private readonly Dictionary<int, List<ServiceDescriptor>> _serviceGroups = new();
+
+    internal IEnumerable<ServiceDescriptor> Descriptors => _serviceGroups.Values.SelectMany(group => group);
     private readonly List<Action<ServiceProvider>> _onStartActions = new();
     private readonly List<ServiceActivatedCallback> _activatedCallbacks = new();
     private readonly List<ServiceDisposingCallback> _disposingCallbacks = new();
