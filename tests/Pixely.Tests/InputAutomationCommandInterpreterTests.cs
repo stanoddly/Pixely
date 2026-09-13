@@ -40,7 +40,6 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
     [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
     [TestCase("screenshot", "error: unknown command 'screenshot'")]
-    [TestCase("screenshot frame.png", "error: no headless window for the default view scope")]
     public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
     {
         (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
@@ -61,6 +60,15 @@ public sealed class InputAutomationCommandInterpreterTests
         InputAutomationCommandInterpreter interpreter = new(InputAutomationTests.CreateAutomation(new WindowRegistry()).Automation, new WindowRegistry(), new NoImageWriter());
 
         Assert.Throws<InvalidOperationException>(() => interpreter.Execute("key press A"));
+    }
+
+    [Test]
+    public void Execute_Screenshot_WithoutDefaultWindow_Fails()
+    {
+        WindowRegistry windowRegistry = new();
+        InputAutomationCommandInterpreter interpreter = new(InputAutomationTests.CreateAutomation(windowRegistry).Automation, windowRegistry, new NoImageWriter());
+
+        Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: no window for the default view scope"));
     }
 
     private static (InputAutomationCommandInterpreter Interpreter, List<string> Events) CreateInterpreter()

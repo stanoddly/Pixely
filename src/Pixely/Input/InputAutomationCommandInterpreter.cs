@@ -86,14 +86,15 @@ internal sealed class InputAutomationCommandInterpreter
 
     private string Screenshot(string path)
     {
-        if (!_windowRegistry.TryGetWindow(out Window window) || window is not OffscreenWindow offscreenWindow)
+        if (!_windowRegistry.TryGetWindow(out Window window))
         {
-            return "error: no headless window for the default view scope";
+            return "error: no window for the default view scope";
         }
 
         try
         {
-            using Image image = offscreenWindow.CaptureLastFrame();
+            // Every window is offscreen in headless mode, which is the only mode this console exists in.
+            using Image image = ((OffscreenWindow)window).CaptureLastFrame();
             _imageWriter.SavePng(image, path);
             return "ok";
         }
