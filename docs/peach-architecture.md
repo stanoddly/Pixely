@@ -11,7 +11,8 @@
 - Each project MUST register what it offers through public extension methods, one per container it
   registers into. A root method extends `PixelyAppBuilder`, a stage method extends
   `ServiceCollection`, e.g. `AddGamePersistence` for root and `AddGame` for the stage. They are the
-  only way `Executable` registers an internal type
+  only way `Executable` registers an internal type. A registrar registers the same types whatever
+  its arguments; arguments configure values, not what exists
 - A stage is what the player is in, a mission or a menu. Each has its own state root
 - Not every game needs every part
   - `Systems` exist when rules advance with time. A turn based game where nothing happens between
@@ -73,8 +74,8 @@ Executable          ──> everything above
 
 ### Foo.Game.State namespace
 
-- There MUST be one state root per stage. It SHOULD be handed to its readers through the
-  constructor
+- There MUST be one state root per stage. It is the one `State` class no other `State` type holds.
+  It SHOULD be handed to its readers through the constructor
 - Storage MAY be ECS or not, depends on the game needs
 - Mutation MUST be `internal`, so nothing outside `Game` writes State. `Mechanics` and `Systems`
   write it. A public property MUST NOT have a setter, a public collection MUST be an
@@ -197,6 +198,7 @@ Executable          ──> everything above
 ## Foo.Executable project
 
 - Composition and the frame loop, nothing else
+- Its assembly is named `Foo.Executable` or `Foo`
 - Two containers. Root is the application: platform, window, presentation infrastructure, content,
   root-scoped forms. A stage is a child container holding its state root, Mechanics, Systems, log,
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage

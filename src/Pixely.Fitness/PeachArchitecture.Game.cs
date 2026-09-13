@@ -110,6 +110,11 @@ public static partial class PeachArchitecture
     // 16. One state root per stage: the stage registers the root and no other State type.
     private static IReadOnlyList<string> StageRegistersExactlyTheStateRoot(PeachArchitectureOptions options)
     {
+        if (options.StateRoot == null)
+        {
+            return [];
+        }
+
         Type[] registered = StageRegistrations(options)
             .SelectMany(registration => new[] { registration.ServiceType, registration.ConcreteType })
             .OfType<Type>()
@@ -169,6 +174,11 @@ public static partial class PeachArchitecture
     // 21. Everything reachable from the state root is State or Vocabulary, or a primitive, so the rules above see all of it.
     private static IReadOnlyList<string> StateGraphStaysInState(PeachArchitectureOptions options)
     {
+        if (options.StateRoot == null)
+        {
+            return [];
+        }
+
         List<string> violations = new List<string>();
         HashSet<Type> visited = new HashSet<Type>();
         Visit(options.StateRoot);
@@ -275,7 +285,7 @@ public static partial class PeachArchitecture
     // root holds directly; an element handed to a helper is the unit of work, the same shape as Step(activity).
     private static IReadOnlyList<string> MechanicsTakeTheStateRootThroughConstructors(PeachArchitectureOptions options)
     {
-        if (!options.MechanicsTakeStateRootThroughConstructor)
+        if (!options.MechanicsTakeStateRootThroughConstructor || options.StateRoot == null)
         {
             return [];
         }

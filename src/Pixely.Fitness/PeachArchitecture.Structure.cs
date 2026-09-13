@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely;
-using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.RenderOrchestration;
 using Pixely.Ui;
@@ -18,9 +17,16 @@ public static partial class PeachArchitecture
 
     public static FitnessReport Evaluate(PeachArchitectureOptions options)
     {
+        FitnessResult resolution = new FitnessResult("00 GameResolvesFromPrefix", options.Resolved.Violations);
+        if (!options.Resolved.IsComplete)
+        {
+            return new FitnessReport([resolution]);
+        }
+
         return new FitnessReport(
         [
-            Run("01 ProjectReferencesMatchTheGraph", static options => options.RepositoryRoot == null ? [] : ProjectReferences.Violations(options.RepositoryRoot, options)),
+            resolution,
+            Run("01 ProjectReferencesMatchTheGraph", static options => options.Resolved.RepositoryRoot == null ? [] : ProjectReferences.Violations(options.Resolved.RepositoryRoot, options)),
             Run("02 AssemblyReferencesMatchTheGraph", AssemblyReferencesMatchTheGraph),
             Run("03 NoInternalAccessBetweenProductionAssemblies", NoInternalAccessBetweenProductionAssemblies),
             Run("05 RegistrarsAreTheOnlyRegistration", RegistrarsAreTheOnlyRegistration),
@@ -118,7 +124,7 @@ public static partial class PeachArchitecture
             string rootNamespace = options.RootNamespaceOf(assembly);
             foreach (Type type in TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == rootNamespace))
             {
-                violations.AddRange(TypeGraph.DeclaredMethods(type).Where(method => method.IsPublic && !IsRegistrarMethod(method)).Select(TypeGraph.Describe));
+                violations.AddRange(TypeGraph.DeclaredMethods(type).Where(method => method.IsPublic && !PeachGame.IsRegistrarMethod(method)).Select(TypeGraph.Describe));
             }
 
             violations.AddRange(TypeGraph.DeclaredTypes(assembly)
@@ -129,15 +135,6 @@ public static partial class PeachArchitecture
         }
 
         return violations;
-
-        static bool IsRegistrarMethod(MethodInfo method)
-        {
-            ParameterInfo[] parameters = method.GetParameters();
-            return method.GetCustomAttribute<ExtensionAttribute>() != null
-                && method.Name.StartsWith("Add", StringComparison.Ordinal)
-                && parameters.Length > 0
-                && (parameters[0].ParameterType == typeof(PixelyAppBuilder) || parameters[0].ParameterType == typeof(ServiceCollection));
-        }
     }
 
     // 6. Executable composes; it takes no part in the frame or the user interface itself.
@@ -220,15 +217,11 @@ public static partial class PeachArchitecture
 
     private static IReadOnlyList<ServiceRegistration> RootRegistrations(PeachArchitectureOptions options)
     {
-        PixelyAppBuilder builder = new PixelyAppBuilder();
-        options.ComposeRoot(builder);
-        return ServiceCollectionProbe.Registrations(builder);
+        return options.Resolved.RootRegistrations;
     }
 
     private static IReadOnlyList<ServiceRegistration> StageRegistrations(PeachArchitectureOptions options)
     {
-        ServiceCollection services = new ServiceCollection();
-        options.ComposeStage(services);
-        return ServiceCollectionProbe.Registrations(services);
+        return options.Resolved.StageRegistrations;
     }
 }

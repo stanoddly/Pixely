@@ -1,30 +1,19 @@
 using System.Reflection;
-using Pixely.App;
-using Pixely.DependencyInjection;
 
 namespace Pixely.Fitness;
 
 /// <summary>
-/// What a game tells the generic rules: which assemblies play which part, its state root, the
-/// namespaces it adds beyond the document's, and how its two containers are composed. Optional
-/// projects are null when the game has none.
+/// What a game tells the generic rules: its prefix, the namespaces it adds beyond the document's, and
+/// which hardened SHOULDs it switches off. Everything else is derived from the prefix, see
+/// <see cref="PeachGame"/>.
 /// </summary>
-public sealed record PeachArchitectureOptions(
-    string GamePrefix,
-    Assembly Game,
-    Assembly Frontend,
-    Assembly? Rendering,
-    Assembly? Audio,
-    Assembly? Ai,
-    Assembly? Scenario,
-    Assembly Executable,
-    Type StateRoot,
-    IReadOnlyList<string> ExtraGameNamespaces,
-    Action<PixelyAppBuilder> ComposeRoot,
-    Action<ServiceCollection> ComposeStage)
+public sealed record PeachArchitectureOptions(string GamePrefix, IReadOnlyList<string> ExtraGameNamespaces)
 {
-    // Where the project files are, for the one function that reads them; null skips it, e.g. when the tests run from a package.
-    public string? RepositoryRoot { get; init; }
+    private PeachGame? _game;
+
+    public PeachArchitectureOptions(string gamePrefix) : this(gamePrefix, [])
+    {
+    }
 
     // Hardened SHOULDs a game may switch off.
     public bool MechanicsHaveNoPublicConstructors { get; init; } = true;
@@ -44,6 +33,17 @@ public sealed record PeachArchitectureOptions(
     internal string AiNamespace => $"{GamePrefix}.Ai";
     internal string ScenarioNamespace => $"{GamePrefix}.Scenario";
     internal string ExecutableNamespace => $"{GamePrefix}.Executable";
+
+    internal PeachGame Resolved => _game ??= PeachGame.Resolve(this);
+
+    internal Assembly Game => Resolved.Game!;
+    internal Assembly Frontend => Resolved.Frontend!;
+    internal Assembly? Rendering => Resolved.Rendering;
+    internal Assembly? Audio => Resolved.Audio;
+    internal Assembly? Ai => Resolved.Ai;
+    internal Assembly? Scenario => Resolved.Scenario;
+    internal Assembly Executable => Resolved.Executable!;
+    internal Type? StateRoot => Resolved.StateRoot;
 
     internal IEnumerable<Assembly> OutputAssemblies => new[] { Rendering, Audio }.Where(assembly => assembly != null)!;
     internal IEnumerable<Assembly> ActorAssemblies => new[] { Ai, Scenario }.Where(assembly => assembly != null)!;
