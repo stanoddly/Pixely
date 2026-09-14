@@ -65,7 +65,7 @@ A layer does not block the pointer by being on top. Only an `IPointerTarget` is 
 builder.UseUi(updateOrder: 500);
 ```
 
-The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, and by setting `UiRoot.Scale`, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
+The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, and by `Update` applying a requested scale, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
 
 A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
 
@@ -75,13 +75,13 @@ The build lays out against the render context's colour target, divided by the ro
 
 Everything in the tree is in logical pixels: sizes, margins, paddings, offsets, anchors, border and nine-patch thicknesses, font sizes and pointer positions. `UiRoot.Scale` says how many target pixels one logical pixel covers, and defaults to 1, where logical and target pixels are the same thing.
 
-A game that renders a low-resolution scene and scales it up sets the same scale on the root, so the UI sits on the scene's pixel grid instead of drawing finer pixels over it:
+A game that renders a low-resolution scene and scales it up requests the same scale on the root, so the UI sits on the scene's pixel grid instead of drawing finer pixels over it:
 
 ```csharp
-root.Scale = 2f;
+root.RequestScale(2f);
 ```
 
-The scale is a property, so it can follow a zoom the player changes. It must be finite and at least 1.
+The request takes effect at the next `Update`, which is when the viewport, the pointer's logical position and the layout all change together, so a zoom the player changes can be requested from anywhere, including a pointer callback. The scale must be finite and at least 1.
 
 The tree never sees the scale. `ViewportSize`, the viewport event, `PointerPosition` and every layout and pointer callback are in logical pixels; the renderer paints the tree at its logical size into the retained texture and presents that texture at the scale with nearest sampling. A 16 px font at 2x is 2x2 blocks, which is what keeps pixel fonts and sprites crisp; nothing is reloaded or re-rasterised. A fractional scale such as 2.5 works the same way and shows uneven pixel widths, the same as a scene scaled by it.
 

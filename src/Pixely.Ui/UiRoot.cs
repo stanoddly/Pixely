@@ -21,6 +21,7 @@ public sealed class UiRoot : IUiPaintSource
     private Vector2Int _targetSize;
     private Vector2Int _viewportSize;
     private float _scale = 1f;
+    private float _requestedScale = 1f;
     private bool _layersChanged = true;
 
     // Starts where the router's position starts, so the first route to the origin is the non-event it
@@ -136,34 +137,42 @@ public sealed class UiRoot : IUiPaintSource
     /// viewport are all in logical pixels; the renderer paints them at this scale. An integer keeps
     /// every logical pixel the same size on screen, which is what keeps pixel fonts and sprites
     /// crisp; a fraction is accepted and shows uneven pixels, the same as a scene scaled by it.
+    /// Changed through <see cref="RequestScale"/>.
+    /// </summary>
+    public float Scale => _scale;
+
+    /// <summary>
+    /// Asks for a scale, which takes effect at the next <see cref="Update"/>. Deferred rather than
+    /// applied here because a change moves the viewport and the pointer's logical position at once,
+    /// and a request can come from inside a pointer callback, where neither may be reported from.
     /// Must be finite and at least 1.
     /// </summary>
-    public float Scale
+    public void RequestScale(float scale)
     {
-        get => _scale;
-        set
+        if (!float.IsFinite(scale) || scale < 1f)
         {
-            if (!float.IsFinite(value) || value < 1f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value), value, "The scale must be finite and at least 1.");
-            }
-
-            if (_scale == value)
-            {
-                return;
-            }
-
-            float previous = _scale;
-            _scale = value;
-
-            // The pointer did not move, but its logical coordinates did. Carried across rather than
-            // left where it was, so the next build revalidates hover under the pointer instead of
-            // under the place the old scale put it. Reported after the viewport, so a listener sees
-            // the two agree, and not from inside a route, which the next build is guaranteed to end.
-            _pointerRouter.Rescale(previous, value);
-            ApplyViewport();
-            ReportPointerPosition();
+            throw new ArgumentOutOfRangeException(nameof(scale), scale, "The scale must be finite and at least 1.");
         }
+
+        _requestedScale = scale;
+    }
+
+    /// <summary>
+    /// Applies a pending request. The pointer did not move, but its logical coordinates did: they are
+    /// carried across rather than left where they were, so the build that follows revalidates hover
+    /// under the pointer instead of under the place the old scale put it.
+    /// </summary>
+    private void ApplyRequestedScale()
+    {
+        if (_requestedScale == _scale)
+        {
+            return;
+        }
+
+        float previous = _scale;
+        _scale = _requestedScale;
+        _pointerRouter.Rescale(previous, _scale);
+        ApplyViewport();
     }
 
     public IReadOnlyList<Element> Layers => _layers;
@@ -528,12 +537,6 @@ public sealed class UiRoot : IUiPaintSource
 
     private void ReportPointerPosition()
     {
-        // A route reports for itself once it has finished; see the remarks above.
-        if (_pointerRouter.IsRouting)
-        {
-            return;
-        }
-
         Vector2Int position = _pointerRouter.Position;
 
         if (_reportedPointerPosition == position)
@@ -563,8 +566,7 @@ public sealed class UiRoot : IUiPaintSource
 
     /// <summary>
     /// Re-derives the viewport from the target and the scale, and invalidates the layers when it
-    /// changed. Done when either input changes rather than at the next build, so a handler that sets
-    /// the scale and then anchors something to the viewport reads the size it will be laid out in.
+    /// changed.
     /// </summary>
     private void ApplyViewport()
     {
@@ -600,7 +602,15 @@ public sealed class UiRoot : IUiPaintSource
     {
         // Pointer callbacks run inside this method, and one of them calling back into it would
         // refill the paint context an outer pass is still writing to, duplicating every quad.
-        if (_isUpdating || !NeedsUpdate())
+        if (_isUpdating)
+        {
+            return false;
+        }
+
+        // Before deciding whether to build, since applying one is what makes a build necessary.
+        ApplyRequestedScale();
+
+        if (!NeedsUpdate())
         {
             return false;
         }
@@ -614,6 +624,9 @@ public sealed class UiRoot : IUiPaintSource
         finally
         {
             _isUpdating = false;
+
+            // Where a scale change leaves the pointer is reported here, after the build, rather than
+            // where it was applied, so a listener sees the tree laid out for the position it is told.
             ReportPointerPosition();
             ReportFocus();
         }
