@@ -39,7 +39,7 @@ internal static class RegistrarProbe
             }
             catch (TargetInvocationException exception)
             {
-                violations.Add($"{TypeGraph.Describe(registrar)}: rejected default arguments, {exception.InnerException?.Message ?? exception.Message}; give every parameter a default or accept null");
+                violations.Add($"{TypeGraph.Describe(registrar)}: threw when invoked with default arguments, {exception.InnerException?.Message ?? exception.Message}");
             }
         }
 
