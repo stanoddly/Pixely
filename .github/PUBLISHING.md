@@ -1,12 +1,12 @@
 # Package publishing
 
-Pixely is packed once for every validated `main` commit. The resulting package is published immediately to the development feed and can later be published unchanged to nuget.org.
+Pixely is packed once for every `main` commit. The resulting package is published immediately to the development feed and can later be published unchanged to nuget.org once its platform validation has passed.
 
 ## Development feed
 
-Pull requests run the complete build, test, integration, NativeAOT, and package-consumer slice on Linux ARM64. After merge, the **Publish to development feed** workflow runs the full validation on Linux x64, Windows x64, and macOS ARM64, then validates the canonical package through isolated consumers on those three platforms. It publishes the `.nupkg` through Sleet and stores the matching `.snupkg` and checksum manifest under `promotion/pixely/<version>/` in B2. Publication attempts are serialized, reruns reuse the first stored files, and existing content is never overwritten.
+Pull requests run the complete build, test, integration, NativeAOT, and package-consumer slice on Linux ARM64. After merge, the **Publish to development feed** workflow packs the commit and publishes the `.nupkg` through Sleet as soon as the pack finishes, storing the matching `.snupkg` and checksum manifest under `promotion/pixely/<version>/` in B2. In parallel, it runs the full validation on Linux x64, Windows x64, and macOS ARM64 and validates the canonical package through isolated consumers on those three platforms. A development version can therefore be on the feed while its validation is still running or has failed. Publication attempts are serialized, reruns reuse the first stored files, and existing content is never overwritten.
 
-When a development publication attempt completes, the **Report development publication** workflow posts its result and a link to the run on the merged pull request. Successful publication comments include the version and a direct package download link. Each rerun is reported separately. The reporting workflow uses the temporary repository-scoped `GITHUB_TOKEN`; it requires no additional secrets.
+The merged pull request receives two comments. The publish job posts the version and a direct package download link as soon as the package is on the feed. When the whole run completes, the **Report development publication** workflow posts the platform validation result, naming the failed jobs, and a link to the run. Each rerun is reported separately. Both use the temporary repository-scoped `GITHUB_TOKEN`; they require no additional secrets.
 
 Versions use the form `0.0.N`. The source commit's absolute first-parent height plus the fixed migration offset `-281` determines `N`, making the first automatically published `main` commit version `0.0.9`; every later first-parent commit increments `N`. The package repository metadata records the complete source commit.
 
@@ -44,7 +44,7 @@ No NuGet API key is stored in GitHub. If nuget.org marks a new policy as pending
 
 Open **Actions**, select **Publish to nuget.org**, and enter an exact version already present in the development feed. The version must advance beyond the highest numbered Pixely version on nuget.org unless the run is recovering that same version.
 
-The workflow downloads the `.nupkg`, `.snupkg`, and manifest from B2, verifies their SHA-256 hashes, validates the version-to-commit mapping, and publishes the existing files through nuget.org trusted publishing. It does not build or pack. After publication, it tags the recorded source commit and creates the GitHub release. Not every development version needs to be published, so the nuget.org sequence can contain gaps.
+The workflow downloads the `.nupkg`, `.snupkg`, and manifest from B2, verifies their SHA-256 hashes, validates the version-to-commit mapping, requires a successful **Publish to development feed** run for the source commit, and publishes the existing files through nuget.org trusted publishing. It does not build or pack. After publication, it tags the recorded source commit and creates the GitHub release. Not every development version needs to be published, so the nuget.org sequence can contain gaps.
 
 ## Recovery
 

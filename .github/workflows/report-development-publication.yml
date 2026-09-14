@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Report publication result
+      - name: Report validation result
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -31,19 +31,17 @@ jobs:
 
           case "$RUN_CONCLUSION" in
             success)
-              artifact_name="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].name')"
-              version="${artifact_name#Pixely-}"
-              package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$version/pixely.$version.nupkg"
-              message="$(printf '✅ Development package [`Pixely %s`](%s) published successfully.' "$version" "$package_url")"
+              message="✅ Development package validation passed on all platforms."
               ;;
             failure)
-              message="❌ Development publication failed."
+              failed_jobs="$(gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?filter=latest" --jq '.jobs[] | select(.conclusion == "failure") | "`" + .name + "`"' | paste -sd ' ' -)"
+              message="❌ Development package validation failed: ${failed_jobs:-no failed job found}."
               ;;
             cancelled)
-              message="⚪ Development publication was cancelled."
+              message="⚪ Development package validation was cancelled."
               ;;
             *)
-              message="$(printf 'ℹ️ Development publication completed with conclusion `%s`.' "$RUN_CONCLUSION")"
+              message="$(printf 'ℹ️ Development package validation completed with conclusion `%s`.' "$RUN_CONCLUSION")"
               ;;
           esac
 
