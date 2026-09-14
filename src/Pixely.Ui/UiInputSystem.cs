@@ -105,32 +105,33 @@ internal sealed class UiInputSystem
     }
 
     /// <summary>
-    /// Converts a window position into the space the tree was laid out in. The root lays out in its
-    /// viewport, which is the render target's size rather than the window's — those differ on a
-    /// high-DPI display, and they differ again when the UI draws into a target of its own — while
-    /// the mouse reports window coordinates. Without this the two disagree by the display scale and
-    /// every hit test lands somewhere else.
+    /// Converts a window position into the space the tree was laid out in. The mouse reports window
+    /// coordinates; the root presents into a target, which differs from the window on a high-DPI
+    /// display and again when the UI draws into a target of its own; and the tree is laid out in
+    /// logical pixels, each <see cref="UiRoot.Scale"/> target pixels wide. Converted once here, so
+    /// the routers and every hit test see only logical pixels.
     /// </summary>
     private Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition) =>
-        ToUiPosition(windowPosition, _windowSize(), _root.ViewportSize);
+        ToUiPosition(windowPosition, _windowSize(), _root.TargetSize, _root.Scale);
 
     /// <inheritdoc cref="ToUiPosition(System.Numerics.Vector2)"/>
-    internal static Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition, Size<uint> windowSize, Vector2Int viewport) =>
-        new(Scale(windowPosition.X, viewport.X, windowSize.Width), Scale(windowPosition.Y, viewport.Y, windowSize.Height));
+    internal static Vector2Int ToUiPosition(System.Numerics.Vector2 windowPosition, Size<uint> windowSize, Vector2Int targetSize, float scale) =>
+        new(Scale(windowPosition.X, targetSize.X, windowSize.Width, scale), Scale(windowPosition.Y, targetSize.Y, windowSize.Height, scale));
 
     /// <summary>
-    /// Scales one axis, flooring rather than truncating. A pixel covers the half-open span from its
-    /// own coordinate to the next, so the position left of the origin belongs to pixel -1; truncation
-    /// rounds it towards zero into pixel 0 instead, which turns a release just outside an element's
-    /// left edge into a click on it.
+    /// Scales one axis, flooring once at the end rather than truncating or flooring in between. A
+    /// pixel covers the half-open span from its own coordinate to the next, so the position left of
+    /// the origin belongs to pixel -1; truncation rounds it towards zero into pixel 0 instead, which
+    /// turns a release just outside an element's left edge into a click on it. Flooring to a target
+    /// pixel first and then to a logical one lands on the wrong logical pixel at a fractional scale.
     /// </summary>
     /// <remarks>
-    /// Each axis falls back on its own. Before the first build there is no viewport to scale into,
+    /// Each axis falls back on its own. Before the first build there is no target to scale into,
     /// and a window can report zero while minimised; scaling the other axis is still right, and
     /// abandoning both because one is unusable would put the pointer somewhere it never was.
     /// </remarks>
-    private static int Scale(float windowPosition, int viewportExtent, uint windowExtent) =>
-        viewportExtent == 0 || windowExtent == 0
-            ? (int)MathF.Floor(windowPosition)
-            : (int)MathF.Floor(windowPosition * viewportExtent / windowExtent);
+    private static int Scale(float windowPosition, int targetExtent, uint windowExtent, float scale) =>
+        targetExtent == 0 || windowExtent == 0
+            ? (int)Math.Floor(windowPosition / (double)scale)
+            : (int)Math.Floor(windowPosition * (double)targetExtent / windowExtent / scale);
 }

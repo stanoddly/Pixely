@@ -218,7 +218,7 @@ public class PaintTests
     {
         UiRoot uiRoot = new();
         uiRoot.AddLayer(root);
-        uiRoot.SetViewportSize(new Vector2Int(width, height));
+        uiRoot.SetTargetSize(new Vector2Int(width, height));
         uiRoot.Update();
         return uiRoot;
     }

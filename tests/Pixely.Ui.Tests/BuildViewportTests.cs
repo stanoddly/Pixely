@@ -44,7 +44,7 @@ public class BuildViewportTests
     public void BuildVersion_RisesOnABuildAndStandsStillWhenNothingChanged()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.AddLayer(new Element { Width = Sizing.Fixed(10), Height = Sizing.Fixed(10) });
 
         ulong beforeFirstBuild = root.BuildVersion;
@@ -67,10 +67,10 @@ public class BuildViewportTests
     private static (UiRoot Root, RecordingPointerTarget Target, Element Spacer) HoveredTarget()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
 
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50) };
-        target.WhenLeft = () => root.SetViewportSize(new Vector2Int(640, 480));
+        target.WhenLeft = () => root.SetTargetSize(new Vector2Int(640, 480));
 
         Element spacer = new() { Width = Sizing.Fixed(0), Height = Sizing.Fixed(0) };
         root.AddLayer(new Column { Children = { spacer, target } });

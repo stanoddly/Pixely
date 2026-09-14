@@ -37,17 +37,17 @@ internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable
 
         // Asked of the provider rather than the window, because the provider is what decides the
         // colour target. Read per frame, since it changes as the window is resized.
-        ShortSize targetSize = _contextProvider.GetColorTargetSize(_window);
-        Vector2Int viewport = new(targetSize.Width, targetSize.Height);
+        ShortSize colorTargetSize = _contextProvider.GetColorTargetSize(_window);
+        Vector2Int targetSize = new(colorTargetSize.Width, colorTargetSize.Height);
 
-        // A window with no area has nothing to lay out against. Building against it would invalidate
+        // A target with no area has nothing to lay out against. Building against it would invalidate
         // every layer now and again on restore, for a tree nothing is going to draw.
-        if (viewport.X <= 0 || viewport.Y <= 0)
+        if (targetSize.X <= 0 || targetSize.Y <= 0)
         {
             return;
         }
 
-        _root.SetViewportSize(viewport);
+        _root.SetTargetSize(targetSize);
         _root.Update();
     }
 }

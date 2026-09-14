@@ -318,7 +318,7 @@ public class PointerButtonTests
 
         UiRoot root = new();
         root.AddLayer(new Overlay { Children = { behind, front } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         bool consumed = root.PointerPressed(new Vector2Int(10, 10), MouseButton.Right);
@@ -529,7 +529,7 @@ public class PointerButtonTests
         Element holder = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20), Children = { first } };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { holder, second } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }
@@ -541,7 +541,7 @@ public class PointerButtonTests
     {
         UiRoot root = new();
         root.AddLayer(new Column { Children = { content } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

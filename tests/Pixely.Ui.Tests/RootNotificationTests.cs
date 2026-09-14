@@ -56,7 +56,7 @@ public class RootNotificationTests
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new();
         root.AddLayer(new Column { Children = { target } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         // A listener may route the pointer itself, so it runs when there is no route in flight for it
@@ -107,7 +107,7 @@ public class RootNotificationTests
         RecordingPointerTarget other = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { held, other } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
@@ -146,7 +146,7 @@ public class RootNotificationTests
         List<Vector2Int> reported = new();
         root.ViewportChanged += reported.Add;
 
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
 
         Assert.That(reported, Is.EqualTo(new[] { new Vector2Int(640, 480) }));
     }
@@ -158,7 +158,7 @@ public class RootNotificationTests
         List<Vector2Int> reported = new();
         root.ViewportChanged += reported.Add;
 
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
 
         Assert.That(reported, Is.Empty);
     }
@@ -175,7 +175,7 @@ public class RootNotificationTests
         // Reported afterwards instead, it would place the popup a frame behind the window.
         root.ViewportChanged += size => child.Anchor = new Vector2Int(size.X / 2, size.Y / 2);
 
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         root.Update();
 
         Assert.That(child.Bounds, Is.EqualTo(new Rectangle(320, 240, 40, 20)));
@@ -234,11 +234,11 @@ public class RootNotificationTests
             }
 
             resized = true;
-            root.SetViewportSize(new Vector2Int(800, 600));
+            root.SetTargetSize(new Vector2Int(800, 600));
         };
         root.ViewportChanged += second.Add;
 
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
 
         Assert.That(second, Is.EqualTo(new[] { new Vector2Int(800, 600) }));
     }
@@ -304,7 +304,7 @@ public class RootNotificationTests
     private static UiRoot Empty()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

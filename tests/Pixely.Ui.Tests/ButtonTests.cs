@@ -748,7 +748,7 @@ public class ButtonTests
 
     private static void Update(UiRoot root)
     {
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
     }
 

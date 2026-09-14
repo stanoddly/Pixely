@@ -104,7 +104,7 @@ public class BorderDrawableTests
             Height = Sizing.Fixed(30)
         });
         root.AddLayer(layer);
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.Update();
 
         Assert.Multiple(() =>
@@ -136,7 +136,7 @@ public class BorderDrawableTests
     {
         UiRoot root = new();
         root.AddLayer(new Column { Background = background, Width = Sizing.Fixed(width), Height = Sizing.Fixed(height) });
-        root.SetViewportSize(new Vector2Int(width, height));
+        root.SetTargetSize(new Vector2Int(width, height));
         root.Update();
         return root;
     }

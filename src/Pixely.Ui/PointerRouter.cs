@@ -227,6 +227,23 @@ internal sealed class PointerRouter
         Track();
     }
 
+    /// <summary>
+    /// Carries the position across a change of the root's scale without routing. The pointer is
+    /// where it was in target pixels, so what it is over is reconciled by the build that follows,
+    /// the same as for layout moving underneath it.
+    /// </summary>
+    /// <remarks>
+    /// Approximate, because the position held here was already rounded to a logical pixel: going to
+    /// a finer scale lands within the coarser pixel rather than where the pointer is within it. The
+    /// next motion event replaces it with an exact one.
+    /// </remarks>
+    internal void Rescale(float from, float to)
+    {
+        _position = new Vector2Int(
+            (int)Math.Floor(_position.X * (double)from / to),
+            (int)Math.Floor(_position.Y * (double)from / to));
+    }
+
     private void MoveTo(Vector2Int position)
     {
         _position = position;

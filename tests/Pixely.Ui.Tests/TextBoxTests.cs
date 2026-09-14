@@ -358,7 +358,7 @@ public class TextBoxTests
         FontlessTextBox field = new() { Text = "hello" };
         UiRoot root = new();
         root.AddLayer(new Column { Children = { field } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.Focus(field);
         root.Update();
@@ -375,7 +375,7 @@ public class TextBoxTests
         FontlessTextBox field = new();
         UiRoot root = new();
         root.AddLayer(new Column { Children = { field } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         root.PointerPressed(new Vector2Int(10, 5), MouseButton.Left);
@@ -389,7 +389,7 @@ public class TextBoxTests
         FontlessTextBox field = new();
         UiRoot root = new();
         root.AddLayer(new Column { Children = { field } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         Assert.That(root.PointerPressed(new Vector2Int(10, 5), MouseButton.Right), Is.False);
