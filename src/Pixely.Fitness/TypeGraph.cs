@@ -97,12 +97,23 @@ public static class TypeGraph
         return direct.SelectMany(Expand).Distinct();
     }
 
+    // A generic parameter may be constrained by itself, e.g. T : IComparable<T>, so each type expands once.
     public static IEnumerable<Type> Expand(Type type)
     {
+        return Expand(type, new HashSet<Type>());
+    }
+
+    private static IEnumerable<Type> Expand(Type type, HashSet<Type> visited)
+    {
+        if (!visited.Add(type))
+        {
+            yield break;
+        }
+
         yield return type;
         if (type.IsGenericParameter)
         {
-            foreach (Type constraint in type.GetGenericParameterConstraints().SelectMany(Expand))
+            foreach (Type constraint in type.GetGenericParameterConstraints().SelectMany(constraint => Expand(constraint, visited)))
             {
                 yield return constraint;
             }
@@ -112,7 +123,7 @@ public static class TypeGraph
 
         if (type.HasElementType)
         {
-            foreach (Type element in Expand(type.GetElementType()!))
+            foreach (Type element in Expand(type.GetElementType()!, visited))
             {
                 yield return element;
             }
@@ -120,7 +131,7 @@ public static class TypeGraph
 
         if (type.IsGenericType)
         {
-            foreach (Type argument in type.GetGenericArguments().SelectMany(Expand))
+            foreach (Type argument in type.GetGenericArguments().SelectMany(argument => Expand(argument, visited)))
             {
                 yield return argument;
             }

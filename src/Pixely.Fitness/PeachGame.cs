@@ -95,7 +95,7 @@ internal sealed class PeachGame
         return new[] { Game, Frontend, Rendering, Audio, Ai, Scenario }.OfType<Assembly>()
             .SelectMany(assembly => TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == options.RootNamespaceOf(assembly)))
             .SelectMany(TypeGraph.DeclaredMethods)
-            .Where(method => method.IsPublic && IsRegistrarMethod(method) && method.GetParameters()[0].ParameterType == container)
+            .Where(method => method.IsPublic && !method.IsGenericMethodDefinition && IsRegistrarMethod(method) && method.GetParameters()[0].ParameterType == container)
             .OrderBy(method => method.DeclaringType!.FullName, StringComparer.Ordinal)
             .ThenBy(method => method.Name, StringComparer.Ordinal);
     }
@@ -103,30 +103,7 @@ internal sealed class PeachGame
     // A registrar registers the same types whatever its arguments, so defaults compose the real set of registrations.
     private IReadOnlyList<ServiceRegistration> Compose(PeachArchitectureOptions options, Type container, ServiceCollection target, List<string> violations)
     {
-        foreach (MethodInfo registrar in Registrars(options, container))
-        {
-            object?[] arguments = registrar.GetParameters().Select(parameter => parameter.Position == 0 ? target : DefaultArgument(parameter)).ToArray();
-            try
-            {
-                registrar.Invoke(null, arguments);
-            }
-            catch (TargetInvocationException exception)
-            {
-                violations.Add($"registrar rejected default arguments: {TypeGraph.Describe(registrar)}: {exception.InnerException?.Message ?? exception.Message}");
-            }
-        }
-
-        return ServiceCollectionProbe.Registrations(target);
-
-        static object? DefaultArgument(ParameterInfo parameter)
-        {
-            if (parameter.HasDefaultValue && parameter.DefaultValue != null)
-            {
-                return parameter.DefaultValue;
-            }
-
-            return parameter.ParameterType.IsValueType && Nullable.GetUnderlyingType(parameter.ParameterType) == null ? Activator.CreateInstance(parameter.ParameterType) : null;
-        }
+        return RegistrarProbe.Compose(Registrars(options, container), target, violations);
     }
 
     // The state root is the one State class no other State type holds.
