@@ -47,7 +47,7 @@ public class FocusTests
         RecordingPointerTarget button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { field, button } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
 
@@ -88,7 +88,7 @@ public class FocusTests
         RecordingPointerTarget other = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { field, other } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
         root.PointerReleased(new Vector2Int(10, 10), MouseButton.Left);
@@ -126,7 +126,7 @@ public class FocusTests
         other.Accepts.Add(MouseButton.Right);
         UiRoot root = new();
         root.AddLayer(new Row { Children = { field, other } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.Focus(field);
         field.Calls.Clear();
@@ -240,7 +240,7 @@ public class FocusTests
         RecordingFocusTarget second = Sized();
         UiRoot root = new();
         root.AddLayer(new Row { Children = { first, second } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.Focus(first);
 
@@ -263,7 +263,7 @@ public class FocusTests
         RecordingFocusTarget second = Sized();
         UiRoot root = new();
         root.AddLayer(new Row { Children = { first, second } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.Focus(first);
 
@@ -304,7 +304,7 @@ public class FocusTests
         RecordingFocusTarget second = Sized();
         UiRoot root = new();
         root.AddLayer(new Row { Children = { first, second } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         List<Element?> reported = new();
@@ -410,7 +410,7 @@ public class FocusTests
         Element layer = new Column { Children = { field } };
         UiRoot root = new();
         root.AddLayer(layer);
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         root.Focus(field);
 
@@ -630,7 +630,7 @@ public class FocusTests
         RecordingViewModel viewModel = new();
         FocusView view = new(viewModel, field);
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.AddView(view);
         root.Update();
         root.Focus(field);
@@ -730,7 +730,7 @@ public class FocusTests
         Row layer = new() { Children = { first, second } };
         UiRoot root = new();
         root.AddLayer(layer);
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         root.FocusChanged += focused =>
@@ -760,7 +760,7 @@ public class FocusTests
 
         UiRoot root = new();
         root.AddLayer(row);
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }
@@ -772,7 +772,7 @@ public class FocusTests
     {
         UiRoot root = new();
         root.AddLayer(new Column { Children = { content } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

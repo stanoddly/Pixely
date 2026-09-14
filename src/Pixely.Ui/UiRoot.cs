@@ -550,10 +550,10 @@ public sealed class UiRoot : IUiPaintSource
 
     /// <summary>
     /// Sets the size of the target the tree is presented into, in target pixels. The viewport the
-    /// tree is laid out in follows from it and <see cref="Scale"/>; at a scale of 1 the two are the
-    /// same.
+    /// tree is laid out in, <see cref="ViewportSize"/>, follows from it and <see cref="Scale"/>; at a
+    /// scale of 1 the two are the same.
     /// </summary>
-    public void SetViewportSize(Vector2Int size)
+    public void SetTargetSize(Vector2Int size)
     {
         if (_targetSize == size)
         {
@@ -635,7 +635,7 @@ public sealed class UiRoot : IUiPaintSource
     private bool Rebuild()
     {
         // Captured at entry and used for everything below, including what is recorded at the end. A
-        // callback further down can call SetViewportSize, and recording the field as it stands then
+        // callback further down can call SetTargetSize, and recording the field as it stands then
         // would claim this geometry was built for a viewport it never saw.
         Vector2Int viewportSize = _viewportSize;
         Vector2Int targetSize = _targetSize;
@@ -720,7 +720,8 @@ public sealed class UiRoot : IUiPaintSource
 
     private bool NeedsUpdate()
     {
-        if (_layersChanged || IsPaintDirty || PaintedViewportSize != _viewportSize || PaintedTargetSize != _targetSize || PaintedScale != _scale)
+        // The viewport follows from the target and the scale, so comparing those two covers it.
+        if (_layersChanged || IsPaintDirty || PaintedTargetSize != _targetSize || PaintedScale != _scale)
         {
             return true;
         }

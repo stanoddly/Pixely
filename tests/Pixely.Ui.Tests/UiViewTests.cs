@@ -31,7 +31,7 @@ public class UiViewTests
     {
         CounterView view = new(new CounterViewModel());
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
 
         root.AddView(view);
 
@@ -48,7 +48,7 @@ public class UiViewTests
         CounterViewModel viewModel = new();
         CounterView view = new(viewModel);
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.AddView(view);
 
         viewModel.Count = 1;
@@ -67,7 +67,7 @@ public class UiViewTests
         CounterViewModel viewModel = new();
         CounterView view = new(viewModel);
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.AddView(view);
 
         viewModel.Count = 0;
@@ -81,7 +81,7 @@ public class UiViewTests
         CounterViewModel viewModel = new();
         CounterView view = new(viewModel);
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.AddView(view);
         root.Update();
 
@@ -97,7 +97,7 @@ public class UiViewTests
         CounterViewModel viewModel = new();
         CounterView view = new(viewModel);
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.AddView(view);
 
         Assert.That(root.RemoveView(view), Is.True);
@@ -117,7 +117,7 @@ public class UiViewTests
     {
         CounterView view = new(new CounterViewModel());
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(100, 100));
+        root.SetTargetSize(new Vector2Int(100, 100));
         root.AddView(view);
 
         Assert.Throws<InvalidOperationException>(() => root.AddView(view));

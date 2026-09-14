@@ -65,7 +65,7 @@ A layer does not block the pointer by being on top. Only an `IPointerTarget` is 
 builder.UseUi(updateOrder: 500);
 ```
 
-The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, and by `Update` applying a requested scale, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
+The viewport event is raised by `SetTargetSize`, which the same system calls immediately before the build, and by `Update` applying a requested scale, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
 
 A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
 

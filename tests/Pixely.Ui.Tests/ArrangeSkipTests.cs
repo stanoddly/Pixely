@@ -154,7 +154,7 @@ public class ArrangeSkipTests
         Column layer = new() { Children = { leaf } };
         UiRoot first = new();
         first.AddLayer(layer);
-        first.SetViewportSize(new Vector2Int(320, 240));
+        first.SetTargetSize(new Vector2Int(320, 240));
         first.Update();
         int measures = leaf.MeasureCount;
         int arranges = leaf.ArrangeCount;
@@ -162,7 +162,7 @@ public class ArrangeSkipTests
         first.RemoveLayer(layer);
         UiRoot second = new();
         second.AddLayer(layer);
-        second.SetViewportSize(new Vector2Int(320, 240));
+        second.SetTargetSize(new Vector2Int(320, 240));
         second.Update();
 
         Assert.Multiple(() =>
@@ -182,7 +182,7 @@ public class ArrangeSkipTests
         MeasuredBox leaf = new(20, 20);
         UiRoot root = new();
         root.AddLayer(new Column { Children = { new Column { Children = { leaf } } } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         int measures = leaf.MeasureCount;
 
@@ -199,7 +199,7 @@ public class ArrangeSkipTests
         MeasuredBox sibling = new(30, 30);
         UiRoot root = new();
         root.AddLayer(new Column { Children = { button, sibling } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         int arranges = sibling.ArrangeCount;
 

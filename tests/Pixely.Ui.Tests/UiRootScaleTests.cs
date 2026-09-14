@@ -11,7 +11,7 @@ public class UiRootScaleTests
     public void ARequestedScale_TakesEffectAtTheNextUpdate()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(1280, 800));
+        root.SetTargetSize(new Vector2Int(1280, 800));
 
         root.RequestScale(2f);
         Vector2Int viewportBeforeUpdate = root.ViewportSize;
@@ -47,7 +47,7 @@ public class UiRootScaleTests
     public void ApplyingAScale_RaisesViewportChanged()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         List<Vector2Int> reported = new();
         root.ViewportChanged += reported.Add;
 
@@ -61,7 +61,7 @@ public class UiRootScaleTests
     public void ApplyingAScale_LaysTheTreeOutInLogicalPixels()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         Element fill = new() { Width = Sizing.Grow(), Height = Sizing.Grow() };
         root.AddLayer(new Overlay { Children = { fill } });
         root.Update();
@@ -84,7 +84,7 @@ public class UiRootScaleTests
         // 4 target pixels round up to 4 logical pixels at both scales, so nothing to lay out changed,
         // but the renderer presents at the painted scale and has to be handed the new one.
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(4, 4));
+        root.SetTargetSize(new Vector2Int(4, 4));
         root.AddLayer(new Element { Width = Sizing.Fixed(1), Height = Sizing.Fixed(1) });
         root.Update();
 
@@ -102,7 +102,7 @@ public class UiRootScaleTests
     public void RequestingTheScaleAlreadyApplied_ChangesNothing()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         root.AddLayer(new Element { Width = Sizing.Fixed(1), Height = Sizing.Fixed(1) });
         root.Update();
         List<Vector2Int> reported = new();
@@ -121,7 +121,7 @@ public class UiRootScaleTests
     public void OnlyTheLastRequestBeforeAnUpdate_Counts()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         List<Vector2Int> reported = new();
         root.ViewportChanged += reported.Add;
 
@@ -154,7 +154,7 @@ public class UiRootScaleTests
         UiRoot root = new();
         root.RequestScale(2f);
 
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         root.Update();
 
         Assert.That(root.ViewportSize, Is.EqualTo(new Vector2Int(320, 240)));
@@ -164,7 +164,7 @@ public class UiRootScaleTests
     public void ACallbackRequestingAScaleMidBuild_LeavesTheBuildAtTheScaleItLaidOutFor()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50) };
         target.WhenLeft = () => root.RequestScale(2f);
         Element spacer = new() { Width = Sizing.Fixed(0), Height = Sizing.Fixed(0) };
@@ -189,7 +189,7 @@ public class UiRootScaleTests
     public void ApplyingAScale_CarriesTheStationaryPointerAcrossAndReportsItAfterTheBuild()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         root.PointerMoved(new Vector2Int(100, 50));
         List<Vector2Int> reported = new();
         root.PointerPositionChanged += position => reported.Add(root.PaintedViewportSize);
@@ -210,7 +210,7 @@ public class UiRootScaleTests
         // Target pixel 37 was logical pixel 18 at 2x. Where within that pixel the pointer is was
         // rounded away, so at 1x it lands on 36 until the next motion event says otherwise.
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         root.RequestScale(2f);
         root.Update();
         root.PointerMoved(new Vector2Int(18, 0));
@@ -225,7 +225,7 @@ public class UiRootScaleTests
     public void ApplyingAScale_RevalidatesHoverUnderThePointer()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(40) };
         root.AddLayer(new Column { Children = { target } });
         root.Update();
@@ -246,7 +246,7 @@ public class UiRootScaleTests
     public void ApplyingAScale_MovesHoverOffATargetThePointerIsNoLongerOver()
     {
         UiRoot root = new();
-        root.SetViewportSize(new Vector2Int(640, 480));
+        root.SetTargetSize(new Vector2Int(640, 480));
         RecordingPointerTarget target = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(40) };
         root.AddLayer(new Column { Children = { target } });
         root.Update();

@@ -256,7 +256,7 @@ public class LabelColorTests
     {
         UiRoot root = new() { Style = style ?? UiStyle.Default };
         root.AddLayer(new Column { Children = { content } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

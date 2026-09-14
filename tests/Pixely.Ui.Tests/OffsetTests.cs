@@ -83,7 +83,7 @@ public class OffsetTests
         child.Offset = new Vector2Int(100, 100);
         UiRoot root = new();
         root.AddLayer(new Column { Children = { child } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         root.PointerMoved(new Vector2Int(110, 110));

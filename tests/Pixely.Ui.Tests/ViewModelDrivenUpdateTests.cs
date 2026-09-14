@@ -190,7 +190,7 @@ public class ViewModelDrivenUpdateTests
     {
         UiRoot root = new();
         root.AddLayer(tree);
-        root.SetViewportSize(new Vector2Int(width, height));
+        root.SetTargetSize(new Vector2Int(width, height));
         root.Update();
         return root;
     }

@@ -167,7 +167,7 @@ public class UiInputSystemTests
     {
         UiRoot root = new();
         root.AddLayer(layer);
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         // Constructing it is what subscribes it; nothing holds the result because the subscriptions
