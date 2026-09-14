@@ -39,7 +39,7 @@ internal static class RegistrarProbe
             }
             catch (TargetInvocationException exception)
             {
-                violations.Add($"registrar rejected default arguments: {TypeGraph.Describe(registrar)}: {exception.InnerException?.Message ?? exception.Message}");
+                violations.Add($"{TypeGraph.Describe(registrar)}: rejected default arguments, {exception.InnerException?.Message ?? exception.Message}; give every parameter a default or accept null");
             }
         }
 
@@ -50,6 +50,11 @@ internal static class RegistrarProbe
             if (parameter.HasDefaultValue && parameter.DefaultValue != null)
             {
                 return parameter.DefaultValue;
+            }
+
+            if (parameter.ParameterType.IsArray)
+            {
+                return Array.CreateInstance(parameter.ParameterType.GetElementType()!, 0);
             }
 
             return parameter.ParameterType.IsValueType && Nullable.GetUnderlyingType(parameter.ParameterType) == null ? Activator.CreateInstance(parameter.ParameterType) : null;
