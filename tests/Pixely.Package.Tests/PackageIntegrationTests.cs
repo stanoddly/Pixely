@@ -322,6 +322,40 @@ public class PackageIntegrationTests
         DateTime written = File.GetLastWriteTimeUtc(generatedFile);
         await BuildConsumerAsync(consumerDirectory);
         Assert.That(File.GetLastWriteTimeUtc(generatedFile), Is.EqualTo(written));
+
+        await RunDotnetAsync(consumerDirectory, "clean", "--configuration", "Release", $"--property:PixelyPackageVersion={_packageVersion}", $"--property:RestorePackagesPath={_packagesDirectory}", "--nologo");
+        Assert.That(File.Exists(generatedFile), Is.False);
+    }
+
+    [Test]
+    public async Task HostedConsumerWithoutOnExceptionLetsTheFailurePropagate()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_HANDLER");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            // an unhandled exception, not the handled-and-reported exit code 1
+            Assert.That(exitCode, Is.Not.EqualTo(0).And.Not.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran with 0 arguments"));
+            Assert.That(output, Does.Contain("Configure failed on purpose."));
+            Assert.That(output, Does.Not.Contain("OnException ran"));
+        });
+    }
+
+    [Test]
+    public async Task HostedConsumerWithoutConfigureFailsToCompile()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_CONFIGURE", expectSuccess: false);
+        Assert.That(output, Does.Contain("CS8795"));
     }
 
     [Test]
@@ -350,7 +384,7 @@ public class PackageIntegrationTests
         });
     }
 
-    private async Task BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null)
+    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -392,10 +426,22 @@ public class PackageIntegrationTests
             buildArguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
             buildArguments.Add("--property:UseAppHost=false");
         }
+        if (defineConstants is not null)
+        {
+            buildArguments.Add($"--property:DefineConstants={defineConstants}");
+        }
 
         await RunDotnetAsync(consumerDirectory, restoreArguments.ToArray());
+        if (!expectSuccess)
+        {
+            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, buildArguments.ToArray());
+            Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
+            return failedOutput;
+        }
+
         string buildOutput = await RunDotnetAsync(consumerDirectory, buildArguments.ToArray());
         Assert.That(buildOutput, Does.Not.Contain("Downloading Slang"));
+        return buildOutput;
     }
 
     private string[] GetPackageDependencies()

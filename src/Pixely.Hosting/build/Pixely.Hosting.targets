@@ -39,19 +39,19 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20catch (global::System.Exception exception) when (Handles(exception))" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return 1%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// Without an OnException implementation the compiler removes the call, its argument included, so handled stays false." />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20static bool Handles(global::System.Exception exception)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20bool handled = false%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20OnException(Observe(exception, ref handled))%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return handled%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20static global::System.Exception Observe(global::System.Exception exception, ref bool handled)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20handled = true%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return exception%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
-            <_PixelyEntryPointLine Include="%20%20%20%20}%0A" />
-            <_PixelyEntryPointLine Include="%20%20%20%20// Without an OnException implementation the compiler removes the call, its argument included, so handled stays false." />
-            <_PixelyEntryPointLine Include="%20%20%20%20private static bool Handles(global::System.Exception exception)" />
-            <_PixelyEntryPointLine Include="%20%20%20%20{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20bool handled = false%3B" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20OnException(Observe(exception, ref handled))%3B" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20return handled%3B" />
-            <_PixelyEntryPointLine Include="%20%20%20%20}%0A" />
-            <_PixelyEntryPointLine Include="%20%20%20%20private static global::System.Exception Observe(global::System.Exception exception, ref bool handled)" />
-            <_PixelyEntryPointLine Include="%20%20%20%20{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20handled = true%3B" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20return exception%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20}" />
             <_PixelyEntryPointLine Include="}" />
         </ItemGroup>
