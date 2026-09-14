@@ -15,7 +15,7 @@
 - `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies
 - `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
 - `docs/subrenderers.md` - Composing multiple renderers within IRenderer<T> (ordering members, IEnumerable injection)
-- `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, views and view models, pointer and focus routing, text fields, styling
+- `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, scrolling, views and view models, pointer, wheel and focus routing, text fields, styling
 - `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic
 - `docs/development-packages.md` - Consuming packages from the public development feed
 - `docs/hosting.md` - Hosting: opting in with `PixelyHosting`, the generated `Main`, `Configure` and `OnException`, diagnostics

@@ -21,8 +21,13 @@ public class Element : ILayoutHost
 
     private readonly List<Element> _layoutChildren = new();
 
+    // Elements this one owns outside its children: painted and hit-collected after them, never laid
+    // out, and reachable only by whoever attached them. Allocated on first use, since almost no
+    // element has any.
+    private List<Element>? _adornments;
+
     // Asked once here rather than tested per collection pass, since what an element is cannot change.
-    private readonly bool _isPointerTarget;
+    private readonly HitKind _hitKind;
 
     private bool _measureDirty = true;
     private bool _arrangeDirty = true;
@@ -37,7 +42,7 @@ public class Element : ILayoutHost
     public Element()
     {
         Children = new ElementCollection(this, MaxChildCount);
-        _isPointerTarget = this is IPointerTarget;
+        _hitKind = (this is IPointerTarget ? HitKind.Pointer : HitKind.None) | (this is IScrollTarget ? HitKind.Scroll : HitKind.None);
     }
 
     /// <summary>Overridden by single-content controls to reject a second child where the mistake is made.</summary>
@@ -80,6 +85,36 @@ public class Element : ILayoutHost
     protected UiStyle Style => OwnerRoot?.Style ?? UiStyle.Default;
 
     public ElementCollection Children { get; }
+
+    /// <summary>
+    /// Elements this one owns that are not children: a scroll view's bars. Parented here so that
+    /// the root, the style and enablement resolve through this element, but held apart from
+    /// <see cref="Children"/> so that a consumer clearing those cannot reach them and no layout
+    /// sees them. The owner measures and arranges them itself; the traversals that walk children
+    /// walk these afterwards, which is what puts them on top of the content.
+    /// </summary>
+    internal IReadOnlyList<Element> Adornments => _adornments ?? (IReadOnlyList<Element>)Array.Empty<Element>();
+
+    /// <summary>Attaches an adornment for the life of this element. Makes the checks adding a child makes.</summary>
+    internal void AttachAdornment(Element adornment)
+    {
+        ArgumentNullException.ThrowIfNull(adornment);
+
+        if (adornment.Parent != null)
+        {
+            throw new InvalidOperationException("The element already has a parent; remove it from its current parent first.");
+        }
+
+        if (adornment.LayerRoot != null)
+        {
+            throw new InvalidOperationException("The element is a layer on a root; remove it from that root first.");
+        }
+
+        _adornments ??= new List<Element>();
+        _adornments.Add(adornment);
+        adornment.Parent = this;
+        adornment.InvalidateSubtreeMeasure();
+    }
 
     public ILayout Layout
     {
@@ -248,7 +283,7 @@ public class Element : ILayoutHost
         RebuildLayoutChildren();
 
         _measuredWith = constraints;
-        _contentConstraints = constraints.Deflate(_padding);
+        _contentConstraints = ResolveContentConstraints(constraints.Deflate(_padding));
 
         Vector2Int content = MeasureContent(_contentConstraints);
         Vector2Int size = new(
@@ -263,9 +298,10 @@ public class Element : ILayoutHost
     }
 
     /// <summary>
-    /// Appends this subtree's pointer targets, in paint order, with the area each one can be hit
-    /// in. Runs once per build so that hit testing — which happens far more often, at pointer rate
-    /// rather than frame rate — reads a packed list instead of walking the tree.
+    /// Appends this subtree's pointer and scroll targets, in paint order, with the area each one
+    /// can be hit in and which kind of target it is. Runs once per build so that hit testing —
+    /// which happens far more often, at pointer rate rather than frame rate — reads a packed list
+    /// instead of walking the tree.
     /// </summary>
     /// <remarks>
     /// The area is the bounds already intersected with the clip, because a point inside both is a
@@ -275,7 +311,7 @@ public class Element : ILayoutHost
     /// rejected on the candidate instead, so the list does not depend on state that can change
     /// between builds.
     /// </remarks>
-    internal void CollectPointerTargets(List<Rectangle> areas, List<Element> elements)
+    internal void CollectPointerTargets(List<Rectangle> areas, List<Element> elements, List<HitKind> kinds)
     {
         if (!_isVisible)
         {
@@ -284,15 +320,21 @@ public class Element : ILayoutHost
 
         // Before the children, so that scanning the list backwards meets them first, which is the
         // precedence painting gives them.
-        if (_isPointerTarget)
+        if (_hitKind != HitKind.None)
         {
             areas.Add(Bounds.Intersect(EffectiveClip));
             elements.Add(this);
+            kinds.Add(_hitKind);
         }
 
         foreach (Element child in Children)
         {
-            child.CollectPointerTargets(areas, elements);
+            child.CollectPointerTargets(areas, elements, kinds);
+        }
+
+        foreach (Element adornment in Adornments)
+        {
+            adornment.CollectPointerTargets(areas, elements, kinds);
         }
     }
 
@@ -369,6 +411,11 @@ public class Element : ILayoutHost
         {
             child.Paint(context);
         }
+
+        foreach (Element adornment in Adornments)
+        {
+            adornment.Paint(context);
+        }
     }
 
     /// <summary>
@@ -377,6 +424,16 @@ public class Element : ILayoutHost
     protected virtual void PaintContent(PaintContext context)
     {
     }
+
+    /// <summary>
+    /// The constraints this element commits to its children, from the ones it was offered with the
+    /// padding already removed. The default commits what was offered. A scroll view leaves its
+    /// scroll axes indefinite, since it does not commit to an extent it will not enforce: a Grow
+    /// child there is measured to its content, which is the documented degradation, rather than
+    /// handed the viewport as its budget. Called once per measure, and what it returns is what
+    /// <see cref="ILayoutHost"/> resolves every child's sizing against.
+    /// </summary>
+    protected virtual Constraints ResolveContentConstraints(Constraints constraints) => constraints;
 
     /// <summary>
     /// The element's own content extent. The base measures children; an element with intrinsic
@@ -428,6 +485,11 @@ public class Element : ILayoutHost
         foreach (Element child in Children)
         {
             child.InvalidateSubtreeMeasure();
+        }
+
+        foreach (Element adornment in Adornments)
+        {
+            adornment.InvalidateSubtreeMeasure();
         }
     }
 

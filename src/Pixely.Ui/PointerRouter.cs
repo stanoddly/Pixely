@@ -1,3 +1,4 @@
+using System.Numerics;
 using Pixely.Input;
 
 namespace Pixely.Ui;
@@ -190,6 +191,70 @@ internal sealed class PointerRouter
         // recomputed rather than reusing the hit above, which by now can name a detached element.
         Track();
         return true;
+    }
+
+    /// <summary>
+    /// Routes a wheel. The topmost element under the pointer, of either kind, decides where it
+    /// starts: from there it climbs the ancestors, each scroll target taking the axes it can use,
+    /// until nothing is left or the layer is reached. Returns whether anything was taken.
+    /// </summary>
+    /// <remarks>
+    /// Starting at the topmost element of either kind, rather than the topmost scroll target, is
+    /// what keeps a wheel over a dialog from scrolling the list beneath it. Climbing rather than
+    /// scanning on is what keeps it from reaching a sibling layer at all.
+    /// </remarks>
+    internal bool Scrolled(Vector2Int position, Vector2 delta)
+    {
+        int version = ++_routeVersion;
+        MoveTo(position);
+        Track();
+
+        // A hover callback may have routed the pointer itself. Whatever that settled on is the
+        // current state, and a wheel delivered on top of it would land where the pointer no longer is.
+        if (_routeVersion != version)
+        {
+            return false;
+        }
+
+        bool consumed = false;
+
+        for (Element? element = HitTest(position, HitKind.Pointer | HitKind.Scroll); element != null && delta != Vector2.Zero; element = element.Parent)
+        {
+            if (element is not IScrollTarget target)
+            {
+                continue;
+            }
+
+            // An ancestor of something hittable is hittable, until a callback below changes that.
+            if (!_root.CanBeHit(element))
+            {
+                break;
+            }
+
+            ScrollAxes taken = target.OnScroll(position, delta);
+
+            if ((taken & ScrollAxes.Horizontal) != 0)
+            {
+                delta.X = 0f;
+                consumed = true;
+            }
+
+            if ((taken & ScrollAxes.Vertical) != 0)
+            {
+                delta.Y = 0f;
+                consumed = true;
+            }
+
+            // The callback may have routed the pointer itself, and the walk was over a tree it may
+            // also have restructured. What it took is kept; where the rest would have gone is not
+            // knowable any more.
+            if (_routeVersion != version)
+            {
+                break;
+            }
+        }
+
+        return consumed;
     }
 
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>
@@ -433,23 +498,24 @@ internal sealed class PointerRouter
     }
 
     /// <summary>
-    /// The topmost target at <paramref name="position"/>. Scanned back to front over the areas the
-    /// last build collected, which is paint order reversed: whatever was drawn on top is what the
-    /// pointer meets first, and a child is allowed to overflow the element that arranged it because
-    /// nothing is pruned by an ancestor's bounds.
+    /// The topmost target of <paramref name="kind"/> at <paramref name="position"/>. Scanned back
+    /// to front over the areas the last build collected, which is paint order reversed: whatever
+    /// was drawn on top is what the pointer meets first, and a child is allowed to overflow the
+    /// element that arranged it because nothing is pruned by an ancestor's bounds.
     /// </summary>
     /// <remarks>
     /// The scan reads rectangles and nothing else, so it walks contiguous memory and touches no
     /// element until something is actually hit. Only then is the candidate checked against the tree
     /// it belongs to, which is where the list being one build old is accounted for.
     /// </remarks>
-    private Element? HitTest(Vector2Int position)
+    private Element? HitTest(Vector2Int position, HitKind kind = HitKind.Pointer)
     {
         List<Rectangle> areas = _root.PointerTargetAreas;
+        List<HitKind> kinds = _root.PointerTargetKinds;
 
         for (int i = areas.Count - 1; i >= 0; i--)
         {
-            if (!areas[i].Contains(position))
+            if ((kinds[i] & kind) == 0 || !areas[i].Contains(position))
             {
                 continue;
             }

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Pixely.Input;
 
 namespace Pixely.Ui;
@@ -15,6 +16,7 @@ public sealed class UiRoot : IUiPaintSource
     private readonly List<UiView> _views = new();
     private readonly List<Rectangle> _pointerTargetAreas = new();
     private readonly List<Element> _pointerTargetElements = new();
+    private readonly List<HitKind> _pointerTargetKinds = new();
 
     private UiStyle _style = UiStyle.Default;
     private bool _isUpdating;
@@ -78,13 +80,15 @@ public sealed class UiRoot : IUiPaintSource
     internal IReadOnlyList<PaintBatch> Batches => _batches;
 
     /// <summary>
-    /// Where each pointer target can be hit, in paint order, alongside the targets themselves.
-    /// Two lists rather than one of pairs: hit testing reads only the rectangles, and keeping them
-    /// packed is the point of having the list at all.
+    /// Where each pointer or scroll target can be hit, in paint order, alongside the targets
+    /// themselves and which kind each one is. Parallel lists rather than one of tuples: hit testing
+    /// reads only the rectangles, and keeping them packed is the point of having the list at all.
     /// </summary>
     internal List<Rectangle> PointerTargetAreas => _pointerTargetAreas;
 
     internal List<Element> PointerTargetElements => _pointerTargetElements;
+
+    internal List<HitKind> PointerTargetKinds => _pointerTargetKinds;
 
     /// <summary>
     /// The look of everything under this root. Never null, because no element holds a look of its
@@ -313,6 +317,20 @@ public sealed class UiRoot : IUiPaintSource
     public bool PointerReleased(Vector2Int position, MouseButton button = MouseButton.Left)
     {
         bool consumed = _pointerRouter.Released(position, button);
+        ReportPointerPosition();
+        return consumed;
+    }
+
+    /// <summary>
+    /// Routes a wheel to the topmost element at <paramref name="position"/> and up through its
+    /// ancestors. Returns true when any of them took any of it, so the caller can keep the event
+    /// from reaching whatever is underneath. The position is where the wheel happened, so hover and
+    /// <see cref="PointerPosition"/> follow it as they would a move.
+    /// </summary>
+    /// <param name="delta">In wheel notches, as <see cref="IScrollTarget.OnScroll"/> describes.</param>
+    public bool PointerScrolled(Vector2Int position, Vector2 delta)
+    {
+        bool consumed = _pointerRouter.Scrolled(position, delta);
         ReportPointerPosition();
         return consumed;
     }
@@ -694,10 +712,11 @@ public sealed class UiRoot : IUiPaintSource
     {
         _pointerTargetAreas.Clear();
         _pointerTargetElements.Clear();
+        _pointerTargetKinds.Clear();
 
         foreach (Element layer in _layers)
         {
-            layer.CollectPointerTargets(_pointerTargetAreas, _pointerTargetElements);
+            layer.CollectPointerTargets(_pointerTargetAreas, _pointerTargetElements, _pointerTargetKinds);
         }
     }
 

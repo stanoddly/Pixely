@@ -163,7 +163,17 @@ public class UiInputSystemTests
         FakeKeyboardService keyboard,
         Element layer,
         ViewScope viewScope = default,
-        int inputOrder = 0)
+        int inputOrder = 0) =>
+        Bridged(textInput, keyboard, new FakeMouseService(), layer, viewScope, inputOrder);
+
+    private static UiRoot Bridged(
+        FakeTextInputService textInput,
+        FakeKeyboardService keyboard,
+        FakeMouseService mouse,
+        Element layer,
+        ViewScope viewScope = default,
+        int inputOrder = 0,
+        Size<uint>? windowSize = null)
     {
         UiRoot root = new();
         root.AddLayer(layer);
@@ -174,13 +184,60 @@ public class UiInputSystemTests
         // are the whole of what it does.
         _ = new UiInputSystem(
             root,
-            () => new Size<uint>(320, 240),
+            () => windowSize ?? new Size<uint>(320, 240),
             viewScope,
             inputOrder,
-            new SilentMouseService(),
+            mouse,
             keyboard,
             textInput);
 
         return root;
+    }
+
+    [Test]
+    public void AWheel_ReachesTheScrollViewUnderItAndIsConsumed()
+    {
+        FakeMouseService mouse = new();
+        ScrollView scrollView = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(50), Children = { new MeasuredBox(100, 500) } };
+        Bridged(new FakeTextInputService(), new FakeKeyboardService(), mouse, new Column { Children = { scrollView } }, new ViewScope(3), inputOrder: -7);
+
+        MouseWheelEventArgs wheelEvent = new() { Delta = new System.Numerics.Vector2(0f, -1f), Position = new System.Numerics.Vector2(10f, 10f) };
+        mouse.WheelHandler!(wheelEvent);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scrollView.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
+            Assert.That(wheelEvent.Consumed, Is.True);
+            Assert.That(mouse.WheelSubscription, Is.EqualTo((new ViewScope(3), -7)), "subscribed for its own window, at the order it was given");
+        });
+    }
+
+    [Test]
+    public void AWheel_IsScaledFromWindowToViewportCoordinates()
+    {
+        FakeMouseService mouse = new();
+        ScrollView scrollView = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(50), Children = { new MeasuredBox(100, 500) } };
+        UiRoot root = Bridged(new FakeTextInputService(), new FakeKeyboardService(), mouse, new Column { Children = { scrollView } }, windowSize: new Size<uint>(640, 480));
+
+        // Half way across a window twice the viewport's size is half way across the viewport.
+        mouse.WheelHandler!(new MouseWheelEventArgs { Delta = new System.Numerics.Vector2(0f, -1f), Position = new System.Numerics.Vector2(100f, 40f) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.PointerPosition, Is.EqualTo(new Vector2Int(50, 20)));
+            Assert.That(scrollView.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
+        });
+    }
+
+    [Test]
+    public void AWheelOverNothingThatScrolls_IsLeftForTheGame()
+    {
+        FakeMouseService mouse = new();
+        Bridged(new FakeTextInputService(), new FakeKeyboardService(), mouse, new Column { Children = { Sized() } });
+
+        MouseWheelEventArgs wheelEvent = new() { Delta = new System.Numerics.Vector2(0f, -1f), Position = new System.Numerics.Vector2(10f, 10f) };
+        mouse.WheelHandler!(wheelEvent);
+
+        Assert.That(wheelEvent.Consumed, Is.False);
     }
 }

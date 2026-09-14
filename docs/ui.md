@@ -142,7 +142,7 @@ Write a custom `ILayout` when allocation is the thing that differs. `ILayoutHost
 
 ## Elements
 
-`Label`, `Button`, `Image`, `TextBox`, `NumberBox<T>` and `ClipBorder` are the built-in leaves and wrappers. Everything else is composition: a panel is an `Element` with a `Background` and a `Layout`.
+`Label`, `Button`, `Image`, `TextBox`, `NumberBox<T>`, `ClipBorder` and `ScrollView` are the built-in leaves and wrappers. Everything else is composition: a panel is an `Element` with a `Background` and a `Layout`.
 
 Backgrounds are `Drawable`s — `SolidDrawable`, `SpriteDrawable`, `NinePatchDrawable`, `BorderDrawable` — and are painted before the element's clip is pushed, so `ClipsContent` clips children and content, never the element's own background. `BorderDrawable` takes a colour, a `Thickness` and an optional inner `Drawable` to fill what is left, so a border around a nine-patch is one drawable rather than two nested elements. It clamps its own edges: a thickness wider than the element paints an outline that swallows it rather than one that spills outside.
 
@@ -168,6 +168,35 @@ public sealed class Divider : Element
 ```
 
 Use the setter that matches how far the change reaches: `SetMeasureProperty` when the desired size can change, `SetArrangeProperty` when only placement can, `SetPaintProperty` when only appearance can. Each invalidates upward and stops at the first ancestor already marked, so writing many properties in a row costs about as much as writing one.
+
+An element that must not commit its children to the space it was given overrides `ResolveContentConstraints`. It is called once per measure with the padding already removed, and what it returns is what every child's `Grow`, `Percent` and `Stretch` resolve against. The default commits what was offered; `ScrollView` is the one built-in override.
+
+## Scrolling
+
+`ScrollView` is a container that shows a window onto children larger than itself. It is a `Column` that clips, with the children slid by `ScrollOffset`: its `Layout` is the ordinary one and may be replaced, so a horizontal strip is a scroll view with a horizontal stack and `ScrollAxes.Horizontal`.
+
+```csharp
+ScrollView log = new(gap: 4)
+{
+    Width = Sizing.Grow(),
+    Height = Sizing.Grow(),
+    Children = { /* many labels */ }
+};
+
+log.ScrollOffset = new Vector2Int(0, int.MaxValue);   // to the end once laid out
+```
+
+`Axes` says which axes scroll, vertical by default. On a scroll axis the children are measured without a bound, so a `Grow` child there is measured to its content and a `Percent` child likewise, which is the degradation described under Sizing. On the other axis they get what the scroll view itself was given, so a `Grow` child of a vertical list fills its width when the list's own width is definite, as it would in a column.
+
+The scroll view's own size is ordinary. A `Fit` scroll view takes what its children need up to what it is offered and only scrolls when that is less; one whose scroll axis is unbounded from outside as well grows to its children and never scrolls. Give it a `Fixed`, `Grow` or `Percent` extent on the axis it scrolls.
+
+`ScrollOffset` is an arrange property: scrolling re-arranges the subtree and measures nothing. It is clamped into `[0, MaxScrollOffset]` when the tree is next built, so assigning `int.MaxValue` means the end once laid out, and after the build it reads the real position, the way `Bounds` does. `ScrollBy` moves within the range of the last build straight away and says whether the offset changed. `ScrollExtent` is the children plus the padding, and `ViewportSize` is the scroll view's own size; both are valid after a build.
+
+Padding scrolls with the children, the way a padding box does on the web: the last row has the bottom padding under it at the end, and the clip is the scroll view's bounds as it is for every element.
+
+The bars lie over the content along the trailing edges and take no space from it. `ScrollBars` is `Auto` by default, which shows a bar only while its axis overflows; a bar never shows on an axis that does not scroll. A press on a bar's track pages by one viewport towards the press; dragging the thumb is not implemented yet. The bars are not children: `Children` holds only what was put there, and clearing it leaves the bars in place.
+
+The mouse wheel reaches a scroll view through `IScrollTarget`, which anything can implement. The wheel goes to the topmost element under the pointer, of any kind, and from there up through its ancestors, so a dialog over a list does not scroll the list, and a wheel over a button inside a list does. Each target along the way is offered what is left of the delta and returns the axes it took; the rest carries on upward, and then to whatever is outside the UI, which is what keeps a wheel over a list that has reached its end available to the game. A scroll view at its end refuses a delta that points further out and takes one that points back in, and it banks a touchpad's fractions too small to move a pixel until they add up to one. `WheelStep` is the pixels per notch.
 
 ## Views and view models
 
@@ -251,6 +280,8 @@ Capture is per button, so a right-drag and a left-drag can be held by different 
 
 Motion is never consumed — a camera that follows the mouse has to keep seeing it while the pointer is over a button.
 
+The wheel is routed separately, to `IScrollTarget`s, and is described under Scrolling. It moves the pointer and hover the way motion does, is delivered whatever capture is in progress, and is consumed only when a target took some of it. An element that is only an `IScrollTarget` is transparent to the pointer the way a panel is.
+
 Callbacks may do anything, including pressing again, moving the pointer, or restructuring the tree. The router is written for that: hover is settled against the tree after every transition rather than assumed, and a gesture that replaced another during a cancel sweep is not cancelled along with it.
 
 ## Focus, keyboard and text
@@ -327,7 +358,7 @@ new Label("Scoreboard") { Role = TextRole.Title, Emphasis = TextEmphasis.Accent 
 
 An intent rather than a colour, so the theme decides what "secondary" looks like and every screen that says it gets the same answer. `Disabled` beats both: unusable is the more important thing to show.
 
-`ButtonAppearance` and `FieldAppearance` cover the controls that have a look of their own; `FieldAppearance.Selection` and `Caret` are read by `TextBox` alone, and a null `Caret` means whatever the text is drawn in.
+`ButtonAppearance`, `FieldAppearance` and `ScrollAppearance` cover the controls that have a look of their own; `FieldAppearance.Selection` and `Caret` are read by `TextBox` alone, and a null `Caret` means whatever the text is drawn in. `ScrollAppearance` is the bars of a `ScrollView`: a `Thumb` per state, an optional `Track` behind it, their `Thickness` and the `MinimumThumbLength` the thumb never shrinks below.
 
 A label inside a control takes that control's answer, not `TextAppearance`, so `Emphasis` is ignored there — what a button's text looks like is the button's to say. Resolution is short enough to state whole:
 
@@ -370,6 +401,7 @@ A view says which root it belongs to by overriding `IUiView.ViewScope`, so regis
 - `Pixely.Tutorials.UiBoxes` — layout and sizing on their own.
 - `Pixely.Tutorials.UiScoreboard` — a view model driving a tree that is built once.
 - `Pixely.Tutorials.UiTextInput` — editable fields and focus.
+- `Pixely.Tutorials.UiScrollView` — a list and a strip larger than their panels, scrolled by the wheel and the bars.
 - `Pixely.Tutorials.Hotbar` — a custom `IPointerTarget` element and an anchored label following hover.
 - `Pixely.Tutorials.StageSwitching` — views owned by a stage, added and removed with it.
 - `Pixely.Tutorials.MultiWindowTextInput` — one root per window, each with its own focus.
