@@ -38,7 +38,7 @@ runs:
 
     - name: Stop build servers
       shell: bash
-      run: dotnet build-server shutdown
+      run: dotnet build-server shutdown --msbuild
 
     - name: Run shader build integration tests
       shell: bash
