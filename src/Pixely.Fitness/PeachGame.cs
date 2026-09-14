@@ -106,12 +106,12 @@ internal sealed class PeachGame
         return RegistrarProbe.Compose(Registrars(options, container), target, violations);
     }
 
-    // The state root is the one State class no other State type holds.
+    // The state root is the one State class no other State type holds. A field typed by a base or an interface holds every type assignable to it.
     private Type? FindStateRoot(PeachArchitectureOptions options, List<string> violations)
     {
         Type[] stateTypes = TypeGraph.TypesIn(Game!, options.StateNamespace).ToArray();
         HashSet<Type> held = stateTypes.SelectMany(TypeGraph.DeclaredFields).Select(field => field.FieldType).SelectMany(TypeGraph.Expand).ToHashSet();
-        Type[] roots = stateTypes.Where(type => type.IsClass && !TypeGraph.IsStatic(type) && !type.IsNested && !held.Contains(type)).ToArray();
+        Type[] roots = stateTypes.Where(type => type.IsClass && !TypeGraph.IsStatic(type) && !type.IsNested && !held.Any(heldType => heldType.IsAssignableFrom(type))).ToArray();
         if (roots.Length == 1)
         {
             return roots[0];
