@@ -7,10 +7,11 @@ using Pixely.Shaders;
 namespace Pixely.Ui;
 
 /// <summary>
-/// Paints a built <see cref="IUiPaintSource"/> into a persistent texture and blits that texture over
-/// the frame. The texture is only repainted when the instructions changed, so a static UI costs one quad per
-/// frame. The build itself belongs to <see cref="UiUpdateSystem"/>, which is why this holds a source
-/// rather than the root.
+/// Paints a built <see cref="IUiPaintSource"/> into a persistent texture the size of its viewport and
+/// blits that texture over the frame at the source's scale. The texture is only repainted when the
+/// instructions changed, so a static UI costs one quad per frame; the scale costs nothing beyond the
+/// blit, and nearest sampling is what makes an integer scale pixel-exact. The build itself belongs
+/// to <see cref="UiUpdateSystem"/>, which is why this holds a source rather than the root.
 /// </summary>
 internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, IDisposable
     where TRenderContext : IRenderContext
@@ -35,7 +36,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     // Solid fills sample this, which is what keeps colours and sprites on one pipeline.
     private readonly Texture _whiteTexture;
 
-    private Texture _retainedTexture;
+    // Created at the first frame that has a build to paint, and sized to that build's viewport.
+    private Texture? _retainedTexture;
     private Matrix4x4 _viewProjection;
     private bool _retainedTextureDirty = true;
     private ulong _paintedVersion;
@@ -72,7 +74,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         GraphicsShaderProgram presentShaderProgram = shaderLoader.LoadGraphicsShaderProgram("shaders/ui_present");
 
         TextureFormat colorTargetFormat = window.ColorTargetFormat;
-        ShortSize renderSize = window.RenderSizeInPixels;
 
         // No depth attachment: submission order is paint order, which clipping needs anyway.
         GraphicsPipeline quadPipeline = graphicsPipelineBuilder
@@ -101,7 +102,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             presentPipeline,
             gpuDevice.CreateSampler(SamplerConfig.PixelArt),
             gpuMemorySystem.CreateTexture(whitePixel),
-            gpuDevice.CreateColorTargetTexture(renderSize, colorTargetFormat),
             colorTargetFormat);
 
         return new UiRenderer<TRenderContext>(source, viewScope, renderOrder, clearTarget, gpuDevice, resources);
@@ -126,9 +126,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         _presentPipeline = resources.PresentPipeline;
         _sampler = resources.Sampler;
         _whiteTexture = resources.WhiteTexture;
-        _retainedTexture = resources.RetainedTexture;
         _colorTargetFormat = resources.ColorTargetFormat;
-        _viewProjection = CreateViewProjection(resources.RetainedTexture.Size);
     }
 
     /// <summary>The GPU objects <see cref="Create"/> builds, handed to the constructor to assign.</summary>
@@ -138,48 +136,60 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         GraphicsPipeline PresentPipeline,
         Sampler Sampler,
         Texture WhiteTexture,
-        Texture RetainedTexture,
         TextureFormat ColorTargetFormat);
 
     public void Render(TRenderContext renderContext)
     {
         ShortSize targetSize = renderContext.ColorTarget.Size;
-        ResizeRetainedTextureIfNeeded(targetSize);
-
         Vector2Int target = new(targetSize.Width, targetSize.Height);
+        Vector2Int viewport = _source.PaintedViewportSize;
 
-        if (IsStale(_source.PaintedViewportSize, _source.ViewportSize, target))
+        if (IsStale(_source.PaintedTargetSize, _source.TargetSize, target) || viewport.X <= 0 || viewport.Y <= 0)
         {
-            Clear(renderContext.CommandBuffer);
-            // The catch-up build may paint the same quads and leave PaintVersion where it is, so
-            // the cleared texture has to ask for its repaint itself.
+            // The retained texture is left alone: the catch-up build decides its size. It may paint
+            // the same quads and leave PaintVersion where it is, so the repaint is asked for here.
             _retainedTextureDirty = true;
-            Present(renderContext.CommandBuffer, renderContext.ColorTarget);
+
+            if (_clearTarget)
+            {
+                ClearTarget(renderContext.CommandBuffer, renderContext.ColorTarget);
+            }
+
             return;
         }
 
+        Texture retainedTexture = EnsureRetainedTexture(new ShortSize((ushort)viewport.X, (ushort)viewport.Y));
+
         if (NeedsRepaint(_source.PaintVersion, _paintedVersion, _retainedTextureDirty))
         {
-            Paint(renderContext.CommandBuffer);
+            Paint(renderContext.CommandBuffer, retainedTexture);
             _paintedVersion = _source.PaintVersion;
             _retainedTextureDirty = false;
         }
 
-        Present(renderContext.CommandBuffer, renderContext.ColorTarget);
+        Present(renderContext.CommandBuffer, renderContext.ColorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
     }
 
     /// <summary>
     /// Whether the completed instructions describe geometry this frame cannot draw. Two questions,
-    /// and either one is enough. Did the build finish at the viewport it was asked for — a callback
-    /// can move the viewport after layout ran. And is that viewport still the target being drawn
-    /// into — a resize landing between the update phase and here breaks it. Either way the texture
-    /// is cleared until a matching build lands, because the projection is built from the target and
-    /// stretching the previous frame's geometry into it is worse than a blank one.
+    /// and either one is enough. Did the build finish at the target it was asked for — a callback
+    /// can move the target after layout ran. And is that target still the one being drawn into — a
+    /// resize landing between the update phase and here breaks it. Either way nothing is presented
+    /// until a matching build lands, because stretching the previous frame's geometry into another
+    /// target is worse than a blank one.
     /// </summary>
-    internal static bool IsStale(Vector2Int paintedViewportSize, Vector2Int viewportSize, Vector2Int target)
+    internal static bool IsStale(Vector2Int paintedTargetSize, Vector2Int targetSize, Vector2Int target)
     {
-        return paintedViewportSize != viewportSize || paintedViewportSize != target;
+        return paintedTargetSize != targetSize || paintedTargetSize != target;
     }
+
+    /// <summary>
+    /// Where the retained texture lands on the target: logical pixel 0 on target pixel 0, and each
+    /// logical pixel <paramref name="scale"/> target pixels wide. The viewport is rounded up to cover
+    /// the target, so the quad can overhang it by less than one logical pixel, which the target clips.
+    /// </summary>
+    internal static Matrix4x4 CreatePresentWorld(Vector2Int viewport, float scale, Vector2Int target) =>
+        Matrix4x4.CreateScale((float)(viewport.X * (double)scale / target.X), (float)(viewport.Y * (double)scale / target.Y), 1f);
 
     /// <summary>
     /// Whether the retained texture no longer shows what the source holds. Compared against the
@@ -191,32 +201,33 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         return paintVersion != paintedVersion || retainedTextureDirty;
     }
 
-    private void ResizeRetainedTextureIfNeeded(ShortSize newSize)
+    private Texture EnsureRetainedTexture(ShortSize size)
     {
-        if (_retainedTexture.Size == newSize)
+        if (_retainedTexture != null && _retainedTexture.Size == size)
         {
-            return;
+            return _retainedTexture;
         }
 
-        _retainedTexture.Dispose();
-        _retainedTexture = _gpuDevice.CreateColorTargetTexture(newSize, _colorTargetFormat);
-        _viewProjection = CreateViewProjection(newSize);
+        _retainedTexture?.Dispose();
+        _retainedTexture = _gpuDevice.CreateColorTargetTexture(size, _colorTargetFormat);
+        _viewProjection = CreateViewProjection(size);
         _retainedTextureDirty = true;
+        return _retainedTexture;
     }
 
-    private void Paint(CommandBuffer commandBuffer)
+    private void Paint(CommandBuffer commandBuffer, Texture retainedTexture)
     {
         IReadOnlyList<PaintInstruction> instructions = _source.Instructions;
         IReadOnlyList<PaintBatch> batches = _source.Batches;
 
         if (instructions.Count == 0)
         {
-            Clear(commandBuffer);
+            Clear(commandBuffer, retainedTexture);
             return;
         }
 
         using IRenderPass renderPass = new RenderPassBuilder(commandBuffer)
-            .AddColorTarget(_retainedTexture, _uiColorTargetSettings)
+            .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
 
         commandBuffer.PushVertexUniformData(0, _viewProjection);
@@ -247,14 +258,25 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         }
     }
 
-    private void Clear(CommandBuffer commandBuffer)
+    private static void Clear(CommandBuffer commandBuffer, Texture retainedTexture)
     {
         using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
-            .AddColorTarget(_retainedTexture, _uiColorTargetSettings)
+            .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
     }
 
-    private void Present(CommandBuffer commandBuffer, Texture target)
+    /// <summary>
+    /// What a frame with nothing to present still owes the target when this renderer is the one
+    /// that clears it: whatever is drawn after it expects a cleared target, stale build or not.
+    /// </summary>
+    private static void ClearTarget(CommandBuffer commandBuffer, Texture target)
+    {
+        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
+            .AddColorTarget(target, ColorTargetSettings.Clear)
+            .Build();
+    }
+
+    private void Present(CommandBuffer commandBuffer, Texture target, Texture retainedTexture, Matrix4x4 world)
     {
         ColorTargetSettings settings = _clearTarget
             ? ColorTargetSettings.Clear
@@ -265,11 +287,11 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             .Build();
 
         commandBuffer.PushVertexUniformData(0, _presentViewProjection);
-        commandBuffer.PushVertexUniformData(1, Matrix4x4.Identity);
+        commandBuffer.PushVertexUniformData(1, world);
 
         presentPass.BindGraphicsPipeline(_presentPipeline);
         presentPass.BindVertexBuffer(_vertexBuffer);
-        presentPass.BindFragmentSampler(_retainedTexture, _sampler);
+        presentPass.BindFragmentSampler(retainedTexture, _sampler);
         presentPass.DrawPrimitive();
     }
 
@@ -278,6 +300,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     public void Dispose()
     {
-        _retainedTexture.Dispose();
+        _retainedTexture?.Dispose();
     }
 }

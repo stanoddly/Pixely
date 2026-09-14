@@ -18,7 +18,9 @@ public sealed class UiRoot : IUiPaintSource
 
     private UiStyle _style = UiStyle.Default;
     private bool _isUpdating;
+    private Vector2Int _targetSize;
     private Vector2Int _viewportSize;
+    private float _scale = 1f;
     private bool _layersChanged = true;
 
     // Starts where the router's position starts, so the first route to the origin is the non-event it
@@ -43,12 +45,18 @@ public sealed class UiRoot : IUiPaintSource
         _focusRouter = new FocusRouter(this);
     }
 
-    /// <summary>
-    /// The viewport the completed instructions were built for. The renderer refuses to present
-    /// instructions built for a different size, which is what keeps a resize from showing a frame
-    /// laid out for the old one.
-    /// </summary>
+    /// <summary>The viewport the completed instructions were laid out in, which is the size to paint them at.</summary>
     internal Vector2Int PaintedViewportSize { get; private set; }
+
+    /// <summary>
+    /// The target size the completed instructions were built to be presented into. The renderer
+    /// refuses to present instructions built for a different target, which is what keeps a resize
+    /// from showing a frame laid out for the old one.
+    /// </summary>
+    internal Vector2Int PaintedTargetSize { get; private set; }
+
+    /// <summary>The scale the completed instructions were built to be presented at.</summary>
+    internal float PaintedScale { get; private set; } = 1f;
 
     internal bool IsPaintDirty { get; private set; } = true;
 
@@ -110,7 +118,53 @@ public sealed class UiRoot : IUiPaintSource
     /// </summary>
     public IClipboardService Clipboard { get; set; } = NullClipboardService.Instance;
 
+    /// <summary>
+    /// The size the tree is laid out in, in logical pixels: <see cref="TargetSize"/> divided by
+    /// <see cref="Scale"/> and rounded up, so the last row and column of logical pixels may be
+    /// partly outside the target when the target is not a multiple of the scale.
+    /// </summary>
     public Vector2Int ViewportSize => _viewportSize;
+
+    /// <summary>
+    /// The size of the target the tree is presented into, in target pixels. The target is the
+    /// window's colour target, which is not the window's size on a high-DPI display.
+    /// </summary>
+    public Vector2Int TargetSize => _targetSize;
+
+    /// <summary>
+    /// How many target pixels one logical pixel covers. Layout, paint, pointer positions and the
+    /// viewport are all in logical pixels; the renderer paints them at this scale. An integer keeps
+    /// every logical pixel the same size on screen, which is what keeps pixel fonts and sprites
+    /// crisp; a fraction is accepted and shows uneven pixels, the same as a scene scaled by it.
+    /// Must be finite and at least 1.
+    /// </summary>
+    public float Scale
+    {
+        get => _scale;
+        set
+        {
+            if (!float.IsFinite(value) || value < 1f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "The scale must be finite and at least 1.");
+            }
+
+            if (_scale == value)
+            {
+                return;
+            }
+
+            float previous = _scale;
+            _scale = value;
+
+            // The pointer did not move, but its logical coordinates did. Carried across rather than
+            // left where it was, so the next build revalidates hover under the pointer instead of
+            // under the place the old scale put it. Reported after the viewport, so a listener sees
+            // the two agree, and not from inside a route, which the next build is guaranteed to end.
+            _pointerRouter.Rescale(previous, value);
+            ApplyViewport();
+            ReportPointerPosition();
+        }
+    }
 
     public IReadOnlyList<Element> Layers => _layers;
 
@@ -474,6 +528,12 @@ public sealed class UiRoot : IUiPaintSource
 
     private void ReportPointerPosition()
     {
+        // A route reports for itself once it has finished; see the remarks above.
+        if (_pointerRouter.IsRouting)
+        {
+            return;
+        }
+
         Vector2Int position = _pointerRouter.Position;
 
         if (_reportedPointerPosition == position)
@@ -485,22 +545,53 @@ public sealed class UiRoot : IUiPaintSource
         _pointerPositionChanged.Notify(position);
     }
 
+    /// <summary>
+    /// Sets the size of the target the tree is presented into, in target pixels. The viewport the
+    /// tree is laid out in follows from it and <see cref="Scale"/>; at a scale of 1 the two are the
+    /// same.
+    /// </summary>
     public void SetViewportSize(Vector2Int size)
     {
-        if (_viewportSize == size)
+        if (_targetSize == size)
         {
             return;
         }
 
-        _viewportSize = size;
+        _targetSize = size;
+        ApplyViewport();
+    }
+
+    /// <summary>
+    /// Re-derives the viewport from the target and the scale, and invalidates the layers when it
+    /// changed. Done when either input changes rather than at the next build, so a handler that sets
+    /// the scale and then anchors something to the viewport reads the size it will be laid out in.
+    /// </summary>
+    private void ApplyViewport()
+    {
+        Vector2Int viewport = ToViewportSize(_targetSize, _scale);
+
+        if (_viewportSize == viewport)
+        {
+            return;
+        }
+
+        _viewportSize = viewport;
 
         foreach (Element layer in _layers)
         {
             layer.InvalidateMeasure();
         }
 
-        _viewportChanged.Notify(size);
+        _viewportChanged.Notify(viewport);
     }
+
+    /// <summary>
+    /// The logical size that covers <paramref name="targetSize"/> at <paramref name="scale"/>.
+    /// Rounded up, so nothing in the target is left uncovered; divided in double, because a float
+    /// quotient a rounding error above a whole number would round up to a phantom logical pixel.
+    /// </summary>
+    internal static Vector2Int ToViewportSize(Vector2Int targetSize, float scale) =>
+        new((int)Math.Ceiling(targetSize.X / (double)scale), (int)Math.Ceiling(targetSize.Y / (double)scale));
 
     /// <summary>
     /// Brings the tree up to date if anything changed. Returns true when a build ran.
@@ -523,6 +614,7 @@ public sealed class UiRoot : IUiPaintSource
         finally
         {
             _isUpdating = false;
+            ReportPointerPosition();
             ReportFocus();
         }
     }
@@ -533,6 +625,8 @@ public sealed class UiRoot : IUiPaintSource
         // callback further down can call SetViewportSize, and recording the field as it stands then
         // would claim this geometry was built for a viewport it never saw.
         Vector2Int viewportSize = _viewportSize;
+        Vector2Int targetSize = _targetSize;
+        float scale = _scale;
         Rectangle viewport = new(0, 0, viewportSize.X, viewportSize.Y);
         Constraints constraints = Constraints.Tight(viewportSize);
 
@@ -577,6 +671,8 @@ public sealed class UiRoot : IUiPaintSource
         _layersChanged = false;
         IsPaintDirty = false;
         PaintedViewportSize = viewportSize;
+        PaintedTargetSize = targetSize;
+        PaintedScale = scale;
         BuildVersion++;
         return true;
     }
@@ -611,7 +707,7 @@ public sealed class UiRoot : IUiPaintSource
 
     private bool NeedsUpdate()
     {
-        if (_layersChanged || IsPaintDirty || PaintedViewportSize != _viewportSize)
+        if (_layersChanged || IsPaintDirty || PaintedViewportSize != _viewportSize || PaintedTargetSize != _targetSize || PaintedScale != _scale)
         {
             return true;
         }
@@ -627,12 +723,14 @@ public sealed class UiRoot : IUiPaintSource
         return false;
     }
 
-    // Forwarded explicitly, all five of them together: four of the members are internal, an internal
+    // Forwarded explicitly, all of them together: most of the members are internal, an internal
     // member cannot implicitly implement an interface one, and widening them is not available either
     // because PaintInstruction and PaintBatch are internal types.
     IReadOnlyList<PaintInstruction> IUiPaintSource.Instructions => Instructions;
     IReadOnlyList<PaintBatch> IUiPaintSource.Batches => Batches;
     Vector2Int IUiPaintSource.PaintedViewportSize => PaintedViewportSize;
-    Vector2Int IUiPaintSource.ViewportSize => ViewportSize;
+    Vector2Int IUiPaintSource.PaintedTargetSize => PaintedTargetSize;
+    float IUiPaintSource.PaintedScale => PaintedScale;
+    Vector2Int IUiPaintSource.TargetSize => TargetSize;
     ulong IUiPaintSource.PaintVersion => PaintVersion;
 }

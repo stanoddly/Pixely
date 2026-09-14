@@ -14,9 +14,17 @@ internal interface IUiPaintSource
 
     IReadOnlyList<PaintBatch> Batches { get; }
 
+    /// <summary>The logical size the instructions are laid out in, which is the size to paint them at.</summary>
     Vector2Int PaintedViewportSize { get; }
 
-    Vector2Int ViewportSize { get; }
+    /// <summary>The target size the instructions were built to be presented into.</summary>
+    Vector2Int PaintedTargetSize { get; }
+
+    /// <summary>How many target pixels one logical pixel covers in the completed instructions.</summary>
+    float PaintedScale { get; }
+
+    /// <summary>The target size the root will build for next, which is stale to present into when it is not the painted one.</summary>
+    Vector2Int TargetSize { get; }
 
     ulong PaintVersion { get; }
 }

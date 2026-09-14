@@ -65,11 +65,29 @@ A layer does not block the pointer by being on top. Only an `IPointerTarget` is 
 builder.UseUi(updateOrder: 500);
 ```
 
-The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
+The viewport event is raised by `SetViewportSize`, which the same system calls immediately before the build, and by setting `UiRoot.Scale`, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
 
 A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
 
-The build lays out against the window's render size. A render context whose colour target is a different size than the window is not supported: the UI is laid out for the window and the renderer refuses to draw it into a target of another size, so it stays blank.
+The build lays out against the render context's colour target, divided by the root's scale, see below. A render context whose colour target is a different size than the window is not supported: the UI is laid out for that target and the renderer refuses to draw it into a target of another size, so it stays blank.
+
+## Scale
+
+Everything in the tree is in logical pixels: sizes, margins, paddings, offsets, anchors, border and nine-patch thicknesses, font sizes and pointer positions. `UiRoot.Scale` says how many target pixels one logical pixel covers, and defaults to 1, where logical and target pixels are the same thing.
+
+A game that renders a low-resolution scene and scales it up sets the same scale on the root, so the UI sits on the scene's pixel grid instead of drawing finer pixels over it:
+
+```csharp
+root.Scale = 2f;
+```
+
+The scale is a property, so it can follow a zoom the player changes. It must be finite and at least 1.
+
+The tree never sees the scale. `ViewportSize`, the viewport event, `PointerPosition` and every layout and pointer callback are in logical pixels; the renderer paints the tree at its logical size into the retained texture and presents that texture at the scale with nearest sampling. A 16 px font at 2x is 2x2 blocks, which is what keeps pixel fonts and sprites crisp; nothing is reloaded or re-rasterised. A fractional scale such as 2.5 works the same way and shows uneven pixel widths, the same as a scene scaled by it.
+
+`ViewportSize` is `TargetSize` divided by the scale and rounded up, so a target that is not a multiple of the scale is covered by a last row and column of logical pixels that are partly outside it. Content aligned to the end of such an axis loses up to one logical pixel; an integer scale on a target it divides is exact.
+
+Anchoring something in the tree to a position in the world means dividing that position by the scale after converting it to target pixels, since the anchor is in logical pixels.
 
 ## Sizing
 
@@ -78,7 +96,7 @@ The build lays out against the window's render size. A render context whose colo
 | Mode | Meaning |
 | --- | --- |
 | `Sizing.Fit` (default) | Size to content. |
-| `Sizing.Fixed(px)` | Exactly that many pixels, even when it exceeds what was offered. |
+| `Sizing.Fixed(px)` | Exactly that many logical pixels, even when it exceeds what was offered. |
 | `Sizing.Grow(weight)` | On a stack's main axis, a share of what is left after the non-growing siblings are measured. On any other axis, fill it. |
 | `Sizing.Percent(fraction)` | A fraction of the parent's content extent. |
 
@@ -116,7 +134,7 @@ Element layer = new()
 
 Clamping is why this is a layout rather than an `Offset` the caller computes: a caller cannot clamp against a size it does not know yet, and the size is not known until the child is measured. It also means a viewport that changes re-clamps by arranging again.
 
-Anchoring to something in the world means converting first — casting `Vector2` to `Vector2Int` truncates, so round if the anchor came from a camera.
+Anchoring to something in the world means converting first — into target pixels, then divided by `UiRoot.Scale` — and casting `Vector2` to `Vector2Int` truncates, so round if the anchor came from a camera.
 
 `Offset` shifts an element away from where its layout put it, and is an arrange property, so changing it re-arranges without re-measuring anything. Stacks and overlays apply it after alignment; `AnchoredLayout` instead adds it to the anchor before pivoting and clamping, so there it moves the anchor rather than the result.
 

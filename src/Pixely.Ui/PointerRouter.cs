@@ -61,144 +61,186 @@ internal sealed class PointerRouter
     // from one that did not. Without it the call it interrupted would finish and overwrite it.
     private int _routeVersion;
 
+    // How many routes are in progress, since a callback can start another one inside the first.
+    private int _routeDepth;
+
     internal PointerRouter(UiRoot root) => _root = root;
 
     internal Vector2Int Position => _position;
 
+    /// <summary>Whether a route is in progress, so what must not run inside one can wait for it to finish.</summary>
+    internal bool IsRouting => _routeDepth > 0;
+
     internal bool Moved(Vector2Int position)
     {
-        _routeVersion++;
-        MoveTo(position);
-        return Track();
+        _routeDepth++;
+
+        try
+        {
+            _routeVersion++;
+            MoveTo(position);
+            return Track();
+        }
+        finally
+        {
+            _routeDepth--;
+        }
     }
 
     internal bool Pressed(Vector2Int position, MouseButton button)
     {
-        _routeVersion++;
-        MoveTo(position);
+        _routeDepth++;
 
-        // Read before the cancel below, not after it: that cancel runs a callback which may route the
-        // pointer itself, and a version taken afterwards would already include whatever it did. The
-        // press would then continue on top of a nested one and overwrite the capture it installed,
-        // leaving that gesture with no way to end.
-        int version = _routeVersion;
-
-        // A second press of the same button cancels the gesture it already holds. Without this the
-        // first target never hears how its press ended and stays pressed for good.
-        Cancel(button);
-
-        if (_routeVersion != version)
+        try
         {
-            return false;
-        }
+            _routeVersion++;
+            MoveTo(position);
 
-        Element? target = HitTest(position);
-        UpdateHover(target);
+            // Read before the cancel below, not after it: that cancel runs a callback which may route the
+            // pointer itself, and a version taken afterwards would already include whatever it did. The
+            // press would then continue on top of a nested one and overwrite the capture it installed,
+            // leaving that gesture with no way to end.
+            int version = _routeVersion;
 
-        // Cancel and hover callbacks can route the pointer themselves. Pressing on top of that would
-        // hand capture to an element the current route has already moved away from.
-        if (_routeVersion != version)
-        {
-            return false;
-        }
+            // A second press of the same button cancels the gesture it already holds. Without this the
+            // first target never hears how its press ended and stays pressed for good.
+            Cancel(button);
 
-        // A press on nothing still takes focus away, which is what makes clicking the background
-        // commit whatever was being edited.
-        if (target == null)
-        {
-            if (button == MouseButton.Left)
+            if (_routeVersion != version)
             {
-                _root.Focus(null);
+                return false;
             }
 
-            return false;
-        }
+            Element? target = HitTest(position);
+            UpdateHover(target);
 
-        // The callback runs before capture is installed, because it decides whether there is one.
-        // That is the whole difference from a press that cannot be declined, and it is why
-        // everything the callback may have changed is re-checked below.
-        bool accepted = ((IPointerTarget)target).OnPointerPress(position, button);
-
-        // Focus moves on the left button and only the left button, before the checks below and well
-        // before any click is raised on release: a field has to have committed what was typed into it
-        // by the time the button the user clicked next acts on the value. Anything other than an
-        // accepted press on a focus target takes focus away, including a press on nothing at all.
-        if (button == MouseButton.Left)
-        {
-            try
+            // Cancel and hover callbacks can route the pointer themselves. Pressing on top of that would
+            // hand capture to an element the current route has already moved away from.
+            if (_routeVersion != version)
             {
-                _root.Focus(accepted ? target : null);
+                return false;
             }
-            catch
+
+            // A press on nothing still takes focus away, which is what makes clicking the background
+            // commit whatever was being edited.
+            if (target == null)
             {
-                // Caught only to end what was started. The target has taken a press that is now never
-                // going to be captured, and without this it stays pressed with nothing to tell it
-                // otherwise.
-                if (accepted)
+                if (button == MouseButton.Left)
                 {
-                    ((IPointerTarget)target).OnPointerCancel(button);
+                    _root.Focus(null);
                 }
 
-                throw;
+                return false;
             }
-        }
 
-        if (!accepted)
-        {
-            Track();
-            return false;
-        }
+            // The callback runs before capture is installed, because it decides whether there is one.
+            // That is the whole difference from a press that cannot be declined, and it is why
+            // everything the callback may have changed is re-checked below.
+            bool accepted = ((IPointerTarget)target).OnPointerPress(position, button);
 
-        // Accepted, but the world it accepted in may be gone: the callback may have routed again or
-        // detached the target. A nested press of this same button needs no separate check, because
-        // routing at all is what bumps the version.
-        if (_routeVersion != version || !_root.CanBeHit(target))
-        {
-            ((IPointerTarget)target).OnPointerCancel(button);
+            // Focus moves on the left button and only the left button, before the checks below and well
+            // before any click is raised on release: a field has to have committed what was typed into it
+            // by the time the button the user clicked next acts on the value. Anything other than an
+            // accepted press on a focus target takes focus away, including a press on nothing at all.
+            if (button == MouseButton.Left)
+            {
+                try
+                {
+                    _root.Focus(accepted ? target : null);
+                }
+                catch
+                {
+                    // Caught only to end what was started. The target has taken a press that is now never
+                    // going to be captured, and without this it stays pressed with nothing to tell it
+                    // otherwise.
+                    if (accepted)
+                    {
+                        ((IPointerTarget)target).OnPointerCancel(button);
+                    }
 
-            // Hover can be left pointing at the element that just detached itself, and nothing else
-            // routes until the next event.
+                    throw;
+                }
+            }
+
+            if (!accepted)
+            {
+                Track();
+                return false;
+            }
+
+            // Accepted, but the world it accepted in may be gone: the callback may have routed again or
+            // detached the target. A nested press of this same button needs no separate check, because
+            // routing at all is what bumps the version.
+            if (_routeVersion != version || !_root.CanBeHit(target))
+            {
+                ((IPointerTarget)target).OnPointerCancel(button);
+
+                // Hover can be left pointing at the element that just detached itself, and nothing else
+                // routes until the next event.
+                Track();
+                return true;
+            }
+
+            _captured[(int)button] = target;
+            _captureTokens[(int)button] = ++_lastCaptureToken;
             Track();
             return true;
         }
-
-        _captured[(int)button] = target;
-        _captureTokens[(int)button] = ++_lastCaptureToken;
-        Track();
-        return true;
+        finally
+        {
+            _routeDepth--;
+        }
     }
 
     internal bool Released(Vector2Int position, MouseButton button)
     {
-        _routeVersion++;
-        MoveTo(position);
+        _routeDepth++;
 
-        Element? captured = _captured[(int)button];
-
-        if (captured == null)
+        try
         {
-            // Nothing to end, but the pointer is somewhere new and hover has to follow it there.
+            _routeVersion++;
+            MoveTo(position);
+
+            Element? captured = _captured[(int)button];
+
+            if (captured == null)
+            {
+                // Nothing to end, but the pointer is somewhere new and hover has to follow it there.
+                Track();
+                return false;
+            }
+
+            _captured[(int)button] = null;
+            bool inside = ReferenceEquals(HitTest(position), captured);
+            ((IPointerTarget)captured).OnPointerRelease(position, button, inside);
+
+            // The callback is where a click is handled, so it may have rearranged the tree. Hover is
+            // recomputed rather than reusing the hit above, which by now can name a detached element.
             Track();
-            return false;
+            return true;
         }
-
-        _captured[(int)button] = null;
-        bool inside = ReferenceEquals(HitTest(position), captured);
-        ((IPointerTarget)captured).OnPointerRelease(position, button, inside);
-
-        // The callback is where a click is handled, so it may have rearranged the tree. Hover is
-        // recomputed rather than reusing the hit above, which by now can name a detached element.
-        Track();
-        return true;
+        finally
+        {
+            _routeDepth--;
+        }
     }
 
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>
     internal void Left()
     {
-        _routeVersion++;
-        _isInWindow = false;
-        CancelAll();
-        Track();
+        _routeDepth++;
+
+        try
+        {
+            _routeVersion++;
+            _isInWindow = false;
+            CancelAll();
+            Track();
+        }
+        finally
+        {
+            _routeDepth--;
+        }
     }
 
     /// <summary>
@@ -208,23 +250,49 @@ internal sealed class PointerRouter
     /// </summary>
     internal void Revalidate()
     {
-        _routeVersion++;
+        _routeDepth++;
 
-        for (int slot = 0; slot < CaptureSlotCount; slot++)
+        try
         {
-            Element? captured = _captured[slot];
+            _routeVersion++;
 
-            // Re-read each slot rather than working from a list taken up front, because a cancel
-            // callback can end this button's gesture and start another one. Reachability is what
-            // decides, so a replacement the callback just installed is kept and an unreachable one
-            // is not, whichever order they arrived in.
-            if (captured != null && !_root.CanBeHit(captured))
+            for (int slot = 0; slot < CaptureSlotCount; slot++)
             {
-                Cancel((MouseButton)slot);
-            }
-        }
+                Element? captured = _captured[slot];
 
-        Track();
+                // Re-read each slot rather than working from a list taken up front, because a cancel
+                // callback can end this button's gesture and start another one. Reachability is what
+                // decides, so a replacement the callback just installed is kept and an unreachable one
+                // is not, whichever order they arrived in.
+                if (captured != null && !_root.CanBeHit(captured))
+                {
+                    Cancel((MouseButton)slot);
+                }
+            }
+
+            Track();
+        }
+        finally
+        {
+            _routeDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Carries the position across a change of the root's scale without routing. The pointer is
+    /// where it was in target pixels, so what it is over is reconciled by the next build, the same as
+    /// for layout moving underneath it.
+    /// </summary>
+    /// <remarks>
+    /// Approximate, because the position held here was already rounded to a logical pixel: going to
+    /// a finer scale lands within the coarser pixel rather than where the pointer is within it. The
+    /// next motion event replaces it with an exact one.
+    /// </remarks>
+    internal void Rescale(float from, float to)
+    {
+        _position = new Vector2Int(
+            (int)Math.Floor(_position.X * (double)from / to),
+            (int)Math.Floor(_position.Y * (double)from / to));
     }
 
     private void MoveTo(Vector2Int position)
