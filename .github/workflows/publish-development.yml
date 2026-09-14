@@ -188,7 +188,7 @@ jobs:
 
           pull_request_number="$(gh api "repos/$REPOSITORY/commits/$REPOSITORY_COMMIT/pulls" --jq '.[0].number')"
           package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
-          message="$(printf '📦 Development package [`Pixely %s`](%s) is available. Platform validation is still running.' "$PIXELY_VERSION" "$package_url")"
+          message="$(printf '📦 Development package [`Pixely %s`](%s) is available.' "$PIXELY_VERSION" "$package_url")"
           body="$(printf '%s\n\n[Workflow run (attempt %s)](%s)' "$message" "$RUN_ATTEMPT" "$RUN_URL")"
           gh api --method POST "repos/$REPOSITORY/issues/$pull_request_number/comments" --field body="$body" >/dev/null
 
