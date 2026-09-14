@@ -1073,6 +1073,22 @@ public class ServiceCollectionTests
         Assert.That(captured, Is.SameAs(provider.GetRequiredService<SimpleService>()));
     }
 
+    // The generator intercepts only the Delegate overload; a one-parameter lambda binds to the
+    // Action<ServiceProvider> overload and must compile with the generator referenced.
+    [Test]
+    public void OnBuilt_ActionOfServiceProvider_ReceivesTheProvider()
+    {
+        ServiceCollection collection = new();
+        collection.AddSingleton<SimpleService>();
+
+        ServiceProvider? captured = null;
+        collection.OnBuilt(sp => { captured = sp; });
+
+        ServiceProvider provider = collection.BuildServiceProvider();
+
+        Assert.That(captured, Is.SameAs(provider));
+    }
+
     [Test]
     public void OnBuilt_CalledInOrder()
     {

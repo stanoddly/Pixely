@@ -28,9 +28,10 @@ static partial class Program
 
         builder.UseUi();
 
-        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl, ServiceProvider provider) =>
+        builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(BuildUi()));
+
+        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl) =>
         {
-            provider.GetUiRoot().AddLayer(BuildUi());
             Console.WriteLine("Static Pixely.Ui layout. Press Escape to quit.");
 
             keyboardService.KeyDown += eventArgs =>

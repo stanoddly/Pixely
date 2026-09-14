@@ -519,7 +519,10 @@ public class InterceptorGenerator : IIncrementalGenerator
         InterceptableLocation interceptableLocation,
         CancellationToken ct)
     {
-        if (methodSymbol.Parameters.Length != 1)
+        // Only the Delegate overload is intercepted. A one-parameter lambda binds to the
+        // Action<ServiceProvider> overload, which needs no interception and whose signature an
+        // interceptor for the Delegate overload does not match.
+        if (methodSymbol.Parameters.Length != 1 || methodSymbol.Parameters[0].Type.ToDisplayString() != "System.Delegate")
         {
             return null;
         }
