@@ -8,7 +8,7 @@ namespace Pixely.Tutorials.MessageBoxes;
 
 static partial class Program
 {
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
@@ -24,12 +24,12 @@ static partial class Program
         builder.AddSingleton<IUiView, MessageBoxView>();
     }
 
-    // Pixely does not report failures on its own. Implementing this optional partial method makes
-    // the generated Main pass a failure from Configure, Build or Run here and return 1; without it
-    // the exception propagates. It runs before the application is disposed, so a failure during
-    // Run still has the window open behind the box, while a failure during Build has no window
-    // yet, which is why the box is shown without a parent.
-    static partial void OnException(Exception exception)
+    // Pixely does not report failures on its own. Declaring this optional method makes the
+    // generated Main pass a failure from Configure, Build or Run here and exit with what it
+    // returns; without it the exception propagates. It runs before the application is disposed,
+    // so a failure during Run still has the window open behind the box, while a failure during
+    // Build has no window yet, which is why the box is shown without a parent.
+    static int OnException(Exception exception)
     {
         Console.Error.WriteLine(exception);
 
@@ -42,5 +42,7 @@ static partial class Program
             // a message box is unavailable on a headless system, where stderr is the only report
             Console.Error.WriteLine(messageBoxException);
         }
+
+        return 1;
     }
 }

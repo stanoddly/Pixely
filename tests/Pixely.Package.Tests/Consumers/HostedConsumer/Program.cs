@@ -8,17 +8,25 @@ namespace HostedConsumer;
 static partial class Program
 {
 #if !HOSTED_CONSUMER_NO_CONFIGURE
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         Console.WriteLine($"Configure ran with {args.Length} arguments: {string.Join(' ', args)}");
         throw new InvalidOperationException("Configure failed on purpose.");
     }
 #endif
 
-#if !HOSTED_CONSUMER_NO_HANDLER
-    static partial void OnException(Exception exception)
+#if HOSTED_CONSUMER_NARROW_HANDLER
+    // Not applicable to an Exception argument, so lookup falls through to the generated default and this never runs.
+    static int OnException(InvalidOperationException exception)
     {
         Console.WriteLine($"OnException ran: {exception.Message}");
+        return 1;
+    }
+#elif !HOSTED_CONSUMER_NO_HANDLER
+    static int OnException(Exception exception)
+    {
+        Console.WriteLine($"OnException ran: {exception.Message}");
+        return 1;
     }
 #endif
 }

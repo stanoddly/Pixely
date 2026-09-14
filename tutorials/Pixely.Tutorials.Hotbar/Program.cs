@@ -14,7 +14,7 @@ namespace Pixely.Tutorials.Hotbar;
 /// </summary>
 static partial class Program
 {
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultContent()

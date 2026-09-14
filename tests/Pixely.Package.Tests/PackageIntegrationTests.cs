@@ -327,13 +327,15 @@ public class PackageIntegrationTests
         Assert.That(File.Exists(generatedFile), Is.False);
     }
 
-    [Test]
-    public async Task HostedConsumerWithoutOnExceptionLetsTheFailurePropagate()
+    // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
+    [TestCase("HOSTED_CONSUMER_NO_HANDLER")]
+    [TestCase("HOSTED_CONSUMER_NARROW_HANDLER")]
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate(string variant)
     {
         string consumerDirectory = GetConsumerDirectory("HostedConsumer");
         DeleteConsumerOutputs("HostedConsumer");
 
-        await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_HANDLER");
+        await BuildConsumerAsync(consumerDirectory, defineConstants: variant);
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
@@ -355,7 +357,7 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("HostedConsumer");
 
         string output = await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_CONFIGURE", expectSuccess: false);
-        Assert.That(output, Does.Contain("CS0762"));
+        Assert.That(output, Does.Contain("CS0117").And.Contain("'Configure'"));
     }
 
     [Test]

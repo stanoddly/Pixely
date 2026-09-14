@@ -7,7 +7,7 @@ namespace Pixely.Tutorials.WindowConfiguration;
 
 static partial class Program
 {
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultRendering(

@@ -12,7 +12,7 @@ static partial class Program
     // Points outside this region are excluded from the window shape, so clicks pass through to whatever is behind the window.
     static readonly Rectangle InteractiveRegion = new Rectangle(50, 50, 300, 300);
 
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultContent()

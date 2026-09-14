@@ -19,14 +19,14 @@ imports the generator, because a `ProjectReference` imports no package targets.
 
 ## What the project writes
 
-`Program` is a `static partial class` in the project's `RootNamespace` and implements `Configure`:
+`Program` is a `static partial class` in the project's `RootNamespace` and declares `Configure`:
 
 ```csharp
 namespace Foo;
 
 static partial class Program
 {
-    static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder.UseDefaultContent().UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Game"));
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
@@ -42,31 +42,37 @@ static partial class Program
   services are constructed and before the provider freezes (`docs/class-registration.md`),
   `IStageManager.Load` before the first frame applies on that frame, and every registered `UiView` is
   added to its root by `Pixely.Ui` (`docs/ui.md`). Nothing needs the app object.
-- A missing `Configure` is CS0762: the generated `Main` passes it as a delegate, which a partial
-  method without an implementation cannot be.
+- `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
+  the same class, so nothing needs to be `internal` or `partial` beyond the class itself.
+- A missing `Configure` is CS0117: the generated `Main` names `Program.Configure`.
 
 ## Reporting failures
 
-Pixely does not report failures on its own. A project that wants a player-visible message implements
-the optional `OnException`:
+Pixely does not report failures on its own. A project that wants a player-visible message declares
+the optional `OnException`, whose return value is the exit code:
 
 ```csharp
-static partial void OnException(Exception exception)
+static int OnException(Exception exception)
 {
     Console.Error.WriteLine(exception);
     MessageBox.Show(MessageBoxSeverity.Error, "Fatal error", exception.Message);
+    return 1;
 }
 ```
 
-When it is implemented, a failure in `Configure`, `Build` or `Run` is passed to it and `Main` returns 1.
-When it is absent, the exception propagates and the process fails as it would from a hand-written
-`Main`. It runs inside the exception filter, before the application is disposed: a failure during `Run`
-still has the window open behind the box, a failure during `Build` has no window yet. An exception
-thrown by the handler itself is swallowed and the original failure propagates.
+A failure in `Configure`, `Build` or `Run` is passed to it before the application is disposed: a
+failure during `Run` still has the window open behind the box, a failure during `Build` has no window
+yet. An exception thrown by the handler itself propagates in place of the original.
 
-`static partial void` without a modifier is the removable partial form: without an implementation the
-compiler removes the call. The generated file relies on that to know whether a handler exists, and
-it is why `Configure` uses the same form: nothing else is needed to make it mandatory.
+When the project declares none, the generated file's default applies: it rethrows the exception with
+its original stack trace, so the process fails as it would from a hand-written `Main`. The default is
+an extension member of `Program`, and lookup prefers a member the type declares over an extension
+member, which is what makes `OnException` optional without a declaration of any kind.
+
+The one consequence: the default also applies when the declared method is not applicable to an
+`Exception` argument. `static int OnException(InvalidOperationException exception)` compiles and never
+runs. A wrong return type still fails to compile: the generated `Main` invokes `OnException` instead of
+passing it as a method group, and an invocation binds to the declared method whatever it returns.
 
 ## The generated file
 
@@ -79,48 +85,40 @@ namespace Foo;
 
 static partial class Program
 {
-    static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args);
-
-    static partial void OnException(global::System.Exception exception);
-
     private static int Main(string[] args)
     {
-        try
+        // OnException is invoked rather than passed as a method group: an invocation binds to a declared OnException whatever it returns, so a wrong return type is a compile error instead of a silent fall-through to the default.
+        return global::Pixely.Hosting.EntryPoint.Run(args, Program.Configure, static exception => Program.OnException(exception));
+    }
+}
+
+// Lookup prefers a member Program declares over an extension member, so the OnException below applies only when the project declares none.
+static class PixelyProgramDefaults
+{
+    extension(Program)
+    {
+        // Rethrown with its original stack trace, so a failure fails the process as it would from a hand-written Main.
+        internal static int OnException(global::System.Exception exception)
         {
-            return global::Pixely.Hosting.EntryPoint.Run(args, Configure);
-        }
-        catch (global::System.Exception exception) when (Handles(exception))
-        {
+            global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception);
             return 1;
-        }
-
-        // Without an OnException implementation the compiler removes the call, its argument included, so handled stays false.
-        static bool Handles(global::System.Exception exception)
-        {
-            bool handled = false;
-            OnException(Observe(exception, ref handled));
-            return handled;
-        }
-
-        static global::System.Exception Observe(global::System.Exception exception, ref bool handled)
-        {
-            handled = true;
-            return exception;
         }
     }
 }
 ```
 
-`Main` is the only member the file adds to `Program`; its helpers are local functions, so the names a
-project can use are unaffected. The generated part states no accessibility, so the project's part may
-state any. `Pixely.Hosting.EntryPoint.Run` builds the application from
-`Configure` and runs it to completion; it is public and can be called from a hand-written `Main` as
-well. The file is generated for `Exe` and `WinExe` C# projects, is rewritten only when its content
-changes, and is removed by `dotnet clean`.
+`Main` is the only member the file adds to `Program`, and `PixelyProgramDefaults` the only type it adds
+to the namespace. The generated part states no accessibility, so the project's part may state any.
+`Pixely.Hosting.EntryPoint.Run` builds the application from `Configure`, runs it to completion and
+hands a failure to the handler before disposing the application; it is public and can be called from
+a hand-written `Main` as well, with or without a handler. The file is generated for `Exe` and `WinExe`
+C# projects, is rewritten only when its content changes, and is removed by `dotnet clean`.
 
 ## Diagnostics
 
-- CS0762: `Configure` is not implemented.
+- CS0117: `Configure` is not declared.
+- CS0123 or CS0407: `Configure` has the wrong parameter or return types.
+- CS0029: `OnException` does not return `int`.
 - CS0017: the project has another `Main`. Remove it or do not opt in.
 - CS0260: the project's `Program` is not `partial`.
 - CS7022: the project uses top-level statements, which take precedence over the generated `Main`.
