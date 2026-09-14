@@ -8,7 +8,7 @@ static partial class Program
 {
     internal static readonly ViewScope SecondaryView = new(1);
 
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultContent()

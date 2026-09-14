@@ -355,7 +355,7 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("HostedConsumer");
 
         string output = await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_CONFIGURE", expectSuccess: false);
-        Assert.That(output, Does.Contain("CS8795"));
+        Assert.That(output, Does.Contain("CS0762"));
     }
 
     [Test]

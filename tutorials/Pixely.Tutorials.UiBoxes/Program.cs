@@ -20,7 +20,7 @@ static partial class Program
     private static readonly Color Teal = new(70, 168, 160, 255);
     private static readonly Color Pale = new(226, 232, 240, 255);
 
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultContent()

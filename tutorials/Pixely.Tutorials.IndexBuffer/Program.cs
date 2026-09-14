@@ -5,7 +5,7 @@ namespace Pixely.Tutorials.IndexBuffer;
 
 static partial class Program
 {
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             .UseDefaultContent()

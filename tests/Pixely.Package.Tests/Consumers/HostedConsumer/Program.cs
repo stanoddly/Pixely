@@ -8,7 +8,7 @@ namespace HostedConsumer;
 static partial class Program
 {
 #if !HOSTED_CONSUMER_NO_CONFIGURE
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         Console.WriteLine($"Configure ran with {args.Length} arguments: {string.Join(' ', args)}");
         throw new InvalidOperationException("Configure failed on purpose.");

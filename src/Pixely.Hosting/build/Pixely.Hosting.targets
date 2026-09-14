@@ -32,7 +32,7 @@
             <_PixelyEntryPointLine Include="namespace $(RootNamespace)%3B%0A" />
             <_PixelyEntryPointLine Include="static partial class Program" />
             <_PixelyEntryPointLine Include="{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20private static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args)%3B%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args)%3B%0A" />
             <_PixelyEntryPointLine Include="%20%20%20%20// Optional. When implemented, a failure in Configure, Build or Run is passed here and Main returns 1. When absent, the exception propagates." />
             <_PixelyEntryPointLine Include="%20%20%20%20static partial void OnException(global::System.Exception exception)%3B%0A" />
             <_PixelyEntryPointLine Include="%20%20%20%20private static int Main(string[] args)" />

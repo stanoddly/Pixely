@@ -26,7 +26,7 @@ namespace Foo;
 
 static partial class Program
 {
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder.UseDefaultContent().UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Game"));
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
@@ -42,8 +42,8 @@ static partial class Program
   services are constructed and before the provider freezes (`docs/class-registration.md`),
   `IStageManager.Load` before the first frame applies on that frame, and every registered `UiView` is
   added to its root by `Pixely.Ui` (`docs/ui.md`). Nothing needs the app object.
-- `private static partial void` is the extended partial method form: the implementation is mandatory,
-  so a missing `Configure` is CS8795. It needs C# 9 or later.
+- A missing `Configure` is CS0762: the generated `Main` passes it as a delegate, which a partial
+  method without an implementation cannot be.
 
 ## Reporting failures
 
@@ -65,7 +65,8 @@ still has the window open behind the box, a failure during `Build` has no window
 thrown by the handler itself is swallowed and the original failure propagates.
 
 `static partial void` without a modifier is the removable partial form: without an implementation the
-compiler removes the call. The generated file relies on that to know whether a handler exists.
+compiler removes the call. The generated file relies on that to know whether a handler exists, and
+it is why `Configure` uses the same form: nothing else is needed to make it mandatory.
 
 ## The generated file
 
@@ -78,7 +79,7 @@ namespace Foo;
 
 static partial class Program
 {
-    private static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args);
+    static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args);
 
     static partial void OnException(global::System.Exception exception);
 
@@ -119,7 +120,7 @@ changes, and is removed by `dotnet clean`.
 
 ## Diagnostics
 
-- CS8795: `Configure` is not implemented.
+- CS0762: `Configure` is not implemented.
 - CS0017: the project has another `Main`. Remove it or do not opt in.
 - CS0260: the project's `Program` is not `partial`.
 - CS7022: the project uses top-level statements, which take precedence over the generated `Main`.

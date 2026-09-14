@@ -5,7 +5,7 @@ namespace Pixely.Tutorials.Triangle;
 
 static partial class Program
 {
-    private static partial void Configure(PixelyAppBuilder builder, string[] args)
+    static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
         builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak"))
