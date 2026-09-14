@@ -93,7 +93,7 @@ internal sealed class PeachGame
     internal IEnumerable<MethodInfo> Registrars(PeachArchitectureOptions options, Type container)
     {
         return new[] { Game, Frontend, Rendering, Audio, Ai, Scenario }.OfType<Assembly>()
-            .SelectMany(assembly => TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == options.RootNamespaceOf(assembly)))
+            .SelectMany(assembly => TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == RootNamespaceOf(options, assembly)))
             .SelectMany(TypeGraph.DeclaredMethods)
             .Where(method => method.IsPublic && !method.IsGenericMethodDefinition && IsRegistrarMethod(method) && method.GetParameters()[0].ParameterType == container)
             .OrderBy(method => method.DeclaringType!.FullName, StringComparer.Ordinal)
@@ -131,6 +131,42 @@ internal sealed class PeachGame
         string[] actual = Directory.EnumerateDirectories(source, $"{options.GamePrefix}.*").Select(directory => Path.GetFileName(directory)).Order(StringComparer.Ordinal).ToArray();
         return actual.Where(name => !expected.Contains(name)).Select(name => $"project not in the document or not loaded: src/{name}")
             .Concat(expected.Where(name => !actual.Contains(name)).Order(StringComparer.Ordinal).Select(name => $"project missing: src/{name}"));
+    }
+
+    // Matched against the loaded assemblies here, not through options.Resolved, because the constructor asks before Resolved is set.
+    internal string RootNamespaceOf(PeachArchitectureOptions options, Assembly assembly)
+    {
+        if (assembly == Game)
+        {
+            return options.GameNamespace;
+        }
+
+        if (assembly == Frontend)
+        {
+            return options.FrontendNamespace;
+        }
+
+        if (assembly == Rendering)
+        {
+            return options.RenderingNamespace;
+        }
+
+        if (assembly == Audio)
+        {
+            return options.AudioNamespace;
+        }
+
+        if (assembly == Ai)
+        {
+            return options.AiNamespace;
+        }
+
+        if (assembly == Scenario)
+        {
+            return options.ScenarioNamespace;
+        }
+
+        return options.ExecutableNamespace;
     }
 
     private static string? FindRepositoryRoot(PeachArchitectureOptions options)

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>14</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="coverlet.collector"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="NUnit"/>
+        <PackageReference Include="NUnit.Analyzers"/>
+        <PackageReference Include="NUnit3TestAdapter"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="NUnit.Framework"/>
+        <Compile Remove="Fixture\**\*.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely.Fitness\Pixely.Fitness.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Game\Peachy.Game.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Frontend\Peachy.Frontend.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Executable\Peachy.Executable.csproj" />
+    </ItemGroup>
+
+</Project>

@@ -24,6 +24,7 @@
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Pixely.Fitness.Tests/Pixely.Fitness.Tests.csproj" />
     <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
     <Project Path="tests/Pixely.Observations.Tests/Pixely.Observations.Tests.csproj" />

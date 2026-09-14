@@ -57,36 +57,6 @@ public sealed record PeachArchitectureOptions(string GamePrefix)
 
     internal string RootNamespaceOf(Assembly assembly)
     {
-        if (assembly == Game)
-        {
-            return GameNamespace;
-        }
-
-        if (assembly == Frontend)
-        {
-            return FrontendNamespace;
-        }
-
-        if (assembly == Rendering)
-        {
-            return RenderingNamespace;
-        }
-
-        if (assembly == Audio)
-        {
-            return AudioNamespace;
-        }
-
-        if (assembly == Ai)
-        {
-            return AiNamespace;
-        }
-
-        if (assembly == Scenario)
-        {
-            return ScenarioNamespace;
-        }
-
-        return ExecutableNamespace;
+        return Resolved.RootNamespaceOf(this, assembly);
     }
 }
