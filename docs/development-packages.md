@@ -1,6 +1,6 @@
 # Development packages
 
-Every validated `main` commit is available from the public Pixely development feed:
+Every `main` commit is available from the public Pixely development feed as soon as it is packed, before its cross-platform validation finishes:
 
 ```text
 https://pixely.pages.dev/index.json

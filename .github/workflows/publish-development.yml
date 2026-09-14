@@ -61,7 +61,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Selected Pixely $version for $GITHUB_SHA."
 
-      - name: Pack validated commit
+      - name: Pack commit
         env:
           PIXELY_VERSION: ${{ steps.version.outputs.version }}
           REPOSITORY_COMMIT: ${{ github.sha }}
@@ -89,7 +89,7 @@ jobs:
           retention-days: 1
 
   package-consumer:
-    needs: [platform-validation, package]
+    needs: [package]
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -123,9 +123,12 @@ jobs:
         run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
 
   publish:
-    needs: [package, package-consumer]
+    needs: [package]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     concurrency:
       group: publish-pixely-development-feed
       queue: max
@@ -142,7 +145,7 @@ jobs:
       - name: Install Sleet
         run: dotnet tool install sleet --version 7.2.0 --tool-path "$RUNNER_TEMP/dotnet-tools"
 
-      - name: Download validated package
+      - name: Download package
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.package.outputs.artifact }}
@@ -171,6 +174,23 @@ jobs:
             --config "$sleet_config" \
             --source pixely \
             --skip-existing
+
+      - name: Report package availability
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_COMMIT: ${{ github.sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          pull_request_number="$(gh api "repos/$REPOSITORY/commits/$REPOSITORY_COMMIT/pulls" --jq '.[0].number')"
+          package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          message="$(printf '📦 Development package [`Pixely %s`](%s) is available.' "$PIXELY_VERSION" "$package_url")"
+          body="$(printf '%s\n\n[Workflow run (attempt %s)](%s)' "$message" "$RUN_ATTEMPT" "$RUN_URL")"
+          gh api --method POST "repos/$REPOSITORY/issues/$pull_request_number/comments" --field body="$body" >/dev/null
 
       - name: Store promotion artifacts
         shell: bash

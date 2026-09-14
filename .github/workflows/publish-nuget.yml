@@ -13,6 +13,7 @@ concurrency:
   queue: max
 
 permissions:
+  actions: read
   contents: write
   id-token: write
 
@@ -115,6 +116,22 @@ jobs:
           expected_version="0.0.$((height + PIXELY_VERSION_HEIGHT_OFFSET))"
           if [[ "$PIXELY_VERSION" != "$expected_version" ]]; then
             echo "$REPOSITORY_COMMIT maps to $expected_version, not $PIXELY_VERSION."
+            exit 1
+          fi
+
+      - name: Verify platform validation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_COMMIT: ${{ steps.publication.outputs.repository_commit }}
+        run: |
+          set -euo pipefail
+
+          # The development feed receives the package before platform validation finishes, so only a successful run proves it.
+          successful_runs="$(gh api "repos/$REPOSITORY/actions/workflows/publish-development.yml/runs?head_sha=$REPOSITORY_COMMIT&event=push&status=success" --jq '.total_count')"
+          if (( successful_runs == 0 )); then
+            echo "$REPOSITORY_COMMIT has no successful development publication run; platform validation did not pass."
             exit 1
           fi
 
