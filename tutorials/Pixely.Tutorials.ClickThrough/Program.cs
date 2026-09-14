@@ -25,7 +25,7 @@ static class Program
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(ClickThroughRenderer.Create);
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
             Size<uint> size = window.Size;

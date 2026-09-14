@@ -21,7 +21,7 @@ static class Program
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
 
-        builder.OnStart((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
 

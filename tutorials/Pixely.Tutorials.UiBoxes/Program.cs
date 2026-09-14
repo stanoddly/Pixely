@@ -29,7 +29,7 @@ static class Program
 
         builder.UseUi();
 
-        builder.OnStart((IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl) =>
         {
             Console.WriteLine("Static Pixely.Ui layout. Press Escape to quit.");
 

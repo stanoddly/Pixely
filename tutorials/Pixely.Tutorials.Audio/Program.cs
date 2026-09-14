@@ -22,7 +22,7 @@ static class Program
                 new WindowConfig(Size: (640, 480), Title: "Audio Tutorial"))
             .RegisterAudio();
 
-        builder.OnStart((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
         {
             DefaultAudioGroups groups = DefaultAudioGroups.Create(audioSystem);
             AudioBuffer beep = audioSystem.LoadBuffer(BeepPath);

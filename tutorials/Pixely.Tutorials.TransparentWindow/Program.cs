@@ -30,7 +30,7 @@ static class Program
         }
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TransparentWindowRenderer.Create);
 
-        builder.OnStart((IMouseService mouseService, AppControl appControl) =>
+        builder.OnBuilt((IMouseService mouseService, AppControl appControl) =>
         {
             mouseService.ButtonPress += eventArgs => appControl.Quit();
         });

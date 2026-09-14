@@ -14,7 +14,7 @@ static class Program
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"));
 
-        builder.OnStart((IGamepadService gamepadService) =>
+        builder.OnBuilt((IGamepadService gamepadService) =>
         {
             Console.WriteLine($"Gamepads connected at startup: {gamepadService.Gamepads.Count}");
             foreach (Pixely.Input.Gamepad gamepad in gamepadService.Gamepads)

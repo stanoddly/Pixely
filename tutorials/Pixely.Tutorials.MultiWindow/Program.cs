@@ -26,7 +26,7 @@ static class Program
         builder.AddSingleton<IRenderer<BasicRenderContext>>(PrimaryRenderer.Create);
         builder.AddSingleton<IRenderer<BasicRenderContext>>(SecondaryWindowRenderer.Create);
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {
             Window secondaryWindow = windowRegistry.GetWindow(SecondaryView);
             Console.WriteLine("Press Space in the main window to show or raise the secondary window. Press H to hide it.");

@@ -17,7 +17,7 @@ static class Program
                     Title: "Window Configuration Demo",
                     AlwaysOnTop: true));
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
         {
             Window window = windowRegistry.GetWindow();
             Console.WriteLine($"SDL video driver: {platformInfo.SdlVideoDriver ?? "unknown"}");

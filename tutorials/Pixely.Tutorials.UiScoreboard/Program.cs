@@ -42,7 +42,7 @@ static class Program
                 provider.GetRequiredService<ScoreboardViewModel>(),
                 provider.GetRequiredService<FrameContext>()));
 
-        builder.OnStart((
+        builder.OnBuilt((
             IKeyboardService keyboardService,
             AppControl appControl,
             ScoreboardViewModel viewModel) =>

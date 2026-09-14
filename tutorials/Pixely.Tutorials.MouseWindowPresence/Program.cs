@@ -13,7 +13,7 @@ static class Program
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"));
 
-        builder.OnStart((IMouseService mouseService) =>
+        builder.OnBuilt((IMouseService mouseService) =>
         {
             Console.WriteLine($"Mouse starts in window: {mouseService.IsInWindow()}");
             Console.WriteLine("Move the mouse into and out of the window to see enter and leave events.");

@@ -26,7 +26,7 @@ static class Program
         builder.AddSingleton(new HotbarViewModel());
         builder.AddSingleton<IUiView, HotbarView>();
 
-        builder.OnStart((IKeyboardService keyboardService, HotbarViewModel viewModel) =>
+        builder.OnBuilt((IKeyboardService keyboardService, HotbarViewModel viewModel) =>
         {
             // The UI subscribes ahead of this and takes nothing from the keyboard here, so every
             // number key comes through. Repeats are ignored: holding 3 selects slot 3 once.

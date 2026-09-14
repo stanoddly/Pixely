@@ -41,7 +41,7 @@ static class Program
             };
         });
 
-        builder.OnStart((AppControl appControl, IKeyboardService keyboardService) =>
+        builder.OnBuilt((AppControl appControl, IKeyboardService keyboardService) =>
         {
             Console.WriteLine("Click a field to edit it. Enter or clicking away commits a valid value, Escape cancels, Escape outside a field quits.");
 

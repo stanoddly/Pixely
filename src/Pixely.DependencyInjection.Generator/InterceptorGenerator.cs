@@ -17,7 +17,7 @@ enum InterceptionKind
     AddTransientWithAlias,
     AddTransientInstanceFactory,
     AddTransientFactory,
-    OnStart,
+    OnBuilt,
     GetRequiredServiceEnumerable,
     GetServiceEnumerable
 }
@@ -156,7 +156,7 @@ public class InterceptorGenerator : IIncrementalGenerator
             _ => null
         };
 
-        return methodName is "AddSingleton" or "AddTransient" or "OnStart" or "GetRequiredService" or "GetService";
+        return methodName is "AddSingleton" or "AddTransient" or "OnBuilt" or "GetRequiredService" or "GetService";
     }
 
     private static ExtractionResult? ExtractInterception(GeneratorSyntaxContext context, CancellationToken ct)
@@ -232,10 +232,10 @@ public class InterceptorGenerator : IIncrementalGenerator
                 "AddTransient");
         }
 
-        if (methodName == "OnStart")
+        if (methodName == "OnBuilt")
         {
-            InterceptionInfo? onStart = ExtractOnStart(methodSymbol, invocation, context, interceptableLocation, ct);
-            return onStart is { } info ? new ExtractionResult(info, null) : null;
+            InterceptionInfo? onBuilt = ExtractOnBuilt(methodSymbol, invocation, context, interceptableLocation, ct);
+            return onBuilt is { } info ? new ExtractionResult(info, null) : null;
         }
 
         return null;
@@ -512,7 +512,7 @@ public class InterceptorGenerator : IIncrementalGenerator
         ), null);
     }
 
-    private static InterceptionInfo? ExtractOnStart(
+    private static InterceptionInfo? ExtractOnBuilt(
         IMethodSymbol methodSymbol,
         InvocationExpressionSyntax invocation,
         GeneratorSyntaxContext context,
@@ -525,7 +525,7 @@ public class InterceptorGenerator : IIncrementalGenerator
         }
 
         return ExtractDelegateInterception(
-            InterceptionKind.OnStart,
+            InterceptionKind.OnBuilt,
             invocation,
             context,
             interceptableLocation,
@@ -826,8 +826,8 @@ public class InterceptorGenerator : IIncrementalGenerator
                 case InterceptionKind.AddTransientFactory:
                     GenerateAddTransientFactoryInterceptor(sb, info, i, emitTrimAnnotations);
                     break;
-                case InterceptionKind.OnStart:
-                    GenerateOnStartInterceptor(sb, info, i);
+                case InterceptionKind.OnBuilt:
+                    GenerateOnBuiltInterceptor(sb, info, i);
                     break;
                 case InterceptionKind.GetRequiredServiceEnumerable:
                     GenerateGetRequiredServiceEnumerableInterceptor(sb, info, i);
@@ -1094,15 +1094,15 @@ public class InterceptorGenerator : IIncrementalGenerator
         sb.AppendLine($"        }}");
     }
 
-    private static void GenerateOnStartInterceptor(StringBuilder sb, InterceptionInfo info, int index)
+    private static void GenerateOnBuiltInterceptor(StringBuilder sb, InterceptionInfo info, int index)
     {
         sb.AppendLine($"        {info.InterceptsLocationAttribute}");
-        sb.AppendLine($"        public static void OnStart_{index}(");
+        sb.AppendLine($"        public static void OnBuilt_{index}(");
         sb.AppendLine($"            this global::Pixely.DependencyInjection.ServiceCollection collection,");
         sb.AppendLine($"            global::System.Delegate action)");
         sb.AppendLine($"        {{");
         sb.AppendLine($"            {info.DelegateTypeFullName} typedAction = ({info.DelegateTypeFullName})action;");
-        sb.AppendLine($"            collection.OnStart(sp => typedAction(");
+        sb.AppendLine($"            collection.OnBuilt(sp => typedAction(");
 
         for (int j = 0; j < info.Parameters.Length; j++)
         {
