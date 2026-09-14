@@ -22,6 +22,11 @@
 
     <!-- No Inputs/Outputs: WriteOnlyWhenDifferent keeps the timestamp stable and the target is cheap. -->
     <Target Name="GeneratePixelyEntryPoint" BeforeTargets="CoreCompile" Condition="'$(_PixelyGenerateEntryPoint)' == 'true'">
+        <!--
+          One item per line. MSBuild trims an Include and rejects an empty one, so indentation is
+          written as %20 and a blank line as %0A on the end of the line before it; a literal
+          semicolon would split the item, so it is %3B.
+        -->
         <ItemGroup>
             <_PixelyEntryPointLine Include="// &lt;auto-generated/&gt;" />
             <_PixelyEntryPointLine Include="namespace $(RootNamespace)%3B%0A" />
