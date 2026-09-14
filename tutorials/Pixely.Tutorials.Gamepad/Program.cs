@@ -5,11 +5,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.Gamepad;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"));
@@ -71,8 +70,5 @@ static class Program
                 Console.WriteLine($"[Gamepad {gamepad.DeviceId}] Disconnected");
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

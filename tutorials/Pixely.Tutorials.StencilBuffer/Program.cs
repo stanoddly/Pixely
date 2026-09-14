@@ -3,11 +3,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.StencilBuffer;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -15,8 +14,5 @@ static class Program
 
         builder.AddSingleton<StencilBufferRenderer>(StencilBufferRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, StencilBufferRenderer>();
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

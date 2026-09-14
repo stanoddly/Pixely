@@ -12,7 +12,7 @@ namespace Pixely.Tutorials.UiBoxes;
 /// sizing, nested clipping and the single-pipeline batching. Everything here is static, so what
 /// appears on screen is decided entirely by layout and painting.
 /// </summary>
-static class Program
+static partial class Program
 {
     private static readonly Color Background = new(24, 27, 32, 255);
     private static readonly Color Panel = new(52, 62, 78, 255);
@@ -20,17 +20,17 @@ static class Program
     private static readonly Color Teal = new(70, 168, 160, 255);
     private static readonly Color Pale = new(226, 232, 240, 255);
 
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(new WindowConfig(Size: (800, 600), Title: "Pixely.Ui — Static Boxes"));
 
         builder.UseUi();
 
-        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl, ServiceProvider provider) =>
         {
+            provider.GetUiRoot().AddLayer(BuildUi());
             Console.WriteLine("Static Pixely.Ui layout. Press Escape to quit.");
 
             keyboardService.KeyDown += eventArgs =>
@@ -41,10 +41,6 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        pixelyApp.ServiceProvider.GetUiRoot().AddLayer(BuildUi());
-        return pixelyApp.Run();
     }
 
     private static Element BuildUi()

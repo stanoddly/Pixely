@@ -28,7 +28,8 @@ public class PackageIntegrationTests
         "Pixely.Observations",
         "Pixely.ShaderCommon",
         "Pixely.Utils",
-        "Pixely"
+        "Pixely",
+        "Pixely.Hosting"
     ];
 
     private string _repositoryDirectory = null!;
@@ -89,6 +90,7 @@ public class PackageIntegrationTests
     {
         DeleteConsumerOutputs("ShaderConsumer");
         DeleteConsumerOutputs("ShaderFreeConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
         DeleteDirectory(_testArtifactsDirectory);
     }
 
@@ -128,6 +130,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("analyzers/dotnet/cs/Pixely.DependencyInjection.Generator.dll"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
+            Assert.That(entries, Does.Contain("buildTransitive/Pixely.Hosting.targets"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.ShaderCommon.dll"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.props"));
@@ -289,6 +292,36 @@ public class PackageIntegrationTests
             consumerDirectory,
             Path.Combine(outputDirectory, "ShaderFreeConsumer.dll"));
         Assert.That(output, Does.Contain("Package consumer succeeded."));
+    }
+
+    [Test]
+    public async Task HostedConsumerGetsAGeneratedEntryPoint()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory);
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net10.0", "PixelyProgram.g.cs");
+        Assert.That(File.Exists(generatedFile), Is.True);
+        Assert.That(File.ReadAllText(generatedFile), Does.Contain("namespace HostedConsumer;"));
+
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            Path.Combine(outputDirectory, "HostedConsumer.dll"),
+            "--first",
+            "--second");
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran with 2 arguments: --first --second"));
+            Assert.That(output, Does.Contain("OnException ran: Configure failed on purpose."));
+        });
+
+        // A second build has nothing to do; the generated file is not rewritten.
+        DateTime written = File.GetLastWriteTimeUtc(generatedFile);
+        await BuildConsumerAsync(consumerDirectory);
+        Assert.That(File.GetLastWriteTimeUtc(generatedFile), Is.EqualTo(written));
     }
 
     [Test]
@@ -493,6 +526,17 @@ public class PackageIntegrationTests
 
     private static async Task<string> RunDotnetAsync(string workingDirectory, params string[] arguments)
     {
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(workingDirectory, arguments);
+        if (exitCode != 0)
+        {
+            Assert.Fail($"dotnet {string.Join(' ', arguments)} failed with exit code {exitCode}.{Environment.NewLine}{output}");
+        }
+
+        return output;
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, params string[] arguments)
+    {
         ProcessStartInfo startInfo = new("dotnet")
         {
             WorkingDirectory = workingDirectory,
@@ -524,14 +568,7 @@ public class PackageIntegrationTests
         }
         string output = await standardOutput;
         string error = await standardError;
-
-        if (process.ExitCode != 0)
-        {
-            Assert.Fail(
-                $"dotnet {string.Join(' ', arguments)} failed with exit code {process.ExitCode}.{Environment.NewLine}{output}{Environment.NewLine}{error}");
-        }
-
-        return output + error;
+        return (process.ExitCode, output + Environment.NewLine + error);
     }
 
     private static void DeleteDirectory(string path)

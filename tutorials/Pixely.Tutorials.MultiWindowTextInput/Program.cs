@@ -12,14 +12,13 @@ namespace Pixely.Tutorials.MultiWindowTextInput;
 /// says which root it belongs to through its <see cref="IUiView.ViewScope"/>, so registering a
 /// view is the same line whichever window it is for.
 /// </summary>
-static class Program
+static partial class Program
 {
     internal static readonly ViewScope LeftView = new(0);
     internal static readonly ViewScope RightView = new(1);
 
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(LeftView, new WindowConfig(Size: (520, 300), Title: "Left text input"))
@@ -37,8 +36,5 @@ static class Program
 
         builder.AddSingleton<IUiView>(new TextInputView(LeftView, "Left View", new TextInputViewModel("left")));
         builder.AddSingleton<IUiView>(new TextInputView(RightView, "Right View", new TextInputViewModel("right")));
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

@@ -12,17 +12,17 @@ namespace Pixely.Tutorials.UiScoreboard;
 /// assigns to the elements it kept a reference to, and nothing is rebuilt — not when a label's text
 /// changes every frame, not when a bar resizes, not when an element appears.
 /// </summary>
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (640, 520), Title: "Pixely.Ui — Scoreboard"));
 
         builder.UseUi();
         builder.AddSingleton(new ScoreboardViewModel());
+        builder.AddSingleton<IUiView, ScoreboardView>();
         builder.AddSingleton<UiStyle>(provider =>
         {
             IFontSystem fonts = provider.GetRequiredService<IFontSystem>();
@@ -77,13 +77,6 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-
-        ScoreboardView view = new(pixelyApp.ServiceProvider.GetRequiredService<ScoreboardViewModel>());
-        pixelyApp.ServiceProvider.GetUiRoot().AddView(view);
-
-        return pixelyApp.Run();
     }
 }
 

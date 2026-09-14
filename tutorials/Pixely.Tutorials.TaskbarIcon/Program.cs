@@ -4,13 +4,12 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.TaskbarIcon;
 
-static class Program
+static partial class Program
 {
     private static readonly ViewScope SecondaryView = new(1);
 
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder.AddSingleton(new PixelyConfig(
             ApplicationIdentifier: "com.pixely.taskbaricon",
             TaskbarIconPath: "images/taskbar-icon.png"));
@@ -33,8 +32,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

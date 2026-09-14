@@ -6,11 +6,10 @@ using Pixely.Ui;
 
 namespace Pixely.Tutorials.StageSwitching;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (960, 540), Title: "Stage Switching"));
@@ -28,8 +27,5 @@ static class Program
 
         builder.AddSingleton(new MenuViewModel());
         builder.AddSingleton<IUiView, MenuView>();
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

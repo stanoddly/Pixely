@@ -11,11 +11,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.TransparentWindow;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -34,8 +33,5 @@ static class Program
         {
             mouseService.ButtonPress += eventArgs => appControl.Quit();
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

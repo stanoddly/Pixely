@@ -4,13 +4,12 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.MultiWindow;
 
-static class Program
+static partial class Program
 {
     internal static readonly ViewScope SecondaryView = new(1);
 
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -55,8 +54,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

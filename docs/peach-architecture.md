@@ -12,7 +12,8 @@
   registers into. A root method extends `PixelyAppBuilder`, a stage method extends
   `ServiceCollection`, e.g. `AddGamePersistence` for root and `AddGame` for the stage. They are the
   only way `Executable` registers an internal type. A registrar registers the same types whatever
-  its arguments; arguments configure values, not what exists
+  its arguments; arguments configure values, not what exists. `Executable` calls its root registrars
+  from `Program.Configure` when it opts into `Pixely.Hosting`, see `docs/hosting.md`, else from `Main`
 - A stage is what the player is in, a mission or a menu. Each has its own state root
 - Not every game needs every part
   - `Systems` exist when rules advance with time. A turn based game where nothing happens between

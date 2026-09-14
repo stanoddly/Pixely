@@ -6,11 +6,10 @@ using Pixely.Ui;
 
 namespace Pixely.Tutorials.FileDialogs;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (960, 540), Title: "File Dialogs"));
@@ -24,8 +23,5 @@ static class Program
 
         builder.AddSingleton(new FileDialogsViewModel());
         builder.AddSingleton<IUiView, FileDialogsView>();
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

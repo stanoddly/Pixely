@@ -1,0 +1,61 @@
+<Project>
+
+    <!--
+      Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
+      project's RootNamespace whose Main calls Pixely.Hosting.EntryPoint.Run with the project's
+      Configure. Consumers get this file through the Pixely package; repository tutorials import it from
+      tutorials/Directory.Build.targets. Both import points come after the SDK has set
+      IntermediateOutputPath, Language and RootNamespace, which an import from a project body does not.
+    -->
+
+    <PropertyGroup>
+        <_PixelyEntryPointFile>$(IntermediateOutputPath)PixelyProgram.g.cs</_PixelyEntryPointFile>
+        <_PixelyGenerateEntryPoint>false</_PixelyGenerateEntryPoint>
+        <_PixelyGenerateEntryPoint Condition="'$(PixelyHosting)' == 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(Language)' == 'C#' and '$(RootNamespace)' != ''">true</_PixelyGenerateEntryPoint>
+    </PropertyGroup>
+
+    <!-- Declared at evaluation time so the file is part of @(Compile) whether or not the writing target runs. -->
+    <ItemGroup Condition="'$(_PixelyGenerateEntryPoint)' == 'true'">
+        <Compile Include="$(_PixelyEntryPointFile)" Link="Properties\PixelyProgram.g.cs" />
+        <FileWrites Include="$(_PixelyEntryPointFile)" />
+    </ItemGroup>
+
+    <!-- No Inputs/Outputs: WriteOnlyWhenDifferent keeps the timestamp stable and the target is cheap. -->
+    <Target Name="GeneratePixelyEntryPoint" BeforeTargets="CoreCompile" Condition="'$(_PixelyGenerateEntryPoint)' == 'true'">
+        <ItemGroup>
+            <_PixelyEntryPointLine Include="// &lt;auto-generated/&gt;" />
+            <_PixelyEntryPointLine Include="namespace $(RootNamespace)%3B%0A" />
+            <_PixelyEntryPointLine Include="internal static partial class Program" />
+            <_PixelyEntryPointLine Include="{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static partial void Configure(global::Pixely.App.PixelyAppBuilder builder, string[] args)%3B%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20// Optional. When implemented, a failure in Configure, Build or Run is passed here and Main returns 1. When absent, the exception propagates." />
+            <_PixelyEntryPointLine Include="%20%20%20%20static partial void OnException(global::System.Exception exception)%3B%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static int Main(string[] args)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return global::Pixely.Hosting.EntryPoint.Run(args, Configure)%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20catch (global::System.Exception exception) when (Handles(exception))" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return 1%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20}%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20// Without an OnException implementation the compiler removes the call, its argument included, so handled stays false." />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static bool Handles(global::System.Exception exception)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20bool handled = false%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20OnException(Observe(exception, ref handled))%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20return handled%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20}%0A" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static global::System.Exception Observe(global::System.Exception exception, ref bool handled)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20handled = true%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20return exception%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="}" />
+        </ItemGroup>
+        <WriteLinesToFile File="$(_PixelyEntryPointFile)" Lines="@(_PixelyEntryPointLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    </Target>
+
+</Project>

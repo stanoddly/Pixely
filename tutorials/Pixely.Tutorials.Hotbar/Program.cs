@@ -12,11 +12,10 @@ namespace Pixely.Tutorials.Hotbar;
 /// which is what a control needs when it wants a look or a pointer behaviour the built-in ones do
 /// not have: here hover has to be reported upwards, so a label can follow it.
 /// </summary>
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    private static partial void Configure(PixelyAppBuilder builder, string[] args)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
@@ -39,8 +38,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }
