@@ -77,6 +77,12 @@ public sealed class ScrollView : Element, IScrollTarget
         get => _axes;
         set
         {
+            if (_axes == value)
+            {
+                return;
+            }
+
+            // Banked under the old axes, so a re-enabled axis does not carry part of an old gesture.
             ClearRemainders();
             SetMeasureProperty(ref _axes, value);
         }
@@ -96,6 +102,13 @@ public sealed class ScrollView : Element, IScrollTarget
         set
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+
+            if (_wheelStep == value)
+            {
+                return;
+            }
+
+            // Banked in pixels of the old step, so they must not mix with pixels of the new one.
             ClearRemainders();
             _wheelStep = value;
         }
@@ -156,12 +169,14 @@ public sealed class ScrollView : Element, IScrollTarget
         Vector2Int current = Clamp(_scrollOffset);
         ScrollAxes taken = ScrollAxes.None;
 
-        if (Accept(ScrollAxes.Horizontal, delta.X, current.X, _maxScrollOffset.X, ref _remainderX, out int stepX))
+        // A wheel rolled away from the user, a positive Y, asks for what is above, which is a smaller
+        // offset; one tilted to the right, a positive X, asks for what is to the right, a larger one.
+        if (Accept(ScrollAxes.Horizontal, delta.X * _wheelStep, current.X, _maxScrollOffset.X, ref _remainderX, out int stepX))
         {
             taken |= ScrollAxes.Horizontal;
         }
 
-        if (Accept(ScrollAxes.Vertical, delta.Y, current.Y, _maxScrollOffset.Y, ref _remainderY, out int stepY))
+        if (Accept(ScrollAxes.Vertical, -delta.Y * _wheelStep, current.Y, _maxScrollOffset.Y, ref _remainderY, out int stepY))
         {
             taken |= ScrollAxes.Vertical;
         }
@@ -185,17 +200,15 @@ public sealed class ScrollView : Element, IScrollTarget
         return taken;
     }
 
-    private bool Accept(ScrollAxes axis, float notches, int current, int max, ref float remainder, out int step)
+    /// <param name="pixels">How far the offset was asked to move on this axis, already in pixels.</param>
+    private bool Accept(ScrollAxes axis, float pixels, int current, int max, ref float remainder, out int step)
     {
         step = 0;
 
-        if ((_axes & axis) == 0 || notches == 0f || !float.IsFinite(notches))
+        if ((_axes & axis) == 0 || pixels == 0f || !float.IsFinite(pixels))
         {
             return false;
         }
-
-        // Notches are towards the start; the offset counts away from it.
-        float pixels = -notches * _wheelStep;
 
         if ((pixels < 0f && current <= 0) || (pixels > 0f && current >= max))
         {

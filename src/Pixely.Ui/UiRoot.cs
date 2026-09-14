@@ -322,8 +322,8 @@ public sealed class UiRoot : IUiPaintSource
     }
 
     /// <summary>
-    /// Routes a wheel to the topmost element at <paramref name="position"/> and up through its
-    /// ancestors. Returns true when any of them took any of it, so the caller can keep the event
+    /// Routes a wheel to the topmost pointer or scroll target at <paramref name="position"/> and up
+    /// through its ancestors. Returns true when any of them took any of it, so the caller can keep the event
     /// from reaching whatever is underneath. The position is where the wheel happened, so hover and
     /// <see cref="PointerPosition"/> follow it as they would a move.
     /// </summary>

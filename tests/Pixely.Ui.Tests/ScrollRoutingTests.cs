@@ -4,8 +4,8 @@ using Pixely.Input;
 namespace Pixely.Ui.Tests;
 
 /// <summary>
-/// Where a wheel goes: to the topmost element under it, whatever kind that is, and from there up
-/// through its ancestors, each taking the axes it can use.
+/// Where a wheel goes: to the topmost pointer or scroll target under it, and from there up through
+/// its ancestors, each taking the axes it can use.
 /// </summary>
 public class ScrollRoutingTests
 {
@@ -152,10 +152,31 @@ public class ScrollRoutingTests
     }
 
     [Test]
-    public void AHiddenOrDisabledTarget_IsNotOffered()
+    public void AWheelOverAPlainPanelAbove_ReachesTheListBeneath()
     {
-        RecordingScrollTarget list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), IsEnabled = false };
+        RecordingScrollTarget list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
         UiRoot root = Rooted(list);
+        root.AddLayer(new Column { Children = { new Element { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) } } });
+        root.Update();
+
+        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.True, "a panel that takes no input is transparent to the wheel as it is to the pointer");
+            Assert.That(list.Calls, Has.Count.EqualTo(1));
+        });
+    }
+
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    public void AHiddenOrDisabledTarget_IsNotOffered(bool hidden, bool disabled)
+    {
+        RecordingScrollTarget list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
+        UiRoot root = Rooted(list);
+        list.IsVisible = !hidden;
+        list.IsEnabled = !disabled;
+        root.Update();
 
         bool consumed = root.PointerScrolled(new Vector2Int(10, 10), Down);
 
@@ -223,7 +244,51 @@ public class ScrollRoutingTests
     }
 
     [Test]
+    public void AScrollCallbackThatScrollsElsewhere_DeliversEachWheelOnce()
+    {
+        RecordingScrollTarget inner = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50), Takes = ScrollAxes.None };
+        RecordingScrollTarget outer = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { inner } };
+        RecordingScrollTarget other = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { outer, other } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+        inner.WhenScrolled = () =>
+        {
+            inner.WhenScrolled = null;
+            root.PointerScrolled(new Vector2Int(150, 10), Down);
+        };
+
+        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.False, "the outer wheel was abandoned once the pointer moved on");
+            Assert.That(inner.Calls, Is.EqualTo(new[] { "scroll 10,10 0,-1" }));
+            Assert.That(other.Calls, Is.EqualTo(new[] { "scroll 150,10 0,-1" }), "the nested wheel went where it was aimed, once");
+            Assert.That(outer.Calls, Is.Empty, "and the outer walk did not carry on over a chain the nested wheel rebuilt");
+        });
+    }
+
+    [Test]
     public void AScrollCallbackThatDetachesItsAncestor_StopsTheWalk()
+    {
+        RecordingScrollTarget inner = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50), Takes = ScrollAxes.None };
+        RecordingScrollTarget outer = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { inner } };
+        UiRoot root = Rooted(outer);
+        inner.WhenScrolled = () => outer.Parent!.Children.Remove(outer);
+
+        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.False);
+            Assert.That(outer.Calls, Is.Empty, "input can no longer reach it");
+        });
+    }
+
+    [Test]
+    public void AScrollCallbackThatHidesItsAncestor_StopsTheWalk()
     {
         RecordingScrollTarget inner = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50), Takes = ScrollAxes.None };
         RecordingScrollTarget outer = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { inner } };
@@ -235,7 +300,34 @@ public class ScrollRoutingTests
         Assert.Multiple(() =>
         {
             Assert.That(consumed, Is.False);
-            Assert.That(outer.Calls, Is.Empty, "input can no longer reach it");
+            Assert.That(outer.Calls, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void AScrollCallbackThatReparentsItsElement_DoesNotSendTheRestUpTheNewChain()
+    {
+        RecordingScrollTarget inner = new() { Width = Sizing.Fixed(50), Height = Sizing.Fixed(50), Takes = ScrollAxes.None };
+        RecordingScrollTarget original = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { inner } };
+        RecordingScrollTarget adoptive = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
+        UiRoot root = new();
+        root.AddLayer(new Row { Children = { original, adoptive } });
+        root.SetViewportSize(new Vector2Int(320, 240));
+        root.Update();
+
+        inner.WhenScrolled = () =>
+        {
+            original.Children.Remove(inner);
+            adoptive.Children.Add(inner);
+        };
+
+        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.False);
+            Assert.That(adoptive.Calls, Is.Empty, "the wheel was not over it");
+            Assert.That(original.Calls, Is.Empty, "and the chain it was over is gone");
         });
     }
 

@@ -374,22 +374,30 @@ public class ScrollViewTests
     public void AChildScrolledOutOfView_CannotBeHitUntilItIsScrolledBack()
     {
         RecordingPointerTarget button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
-        ScrollView view = Sized(new MeasuredBox(80, 500), button);
+        ScrollView view = Sized(button, new MeasuredBox(80, 500));
         UiRoot root = Rooted(view);
 
-        Rectangle before = HitArea(root, button);
-        view.ScrollOffset = new Vector2Int(0, 380);
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        root.PointerReleased(new Vector2Int(10, 10), MouseButton.Left);
+        Rectangle visible = HitArea(root, button);
+
+        view.ScrollOffset = new Vector2Int(0, 100);
         root.Update();
         Rectangle scrolledAway = HitArea(root, button);
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
+        root.PointerReleased(new Vector2Int(10, 10), MouseButton.Left);
+        int callsWhileAway = button.Calls.Count;
+
         view.ScrollOffset = default;
         root.Update();
-        Rectangle back = HitArea(root, button);
+        root.PointerPressed(new Vector2Int(10, 10), MouseButton.Left);
 
         Assert.Multiple(() =>
         {
-            Assert.That(before, Is.EqualTo(new Rectangle(0, 500, 40, 20).Intersect(new Rectangle(0, 0, 100, 120))), "the button sits under the box, out of view from the start");
-            Assert.That(scrolledAway, Is.EqualTo(new Rectangle(0, 120, 40, 20).Intersect(new Rectangle(0, 0, 100, 120))));
-            Assert.That(back, Is.EqualTo(before));
+            Assert.That(visible, Is.EqualTo(new Rectangle(0, 0, 40, 20)));
+            Assert.That(scrolledAway, Is.EqualTo(default(Rectangle)), "the button sits at -100, wholly outside the clip");
+            Assert.That(button.Calls.Take(callsWhileAway), Is.EqualTo(new[] { "enter 10,10", "press 10,10 Left", "release 10,10 Left inside=True", "leave" }), "nothing reached it while it was scrolled away");
+            Assert.That(button.Calls.Skip(callsWhileAway), Is.EqualTo(new[] { "enter 10,10", "press 10,10 Left" }), "and it is hit again once scrolled back");
         });
     }
 
@@ -481,7 +489,7 @@ public class ScrollViewTests
         ScrollView view = Sized(new MeasuredBox(300, 500));
         Layout.Run(view, 100, 120);
 
-        ScrollAxes taken = Scroll(view, new Vector2(-1f, -1f));
+        ScrollAxes taken = Scroll(view, new Vector2(1f, -1f));
 
         Assert.Multiple(() =>
         {
@@ -521,6 +529,25 @@ public class ScrollViewTests
         Scroll(view, new Vector2(0f, 0.05f));
 
         Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 380)), "half a notch back has nothing banked to add to");
+    }
+
+    [Test]
+    public void AssigningTheSameAxesOrStep_KeepsTheRemainder()
+    {
+        ScrollView view = Sized(new MeasuredBox(80, 500));
+        view.WheelStep = 10;
+        Layout.Run(view, 100, 120);
+        Scroll(view, new Vector2(0f, -0.05f));
+
+        view.Axes = ScrollAxes.Vertical;
+        view.WheelStep = 10;
+        Scroll(view, new Vector2(0f, -0.05f));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(view.IsMeasureDirty, Is.False, "an unchanged value invalidates nothing");
+            Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 1)), "the two halves added up");
+        });
     }
 
     [Test]
@@ -576,7 +603,7 @@ public class ScrollViewTests
         ScrollView list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { strip, new MeasuredBox(100, 500) } };
         UiRoot root = Rooted(list);
 
-        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), new Vector2(-1f, -1f));
+        bool consumed = root.PointerScrolled(new Vector2Int(10, 10), new Vector2(1f, -1f));
 
         Assert.Multiple(() =>
         {

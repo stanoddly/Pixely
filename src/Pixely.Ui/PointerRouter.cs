@@ -52,6 +52,9 @@ internal sealed class PointerRouter
     private readonly Element?[] _cancelScratch = new Element?[CaptureSlotCount];
     private readonly int[] _cancelTokenScratch = new int[CaptureSlotCount];
 
+    // The ancestors a wheel climbs, taken before the first callback runs. See Scrolled.
+    private readonly List<Element> _scrollChain = new();
+
     private Vector2Int _position;
     private bool _isInWindow;
 
@@ -194,14 +197,16 @@ internal sealed class PointerRouter
     }
 
     /// <summary>
-    /// Routes a wheel. The topmost element under the pointer, of either kind, decides where it
+    /// Routes a wheel. The topmost pointer or scroll target under the pointer decides where it
     /// starts: from there it climbs the ancestors, each scroll target taking the axes it can use,
     /// until nothing is left or the layer is reached. Returns whether anything was taken.
     /// </summary>
     /// <remarks>
-    /// Starting at the topmost element of either kind, rather than the topmost scroll target, is
-    /// what keeps a wheel over a dialog from scrolling the list beneath it. Climbing rather than
-    /// scanning on is what keeps it from reaching a sibling layer at all.
+    /// Starting at the topmost target of either kind, rather than the topmost scroll target, is
+    /// what keeps a wheel over a modal backdrop from scrolling the list beneath it, by the same
+    /// rule the pointer follows: a plain panel is transparent, and a backdrop has to be a pointer
+    /// target to be solid. Climbing rather than scanning on is what keeps it from reaching a
+    /// sibling layer at all.
     /// </remarks>
     internal bool Scrolled(Vector2Int position, Vector2 delta)
     {
@@ -218,43 +223,76 @@ internal sealed class PointerRouter
 
         bool consumed = false;
 
-        for (Element? element = HitTest(position, HitKind.Pointer | HitKind.Scroll); element != null && delta != Vector2.Zero; element = element.Parent)
+        // The chain is taken up front and each link re-checked before the next target is offered,
+        // so a callback that reparents something below cannot send what is left up a chain the
+        // wheel was never over. Cleared in a finally so that a callback that throws does not leave
+        // the router holding elements it may have detached.
+        try
         {
-            if (element is not IScrollTarget target)
+            // Cleared here as well as below: a nested route from a callback rebuilds this list under
+            // the outer one, and the outer one stops at the version check as soon as it returns.
+            _scrollChain.Clear();
+
+            for (Element? element = HitTest(position, HitKind.Pointer | HitKind.Scroll); element != null; element = element.Parent)
             {
-                continue;
+                _scrollChain.Add(element);
             }
 
-            // An ancestor of something hittable is hittable, until a callback below changes that.
-            if (!_root.CanBeHit(element))
+            for (int i = 0; i < _scrollChain.Count && delta != Vector2.Zero; i++)
             {
-                break;
-            }
+                if (_scrollChain[i] is not IScrollTarget target)
+                {
+                    continue;
+                }
 
-            ScrollAxes taken = target.OnScroll(position, delta);
+                // An ancestor of something hittable is hittable, until a callback below changes that.
+                if (!IsScrollChainIntact(i) || !_root.CanBeHit(_scrollChain[i]))
+                {
+                    break;
+                }
 
-            if ((taken & ScrollAxes.Horizontal) != 0)
-            {
-                delta.X = 0f;
-                consumed = true;
-            }
+                ScrollAxes taken = target.OnScroll(position, delta);
 
-            if ((taken & ScrollAxes.Vertical) != 0)
-            {
-                delta.Y = 0f;
-                consumed = true;
-            }
+                if ((taken & ScrollAxes.Horizontal) != 0)
+                {
+                    delta.X = 0f;
+                    consumed = true;
+                }
 
-            // The callback may have routed the pointer itself, and the walk was over a tree it may
-            // also have restructured. What it took is kept; where the rest would have gone is not
-            // knowable any more.
-            if (_routeVersion != version)
-            {
-                break;
+                if ((taken & ScrollAxes.Vertical) != 0)
+                {
+                    delta.Y = 0f;
+                    consumed = true;
+                }
+
+                // The callback may have routed the pointer itself. What it took is kept; where the
+                // rest would have gone is not knowable any more.
+                if (_routeVersion != version)
+                {
+                    break;
+                }
             }
+        }
+        finally
+        {
+            _scrollChain.Clear();
         }
 
         return consumed;
+    }
+
+    /// <summary>Whether every link from the element the wheel hit up to <paramref name="index"/> still holds.</summary>
+    private bool IsScrollChainIntact(int index)
+    {
+        for (int i = 0; i < index; i++)
+        {
+            if (!ReferenceEquals(_scrollChain[i].Parent, _scrollChain[i + 1]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>The pointer left the window, which cancels every press in progress.</summary>

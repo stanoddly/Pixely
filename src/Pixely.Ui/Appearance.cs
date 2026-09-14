@@ -201,7 +201,7 @@ public readonly record struct ScrollAppearance
         }
     }
 
-    /// <summary>What the thumb shrinks to at most, so it stays visible over very long content.</summary>
+    /// <summary>The shortest the thumb gets when the track permits, so it stays visible over very long content.</summary>
     public int MinimumThumbLength
     {
         get => _minimumThumbLength ?? 12;
