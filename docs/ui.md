@@ -194,9 +194,13 @@ The scroll view's own size is ordinary. A `Fit` scroll view takes what its child
 
 Padding scrolls with the children, the way a padding box does on the web: the last row has the bottom padding under it at the end, and the clip is the scroll view's bounds as it is for every element.
 
-The bars lie over the content along the trailing edges and take no space from it. `ScrollBars` is `Auto` by default, which shows a bar only while its axis overflows; a bar never shows on an axis that does not scroll. A press on a bar's track pages by one viewport towards the press; dragging the thumb is not implemented yet. The bars are not children: `Children` holds only what was put there, and clearing it leaves the bars in place.
+`ScrollIntoView(descendant)` scrolls the least distance that brings an element below the scroll view wholly into the viewport on each axis that scrolls, or to its start when it is larger than the viewport. It is answered by the next build, from the geometry that build produces, so it is right after a change of size or content that has not been laid out yet; `ScrollOffset` reads the result after that build. It applies on top of an offset assigned before the build, a second call replaces the first, and a descendant that has left the subtree or been hidden by the build is not scrolled to. An element that is not below the scroll view is an `ArgumentException`.
+
+The bars lie over the content along the trailing edges and take no space from it. `ScrollBars` is `Auto` by default, which shows a bar only while its axis overflows; a bar never shows on an axis that does not scroll. A press on a bar's track pages by one viewport towards the press; a press on the thumb grabs it, and dragging puts the grabbed point under the pointer, mapped to an offset through the thumb's travel. The bars are not children: `Children` holds only what was put there, and clearing it leaves the bars in place.
 
 The mouse wheel reaches a scroll view through `IScrollTarget`, which anything can implement. The wheel goes to the topmost pointer or scroll target under the pointer, and from there up through its ancestors, so a wheel over a button inside a list reaches the list, and a modal backdrop that is an `IPointerTarget` keeps it from the list beneath. A plain panel is as transparent to the wheel as it is to the pointer. Each target along the way is offered what is left of the delta and returns the axes it took; the rest carries on upward, and then to whatever is outside the UI, which is what keeps a wheel over a list that has reached its end available to the game. A scroll view at its end refuses a delta that points further out and takes one that points back in, and it banks a touchpad's fractions too small to move a pixel until they add up to one. `WheelStep` is the pixels per notch.
+
+A scroll view whose `Axes` is `Horizontal` alone takes the vertical component as a horizontal one, since a plain wheel produces nothing else: rolling towards the user moves to the right, as it moves down elsewhere. The two components are added into one request, so at an end the whole is refused and reaches an outer vertical list. A view with both axes keeps the components apart.
 
 ## Views and view models
 
@@ -279,6 +283,8 @@ Capture is per button, so a right-drag and a left-drag can be held by different 
 `OnPointerCancel` means the press ended without a release the element can be told about. That covers more than losing a drag: the pointer left the window, the same button was pressed again anywhere — the old gesture is cancelled before the new press is even hit-tested, so a press that goes on to be declined still cancels it — the element left the tree or became hidden or disabled, or the press was accepted at a moment when capture could not be installed.
 
 Motion is never consumed — a camera that follows the mouse has to keep seeing it while the pointer is over a button.
+
+An element that follows the pointer while it holds a press, a slider or a scrollbar's thumb, implements `IPointerDragTarget` as well. `OnPointerDrag` is sent for every move between the accepted press and its release or cancel, with the button that press was, wherever the pointer has gone, including off the element; a button held by another element is reported to that element alone. The drag is delivered before hover follows the move, so a drag callback that rearranges the tree is settled by the hover that comes after it. A plain `IPointerTarget` never hears of a move.
 
 The wheel is routed separately, to `IScrollTarget`s, and is described under Scrolling. It moves the pointer and hover the way motion does, is delivered whatever capture is in progress, and is consumed only when a target took some of it. An element that is only an `IScrollTarget` is transparent to the pointer the way a panel is.
 
@@ -401,7 +407,7 @@ A view says which root it belongs to by overriding `IUiView.ViewScope`, so regis
 - `Pixely.Tutorials.UiBoxes` — layout and sizing on their own.
 - `Pixely.Tutorials.UiScoreboard` — a view model driving a tree that is built once.
 - `Pixely.Tutorials.UiTextInput` — editable fields and focus.
-- `Pixely.Tutorials.UiScrollView` — a list and a strip larger than their panels, scrolled by the wheel and the bars.
+- `Pixely.Tutorials.UiScrollView` — a list and a strip larger than their panels, scrolled by the wheel, by a press on a bar's track and by dragging its thumb.
 - `Pixely.Tutorials.Hotbar` — a custom `IPointerTarget` element and an anchored label following hover.
 - `Pixely.Tutorials.StageSwitching` — views owned by a stage, added and removed with it.
 - `Pixely.Tutorials.MultiWindowTextInput` — one root per window, each with its own focus.

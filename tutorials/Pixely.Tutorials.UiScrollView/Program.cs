@@ -40,7 +40,7 @@ static partial class Program
 
         builder.OnBuilt((AppControl appControl, IKeyboardService keyboardService) =>
         {
-            Console.WriteLine("Wheel over the list, or click its bar. Escape quits.");
+            Console.WriteLine("Wheel over the list or the strip, click a bar's track, or drag its thumb. Escape quits.");
 
             keyboardService.KeyDown += eventArgs =>
             {
@@ -75,9 +75,9 @@ static partial class Program
             list.Children.Add(button);
         }
 
-        // The strip scrolls the other way: a horizontal stack, and only the horizontal axis. A
-        // vertical wheel over it is refused, and since the strip is beside the list rather than
-        // inside it, the wheel goes on to nothing.
+        // The strip scrolls the other way: a horizontal stack, and only the horizontal axis. Having
+        // no vertical axis, it takes a plain wheel sideways, and at either end it refuses the wheel;
+        // since the strip is beside the list rather than inside it, the wheel then goes on to nothing.
         ScrollView strip = new()
         {
             Axes = ScrollAxes.Horizontal,

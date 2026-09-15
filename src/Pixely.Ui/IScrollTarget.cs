@@ -32,7 +32,9 @@ public interface IScrollTarget
     /// The axes on which this element took the delta. Taking it includes banking a fraction too
     /// small to move a pixel yet; what is refused is a component that points past an end the
     /// element is already at, or along an axis it does not scroll. A refused component reaches
-    /// the ancestors, while a taken one stops here.
+    /// the ancestors, while a taken one stops here. The axes name the components of the delta,
+    /// not what moved: an element that scrolls sideways on a vertical wheel reports the vertical
+    /// component taken.
     /// </returns>
     ScrollAxes OnScroll(Vector2Int position, Vector2 delta);
 }

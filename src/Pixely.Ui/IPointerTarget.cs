@@ -20,8 +20,8 @@ namespace Pixely.Ui;
 /// </para>
 /// <para>
 /// Deliberately without a move notification. Anything that tracks the pointer while it is held —
-/// a slider, a scrollbar — needs a second interface, and that one can be added without changing
-/// what a button has to implement.
+/// a slider, a scrollbar — implements <see cref="IPointerDragTarget"/> as well, which is what keeps
+/// a button from implementing what only those use.
 /// </para>
 /// </remarks>
 public interface IPointerTarget
