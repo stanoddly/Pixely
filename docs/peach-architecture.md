@@ -154,7 +154,7 @@ Executable          ──> everything above
   dependency direction, `Rendering` and `Audio` never reference `Frontend`, and there is no
   abstraction layer between them. `Frontend` MAY call or poll anything an output makes public
 - `Frontend` SHOULD NOT subscribe to an output. A handler runs inside the output's `Update`, so a
-  Mechanic invoked from it mutates State while the output reads it. `Frontend` polls an item's
+  Mechanic invoked from it mutates State while the output reads it. `Frontend` SHOULD poll an item's
   progress in its own `Update` instead
 - Output state MUST be presentation only. Dropping it changes what is seen or heard, never game
   state, never the meaning of input
