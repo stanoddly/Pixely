@@ -5,8 +5,8 @@ namespace Pixely.Ui;
 
 /// <summary>
 /// Turns pointer positions into the enter, leave, press, release and cancel an
-/// <see cref="IPointerTarget"/> sees. Hit testing and capture live here rather than in
-/// <see cref="UiRoot"/>, which only forwards.
+/// <see cref="IPointerTarget"/> sees, and the drag an <see cref="IPointerDragTarget"/> sees while it
+/// holds a press. Hit testing and capture live here rather than in <see cref="UiRoot"/>, which only forwards.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -79,8 +79,27 @@ internal sealed class PointerRouter
 
     internal bool Moved(Vector2Int position)
     {
-        _routeVersion++;
+        int version = ++_routeVersion;
         MoveTo(position);
+
+        // Drags before hover, as a release comes before the hover that follows it: one hit test per
+        // move, and a drag callback that rearranges the tree is settled by that hover. In button
+        // order, so a target holding two of them hears about them predictably.
+        for (int slot = 0; slot < CaptureSlotCount && _routeVersion == version; slot++)
+        {
+            if (_captured[slot] is IPointerDragTarget target)
+            {
+                target.OnPointerDrag(position, (MouseButton)slot);
+            }
+        }
+
+        // A drag callback may have routed the pointer itself. Whatever that settled on is the
+        // current state, including the drags it delivered and the hover it left.
+        if (_routeVersion != version)
+        {
+            return false;
+        }
+
         return Track();
     }
 

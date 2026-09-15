@@ -599,7 +599,8 @@ public class ScrollViewTests
     [Test]
     public void AMixedWheelOverAStripInsideAList_ScrollsEachOnItsOwnAxis()
     {
-        ScrollView strip = new() { Axes = ScrollAxes.Horizontal, Width = Sizing.Fixed(50), Height = Sizing.Fixed(30), Children = { new MeasuredBox(500, 30) } };
+        // Both axes, so the strip keeps the components apart; nothing to scroll to vertically, so it refuses that one.
+        ScrollView strip = new() { Axes = ScrollAxes.Both, Width = Sizing.Fixed(50), Height = Sizing.Fixed(30), Children = { new MeasuredBox(500, 30) } };
         ScrollView list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { strip, new MeasuredBox(100, 500) } };
         UiRoot root = Rooted(list);
 
@@ -611,6 +612,298 @@ public class ScrollViewTests
             Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(40, 0)));
             Assert.That(list.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
         });
+    }
+
+    [Test]
+    public void AHorizontalOnlyView_TakesTheVerticalWheelSideways()
+    {
+        ScrollView strip = Strip(new MeasuredBox(500, 30));
+        Layout.Run(strip, 50, 30);
+
+        ScrollAxes taken = Scroll(strip, Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(taken, Is.EqualTo(ScrollAxes.Vertical), "the component it took, which is what the router zeroes");
+            Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(40, 0)), "towards the user is to the right");
+        });
+    }
+
+    [Test]
+    public void AHorizontalOnlyViewAtAnEnd_RefusesTheVerticalWheelSoItReachesTheListAround()
+    {
+        ScrollView strip = Strip(new MeasuredBox(500, 30));
+        ScrollView list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { strip, new MeasuredBox(100, 500) } };
+        strip.ScrollOffset = new Vector2Int(int.MaxValue, 0);
+        UiRoot root = Rooted(list);
+
+        ScrollAxes upAtTheStart = Scroll(Strip(new MeasuredBox(500, 30)), Up);
+        root.PointerScrolled(new Vector2Int(10, 10), Down);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(upAtTheStart, Is.EqualTo(ScrollAxes.None));
+            Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(450, 0)));
+            Assert.That(list.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
+        });
+    }
+
+    [Test]
+    public void AHorizontalOnlyView_AddsBothComponentsAndBanksThemTogether()
+    {
+        ScrollView strip = Strip(new MeasuredBox(500, 30));
+        strip.WheelStep = 10;
+        Layout.Run(strip, 50, 30);
+
+        ScrollAxes both = Scroll(strip, new Vector2(1f, -1f));
+        Vector2Int afterBoth = strip.ScrollOffset;
+        Scroll(strip, new Vector2(0.05f, 0f));
+        Scroll(strip, new Vector2(0f, -0.05f));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(both, Is.EqualTo(ScrollAxes.Both));
+            Assert.That(afterBoth, Is.EqualTo(new Vector2Int(20, 0)));
+            Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(21, 0)), "half a pixel from each component");
+        });
+    }
+
+    [Test]
+    public void AHorizontalOnlyView_RefusesComponentsThatCancelOut()
+    {
+        ScrollView strip = Strip(new MeasuredBox(500, 30));
+        ScrollView list = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100), Children = { strip, new MeasuredBox(100, 500) } };
+        list.ScrollOffset = new Vector2Int(0, 40);
+        UiRoot root = Rooted(list);
+
+        root.PointerScrolled(new Vector2Int(10, 10), new Vector2(1f, 1f));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strip.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+            Assert.That(list.ScrollOffset, Is.EqualTo(default(Vector2Int)), "refused as a whole, so the vertical component reached the list");
+        });
+    }
+
+    [Test]
+    public void AHorizontalOnlyView_LeavesOutAComponentThatIsNotANumber()
+    {
+        ScrollView strip = Strip(new MeasuredBox(500, 30));
+        Layout.Run(strip, 50, 30);
+
+        ScrollAxes taken = Scroll(strip, new Vector2(float.NaN, -1f));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(taken, Is.EqualTo(ScrollAxes.Vertical));
+            Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(40, 0)));
+        });
+    }
+
+    [Test]
+    public void AViewWithBothAxes_KeepsTheComponentsApart()
+    {
+        ScrollView view = new() { Axes = ScrollAxes.Both, Width = Sizing.Fixed(50), Height = Sizing.Fixed(50), Children = { new MeasuredBox(500, 500) } };
+        Layout.Run(view, 50, 50);
+
+        Scroll(view, Down);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
+    }
+
+    // --- ScrollIntoView -----------------------------------------------------------------
+
+    [Test]
+    public void ScrollIntoView_BelowTheViewport_AlignsTheEndAndArrangesInTheSameBuild()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target, new MeasuredBox(80, 300));
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 200)), "320 is the target's end, 120 the window's");
+            Assert.That(target.Bounds, Is.EqualTo(new Rectangle(0, 100, 80, 20)));
+        });
+    }
+
+    [Test]
+    public void ScrollIntoView_AboveTheViewport_AlignsTheStart()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target, new MeasuredBox(80, 300));
+        view.ScrollOffset = new Vector2Int(0, int.MaxValue);
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 300)));
+    }
+
+    [Test]
+    public void ScrollIntoView_AlreadyVisible_MovesNothing()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 30), target, new MeasuredBox(80, 300));
+        view.ScrollOffset = new Vector2Int(0, 10);
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 10)));
+    }
+
+    [Test]
+    public void ScrollIntoView_LargerThanTheViewport_ShowsItsStart()
+    {
+        MeasuredBox target = new(80, 200);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target, new MeasuredBox(80, 300));
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 300)));
+    }
+
+    [Test]
+    public void ScrollIntoView_OnACleanTree_IsAnsweredByTheNextBuild()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target);
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Vector2Int beforeTheBuild = view.ScrollOffset;
+        bool dirty = view.IsArrangeDirty && !view.IsMeasureDirty;
+        Layout.Run(view, 100, 120);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforeTheBuild, Is.EqualTo(default(Vector2Int)));
+            Assert.That(dirty, Is.True, "an arrange, not a measure");
+            Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 200)));
+        });
+    }
+
+    [Test]
+    public void ScrollIntoView_BeforeTheFirstBuild_IsAnsweredByIt()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 200)));
+    }
+
+    [Test]
+    public void ScrollIntoView_AppliesOnTopOfAnOffsetAssignedBeforeTheBuild()
+    {
+        MeasuredBox target = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), target, new MeasuredBox(80, 300));
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        view.ScrollOffset = new Vector2Int(0, 250);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 250)), "visible from there, so the request moved nothing");
+    }
+
+    [Test]
+    public void ScrollIntoView_ASecondCallReplacesTheFirst()
+    {
+        MeasuredBox first = new(80, 20);
+        MeasuredBox second = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300), first, new MeasuredBox(80, 300), second);
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(first);
+        view.ScrollIntoView(second);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 520)));
+    }
+
+    [Test]
+    public void ScrollIntoView_ADescendantGoneOrHiddenByTheBuild_IsDropped()
+    {
+        MeasuredBox removed = new(80, 20);
+        MeasuredBox hidden = new(80, 20);
+        MeasuredBox underHidden = new(80, 20);
+        Element holder = new() { Children = { underHidden } };
+        ScrollView removedFrom = Sized(new MeasuredBox(80, 300), removed);
+        ScrollView hiddenIn = Sized(new MeasuredBox(80, 300), hidden);
+        ScrollView holderIn = Sized(new MeasuredBox(80, 300), holder);
+        Layout.Run(removedFrom, 100, 120);
+        Layout.Run(hiddenIn, 100, 120);
+        Layout.Run(holderIn, 100, 120);
+
+        removedFrom.ScrollIntoView(removed);
+        removedFrom.Children.Remove(removed);
+        hiddenIn.ScrollIntoView(hidden);
+        hidden.IsVisible = false;
+        holderIn.ScrollIntoView(underHidden);
+        holder.IsVisible = false;
+        Layout.Run(removedFrom, 100, 120);
+        Layout.Run(hiddenIn, 100, 120);
+        Layout.Run(holderIn, 100, 120);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(removedFrom.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+            Assert.That(hiddenIn.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+            Assert.That(holderIn.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+        });
+    }
+
+    [Test]
+    public void ScrollIntoView_RejectsWhatIsNotBelowIt()
+    {
+        MeasuredBox stranger = new(80, 20);
+        ScrollView view = Sized(new MeasuredBox(80, 300));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => view.ScrollIntoView(stranger), Throws.ArgumentException);
+            Assert.That(() => view.ScrollIntoView(view), Throws.ArgumentException);
+            Assert.That(() => view.ScrollIntoView(null!), Throws.ArgumentNullException);
+        });
+    }
+
+    [Test]
+    public void ScrollIntoView_ReachesAGrandchild()
+    {
+        MeasuredBox target = new(80, 20);
+        Element holder = new() { Children = { new MeasuredBox(80, 300), target } };
+        ScrollView view = Sized(holder);
+        Layout.Run(view, 100, 120);
+
+        view.ScrollIntoView(target);
+        Layout.Run(view, 100, 120);
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 200)));
+    }
+
+    [Test]
+    public void ScrollIntoView_MovesOnlyTheAxesThatScroll()
+    {
+        MeasuredBox target = new(20, 20);
+        ScrollView strip = Strip(new MeasuredBox(300, 300), target);
+        strip.Layout = new StackLayout(Orientation.Horizontal);
+        Layout.Run(strip, 50, 30);
+
+        strip.ScrollIntoView(target);
+        Layout.Run(strip, 50, 30);
+
+        Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(270, 0)), "the target is below the window as well, and that axis does not scroll");
     }
 
     // --- Bars ---------------------------------------------------------------------------
@@ -753,6 +1046,101 @@ public class ScrollViewTests
     }
 
     [Test]
+    public void DraggingTheThumb_MapsThePointerThroughTheTravel()
+    {
+        // 120 of 480 makes a 30-pixel thumb on a 120-pixel track: 90 pixels of travel for 360 of range.
+        ScrollView view = Sized(new MeasuredBox(80, 480));
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(97, 5), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 50));
+        Vector2Int midway = view.ScrollOffset;
+        root.PointerMoved(new Vector2Int(200, 500));
+        Vector2Int pastTheEnd = view.ScrollOffset;
+        root.PointerMoved(new Vector2Int(-50, -50));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(midway, Is.EqualTo(new Vector2Int(0, 180)), "the grabbed point, 5 in, is at 50, so the thumb starts at 45 of 90");
+            Assert.That(pastTheEnd, Is.EqualTo(new Vector2Int(0, 360)), "clamped to the travel, whatever the pointer does off the track");
+            Assert.That(view.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+        });
+    }
+
+    [Test]
+    public void DraggingTheThumb_PaintsItWhereThePointerPutIt()
+    {
+        // 15 of 19 makes a thumb of the 12-pixel minimum on a 15-pixel track: 3 pixels of travel for 4 of range.
+        ScrollView view = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(15), Children = { new MeasuredBox(20, 19) } };
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(17, 0), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(17, 1));
+        root.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 2)), "rounded up: 1 would paint the thumb back at 0");
+            Assert.That(VerticalBar(view).ThumbBounds.Y, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void DraggingTheThumb_EndsWithTheRelease()
+    {
+        ScrollView view = Sized(new MeasuredBox(80, 480));
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(97, 5), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 50));
+        root.PointerReleased(new Vector2Int(97, 50), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 100));
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 180)));
+    }
+
+    [Test]
+    public void APressOnTheTrack_DoesNotStartADrag()
+    {
+        ScrollView view = Sized(new MeasuredBox(80, 480));
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(97, 110), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 50));
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 120)), "paged once, and the move did nothing");
+    }
+
+    [Test]
+    public void TheHorizontalThumb_DragsSideways()
+    {
+        ScrollView strip = new() { Axes = ScrollAxes.Horizontal, Width = Sizing.Fixed(120), Height = Sizing.Fixed(30), Children = { new MeasuredBox(480, 20) } };
+        UiRoot root = Rooted(strip);
+
+        root.PointerPressed(new Vector2Int(5, 27), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(50, 27));
+
+        Assert.That(strip.ScrollOffset, Is.EqualTo(new Vector2Int(180, 0)));
+    }
+
+    [Test]
+    public void AThumbThatFillsTheTrack_DragsNothing()
+    {
+        ScrollView view = Sized(new MeasuredBox(80, 100));
+        view.ScrollBars = ScrollBarVisibility.Visible;
+        UiRoot root = Rooted(view);
+
+        bool consumed = root.PointerPressed(new Vector2Int(97, 5), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 50));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumed, Is.True);
+            Assert.That(view.ScrollOffset, Is.EqualTo(default(Vector2Int)));
+        });
+    }
+
+    [Test]
     public void TheBar_TakesItsLookFromTheStyle()
     {
         SolidDrawable thumb = new(new Color(1, 2, 3, 255));
@@ -850,6 +1238,18 @@ public class ScrollViewTests
         }
 
         return view;
+    }
+
+    private static ScrollView Strip(params Element[] children)
+    {
+        ScrollView strip = new() { Axes = ScrollAxes.Horizontal, Width = Sizing.Fixed(50), Height = Sizing.Fixed(30), Layout = new StackLayout(Orientation.Horizontal) };
+
+        foreach (Element child in children)
+        {
+            strip.Children.Add(child);
+        }
+
+        return strip;
     }
 
     private static ScrollAxes Scroll(ScrollView view, Vector2 delta) => ((IScrollTarget)view).OnScroll(default, delta);

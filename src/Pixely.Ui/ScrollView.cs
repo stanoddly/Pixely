@@ -57,6 +57,9 @@ public sealed class ScrollView : Element, IScrollTarget
     private float _remainderX;
     private float _remainderY;
 
+    // What ScrollIntoView asked for, held until the build that can answer it. See ArrangeContent.
+    private Element? _scrollIntoViewRequest;
+
     public ScrollView(int gap = 0)
     {
         Layout = new StackLayout(Orientation.Vertical, gap);
@@ -136,6 +139,9 @@ public sealed class ScrollView : Element, IScrollTarget
     /// <summary>How far <see cref="ScrollOffset"/> can go: the extent past the viewport, and zero on an axis that does not scroll. Valid after a build.</summary>
     public Vector2Int MaxScrollOffset => _maxScrollOffset;
 
+    /// <summary>The offset within the range of the last build, which <see cref="ScrollOffset"/> is not while it holds a request the build has not settled.</summary>
+    internal Vector2Int ClampedScrollOffset => Clamp(_scrollOffset);
+
     /// <summary>
     /// Moves by <paramref name="delta"/> within the range of the last build, and returns whether the
     /// offset changed. Synchronous on purpose, which is what lets the wheel say whether it was used;
@@ -157,28 +163,74 @@ public sealed class ScrollView : Element, IScrollTarget
         return true;
     }
 
+    /// <summary>
+    /// Scrolls the least distance that brings <paramref name="descendant"/> wholly into the viewport
+    /// on each axis in <see cref="Axes"/>, or its start when it is larger than the viewport. Resolved
+    /// by the next build, from the geometry that build produces, so it is right after a change of
+    /// size or content that has not been laid out yet; <see cref="ScrollOffset"/> reads the result
+    /// after that build. Applied on top of an offset assigned before the build. A descendant that has
+    /// left this subtree or been hidden by then is not scrolled to.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="descendant"/> is not below this scroll view.</exception>
+    public void ScrollIntoView(Element descendant)
+    {
+        ArgumentNullException.ThrowIfNull(descendant);
+
+        if (!IsDescendant(descendant))
+        {
+            throw new ArgumentException("The element is not a descendant of this scroll view.", nameof(descendant));
+        }
+
+        _scrollIntoViewRequest = descendant;
+        InvalidateArrange();
+    }
+
     /// <inheritdoc/>
     /// <remarks>
     /// Per axis: refused when the delta points past an end the view is already at, so an inner view
     /// does not bank what it turned away and reversing direction responds to the first notch; taken
     /// otherwise, including a fraction that moves nothing yet. A step the range clamps discards the
-    /// remainder as well.
+    /// remainder as well. A view that scrolls only sideways takes the vertical component as a
+    /// horizontal one, since a plain wheel produces nothing else: rolling towards the user moves to
+    /// the right, as it moves down elsewhere.
     /// </remarks>
     ScrollAxes IScrollTarget.OnScroll(Vector2Int position, Vector2 delta)
     {
         Vector2Int current = Clamp(_scrollOffset);
         ScrollAxes taken = ScrollAxes.None;
+        int stepX = 0;
+        int stepY = 0;
 
         // A wheel rolled away from the user, a positive Y, asks for what is above, which is a smaller
         // offset; one tilted to the right, a positive X, asks for what is to the right, a larger one.
-        if (Accept(ScrollAxes.Horizontal, delta.X * _wheelStep, current.X, _maxScrollOffset.X, ref _remainderX, out int stepX))
-        {
-            taken |= ScrollAxes.Horizontal;
-        }
+        float horizontalPixels = delta.X * _wheelStep;
+        float verticalPixels = -delta.Y * _wheelStep;
 
-        if (Accept(ScrollAxes.Vertical, -delta.Y * _wheelStep, current.Y, _maxScrollOffset.Y, ref _remainderY, out int stepY))
+        if (_axes == ScrollAxes.Horizontal)
         {
-            taken |= ScrollAxes.Vertical;
+            // Summed into one request, so the end refuses the sum and one remainder banks it. A
+            // component that is not a number is left out here so that it does not spoil the other,
+            // and refused below by not being reported as taken.
+            bool hasX = float.IsFinite(horizontalPixels) && horizontalPixels != 0f;
+            bool hasY = float.IsFinite(verticalPixels) && verticalPixels != 0f;
+            float pixels = (hasX ? horizontalPixels : 0f) + (hasY ? verticalPixels : 0f);
+
+            if (Accept(ScrollAxes.Horizontal, pixels, current.X, _maxScrollOffset.X, ref _remainderX, out stepX))
+            {
+                taken = (hasX ? ScrollAxes.Horizontal : ScrollAxes.None) | (hasY ? ScrollAxes.Vertical : ScrollAxes.None);
+            }
+        }
+        else
+        {
+            if (Accept(ScrollAxes.Horizontal, horizontalPixels, current.X, _maxScrollOffset.X, ref _remainderX, out stepX))
+            {
+                taken |= ScrollAxes.Horizontal;
+            }
+
+            if (Accept(ScrollAxes.Vertical, verticalPixels, current.Y, _maxScrollOffset.Y, ref _remainderY, out stepY))
+            {
+                taken |= ScrollAxes.Vertical;
+            }
         }
 
         if (stepX != 0 || stepY != 0)
@@ -275,7 +327,93 @@ public sealed class ScrollView : Element, IScrollTarget
             Math.Max(_childrenExtent.Y, contentBounds.Height));
 
         ArrangeChildren(canvas);
+
+        // Answered here, where the descendant's bounds are those of this very build, and by arranging
+        // the children again rather than invalidating: an invalidation from inside a build shows its
+        // change a frame late.
+        if (_scrollIntoViewRequest != null)
+        {
+            Vector2Int target = ResolveScrollIntoView(_scrollIntoViewRequest);
+            _scrollIntoViewRequest = null;
+
+            if (target != _scrollOffset)
+            {
+                canvas = canvas with { X = contentBounds.X - target.X, Y = contentBounds.Y - target.Y };
+                _scrollOffset = target;
+                ArrangeChildren(canvas);
+            }
+        }
+
         ArrangeBars();
+    }
+
+    /// <summary>
+    /// The offset that shows <paramref name="descendant"/>, from its bounds as just arranged against
+    /// this element's, which are the window: the padding scrolls with the children and is no part
+    /// of it. A request for an element no longer below here, or under something hidden, whose
+    /// bounds are then whatever they last were, resolves to the offset as it stands.
+    /// </summary>
+    private Vector2Int ResolveScrollIntoView(Element descendant)
+    {
+        if (!IsDescendant(descendant) || !IsArrangedBelow(descendant))
+        {
+            return _scrollOffset;
+        }
+
+        Rectangle bounds = descendant.Bounds;
+        int x = (_axes & ScrollAxes.Horizontal) != 0 ? Reveal(_scrollOffset.X, _maxScrollOffset.X, bounds.X, bounds.Width, Bounds.X, Bounds.Width) : _scrollOffset.X;
+        int y = (_axes & ScrollAxes.Vertical) != 0 ? Reveal(_scrollOffset.Y, _maxScrollOffset.Y, bounds.Y, bounds.Height, Bounds.Y, Bounds.Height) : _scrollOffset.Y;
+        return new Vector2Int(x, y);
+    }
+
+    /// <summary>
+    /// On one axis: the least move that brings the span into the window. Behind the window's start,
+    /// the start is aligned; past its end, the end is, unless the span is longer than the window, in
+    /// which case its start is what is shown.
+    /// </summary>
+    private static int Reveal(int offset, int max, int start, int length, int windowStart, int windowLength)
+    {
+        long end = (long)start + length;
+        long windowEnd = (long)windowStart + windowLength;
+        long delta = 0;
+
+        if (start < windowStart)
+        {
+            delta = start - windowStart;
+        }
+        else if (end > windowEnd)
+        {
+            delta = Math.Min(end - windowEnd, start - windowStart);
+        }
+
+        return (int)Math.Clamp(offset + delta, 0, max);
+    }
+
+    private bool IsDescendant(Element element)
+    {
+        for (Element? ancestor = element.Parent; ancestor != null; ancestor = ancestor.Parent)
+        {
+            if (ReferenceEquals(ancestor, this))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether the arrange that just ran reached <paramref name="descendant"/>: a hidden element is not arranged, and neither is anything under it.</summary>
+    private bool IsArrangedBelow(Element descendant)
+    {
+        for (Element? element = descendant; element != null && !ReferenceEquals(element, this); element = element.Parent)
+        {
+            if (!element.IsVisible)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

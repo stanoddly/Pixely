@@ -6,7 +6,7 @@ namespace Pixely.Ui.Tests;
 /// A pointer target that records what it was told, so tests can assert the callbacks a button
 /// hides behind its own state: which of them arrive, in what order, and with what position.
 /// </summary>
-internal sealed class RecordingPointerTarget : Element, IPointerTarget
+internal class RecordingPointerTarget : Element, IPointerTarget
 {
     public List<string> Calls { get; } = new();
 

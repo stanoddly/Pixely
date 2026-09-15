@@ -9,15 +9,21 @@ namespace Pixely.Ui;
 /// </summary>
 /// <remarks>
 /// A press on the track pages the scroll view by one viewport towards the press. A press on the
-/// thumb is taken so that it does not fall through to the game, and does nothing more yet:
-/// dragging needs a move notification <see cref="IPointerTarget"/> does not have.
+/// thumb grabs it where it was pressed, and each drag then puts that point under the pointer,
+/// mapped to an offset through the thumb's travel.
 /// </remarks>
-internal sealed class ScrollBar : Element, IPointerTarget
+internal sealed class ScrollBar : Element, IPointerDragTarget
 {
     private readonly ScrollView _owner;
     private readonly Orientation _orientation;
     private bool _isHovered;
     private bool _isPressed;
+
+    private bool _isDraggingThumb;
+
+    // Where on the thumb it was grabbed, from the thumb's start along the axis. The thumb is dragged
+    // by that point rather than by its start, so it does not jump under the pointer at the first move.
+    private int _thumbGrabOffset;
 
     internal ScrollBar(ScrollView owner, Orientation orientation)
     {
@@ -131,19 +137,55 @@ internal sealed class ScrollBar : Element, IPointerTarget
         {
             _owner.ScrollBy(Compose(page));
         }
+        else
+        {
+            _isDraggingThumb = true;
+            _thumbGrabOffset = pressed - thumbStart;
+        }
 
         return true;
+    }
+
+    /// <summary>
+    /// Puts the grabbed point under the pointer. The thumb's start within its travel is the
+    /// offset's share of the range, so the start the pointer asks for is mapped back the same way.
+    /// Rounded up: painting rounds the other way down, and the travel never exceeds the range while
+    /// a bar shows (the track is the viewport, which is shorter than the extent), so the smallest
+    /// offset at or above the exact one is the one that paints the thumb where the pointer put it.
+    /// </summary>
+    void IPointerDragTarget.OnPointerDrag(Vector2Int position, MouseButton button)
+    {
+        if (!_isDraggingThumb)
+        {
+            return;
+        }
+
+        Rectangle thumb = ThumbBounds;
+        int travel = Along(Bounds.Width, Bounds.Height) - Along(thumb.Width, thumb.Height);
+        int max = Along(_owner.MaxScrollOffset.X, _owner.MaxScrollOffset.Y);
+
+        if (travel <= 0 || max <= 0)
+        {
+            return;
+        }
+
+        int thumbStart = Math.Clamp(Along(position.X, position.Y) - _thumbGrabOffset - Along(Bounds.X, Bounds.Y), 0, travel);
+        int target = (int)(((long)thumbStart * max + travel - 1) / travel);
+        Vector2Int current = _owner.ClampedScrollOffset;
+        _owner.ScrollBy(Compose(target - Along(current.X, current.Y)));
     }
 
     void IPointerTarget.OnPointerRelease(Vector2Int position, MouseButton button, bool inside)
     {
         _isPressed = false;
+        _isDraggingThumb = false;
         InvalidatePaint();
     }
 
     void IPointerTarget.OnPointerCancel(MouseButton button)
     {
         _isPressed = false;
+        _isDraggingThumb = false;
         InvalidatePaint();
     }
 
