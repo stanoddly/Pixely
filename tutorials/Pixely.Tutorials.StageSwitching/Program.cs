@@ -16,7 +16,7 @@ static partial class Program
 
         builder.UseUi();
         builder.AddSingleton<UiStyle>(provider =>
-            new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 16))
+            new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14))
             {
                 Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255) },
                 Button = new ButtonAppearance
