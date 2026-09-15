@@ -5,7 +5,7 @@ namespace Pixely.Tutorials.WindowCreation;
 
 static partial class Program
 {
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak").AddProjectDirectory("_Content"))

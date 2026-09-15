@@ -24,7 +24,7 @@ namespace Foo;
 
 static partial class Program
 {
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder.UseDefaultContent().UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Game"));
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
@@ -34,11 +34,12 @@ static partial class Program
 
 - `RootNamespace` defaults to the project file name and is where `dotnet new` puts `Program`. A project
   that wants `Program` elsewhere does not opt in.
-- `Configure` runs before `Build()` and receives the command-line arguments `Main` received. It is the
-  only place that registers into the root container, and nothing after it sees the app object: work
+- `Configure` runs before `Build()`. It is the only place that registers into the root container, and nothing after it sees the app object: work
   that needs built services runs in `OnBuilt` (`docs/class-registration.md`), a stage is loaded
   through `IStageManager.Load`, and a registered `UiView` is added to its root by `Pixely.Ui`
   (`docs/ui.md`).
+- Command-line arguments come from `Environment.GetCommandLineArgs()`; its first element is the
+  executable.
 - `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
   the same class, so nothing needs to be `internal` or `partial` beyond the class itself.
 - A missing `Configure` is CS0117: the generated `Main` names `Program.Configure`.

@@ -307,13 +307,11 @@ public class PackageIntegrationTests
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
-            Path.Combine(outputDirectory, "HostedConsumer.dll"),
-            "--first",
-            "--second");
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
         Assert.Multiple(() =>
         {
             Assert.That(exitCode, Is.EqualTo(1));
-            Assert.That(output, Does.Contain("Configure ran with 2 arguments: --first --second"));
+            Assert.That(output, Does.Contain("Configure ran."));
             Assert.That(output, Does.Contain("OnException ran: Configure failed on purpose."));
         });
 
@@ -343,7 +341,7 @@ public class PackageIntegrationTests
         {
             // an unhandled exception, not the handled-and-reported exit code 1
             Assert.That(exitCode, Is.Not.EqualTo(0).And.Not.EqualTo(1));
-            Assert.That(output, Does.Contain("Configure ran with 0 arguments"));
+            Assert.That(output, Does.Contain("Configure ran."));
             Assert.That(output, Does.Contain("Configure failed on purpose."));
             Assert.That(output, Does.Not.Contain("OnException ran"));
         });

@@ -5,7 +5,7 @@ namespace Pixely.Tutorials.TextureArray;
 
 static partial class Program
 {
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder
             .UseDefaultContent()

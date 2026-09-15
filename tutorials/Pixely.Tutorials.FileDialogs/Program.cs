@@ -8,7 +8,7 @@ namespace Pixely.Tutorials.FileDialogs;
 
 static partial class Program
 {
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))

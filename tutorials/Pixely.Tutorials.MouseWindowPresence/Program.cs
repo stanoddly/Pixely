@@ -6,7 +6,7 @@ namespace Pixely.Tutorials.MouseWindowPresence;
 
 static partial class Program
 {
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder
             .UseDefaultRendering(

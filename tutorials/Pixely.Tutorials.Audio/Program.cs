@@ -13,7 +13,7 @@ static partial class Program
     private const float BufferedGain = 0.45f;
     private const float StreamGain = 0.15f;
 
-    static void Configure(PixelyAppBuilder builder, string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
         builder
             .UseDefaultContent()

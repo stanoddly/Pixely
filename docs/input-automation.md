@@ -42,7 +42,7 @@ Keep logging off standard output while doing this; replies share the stream.
 `PixelyConfig.Headless` makes every window the app registers an `OffscreenWindow`, whether through `AddWindow` or `UseDefaultRendering`, and whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync; frames are paced at `OffscreenWindow.FrameInterval`, 30 per second. The console and `IImageWriter` are registered only in headless mode.
 
 ```csharp
-builder.AddSingleton(new PixelyConfig(Headless: args.Contains("--headless")));
+builder.AddSingleton(new PixelyConfig(Headless: Environment.GetCommandLineArgs().Contains("--headless")));
 builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
 ```
 
