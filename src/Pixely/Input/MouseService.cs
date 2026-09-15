@@ -104,6 +104,7 @@ public class MouseService : IMouseService
 {
     private readonly WindowRegistry _windowRegistry;
     private readonly Dictionary<SDL_MouseID, Mouse> _mice = new();
+    private readonly HashSet<ViewScope> _syntheticMouseScopes = new();
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly MouseButtonEventArgs _buttonEventArgs = new();
@@ -126,6 +127,11 @@ public class MouseService : IMouseService
     public bool IsInWindow(ViewScope viewScope = default)
     {
         Window window = _windowRegistry.GetWindow(viewScope);
+        if (_syntheticMouseScopes.Contains(viewScope))
+        {
+            return true;
+        }
+
         unsafe
         {
             Pointer<SDL_Window> mouseFocusWindow = SDL3.SDL_GetMouseFocus();
@@ -254,6 +260,17 @@ public class MouseService : IMouseService
             : _windowLeaveHandlers;
 
         handlers.Invoke(viewScope, _windowPresenceEventArgs);
+    }
+
+    // Presence of the synthetic mouse is tracked here rather than read from SDL, which never sees it. The set is
+    // updated before the handlers run so a handler observes the new IsInWindow, as it does for a physical event.
+    internal void OnSyntheticMouseWindowPresence(ViewScope viewScope, bool isInWindow, ulong timestamp)
+    {
+        bool changed = isInWindow ? _syntheticMouseScopes.Add(viewScope) : _syntheticMouseScopes.Remove(viewScope);
+        if (changed)
+        {
+            OnMouseWindowPresenceEvent(viewScope, isInWindow, timestamp);
+        }
     }
 
     internal void OnMouseButtonEvent(ViewScope viewScope, SDL_MouseID mouseId, MouseButton button, Vector2 position, bool isPressed, ulong timestamp)

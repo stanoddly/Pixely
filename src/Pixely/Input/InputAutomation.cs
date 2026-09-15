@@ -29,30 +29,35 @@ internal sealed class InputAutomation
     public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
     }
 
     public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseMoveBy(viewScope, VirtualMouseId(viewScope), delta, GetTimestamp());
     }
 
     public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
     }
 
     public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
     }
 
     public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
         _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
         _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
@@ -61,7 +66,14 @@ internal sealed class InputAutomation
     public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default)
     {
         ValidateView(viewScope);
+        EnterWindow(viewScope);
         _mouseService.OnMouseWheelEvent(viewScope, VirtualMouseId(viewScope), delta, windowPosition, GetTimestamp());
+    }
+
+    public void MouseLeave(ViewScope viewScope = default)
+    {
+        ValidateView(viewScope);
+        _mouseService.OnSyntheticMouseWindowPresence(viewScope, false, GetTimestamp());
     }
 
     public void KeyDown(Scancode scancode, ViewScope viewScope = default)
@@ -94,6 +106,12 @@ internal sealed class InputAutomation
     private void ValidateView(ViewScope viewScope)
     {
         _windowRegistry.GetWindow(viewScope);
+    }
+
+    // SDL raises the window enter before the first motion of a pointer that arrives; the synthetic mouse does the same.
+    private void EnterWindow(ViewScope viewScope)
+    {
+        _mouseService.OnSyntheticMouseWindowPresence(viewScope, true, GetTimestamp());
     }
 
     private static VirtualKey GetVirtualKey(Scancode scancode)

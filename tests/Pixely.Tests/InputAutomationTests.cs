@@ -67,6 +67,51 @@ public sealed class InputAutomationTests
     }
 
     [Test]
+    public void FirstMouseInput_RaisesWindowEnterOnceBeforeItsOwnEvent()
+    {
+        (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
+        List<(string Event, bool IsInWindow)> events = new();
+        mouseService.SubscribeWindowEnter(_viewScope, 0, eventArgs => events.Add(("enter", mouseService.IsInWindow(_viewScope))));
+        mouseService.SubscribeMotion(_viewScope, 0, _ => events.Add(("motion", mouseService.IsInWindow(_viewScope))));
+        bool isInWindowBefore = mouseService.IsInWindow(_viewScope);
+
+        automation.MouseMoveTo(new Vector2(20, 30), _viewScope);
+        automation.MouseMoveBy(new Vector2(1, 1), _viewScope);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(isInWindowBefore, Is.False);
+            Assert.That(events, Is.EqualTo(new[] { ("enter", true), ("motion", true), ("motion", true) }));
+        });
+    }
+
+    [Test]
+    public void MouseLeave_RaisesWindowLeaveOnceAndTheNextInputEntersAgain()
+    {
+        (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
+        List<(string Event, bool IsInWindow)> events = new();
+        mouseService.SubscribeWindowEnter(_viewScope, 0, _ => events.Add(("enter", mouseService.IsInWindow(_viewScope))));
+        mouseService.SubscribeWindowLeave(_viewScope, 0, eventArgs => events.Add(("leave", mouseService.IsInWindow(_viewScope))));
+        mouseService.SubscribeButtonPress(_viewScope, 0, _ => events.Add(("press", mouseService.IsInWindow(_viewScope))));
+
+        automation.MouseLeave(_viewScope);
+        automation.MouseDown(MouseButton.Left, new Vector2(20, 30), _viewScope);
+        automation.MouseLeave(_viewScope);
+        automation.MouseLeave(_viewScope);
+        automation.MouseMoveBy(Vector2.One, _viewScope);
+
+        Assert.That(events, Is.EqualTo(new[] { ("enter", true), ("press", true), ("leave", false), ("enter", true) }));
+    }
+
+    [Test]
+    public void MouseLeave_ForUnregisteredView_Throws()
+    {
+        (InputAutomation automation, _, _, _) = CreateAutomation();
+
+        Assert.Throws<InvalidOperationException>(() => automation.MouseLeave(new ViewScope(99)));
+    }
+
+    [Test]
     public void KeyPress_DispatchesDownAndUpWithCorrespondingState()
     {
         (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation();

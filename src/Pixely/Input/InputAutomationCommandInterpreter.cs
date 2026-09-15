@@ -83,6 +83,9 @@ internal sealed class InputAutomationCommandInterpreter
             case ["mouse", "wheel", string dx, string dy, string x, string y]:
                 _automation.MouseWheel(ParseVector(dx, dy), ParseVector(x, y), viewScope);
                 break;
+            case ["mouse", "leave"]:
+                _automation.MouseLeave(viewScope);
+                break;
             case ["key", "down", string scancode]:
                 _automation.KeyDown(ParseEnum<Scancode>(scancode), viewScope);
                 break;
