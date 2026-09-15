@@ -359,7 +359,7 @@ services.Decorate<PixelyConfig>(static config => config with { Headless = true }
 - Decorators are keyed by service type id and cost one array index per produced instance; types without a decorator pay nothing.
 - Multiple decorators for one type run in registration order. A decorator may be registered before or after the registrations it applies to.
 - Only registrations under `T` are decorated. An alias resolves to the already decorated source instance, and a decorator registered for the alias type is not applied.
-- `OnActivated` and `OnDisposing` receive the returned instance with the registration's concrete type, and the provider disposes the returned instance. A decorator that wraps a disposable original owns it.
+- `OnActivated` and `OnDisposing` receive the returned instance. When it is the original, its type is the registration's concrete type as usual; when it is a replacement, its type is `T`, since the registration's concrete type no longer describes it and callbacks such as `AddRegistry` read interfaces from that type. The provider disposes the returned instance; a decorator that wraps a disposable original owns it.
 - Returning `null` fails the build with `InvalidOperationException`.
 - Parent decorators are merged into child providers and run before the child's own, like `OnActivated` callbacks.
 

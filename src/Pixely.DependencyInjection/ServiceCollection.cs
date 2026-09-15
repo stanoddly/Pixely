@@ -15,7 +15,7 @@ public class ServiceCollection
     private readonly List<ServiceActivatedCallback> _activatedCallbacks = new();
     private readonly List<ServiceDisposingCallback> _disposingCallbacks = new();
     // Indexed by service type id like ServiceProvider._services; null slots mean no decorator.
-    private Func<object, object>?[]? _decorators;
+    private ServiceDecorator?[]? _decorators;
 
     public ServiceCollection()
     {
@@ -182,8 +182,7 @@ public class ServiceCollection
 
         ServiceDescriptor sourceDescriptor = _serviceGroups[ServiceTypeId<TImplementation>.Id][^1];
         ServiceDescriptor descriptor = sourceDescriptor.Lifetime == ServiceLifetime.Transient
-            ? ServiceDescriptor.ForTransientTypedFactoryWithConcreteType<TService, TImplementation>(
-                static sp => sp.GetService<TImplementation>())
+            ? ServiceDescriptor.ForTransientAlias<TService, TImplementation>()
             : ServiceDescriptor.ForAlias<TService, TImplementation>();
         RegisterDescriptor(ServiceTypeId<TService>.Id, descriptor);
     }
@@ -237,9 +236,9 @@ public class ServiceCollection
     /// provider stores it, tracks its disposal, or runs <see cref="OnActivated"/> callbacks. The decorator returns either the
     /// instance itself or a replacement, which is what consumers then receive. Aliases resolve to the already decorated source.
     /// </summary>
-    /// <typeparam name="T">The service type whose registrations are decorated. Registrations under other service types, such as an alias or interface, are not affected.</typeparam>
+    /// <typeparam name="T">The service type whose registrations are decorated. Registrations under other service types, such as an alias or interface, are not affected. Callbacks receive <c>typeof(T)</c> as the concrete type of a replacement, since the registration's concrete type no longer describes it.</typeparam>
     /// <param name="decorator">Receives the produced instance and returns the instance to use in its place. Multiple decorators for one type run in registration order.</param>
-    public void Decorate<T>(Func<T, T> decorator) where T : class
+    public void Decorate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>(Func<T, T> decorator) where T : class
     {
         ArgumentNullException.ThrowIfNull(decorator);
 
@@ -252,17 +251,7 @@ public class ServiceCollection
         // Unsafe.As skips the castclass check. Safe: an instance produced under T's service id is always a T.
         Func<object, object> added = instance => decorator(Unsafe.As<T>(instance))
             ?? throw new InvalidOperationException($"The decorator for {typeof(T).Name} returned null.");
-        _decorators[id] = ComposeDecorators(_decorators[id], added);
-    }
-
-    internal static Func<object, object>? ComposeDecorators(Func<object, object>? first, Func<object, object>? second)
-    {
-        if (first == null || second == null)
-        {
-            return first ?? second;
-        }
-
-        return instance => second(first(instance));
+        _decorators[id] = ServiceDecorator.Compose(_decorators[id], new ServiceDecorator(added, typeof(T)));
     }
 
     /// <summary>Returns <see langword="true"/> if <typeparamref name="T"/> has been registered at least once.</summary>
@@ -507,17 +496,18 @@ public class ServiceCollection
                 _ => null
             };
 
-            if (instance != null && descriptor.Kind != ServiceDescriptorKind.Alias)
+            Type? concreteType = descriptor.ConcreteType;
+            if (instance != null && descriptor.AppliesDecorators)
             {
-                instance = provider.Decorate(descriptor.ServiceTypeId, instance);
+                instance = provider.Decorate(descriptor.ServiceTypeId, instance, ref concreteType!);
             }
 
             singletonInstances[descriptor] = instance;
 
             if (instance != null && descriptor.Kind != ServiceDescriptorKind.Alias)
             {
-                provider.TrackSingleton(instance, descriptor.ConcreteType!);
-                provider.RunActivatedCallbacks(instance, descriptor.ConcreteType!);
+                provider.TrackSingleton(instance, concreteType!);
+                provider.RunActivatedCallbacks(instance, concreteType!);
             }
 
             return instance;
@@ -528,20 +518,21 @@ public class ServiceCollection
         }
     }
 
-    // Parent decorators run first, then the child's, matching activation callback order.
-    private static Func<object, object>?[]? MergeDecorators(Func<object, object>?[]? parentDecorators, Func<object, object>?[]? childDecorators)
+    // Parent decorators run first, then the child's, matching activation callback order. Always a copy, so a
+    // Decorate call after the build does not reach the built provider.
+    private static ServiceDecorator?[]? MergeDecorators(ServiceDecorator?[]? parentDecorators, ServiceDecorator?[]? childDecorators)
     {
-        if (parentDecorators == null || childDecorators == null)
+        if (parentDecorators == null && childDecorators == null)
         {
-            return parentDecorators ?? childDecorators;
+            return null;
         }
 
-        Func<object, object>?[] decorators = new Func<object, object>?[Math.Max(parentDecorators.Length, childDecorators.Length)];
+        ServiceDecorator?[] decorators = new ServiceDecorator?[Math.Max(parentDecorators?.Length ?? 0, childDecorators?.Length ?? 0)];
         for (int id = 0; id < decorators.Length; id++)
         {
-            decorators[id] = ComposeDecorators(
-                id < parentDecorators.Length ? parentDecorators[id] : null,
-                id < childDecorators.Length ? childDecorators[id] : null);
+            decorators[id] = ServiceDecorator.Compose(
+                parentDecorators != null && id < parentDecorators.Length ? parentDecorators[id] : null,
+                childDecorators != null && id < childDecorators.Length ? childDecorators[id] : null);
         }
 
         return decorators;

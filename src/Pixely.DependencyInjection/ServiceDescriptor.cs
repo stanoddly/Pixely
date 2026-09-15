@@ -33,6 +33,9 @@ internal class ServiceDescriptor
 
     public bool TracksDisposal { get; private init; }
 
+    // False for aliases, whose source registration already applied the decorators of its own service type.
+    public bool AppliesDecorators { get; private init; } = true;
+
     private ServiceDescriptor(int serviceTypeId, Type serviceType, ServiceDescriptorKind kind, ServiceLifetime lifetime)
     {
         ServiceTypeId = serviceTypeId;
@@ -103,12 +106,26 @@ internal class ServiceDescriptor
         };
     }
 
+    public static ServiceDescriptor ForTransientAlias<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TImplementation>()
+        where TService : class
+        where TImplementation : class, TService
+    {
+        return new ServiceDescriptor(ServiceTypeId<TService>.Id, typeof(TService), ServiceDescriptorKind.TypedFactory, ServiceLifetime.Transient)
+        {
+            TypedFactory = static sp => sp.GetService<TImplementation>(),
+            ConcreteType = typeof(TImplementation),
+            TracksDisposal = typeof(IDisposable).IsAssignableFrom(typeof(TImplementation)),
+            AppliesDecorators = false
+        };
+    }
+
     public static ServiceDescriptor ForAlias<TService, TImplementation>()
         where TService : class
         where TImplementation : class, TService
     {
         return new ServiceDescriptor(ServiceTypeId<TService>.Id, typeof(TService), ServiceDescriptorKind.Alias, ServiceLifetime.Singleton)
         {
+            AppliesDecorators = false,
             AliasSourceId = ServiceTypeId<TImplementation>.Id
         };
     }

@@ -17,7 +17,7 @@ public class ServiceProvider : IDisposable
     private List<ServiceProvider>? _children;
     private List<ServiceActivatedCallback>? _activatedCallbacks;
     private List<ServiceDisposingCallback>? _disposingCallbacks;
-    private Func<object, object>?[]? _decorators;
+    private ServiceDecorator?[]? _decorators;
     private Func<int, Type, object>? _buildTimeResolver;
     private Func<int, object?>? _buildTimeTryResolver;
     private Func<int, object[]>? _buildTimeCollectionResolver;
@@ -144,23 +144,39 @@ public class ServiceProvider : IDisposable
 
     internal List<ServiceDisposingCallback>? DisposingCallbacks => _disposingCallbacks;
 
-    internal Func<object, object>?[]? Decorators => _decorators;
+    internal ServiceDecorator?[]? Decorators => _decorators;
 
-    internal void SetDecorators(Func<object, object>?[]? decorators)
+    internal void SetDecorators(ServiceDecorator?[]? decorators)
     {
         _decorators = decorators;
     }
 
-    internal object Decorate(int serviceTypeId, object instance)
+    // A replacement is described by the decorated service type, since the registration's concrete type
+    // may not be its type and callbacks read interfaces from concreteType.
+    internal object Decorate(
+        int serviceTypeId,
+        object instance,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] ref Type concreteType)
     {
-        Func<object, object>?[]? decorators = _decorators;
+        ServiceDecorator?[]? decorators = _decorators;
         if (decorators == null || serviceTypeId >= decorators.Length)
         {
             return instance;
         }
 
-        Func<object, object>? decorator = decorators[serviceTypeId];
-        return decorator == null ? instance : decorator(instance);
+        ServiceDecorator? decorator = decorators[serviceTypeId];
+        if (decorator == null)
+        {
+            return instance;
+        }
+
+        object decorated = decorator.Apply(instance);
+        if (!ReferenceEquals(decorated, instance))
+        {
+            concreteType = decorator.ServiceType;
+        }
+
+        return decorated;
     }
 
     // The [DynamicallyAccessedMembers] annotation on type preserves interface metadata
@@ -395,14 +411,18 @@ public class ServiceProvider : IDisposable
             return null;
         }
 
-        instance = Decorate(descriptor.ServiceTypeId, instance);
+        Type concreteType = descriptor.ConcreteType!;
+        if (descriptor.AppliesDecorators)
+        {
+            instance = Decorate(descriptor.ServiceTypeId, instance, ref concreteType);
+        }
 
         if (instance is IDisposable)
         {
-            _transientDisposalRecords.Add(new TransientDisposalRecord(instance, descriptor.ConcreteType!));
+            _transientDisposalRecords.Add(new TransientDisposalRecord(instance, concreteType));
         }
 
-        RunActivatedCallbacks(instance, descriptor.ConcreteType!);
+        RunActivatedCallbacks(instance, concreteType);
 
         return instance;
     }

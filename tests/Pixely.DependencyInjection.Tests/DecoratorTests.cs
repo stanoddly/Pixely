@@ -26,7 +26,14 @@ public sealed class DecoratedConsumer
     public DecoratedService Decorated { get; }
 }
 
-public sealed class DecoratedTransientService
+public sealed class DecoratedContractProxy : IDecoratedContract;
+
+public interface IDecoratedTransientContract
+{
+    int Generation { get; }
+}
+
+public sealed class DecoratedTransientService : IDecoratedTransientContract
 {
     public int Generation { get; init; }
 }
@@ -138,6 +145,66 @@ public sealed class DecoratorTests
         using ServiceProvider child = childCollection.BuildServiceProvider();
 
         Assert.That(child.GetRequiredService<DecoratedService>().Name, Is.EqualTo("original+parent+child"));
+    }
+
+    [Test]
+    public void Decorate_Replacement_ReportsServiceTypeToCallbacks()
+    {
+        List<(object Instance, Type Type)> activations = new();
+        List<(object Instance, Type Type)> disposals = new();
+        ServiceCollection collection = new();
+        collection.AddSingleton<IDecoratedContract, DecoratedService>(static sp => new DecoratedService());
+        collection.Decorate<IDecoratedContract>(_ => new DecoratedContractProxy());
+        collection.OnActivated((instance, type) => activations.Add((instance, type)));
+        collection.OnDisposing((instance, type) => disposals.Add((instance, type)));
+
+        ServiceProvider provider = collection.BuildServiceProvider();
+        IDecoratedContract resolved = provider.GetRequiredService<IDecoratedContract>();
+        provider.Dispose();
+
+        Assert.That(resolved, Is.TypeOf<DecoratedContractProxy>());
+        Assert.That(activations, Is.EqualTo(new[] { (resolved, typeof(IDecoratedContract)) }));
+        Assert.That(disposals, Is.EqualTo(new[] { (resolved, typeof(IDecoratedContract)) }));
+    }
+
+    [Test]
+    public void Decorate_SameInstance_KeepsConcreteTypeForCallbacks()
+    {
+        List<Type> activations = new();
+        ServiceCollection collection = new();
+        collection.AddSingleton<IDecoratedContract, DecoratedService>(static sp => new DecoratedService());
+        collection.Decorate<IDecoratedContract>(service => service);
+        collection.OnActivated((_, type) => activations.Add(type));
+
+        using ServiceProvider provider = collection.BuildServiceProvider();
+
+        Assert.That(activations, Is.EqualTo(new[] { typeof(DecoratedService) }));
+    }
+
+    [Test]
+    public void Decorate_DoesNotApplyToTransientAliasType()
+    {
+        ServiceCollection collection = new();
+        collection.AddTransient<DecoratedTransientService>(static sp => new DecoratedTransientService { Generation = 1 });
+        collection.AddAlias<IDecoratedTransientContract, DecoratedTransientService>();
+        collection.Decorate<IDecoratedTransientContract>(_ => new DecoratedTransientService { Generation = 2 });
+
+        using ServiceProvider provider = collection.BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<IDecoratedTransientContract>().Generation, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Decorate_AfterBuild_DoesNotReachTheBuiltProvider()
+    {
+        ServiceCollection collection = new();
+        collection.AddTransient<DecoratedTransientService>(static sp => new DecoratedTransientService { Generation = 1 });
+        collection.Decorate<DecoratedTransientService>(service => service);
+        using ServiceProvider provider = collection.BuildServiceProvider();
+
+        collection.Decorate<DecoratedTransientService>(_ => new DecoratedTransientService { Generation = 2 });
+
+        Assert.That(provider.GetRequiredService<DecoratedTransientService>().Generation, Is.EqualTo(1));
     }
 
     [Test]
