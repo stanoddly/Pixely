@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <!-- Keep the packaging project's own output out of lib while retaining pack's build-output and symbol extension points. -->
         <TargetExt>.packaging</TargetExt>
         <DebugType>none</DebugType>
@@ -60,14 +60,14 @@
         <None Include="..\..\docs\peach-architecture.md" Pack="true" PackagePath="docs" />
         <None Include="..\..\src\Pixely.DependencyInjection.Generator\bin\$(Configuration)\netstandard2.0\Pixely.DependencyInjection.Generator.dll"
               Pack="true" PackagePath="analyzers\dotnet\cs" />
-        <None Include="..\..\src\Pixely.SdlangCompiler\bin\$(Configuration)\net10.0\Pixely.SdlangCompiler.dll"
-              Pack="true" PackagePath="tools\net10.0\any" />
-        <None Include="..\..\src\Pixely.ShaderCommon\bin\$(Configuration)\net10.0\Pixely.ShaderCommon.dll"
-              Pack="true" PackagePath="tools\net10.0\any" />
+        <None Include="..\..\src\Pixely.SdlangCompiler\bin\$(Configuration)\net11.0\Pixely.SdlangCompiler.dll"
+              Pack="true" PackagePath="tools\net11.0\any" />
+        <None Include="..\..\src\Pixely.ShaderCommon\bin\$(Configuration)\net11.0\Pixely.ShaderCommon.dll"
+              Pack="true" PackagePath="tools\net11.0\any" />
         <None Include="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.props"
-              Pack="true" PackagePath="tools\net10.0\any\build" />
+              Pack="true" PackagePath="tools\net11.0\any\build" />
         <None Include="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets"
-              Pack="true" PackagePath="tools\net10.0\any\build" />
+              Pack="true" PackagePath="tools\net11.0\any\build" />
         <None Include="buildTransitive\Pixely.Hosting.targets" Pack="true" PackagePath="buildTransitive" />
         <None Include="buildTransitive\Pixely.props" Pack="true" PackagePath="buildTransitive" />
         <None Include="buildTransitive\Pixely.targets" Pack="true" PackagePath="buildTransitive" />

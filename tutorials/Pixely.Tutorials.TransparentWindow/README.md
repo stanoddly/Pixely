@@ -124,7 +124,7 @@ that file after each `dotnet build`.
 After building the project, the NuGet-provided library is at:
 
 ```
-bin/Debug/net10.0/runtimes/linux-x64/native/libSDL3.so
+bin/Debug/net11.0/runtimes/linux-x64/native/libSDL3.so
 ```
 
 The exact RID directory depends on your platform (`linux-x64`, `linux-arm64`,
@@ -138,13 +138,13 @@ dotnet build
 
 # Overwrite the NuGet library with the patched one
 cp /path/to/SDL/build/libSDL3.so.0.5.0 \
-   bin/Debug/net10.0/runtimes/linux-x64/native/libSDL3.so
+   bin/Debug/net11.0/runtimes/linux-x64/native/libSDL3.so
 
 # macOS arm64:
 cp /path/to/SDL/build/libSDL3.0.dylib \
-   bin/Debug/net10.0/runtimes/osx-arm64/native/libSDL3.dylib
+   bin/Debug/net11.0/runtimes/osx-arm64/native/libSDL3.dylib
 cp /path/to/SDL/build/libSDL3.0.dylib \
-   bin/Debug/net10.0/runtimes/osx-arm64/native/libSDL3.0.dylib
+   bin/Debug/net11.0/runtimes/osx-arm64/native/libSDL3.0.dylib
 
 # Run without rebuilding (rebuild would restore the NuGet version)
 dotnet run --no-build

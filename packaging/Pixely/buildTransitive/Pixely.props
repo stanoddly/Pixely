@@ -8,5 +8,5 @@
         <CompilerVisibleProperty Include="PixelyDIEmitTrimAnnotations" />
     </ItemGroup>
 
-    <Import Project="$(MSBuildThisFileDirectory)..\tools\net10.0\any\build\Pixely.SdlangCompiler.props" />
+    <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.props" />
 </Project>

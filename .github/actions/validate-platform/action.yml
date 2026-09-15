@@ -20,7 +20,8 @@ runs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: '10.0.x'
+        dotnet-version: '11.0.x'
+        dotnet-quality: 'preview'
 
     # Dropping the tutorial and benchmark project lines from Pixely.slnx leaves a valid solution with empty folders,
     # so new src and tests projects are validated without maintaining a second project list.

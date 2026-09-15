@@ -27,7 +27,7 @@ public class SdlangBuildIntegrationTests
             "Pixely.SdlangCompiler",
             "bin",
             "Debug",
-            "net10.0");
+            "net11.0");
         string[] taskAssemblyPaths =
         [
             Path.Combine(taskOutputDirectory, "Pixely.SdlangCompiler.dll"),
@@ -94,15 +94,15 @@ public class SdlangBuildIntegrationTests
         string buildGeneratedDirectory = Path.Combine(
             outputDirectory,
             "Debug",
-            "net10.0",
+            "net11.0",
             "Content",
             "shaders",
             ".generated");
         AssertGeneratedShadersExist(buildGeneratedDirectory);
         AssertExternalGeneratedShadersExist(externalGeneratedDirectory);
-        AssertExternalGeneratedShadersAreNotCopied(Path.Combine(outputDirectory, "Debug", "net10.0"));
-        AssertEmbeddedShadersAreNotCopied(Path.Combine(outputDirectory, "Debug", "net10.0"));
-        AssertEmbeddedShadersExist(Path.Combine(outputDirectory, "Debug", "net10.0", "BuildIntegration.dll"));
+        AssertExternalGeneratedShadersAreNotCopied(Path.Combine(outputDirectory, "Debug", "net11.0"));
+        AssertEmbeddedShadersAreNotCopied(Path.Combine(outputDirectory, "Debug", "net11.0"));
+        AssertEmbeddedShadersExist(Path.Combine(outputDirectory, "Debug", "net11.0", "BuildIntegration.dll"));
 
         DeleteDirectory(generatedDirectory);
         DeleteDirectory(nestedGeneratedDirectory);

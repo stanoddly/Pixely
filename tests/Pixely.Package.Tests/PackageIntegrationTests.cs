@@ -105,7 +105,7 @@ public class PackageIntegrationTests
 
         foreach (string assembly in RuntimeAssemblies)
         {
-            string entryName = $"lib/net10.0/{assembly}.dll";
+            string entryName = $"lib/net11.0/{assembly}.dll";
             Assert.That(entries, Does.Contain(entryName));
             ZipArchiveEntry assemblyEntry = package.GetEntry(entryName)
                 ?? throw new InvalidOperationException($"{entryName} is missing from the package.");
@@ -130,24 +130,24 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.Hosting.targets"));
-            Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.SdlangCompiler.dll"));
-            Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.ShaderCommon.dll"));
-            Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.props"));
-            Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.targets"));
+            Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.SdlangCompiler.dll"));
+            Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.ShaderCommon.dll"));
+            Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.props"));
+            Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.targets"));
             Assert.That(entries, Does.Contain("THIRD-PARTY-NOTICES.md"));
             Assert.That(entries, Does.Contain("docs/peach-architecture.md"));
-            Assert.That(entries, Does.Not.Contain("lib/net10.0/Pixely.SdlangCompiler.dll"));
-            Assert.That(entries, Does.Not.Contain("lib/net10.0/Pixely.DependencyInjection.Generator.dll"));
+            Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.SdlangCompiler.dll"));
+            Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.DependencyInjection.Generator.dll"));
             Assert.That(entries.Any(entry => entry.StartsWith("tools/slang/", StringComparison.Ordinal)), Is.False);
             Assert.That(entries.Any(IsNuGetEmptyFolderPlaceholder), Is.False);
         });
 
         string shaderProps = ReadPackageEntry(
             package,
-            "tools/net10.0/any/build/Pixely.SdlangCompiler.props");
+            "tools/net11.0/any/build/Pixely.SdlangCompiler.props");
         string shaderTargets = ReadPackageEntry(
             package,
-            "tools/net10.0/any/build/Pixely.SdlangCompiler.targets");
+            "tools/net11.0/any/build/Pixely.SdlangCompiler.targets");
         string pixelyProps = ReadPackageEntry(package, "buildTransitive/Pixely.props");
         Assert.Multiple(() =>
         {
@@ -207,10 +207,10 @@ public class PackageIntegrationTests
             .ToHashSet(StringComparer.Ordinal);
         foreach (string assembly in RuntimeAssemblies)
         {
-            Assert.That(symbolEntries, Does.Contain($"lib/net10.0/{assembly}.pdb"));
+            Assert.That(symbolEntries, Does.Contain($"lib/net11.0/{assembly}.pdb"));
         }
 
-        ZipArchiveEntry sourceLinkEntry = symbols.GetEntry("lib/net10.0/Pixely.pdb")
+        ZipArchiveEntry sourceLinkEntry = symbols.GetEntry("lib/net11.0/Pixely.pdb")
             ?? throw new InvalidOperationException("Pixely.pdb is missing from the symbol package.");
         using Stream sourceLinkStream = sourceLinkEntry.Open();
         using MemoryStream sourceLinkBytes = new();
@@ -228,7 +228,7 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("ShaderConsumer");
 
         await BuildConsumerAsync(consumerDirectory);
-        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         string generatedDirectory = Path.Combine(consumerDirectory, "Content", "shaders", ".generated");
         string shaderToolDirectory = Path.Combine(consumerDirectory, "obj", "Pixely.SdlangCompiler");
         string slangDirectory = GetRestoredSlangDirectory(GetCurrentSlangPlatform());
@@ -272,7 +272,7 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("ShaderFreeConsumer");
 
         await BuildConsumerAsync(consumerDirectory);
-        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         string shaderToolDirectory = Path.Combine(consumerDirectory, "obj", "Pixely.SdlangCompiler");
 
         Assert.Multiple(() =>
@@ -300,11 +300,11 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("HostedConsumer");
 
         await BuildConsumerAsync(consumerDirectory);
-        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net10.0", "PixelyProgram.g.cs");
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs");
         Assert.That(File.Exists(generatedFile), Is.True);
         Assert.That(File.ReadAllText(generatedFile), Does.Contain("namespace HostedConsumer;"));
 
-        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
             Path.Combine(outputDirectory, "HostedConsumer.dll"));
@@ -333,7 +333,7 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("HostedConsumer");
 
         await BuildConsumerAsync(consumerDirectory, defineConstants: variant);
-        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
             Path.Combine(outputDirectory, "HostedConsumer.dll"));
