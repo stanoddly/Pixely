@@ -170,16 +170,12 @@ Executable          ──> everything above
 - A ViewModel that shows State SHOULD implement `Pixely.IUpdatable`, read State in `Update` and raise
   `Changed` when what it shows differs. It MAY invoke Mechanics to update the State
 
-## Foo.Frontend.Rendering project
+## Foo.Frontend.Rendering and Foo.Frontend.Audio projects
 
 - MAY read State. What State says every frame, e.g. a position that advances every tick, is drawn
   from State directly
 - State is ahead of the screen, e.g. the Mechanic already put the unit at the end of its path while
   `Rendering` still shows the walk
-
-## Foo.Frontend.Audio project
-
-- The `Rendering` rules hold here too
 
 ## Autonomous actor projects
 
