@@ -212,11 +212,9 @@ Executable          ──> everything above
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage
 - State MUST NOT be reset in place. Another run is another stage
 - The frame is single threaded, set by Pixely, so nothing returns a `Task`
-- One frame runs in this order. First whatever writes State: `Frontend` input handling, `Ai`,
-  `Systems`, `Scenario`. Then the `Frontend` root drains the log and advances playback. Then
-  `Rendering` and `Audio`
-- Each step is a band of `UpdateOrder`. Where an updatable sits inside one is composed per game, except
-  where a project states its own constraint, e.g. `Scenario`
+- Pixely delivers input before any updatable runs, so `Frontend` input handlers run first in the frame
+- Updatables MUST run in this order: `Systems`, `Scenario`, `Ai`, `Frontend`, then `Rendering` and
+  `Audio`. Inside a project they run in registration order unless one sets its own `UpdateOrder`
 
 ## Out of scope
 
