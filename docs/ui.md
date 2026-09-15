@@ -75,13 +75,19 @@ The build lays out against the render context's colour target, divided by the ro
 
 Everything in the tree is in logical pixels: sizes, margins, paddings, offsets, anchors, border and nine-patch thicknesses, font sizes and pointer positions. `UiRoot.Scale` says how many target pixels one logical pixel covers, and defaults to 1, where logical and target pixels are the same thing.
 
-A game that renders a low-resolution scene and scales it up requests the same scale on the root, so the UI sits on the scene's pixel grid instead of drawing finer pixels over it:
+A game that renders a low-resolution scene and scales it up gives the root the same scale, so the UI sits on the scene's pixel grid instead of drawing finer pixels over it. A fixed scale is part of setup:
+
+```csharp
+builder.UseUi(scale: 2f);
+```
+
+A scale that changes at runtime, such as a zoom the player controls, is requested on the root:
 
 ```csharp
 root.RequestScale(2f);
 ```
 
-The request takes effect at the next `Update`, which is when the viewport, the pointer's logical position and the layout all change together, so a zoom the player changes can be requested from anywhere, including a pointer callback. The scale must be finite and at least 1.
+The request takes effect at the next `Update`, which is when the viewport, the pointer's logical position and the layout all change together, so it can be requested from anywhere, including a pointer callback. A root built by hand takes its starting scale in the initializer, `new UiRoot { Scale = 2f }`. The scale must be finite and at least 1.
 
 The tree never sees the scale. `ViewportSize`, the viewport event, `PointerPosition` and every layout and pointer callback are in logical pixels; the renderer paints the tree at its logical size into the retained texture and presents that texture at the scale with nearest sampling. A 16 px font at 2x is 2x2 blocks, which is what keeps pixel fonts and sprites crisp; nothing is reloaded or re-rasterised. A fractional scale such as 2.5 works the same way and shows uneven pixel widths, the same as a scene scaled by it.
 

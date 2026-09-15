@@ -18,9 +18,10 @@ public static class UiExtensions
         int renderOrder = RenderOrders.Ui,
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        float scale = 1f)
     {
-        return UseUi<BasicRenderContext>(appBuilder, default, renderOrder, updateOrder, inputOrder, clearTarget);
+        return UseUi<BasicRenderContext>(appBuilder, default, renderOrder, updateOrder, inputOrder, clearTarget, scale);
     }
 
     public static PixelyAppBuilder UseUi(
@@ -29,9 +30,10 @@ public static class UiExtensions
         int renderOrder = RenderOrders.Ui,
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        float scale = 1f)
     {
-        return UseUi<BasicRenderContext>(appBuilder, viewScope, renderOrder, updateOrder, inputOrder, clearTarget);
+        return UseUi<BasicRenderContext>(appBuilder, viewScope, renderOrder, updateOrder, inputOrder, clearTarget, scale);
     }
 
     /// <param name="renderOrder">When the UI is drawn relative to the other renderers, lower first. Defaults late, so it draws over the game.</param>
@@ -41,16 +43,25 @@ public static class UiExtensions
     /// produced. Updatables with an equal order run in registration order.
     /// </param>
     /// <param name="inputOrder">When the UI sees input relative to the other subscribers, lower first. Defaults early, so it takes events before the game does.</param>
+    /// <param name="scale">
+    /// How many target pixels one logical pixel covers, see <see cref="UiRoot.Scale"/>. The root
+    /// starts at it, so the first build is laid out at it; <see cref="UiRoot.RequestScale"/> changes
+    /// it at runtime. Must be finite and at least 1.
+    /// </param>
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
         int renderOrder = RenderOrders.Ui,
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
-        bool clearTarget = false)
+        bool clearTarget = false,
+        float scale = 1f)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
+
+        // Refused here rather than when the root is built, so a bad scale names the UseUi call.
+        UiRoot.ValidateScale(scale);
 
         if (!appBuilder.IsRegistered<ServiceRegistry<ScopedUiRoot>>())
         {
@@ -69,7 +80,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
             new ScopedUiRoot(
                 viewScope,
-                new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>() }));
+                new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>(), Scale = scale }));
 
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(

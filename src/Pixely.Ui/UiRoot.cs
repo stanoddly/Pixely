@@ -141,9 +141,16 @@ public sealed class UiRoot : IUiPaintSource
     /// viewport are all in logical pixels; the renderer paints them at this scale. An integer keeps
     /// every logical pixel the same size on screen, which is what keeps pixel fonts and sprites
     /// crisp; a fraction is accepted and shows uneven pixels, the same as a scene scaled by it.
-    /// Changed through <see cref="RequestScale"/>.
+    /// Set at construction, and changed afterwards through <see cref="RequestScale"/>. Must be
+    /// finite and at least 1.
     /// </summary>
-    public float Scale => _scale;
+    public float Scale
+    {
+        get => _scale;
+        // Applied directly: there is no target yet to re-derive the viewport from, and the pointer
+        // is still at the origin, which is the same logical position at every scale.
+        init => _scale = _requestedScale = ValidateScale(value);
+    }
 
     /// <summary>
     /// Asks for a scale, which takes effect at the next <see cref="Update"/>. Deferred rather than
@@ -153,12 +160,17 @@ public sealed class UiRoot : IUiPaintSource
     /// </summary>
     public void RequestScale(float scale)
     {
+        _requestedScale = ValidateScale(scale);
+    }
+
+    internal static float ValidateScale(float scale)
+    {
         if (!float.IsFinite(scale) || scale < 1f)
         {
             throw new ArgumentOutOfRangeException(nameof(scale), scale, "The scale must be finite and at least 1.");
         }
 
-        _requestedScale = scale;
+        return scale;
     }
 
     /// <summary>
