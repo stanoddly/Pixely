@@ -21,9 +21,11 @@ internal sealed class ScrollBar : Element, IPointerDragTarget
 
     private bool _isDraggingThumb;
 
-    // Where on the thumb it was grabbed, from the thumb's start along the axis. The thumb is dragged
-    // by that point rather than by its start, so it does not jump under the pointer at the first move.
-    private int _thumbGrabOffset;
+    // Where the thumb was pressed along the axis and the offset it stood at. A drag is measured from
+    // there rather than from the thumb's painted start, which is the offset rounded to a pixel and
+    // would send the offset back to that pixel's lowest value at the first move.
+    private int _pressPosition;
+    private int _offsetAtPress;
 
     internal ScrollBar(ScrollView owner, Orientation orientation)
     {
@@ -74,7 +76,7 @@ internal sealed class ScrollBar : Element, IPointerDragTarget
             int extent = Along(_owner.ScrollExtent.X, _owner.ScrollExtent.Y);
             int viewport = Along(_owner.ViewportSize.X, _owner.ViewportSize.Y);
             int max = Along(_owner.MaxScrollOffset.X, _owner.MaxScrollOffset.Y);
-            int offset = Along(_owner.ScrollOffset.X, _owner.ScrollOffset.Y);
+            int offset = Along(_owner.ClampedScrollOffset.X, _owner.ClampedScrollOffset.Y);
 
             int thumbLength = extent <= viewport
                 ? length
@@ -140,18 +142,20 @@ internal sealed class ScrollBar : Element, IPointerDragTarget
         else
         {
             _isDraggingThumb = true;
-            _thumbGrabOffset = pressed - thumbStart;
+            _pressPosition = pressed;
+            _offsetAtPress = Along(_owner.ClampedScrollOffset.X, _owner.ClampedScrollOffset.Y);
         }
 
         return true;
     }
 
     /// <summary>
-    /// Puts the grabbed point under the pointer. The thumb's start within its travel is the
-    /// offset's share of the range, so the start the pointer asks for is mapped back the same way.
-    /// Rounded up: painting rounds the other way down, and the travel never exceeds the range while
-    /// a bar shows (the track is the viewport, which is shorter than the extent), so the smallest
-    /// offset at or above the exact one is the one that paints the thumb where the pointer put it.
+    /// Moves the thumb by as many pixels as the pointer has moved since the press. Painting rounds
+    /// the offset down to a thumb pixel, so each pixel stands for a run of offsets; the offset at the
+    /// press is moved the least distance into the run of the pixel the pointer asks for, which keeps
+    /// it where it was while the pointer has not moved along the bar. A pointer pushed past the
+    /// start reaches offset zero rather than the top of the first pixel's run; past the end, the
+    /// last pixel's run begins at the end already.
     /// </summary>
     void IPointerDragTarget.OnPointerDrag(Vector2Int position, MouseButton button)
     {
@@ -169,11 +173,16 @@ internal sealed class ScrollBar : Element, IPointerDragTarget
             return;
         }
 
-        int thumbStart = Math.Clamp(Along(position.X, position.Y) - _thumbGrabOffset - Along(Bounds.X, Bounds.Y), 0, travel);
-        int target = (int)(((long)thumbStart * max + travel - 1) / travel);
+        long asked = (long)travel * _offsetAtPress / max + Along(position.X, position.Y) - (long)_pressPosition;
+        int pixel = (int)Math.Clamp(asked, 0, travel);
+        int lowest = LowestOffsetPaintedAt(pixel, travel, max);
+        int highest = asked < 0 ? 0 : Math.Min(max, LowestOffsetPaintedAt(pixel + 1, travel, max) - 1);
+        int target = Math.Clamp(_offsetAtPress, lowest, Math.Max(lowest, highest));
         Vector2Int current = _owner.ClampedScrollOffset;
         _owner.ScrollBy(Compose(target - Along(current.X, current.Y)));
     }
+
+    private static int LowestOffsetPaintedAt(int pixel, int travel, int max) => (int)(((long)pixel * max + travel - 1) / travel);
 
     void IPointerTarget.OnPointerRelease(Vector2Int position, MouseButton button, bool inside)
     {

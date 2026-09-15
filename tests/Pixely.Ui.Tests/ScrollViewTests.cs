@@ -637,7 +637,10 @@ public class ScrollViewTests
         strip.ScrollOffset = new Vector2Int(int.MaxValue, 0);
         UiRoot root = Rooted(list);
 
-        ScrollAxes upAtTheStart = Scroll(Strip(new MeasuredBox(500, 30)), Up);
+        ScrollView atTheStart = Strip(new MeasuredBox(500, 30));
+        Layout.Run(atTheStart, 50, 30);
+
+        ScrollAxes upAtTheStart = Scroll(atTheStart, Up);
         root.PointerScrolled(new Vector2Int(10, 10), Down);
 
         Assert.Multiple(() =>
@@ -1082,6 +1085,64 @@ public class ScrollViewTests
         {
             Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 2)), "rounded up: 1 would paint the thumb back at 0");
             Assert.That(VerticalBar(view).ThumbBounds.Y, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void DraggingTheThumb_KeepsAnOffsetBetweenPixelsUntilThePointerMovesAlongTheBar()
+    {
+        // 3 pixels of travel for 4 of range: offsets 0 and 1 both paint the thumb at 0.
+        ScrollView view = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(15), Children = { new MeasuredBox(20, 19) } };
+        view.ScrollOffset = new Vector2Int(0, 1);
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(17, 0), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(16, 0));
+        Vector2Int acrossTheBar = view.ScrollOffset;
+        root.PointerMoved(new Vector2Int(17, 1));
+        Vector2Int onePixelDown = view.ScrollOffset;
+        root.PointerMoved(new Vector2Int(17, 0));
+        Vector2Int backToThePress = view.ScrollOffset;
+        root.PointerMoved(new Vector2Int(17, -1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(acrossTheBar, Is.EqualTo(new Vector2Int(0, 1)), "not moved along the bar, so not moved at all");
+            Assert.That(onePixelDown, Is.EqualTo(new Vector2Int(0, 2)), "the lowest offset that paints one pixel down");
+            Assert.That(backToThePress, Is.EqualTo(new Vector2Int(0, 1)), "back into the run of offsets the press was in, so back to the press");
+            Assert.That(view.ScrollOffset, Is.EqualTo(default(Vector2Int)), "past the start is the start");
+        });
+    }
+
+    [Test]
+    public void DraggingTheThumb_Backwards_MovesTheLeastDistanceThatRepaintsIt()
+    {
+        // From the end, at 4, the thumb paints at 3; 3 is the highest offset that paints it at 2.
+        ScrollView view = new() { Width = Sizing.Fixed(20), Height = Sizing.Fixed(15), Children = { new MeasuredBox(20, 19) } };
+        view.ScrollOffset = new Vector2Int(0, int.MaxValue);
+        UiRoot root = Rooted(view);
+
+        root.PointerPressed(new Vector2Int(17, 3), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(17, 2));
+
+        Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 3)));
+    }
+
+    [Test]
+    public void TheThumb_IsWhereAnOffsetAssignedSinceTheBuildWillPutIt()
+    {
+        ScrollView view = Sized(new MeasuredBox(80, 480));
+        UiRoot root = Rooted(view);
+        view.ScrollOffset = new Vector2Int(0, int.MaxValue);
+
+        Rectangle thumb = VerticalBar(view).ThumbBounds;
+        root.PointerPressed(new Vector2Int(97, 100), MouseButton.Left);
+        root.PointerMoved(new Vector2Int(97, 90));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(thumb, Is.EqualTo(new Rectangle(94, 90, 6, 30)), "at the end, which is what the request stands for");
+            Assert.That(view.ScrollOffset, Is.EqualTo(new Vector2Int(0, 323)), "the press landed on the thumb and dragged it ten pixels back, rather than paging past it");
         });
     }
 
