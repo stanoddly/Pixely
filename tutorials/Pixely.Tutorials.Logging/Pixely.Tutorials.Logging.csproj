@@ -12,7 +12,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
-      <ProjectReference Include="..\..\src\Pixely.Hosting\Pixely.Hosting.csproj" />
       <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" />
       <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"

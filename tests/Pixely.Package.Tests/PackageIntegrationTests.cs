@@ -28,8 +28,7 @@ public class PackageIntegrationTests
         "Pixely.Observations",
         "Pixely.ShaderCommon",
         "Pixely.Utils",
-        "Pixely",
-        "Pixely.Hosting"
+        "Pixely"
     ];
 
     private string _repositoryDirectory = null!;

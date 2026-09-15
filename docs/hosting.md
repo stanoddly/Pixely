@@ -1,7 +1,7 @@
 # Hosting
 
-`Pixely.Hosting` owns the entry point. A project that opts in gets a generated `Main` and writes only
-what to register.
+Pixely can own the entry point. A project that opts in gets a generated `Main` and writes only what
+to register.
 
 ## Opting in
 
@@ -75,14 +75,11 @@ passing it as a method group, and an invocation binds to the declared method wha
 
 `obj/<Configuration>/<TargetFramework>/PixelyProgram.g.cs`, with a `<RuntimeIdentifier>` segment
 after the framework when the build has one, shown in the IDE under `Properties/PixelyProgram.g.cs`.
-It adds `Main` to `Program`, which calls `Pixely.Hosting.EntryPoint.Run` with `Configure` and
-`OnException`, and `PixelyProgramDefaults` to the namespace, which holds the default `OnException`.
-Nothing else is added. The generated part of `Program` states no accessibility, so the project's part
+It adds `Main` to `Program`, which builds the app from `Configure`, runs it, hands a failure to
+`OnException` and disposes the app last, and `PixelyProgramDefaults` to the namespace, which holds the
+default `OnException`. Nothing else is added. The generated part of `Program` states no accessibility, so the project's part
 may state any. The file is generated for `Exe` and `WinExe` C# projects, is rewritten only when its
 content changes, and is removed by `dotnet clean`.
-
-`EntryPoint.Run` is public and can be called from a hand-written `Main` as well, with or without a
-handler.
 
 ## Diagnostics
 

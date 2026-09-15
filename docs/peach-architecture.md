@@ -199,7 +199,7 @@ Executable          ──> everything above
 
 - Composition and the frame loop, nothing else
 - Its assembly is named `Foo.Executable` or `Foo`
-- It SHOULD opt into `Pixely.Hosting`, see `docs/hosting.md`
+- It SHOULD set `PixelyHosting`, see `docs/hosting.md`
 - Two containers. Root is the application: platform, window, presentation infrastructure, content,
   root-scoped forms. A stage is a child container holding its state root, Mechanics, Systems, log,
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage

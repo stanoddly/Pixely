@@ -1,6 +1,6 @@
 <Project>
 
-    <!-- Tutorials reference Pixely.Hosting as a project, which imports no package targets, so the generator is imported here. -->
-    <Import Project="$(MSBuildThisFileDirectory)..\src\Pixely.Hosting\build\Pixely.Hosting.targets" />
+    <!-- Tutorials reference Pixely as a project, which imports no package targets, so the generator is imported here. -->
+    <Import Project="$(MSBuildThisFileDirectory)..\packaging\Pixely\buildTransitive\Pixely.Hosting.targets" />
 
 </Project>
