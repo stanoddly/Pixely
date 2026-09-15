@@ -68,17 +68,6 @@ public class SfntBitmapStrikesTests
         Assert.That(pixelSizes, Is.EqualTo(new[] { 20 }));
     }
 
-    [TestCase(new byte[] { 0x00, 0x01, 0x00, 0x00 }, true)]
-    [TestCase(new byte[] { 0x4F, 0x54, 0x54, 0x4F }, true)]
-    [TestCase(new byte[] { 0x74, 0x72, 0x75, 0x65 }, true)]
-    [TestCase(new byte[] { 0x74, 0x74, 0x63, 0x66 }, true)]
-    [TestCase(new byte[] { 0x01, 0x66, 0x63, 0x70 }, false)]
-    [TestCase(new byte[] { 0x4D, 0x5A }, false)]
-    public void IsSfnt_RecognisesSfntTags(byte[] fontData, bool expected)
-    {
-        Assert.That(SfntBitmapStrikes.IsSfnt(fontData), Is.EqualTo(expected));
-    }
-
     [Test]
     public void ReadPixelSizes_SbixStrikes_ReturnsPpem()
     {

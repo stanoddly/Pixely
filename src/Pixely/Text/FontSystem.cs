@@ -66,7 +66,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 SdlError.ThrowOnNull(ttfFont, nameof(SDL3_ttf.TTF_OpenFontIO));
 
                 ReadOnlySpan<byte> fontData = new(nativeFontData, fontDataLength);
-                if (!SDL3_ttf.TTF_FontIsScalable(ttfFont) && SfntBitmapStrikes.IsSfnt(fontData))
+                if (!SDL3_ttf.TTF_FontIsScalable(ttfFont))
                 {
                     SelectBitmapStrike(ttfFont, fontData, path, size);
                 }
@@ -175,7 +175,7 @@ internal class FontSystem: IFontSystem, IUpdatable
 
     // SDL_ttf treats the size of a bitmap-only face as an index into FreeType's strike list, clamped to its bounds, so every
     // requested size would silently land on some strike. Resolve the pixel size to the strike index from the font file instead.
-    // Only sfnt files carry a strike table Pixely can read; PCF, BDF and FON fonts keep SDL_ttf's index semantics.
+    // Only TrueType and OpenType files carry a strike table Pixely can read; a bitmap PCF, BDF, FON or WOFF font is rejected rather than rendered at an unverified size.
     // SDL_ttf rejects a size of zero but truncates the index from a float, so index + 0.5 reaches every strike, including the first.
     private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, ushort size)
     {
@@ -190,10 +190,14 @@ internal class FontSystem: IFontSystem, IUpdatable
             }
         }
 
+        if (strikePixelSizes.Count == 0)
+        {
+            throw new PixelyException($"Font '{path}' is a bitmap font whose strike sizes Pixely cannot read (only TrueType and OpenType bitmap strikes are supported), so the size cannot be verified.");
+        }
+
         if (strikeIndex < 0)
         {
-            string availableSizes = strikePixelSizes.Count == 0 ? "none" : string.Join(", ", strikePixelSizes);
-            throw new PixelyException($"Font '{path}' is a bitmap font without a {size} px strike. Available sizes: {availableSizes}.");
+            throw new PixelyException($"Font '{path}' is a bitmap font without a {size} px strike. Available sizes: {string.Join(", ", strikePixelSizes)}.");
         }
 
         SdlError.ThrowOnFalse(SDL3_ttf.TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(SDL3_ttf.TTF_SetFontSize));

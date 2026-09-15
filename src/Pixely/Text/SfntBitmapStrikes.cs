@@ -9,9 +9,6 @@ namespace Pixely.Text;
 /// </summary>
 internal static class SfntBitmapStrikes
 {
-    private static readonly uint TrueTypeTag = 0x00010000;
-    private static readonly uint AppleTrueTypeTag = Tag("true");
-    private static readonly uint OpenTypeCffTag = Tag("OTTO");
     private static readonly uint CollectionTag = Tag("ttcf");
     private static readonly uint CblcTag = Tag("CBLC");
     private static readonly uint EblcTag = Tag("EBLC");
@@ -21,18 +18,6 @@ internal static class SfntBitmapStrikes
     private const int BitmapSizeTableLength = 48;
     private const int BitmapSizeTablePpemXOffset = 44;
     private const int BitmapSizeTablePpemYOffset = 45;
-
-    /// <summary>Whether the data starts like an sfnt font (TrueType, OpenType or a collection), as opposed to a PCF, BDF or Windows FON bitmap font.</summary>
-    public static bool IsSfnt(ReadOnlySpan<byte> fontData)
-    {
-        if (fontData.Length < 4)
-        {
-            return false;
-        }
-
-        uint tag = BinaryPrimitives.ReadUInt32BigEndian(fontData);
-        return tag == TrueTypeTag || tag == AppleTrueTypeTag || tag == OpenTypeCffTag || tag == CollectionTag;
-    }
 
     /// <summary>
     /// Returns the vertical pixels per em of each usable strike of the first face, or an empty list when the font has no bitmap strikes.
