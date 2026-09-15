@@ -760,7 +760,7 @@ public class ScrollViewTests
         ScrollView view = Sized(new MeasuredBox(80, 500));
         UiRoot root = new() { Style = new UiStyle { Scroll = new ScrollAppearance { Thumb = new StateDrawables(thumb), Track = track, Thickness = 10, MinimumThumbLength = 4 } } };
         root.AddLayer(new Column { Children = { view } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         Assert.Multiple(() =>
@@ -862,7 +862,7 @@ public class ScrollViewTests
     {
         UiRoot root = new();
         root.AddLayer(new Column { Children = { content } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

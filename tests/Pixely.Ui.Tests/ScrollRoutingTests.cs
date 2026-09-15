@@ -195,7 +195,7 @@ public class ScrollRoutingTests
         UiRoot root = new();
         root.AddLayer(new Column { Children = { behind } });
         root.AddLayer(new Column { Children = { list } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         root.PointerMoved(new Vector2Int(10, 10));
@@ -251,7 +251,7 @@ public class ScrollRoutingTests
         RecordingScrollTarget other = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { outer, other } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         inner.WhenScrolled = () =>
         {
@@ -312,7 +312,7 @@ public class ScrollRoutingTests
         RecordingScrollTarget adoptive = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(100) };
         UiRoot root = new();
         root.AddLayer(new Row { Children = { original, adoptive } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
 
         inner.WhenScrolled = () =>
@@ -335,7 +335,7 @@ public class ScrollRoutingTests
     {
         UiRoot root = new();
         root.AddLayer(new Column { Children = { content } });
-        root.SetViewportSize(new Vector2Int(320, 240));
+        root.SetTargetSize(new Vector2Int(320, 240));
         root.Update();
         return root;
     }

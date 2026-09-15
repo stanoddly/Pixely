@@ -11,16 +11,15 @@ namespace Pixely.Tutorials.UiScrollView;
 /// Content larger than the panel it sits in. A vertical list of buttons scrolls with the wheel
 /// and with its bar; a horizontal strip beneath it scrolls along the other axis.
 /// </summary>
-static class Program
+static partial class Program
 {
     private static readonly Color Background = new(24, 27, 32, 255);
     private static readonly Color Panel = new(36, 42, 52, 255);
     private static readonly Color Chip = new(70, 168, 160, 255);
 
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: args.Contains("--headless")));
+        builder.AddSingleton(new PixelyConfig(Headless: Environment.GetCommandLineArgs().Contains("--headless")));
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Pixely.Ui — Scroll View"));
@@ -37,7 +36,9 @@ static class Program
             };
         });
 
-        builder.OnStart((AppControl appControl, IKeyboardService keyboardService) =>
+        builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(BuildUi()));
+
+        builder.OnBuilt((AppControl appControl, IKeyboardService keyboardService) =>
         {
             Console.WriteLine("Wheel over the list, or click its bar. Escape quits.");
 
@@ -49,10 +50,6 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        pixelyApp.ServiceProvider.GetUiRoot().AddLayer(BuildUi());
-        return pixelyApp.Run();
     }
 
     private static Element BuildUi()
