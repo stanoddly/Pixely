@@ -183,6 +183,11 @@ public class FastList<TValue>
     {
         return new ReadOnlySpan<TValue>(_items, 0, Length);
     }
+
+    public int IndexOf(in TValue value)
+    {
+        return Array.IndexOf(_items, value, 0, Length);
+    }
 }
 public struct FastListStruct<TValue>
 {
@@ -362,6 +367,11 @@ public struct FastListStruct<TValue>
     public ReadOnlySpan<TValue> AsReadOnlySpan()
     {
         return new ReadOnlySpan<TValue>(_items, 0, Length);
+    }
+
+    public int IndexOf(in TValue value)
+    {
+        return Array.IndexOf(_items, value, 0, Length);
     }
 }
 

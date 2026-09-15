@@ -127,7 +127,7 @@ public class MouseService : IMouseService
     public bool IsInWindow(ViewScope viewScope = default)
     {
         _windowRegistry.GetWindow(viewScope);
-        return _scopesInWindow.AsReadOnlySpan().IndexOf(viewScope) >= 0;
+        return _scopesInWindow.IndexOf(viewScope) >= 0;
     }
 
     public MouseState GetGlobalState()
@@ -243,7 +243,7 @@ public class MouseService : IMouseService
     // Presence is recorded before the handlers run so a handler observes the new IsInWindow.
     internal void OnMouseWindowPresenceEvent(ViewScope viewScope, bool isInWindow, ulong timestamp)
     {
-        int index = _scopesInWindow.AsReadOnlySpan().IndexOf(viewScope);
+        int index = _scopesInWindow.IndexOf(viewScope);
         if (isInWindow == index >= 0)
         {
             return;
