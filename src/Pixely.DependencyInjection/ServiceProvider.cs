@@ -17,6 +17,7 @@ public class ServiceProvider : IDisposable
     private List<ServiceProvider>? _children;
     private List<ServiceActivatedCallback>? _activatedCallbacks;
     private List<ServiceDisposingCallback>? _disposingCallbacks;
+    private Func<object, object>?[]? _decorators;
     private Func<int, Type, object>? _buildTimeResolver;
     private Func<int, object?>? _buildTimeTryResolver;
     private Func<int, object[]>? _buildTimeCollectionResolver;
@@ -142,6 +143,25 @@ public class ServiceProvider : IDisposable
     internal List<ServiceActivatedCallback>? ActivatedCallbacks => _activatedCallbacks;
 
     internal List<ServiceDisposingCallback>? DisposingCallbacks => _disposingCallbacks;
+
+    internal Func<object, object>?[]? Decorators => _decorators;
+
+    internal void SetDecorators(Func<object, object>?[]? decorators)
+    {
+        _decorators = decorators;
+    }
+
+    internal object Decorate(int serviceTypeId, object instance)
+    {
+        Func<object, object>?[]? decorators = _decorators;
+        if (decorators == null || serviceTypeId >= decorators.Length)
+        {
+            return instance;
+        }
+
+        Func<object, object>? decorator = decorators[serviceTypeId];
+        return decorator == null ? instance : decorator(instance);
+    }
 
     // The [DynamicallyAccessedMembers] annotation on type preserves interface metadata
     // when called from generator-emitted code via typeof(T) where T carries the annotation.
@@ -374,6 +394,8 @@ public class ServiceProvider : IDisposable
         {
             return null;
         }
+
+        instance = Decorate(descriptor.ServiceTypeId, instance);
 
         if (instance is IDisposable)
         {

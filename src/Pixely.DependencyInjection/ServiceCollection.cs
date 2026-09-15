@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Pixely.DependencyInjection;
 
@@ -13,6 +14,8 @@ public class ServiceCollection
     private readonly List<Action<ServiceProvider>> _onBuiltActions = new();
     private readonly List<ServiceActivatedCallback> _activatedCallbacks = new();
     private readonly List<ServiceDisposingCallback> _disposingCallbacks = new();
+    // Indexed by service type id like ServiceProvider._services; null slots mean no decorator.
+    private Func<object, object>?[]? _decorators;
 
     public ServiceCollection()
     {
@@ -229,6 +232,39 @@ public class ServiceCollection
         _disposingCallbacks.Add(callback);
     }
 
+    /// <summary>
+    /// Registers a decorator applied to every instance produced for the service type <typeparamref name="T"/>, before the
+    /// provider stores it, tracks its disposal, or runs <see cref="OnActivated"/> callbacks. The decorator returns either the
+    /// instance itself or a replacement, which is what consumers then receive. Aliases resolve to the already decorated source.
+    /// </summary>
+    /// <typeparam name="T">The service type whose registrations are decorated. Registrations under other service types, such as an alias or interface, are not affected.</typeparam>
+    /// <param name="decorator">Receives the produced instance and returns the instance to use in its place. Multiple decorators for one type run in registration order.</param>
+    public void Decorate<T>(Func<T, T> decorator) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(decorator);
+
+        int id = ServiceTypeId<T>.Id;
+        if (_decorators == null || id >= _decorators.Length)
+        {
+            Array.Resize(ref _decorators, id + 1);
+        }
+
+        // Unsafe.As skips the castclass check. Safe: an instance produced under T's service id is always a T.
+        Func<object, object> added = instance => decorator(Unsafe.As<T>(instance))
+            ?? throw new InvalidOperationException($"The decorator for {typeof(T).Name} returned null.");
+        _decorators[id] = ComposeDecorators(_decorators[id], added);
+    }
+
+    internal static Func<object, object>? ComposeDecorators(Func<object, object>? first, Func<object, object>? second)
+    {
+        if (first == null || second == null)
+        {
+            return first ?? second;
+        }
+
+        return instance => second(first(instance));
+    }
+
     /// <summary>Returns <see langword="true"/> if <typeparamref name="T"/> has been registered at least once.</summary>
     /// <typeparam name="T">The service type to check.</typeparam>
     /// <returns><see langword="true"/> if <typeparamref name="T"/> is registered; otherwise <see langword="false"/>.</returns>
@@ -300,6 +336,7 @@ public class ServiceCollection
         List<ServiceDisposingCallback>? disposingCallbacks =
             MergeCallbacks(_parent?.DisposingCallbacks, _disposingCallbacks, parentFirst: false);
         provider.SetCallbacks(activatedCallbacks, disposingCallbacks);
+        provider.SetDecorators(MergeDecorators(_parent?.Decorators, _decorators));
 
         // Register ServiceProvider itself
         provider.SetService(ServiceTypeId<ServiceProvider>.Id, provider);
@@ -470,6 +507,11 @@ public class ServiceCollection
                 _ => null
             };
 
+            if (instance != null && descriptor.Kind != ServiceDescriptorKind.Alias)
+            {
+                instance = provider.Decorate(descriptor.ServiceTypeId, instance);
+            }
+
             singletonInstances[descriptor] = instance;
 
             if (instance != null && descriptor.Kind != ServiceDescriptorKind.Alias)
@@ -484,6 +526,25 @@ public class ServiceCollection
         {
             resolving.Remove(descriptor);
         }
+    }
+
+    // Parent decorators run first, then the child's, matching activation callback order.
+    private static Func<object, object>?[]? MergeDecorators(Func<object, object>?[]? parentDecorators, Func<object, object>?[]? childDecorators)
+    {
+        if (parentDecorators == null || childDecorators == null)
+        {
+            return parentDecorators ?? childDecorators;
+        }
+
+        Func<object, object>?[] decorators = new Func<object, object>?[Math.Max(parentDecorators.Length, childDecorators.Length)];
+        for (int id = 0; id < decorators.Length; id++)
+        {
+            decorators[id] = ComposeDecorators(
+                id < parentDecorators.Length ? parentDecorators[id] : null,
+                id < childDecorators.Length ? childDecorators[id] : null);
+        }
+
+        return decorators;
     }
 
     private static List<TCallback>? MergeCallbacks<TCallback>(
