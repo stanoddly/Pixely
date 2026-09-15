@@ -172,7 +172,6 @@ Executable          ──> everything above
 
 ## Foo.Frontend.Rendering project
 
-- Owns the camera. `Frontend` sets it and reads it back to hit test
 - MAY read State. What State says every frame, e.g. a position that advances every tick, is drawn
   from State directly
 - State is ahead of the screen, e.g. the Mechanic already put the unit at the end of its path while
@@ -180,7 +179,7 @@ Executable          ──> everything above
 
 ## Foo.Frontend.Audio project
 
-- The `Rendering` rules hold here too, except the camera
+- The `Rendering` rules hold here too
 
 ## Autonomous actor projects
 
