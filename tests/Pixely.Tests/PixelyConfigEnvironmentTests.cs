@@ -17,13 +17,16 @@ public class PixelyConfigEnvironmentTests
     public void Apply_WithoutVariables_KeepsConfig(string? value)
     {
         PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true);
+        PixelyConfig original = config with { };
         Func<string, string?> variables = Variables(
             (PixelyConfigEnvironment.GpuBackendVariable, value),
             (PixelyConfigEnvironment.HeadlessVariable, value),
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
             (PixelyConfigEnvironment.GpuValidationVariable, value));
 
-        Assert.That(PixelyConfigEnvironment.Apply(config, variables), Is.EqualTo(config));
+        PixelyConfigEnvironment.Apply(config, variables);
+
+        Assert.That(config, Is.EqualTo(original));
     }
 
     [TestCase("automatic", GpuBackend.Automatic)]
@@ -33,7 +36,9 @@ public class PixelyConfigEnvironmentTests
     [TestCase(" VULKAN ", GpuBackend.Vulkan)]
     public void Apply_WithSupportedGpuBackend_OverridesGpuBackend(string value, GpuBackend expected)
     {
-        PixelyConfig config = PixelyConfigEnvironment.Apply(new PixelyConfig(), Variables((PixelyConfigEnvironment.GpuBackendVariable, value)));
+        PixelyConfig config = new();
+
+        PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.GpuBackendVariable, value)));
 
         Assert.That(config.GpuBackend, Is.EqualTo(expected));
     }
@@ -61,11 +66,11 @@ public class PixelyConfigEnvironmentTests
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
             (PixelyConfigEnvironment.GpuValidationVariable, value));
 
-        PixelyConfig applied = PixelyConfigEnvironment.Apply(config, variables);
+        PixelyConfigEnvironment.Apply(config, variables);
 
-        Assert.That(applied.Headless, Is.EqualTo(expected));
-        Assert.That(applied.EnableSdlLogging, Is.EqualTo(expected));
-        Assert.That(applied.EnableGpuValidation, Is.EqualTo(expected));
+        Assert.That(config.Headless, Is.EqualTo(expected));
+        Assert.That(config.EnableSdlLogging, Is.EqualTo(expected));
+        Assert.That(config.EnableGpuValidation, Is.EqualTo(expected));
     }
 
     [Test]
@@ -82,10 +87,11 @@ public class PixelyConfigEnvironmentTests
     public void Apply_LeavesUnrelatedFields()
     {
         PixelyConfig config = new(ApplicationIdentifier: "com.example.app", TaskbarIconPath: "icon.png", DeliverActivatingMouseClicks: false);
+        PixelyConfig expected = config with { Headless = true };
 
-        PixelyConfig applied = PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.HeadlessVariable, "1")));
+        PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.HeadlessVariable, "1")));
 
-        Assert.That(applied, Is.EqualTo(config with { Headless = true }));
+        Assert.That(config, Is.EqualTo(expected));
     }
 
     [Test]
@@ -96,10 +102,12 @@ public class PixelyConfigEnvironmentTests
         try
         {
             PixelyAppBuilder appBuilder = new();
-            appBuilder.AddSingleton(new PixelyConfig(ApplicationIdentifier: "com.example.app"));
+            PixelyConfig registered = new(ApplicationIdentifier: "com.example.app");
+            appBuilder.AddSingleton(registered);
             using ServiceProvider provider = appBuilder.BuildServiceProvider();
 
             PixelyConfig config = provider.GetRequiredService<PixelyConfig>();
+            Assert.That(config, Is.SameAs(registered));
             Assert.That(config.Headless, Is.True);
             Assert.That(config.ApplicationIdentifier, Is.EqualTo("com.example.app"));
         }

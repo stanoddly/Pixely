@@ -8,6 +8,7 @@ public enum GpuBackend
     Metal
 }
 
+// The settable properties are overridden from PIXELY_* environment variables by PixelyAppBuilder, see PixelyConfigEnvironment.
 #if DEBUG
 public sealed record PixelyConfig(
     bool EnableSdlLogging = true,
@@ -16,7 +17,13 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false);
+    bool Headless = false)
+{
+    public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
+    public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
+    public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
+    public bool Headless { get; internal set; } = Headless;
+}
 #else
 public sealed record PixelyConfig(
     bool EnableSdlLogging = false,
@@ -25,5 +32,11 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false);
+    bool Headless = false)
+{
+    public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
+    public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
+    public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
+    public bool Headless { get; internal set; } = Headless;
+}
 #endif

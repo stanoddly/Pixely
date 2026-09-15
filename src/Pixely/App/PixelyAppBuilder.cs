@@ -15,7 +15,13 @@ public class PixelyAppBuilder : ServiceCollection
     public PixelyAppBuilder()
     {
         // Applied to the app's PixelyConfig registration (or the default from Build()) before any service sees it.
-        Decorate<PixelyConfig>(static config => PixelyConfigEnvironment.Apply(config, Environment.GetEnvironmentVariable));
+        OnActivated(static (instance, type) =>
+        {
+            if (type == typeof(PixelyConfig))
+            {
+                PixelyConfigEnvironment.Apply((PixelyConfig)instance, Environment.GetEnvironmentVariable);
+            }
+        });
         AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
         WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();

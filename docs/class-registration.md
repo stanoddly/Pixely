@@ -345,26 +345,6 @@ services.OnActivated(static (instance, type) =>
 
 ---
 
-### `Decorate<T>(Func<T, T> decorator)`
-
-Registers a decorator for the service type `T`. Every singleton or transient instance produced under `T` is passed to the decorator before the provider stores it, tracks its disposal, or runs `OnActivated` callbacks, and whatever the decorator returns, the instance itself or a replacement, is what consumers receive. This is how a composition root adjusts a registration it does not own, such as `PixelyAppBuilder` applying environment variables to the app's `PixelyConfig`.
-
-```csharp
-services.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Vulkan));
-services.Decorate<PixelyConfig>(static config => config with { Headless = true });
-
-// Every consumer of PixelyConfig, and GetRequiredService<PixelyConfig>(), sees Headless == true
-```
-
-- Decorators are keyed by service type id and cost one array index per produced instance; types without a decorator pay nothing.
-- Multiple decorators for one type run in registration order. A decorator may be registered before or after the registrations it applies to.
-- Only registrations under `T` are decorated. An alias resolves to the already decorated source instance, and a decorator registered for the alias type is not applied.
-- `OnActivated` and `OnDisposing` receive the returned instance. When it is the original, its type is the registration's concrete type as usual; when it is a replacement, its type is `T`, since the registration's concrete type no longer describes it and callbacks such as `AddRegistry` read interfaces from that type. The provider disposes the returned instance; a decorator that wraps a disposable original owns it.
-- Returning `null` fails the build with `InvalidOperationException`.
-- Parent decorators are merged into child providers and run before the child's own, like `OnActivated` callbacks.
-
----
-
 ### `IsRegistered<T>()`
 
 Returns `true` if the type has been registered in the collection or its parent provider hierarchy.
@@ -421,7 +401,7 @@ Multi-registrations compose across the hierarchy: parent entries appear first, f
 
 ### Callback merging
 
-`OnActivated` and `OnDisposing` callbacks registered on the parent's `ServiceCollection` are **merged into the child provider**. When the child provider constructs a service, the parent's `OnActivated` callbacks fire first, then the child's own. When the child provider disposes, its `OnDisposing` callbacks fire first, then the parent's. `Decorate<T>` decorators merge the same way: a service the child produces goes through the parent's decorators for its type, then the child's.
+`OnActivated` and `OnDisposing` callbacks registered on the parent's `ServiceCollection` are **merged into the child provider**. When the child provider constructs a service, the parent's `OnActivated` callbacks fire first, then the child's own. When the child provider disposes, its `OnDisposing` callbacks fire first, then the parent's.
 
 This means child services automatically participate in any lifecycle hooks the parent set up. `AddRegistry<TService>()` is built on these callbacks, so a child provider contributes matching services to registries created by the parent and removes them on disposal. Some higher-level systems still use callbacks directly when they need richer behavior than a plain role list.
 

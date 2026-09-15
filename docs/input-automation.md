@@ -54,7 +54,7 @@ The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`
 
 ### Environment variables
 
-`PixelyAppBuilder` overrides the registered `PixelyConfig`, whether the app registered one or `Build()` supplied the default, from these variables before any service receives it (`Decorate<PixelyConfig>`, see class-registration.md), so automation can reconfigure an app without touching its code:
+`PixelyAppBuilder` overrides the registered `PixelyConfig`, whether the app registered one or `Build()` supplied the default, from these variables when the provider is built, before any service receives it (an `OnActivated` callback, see class-registration.md), so automation can reconfigure an app without touching its code:
 
 | Variable | Overrides | Values |
 | --- | --- | --- |
