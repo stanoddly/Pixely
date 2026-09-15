@@ -102,8 +102,8 @@ public class InterceptorGeneratorTests
                 services.AddTransient<Product>(CreateProduct);
                 services.AddTransient<Product>((OptionalDependency? optional) => new Product());
 
-                services.OnStart(Start);
-                services.OnStart((OptionalDependency? optional) => { });
+                services.OnBuilt(Start);
+                services.OnBuilt((OptionalDependency? optional) => { });
             }
 
             public static void ResolveCollections(ServiceProvider provider)

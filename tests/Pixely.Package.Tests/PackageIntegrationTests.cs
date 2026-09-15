@@ -89,6 +89,7 @@ public class PackageIntegrationTests
     {
         DeleteConsumerOutputs("ShaderConsumer");
         DeleteConsumerOutputs("ShaderFreeConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
         DeleteDirectory(_testArtifactsDirectory);
     }
 
@@ -128,6 +129,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("analyzers/dotnet/cs/Pixely.DependencyInjection.Generator.dll"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
+            Assert.That(entries, Does.Contain("buildTransitive/Pixely.Hosting.targets"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/Pixely.ShaderCommon.dll"));
             Assert.That(entries, Does.Contain("tools/net10.0/any/build/Pixely.SdlangCompiler.props"));
@@ -292,6 +294,70 @@ public class PackageIntegrationTests
     }
 
     [Test]
+    public async Task HostedConsumerGetsAGeneratedEntryPoint()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory);
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net10.0", "PixelyProgram.g.cs");
+        Assert.That(File.Exists(generatedFile), Is.True);
+        Assert.That(File.ReadAllText(generatedFile), Does.Contain("namespace HostedConsumer;"));
+
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran."));
+            Assert.That(output, Does.Contain("OnException ran: Configure failed on purpose."));
+        });
+
+        // A second build has nothing to do; the generated file is not rewritten.
+        DateTime written = File.GetLastWriteTimeUtc(generatedFile);
+        await BuildConsumerAsync(consumerDirectory);
+        Assert.That(File.GetLastWriteTimeUtc(generatedFile), Is.EqualTo(written));
+
+        await RunDotnetAsync(consumerDirectory, "clean", "--configuration", "Release", $"--property:PixelyPackageVersion={_packageVersion}", $"--property:RestorePackagesPath={_packagesDirectory}", "--nologo");
+        Assert.That(File.Exists(generatedFile), Is.False);
+    }
+
+    // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
+    [TestCase("HOSTED_CONSUMER_NO_HANDLER")]
+    [TestCase("HOSTED_CONSUMER_NARROW_HANDLER")]
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate(string variant)
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, defineConstants: variant);
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net10.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            // an unhandled exception, not the handled-and-reported exit code 1
+            Assert.That(exitCode, Is.Not.EqualTo(0).And.Not.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran."));
+            Assert.That(output, Does.Contain("Configure failed on purpose."));
+            Assert.That(output, Does.Not.Contain("OnException ran"));
+        });
+    }
+
+    [Test]
+    public async Task HostedConsumerWithoutConfigureFailsToCompile()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NO_CONFIGURE", expectSuccess: false);
+        Assert.That(output, Does.Contain("CS0117").And.Contain("'Configure'"));
+    }
+
+    [Test]
     public async Task ShaderCompilerSelectionUsesBuildHostInsteadOfTargetRuntime()
     {
         string consumerDirectory = GetConsumerDirectory("ShaderConsumer");
@@ -317,7 +383,7 @@ public class PackageIntegrationTests
         });
     }
 
-    private async Task BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null)
+    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -359,10 +425,22 @@ public class PackageIntegrationTests
             buildArguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
             buildArguments.Add("--property:UseAppHost=false");
         }
+        if (defineConstants is not null)
+        {
+            buildArguments.Add($"--property:DefineConstants={defineConstants}");
+        }
 
         await RunDotnetAsync(consumerDirectory, restoreArguments.ToArray());
+        if (!expectSuccess)
+        {
+            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, buildArguments.ToArray());
+            Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
+            return failedOutput;
+        }
+
         string buildOutput = await RunDotnetAsync(consumerDirectory, buildArguments.ToArray());
         Assert.That(buildOutput, Does.Not.Contain("Downloading Slang"));
+        return buildOutput;
     }
 
     private string[] GetPackageDependencies()
@@ -493,6 +571,17 @@ public class PackageIntegrationTests
 
     private static async Task<string> RunDotnetAsync(string workingDirectory, params string[] arguments)
     {
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(workingDirectory, arguments);
+        if (exitCode != 0)
+        {
+            Assert.Fail($"dotnet {string.Join(' ', arguments)} failed with exit code {exitCode}.{Environment.NewLine}{output}");
+        }
+
+        return output;
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, params string[] arguments)
+    {
         ProcessStartInfo startInfo = new("dotnet")
         {
             WorkingDirectory = workingDirectory,
@@ -524,14 +613,7 @@ public class PackageIntegrationTests
         }
         string output = await standardOutput;
         string error = await standardError;
-
-        if (process.ExitCode != 0)
-        {
-            Assert.Fail(
-                $"dotnet {string.Join(' ', arguments)} failed with exit code {process.ExitCode}.{Environment.NewLine}{output}{Environment.NewLine}{error}");
-        }
-
-        return output + error;
+        return (process.ExitCode, output + Environment.NewLine + error);
     }
 
     private static void DeleteDirectory(string path)

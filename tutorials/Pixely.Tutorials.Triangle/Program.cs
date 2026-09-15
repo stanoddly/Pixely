@@ -3,11 +3,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.Triangle;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak"))
             .UseDefaultContent()
@@ -15,8 +14,5 @@ static class Program
                 new WindowConfig(Size: (1280, 720), Title: "Game"));
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

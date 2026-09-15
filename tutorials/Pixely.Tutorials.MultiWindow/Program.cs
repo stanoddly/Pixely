@@ -4,13 +4,12 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.MultiWindow;
 
-static class Program
+static partial class Program
 {
     internal static readonly ViewScope SecondaryView = new(1);
 
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -26,7 +25,7 @@ static class Program
         builder.AddSingleton<IRenderer<BasicRenderContext>>(PrimaryRenderer.Create);
         builder.AddSingleton<IRenderer<BasicRenderContext>>(SecondaryWindowRenderer.Create);
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService) =>
         {
             Window secondaryWindow = windowRegistry.GetWindow(SecondaryView);
             Console.WriteLine("Press Space in the main window to show or raise the secondary window. Press H to hide it.");
@@ -55,8 +54,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

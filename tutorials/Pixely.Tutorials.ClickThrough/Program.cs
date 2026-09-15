@@ -3,17 +3,17 @@ using Pixely.App;
 using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
-using Pixely.Tutorials.ClickThrough;
 
-static class Program
+namespace Pixely.Tutorials.ClickThrough;
+
+static partial class Program
 {
     // Matches the NDC quad rendered by ClickThroughRenderer in a 400x400 window.
     // Points outside this region are excluded from the window shape, so clicks pass through to whatever is behind the window.
     static readonly Rectangle InteractiveRegion = new Rectangle(50, 50, 300, 300);
 
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -25,7 +25,7 @@ static class Program
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(ClickThroughRenderer.Create);
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
             Size<uint> size = window.Size;
@@ -47,8 +47,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

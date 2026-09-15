@@ -5,16 +5,15 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.Gamepad;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"));
 
-        builder.OnStart((IGamepadService gamepadService) =>
+        builder.OnBuilt((IGamepadService gamepadService) =>
         {
             Console.WriteLine($"Gamepads connected at startup: {gamepadService.Gamepads.Count}");
             foreach (Pixely.Input.Gamepad gamepad in gamepadService.Gamepads)
@@ -71,8 +70,5 @@ static class Program
                 Console.WriteLine($"[Gamepad {gamepad.DeviceId}] Disconnected");
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

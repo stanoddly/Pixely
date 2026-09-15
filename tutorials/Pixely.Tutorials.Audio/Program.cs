@@ -6,23 +6,22 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.Audio;
 
-static class Program
+static partial class Program
 {
     private const string BeepPath = "audio/beep-example.ogg";
     private const int SourceCount = 4;
     private const float BufferedGain = 0.45f;
     private const float StreamGain = 0.15f;
 
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Audio Tutorial"))
             .RegisterAudio();
 
-        builder.OnStart((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>
         {
             DefaultAudioGroups groups = DefaultAudioGroups.Create(audioSystem);
             AudioBuffer beep = audioSystem.LoadBuffer(BeepPath);
@@ -120,9 +119,6 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 
     private static AudioSource[] CreateBufferedSources(IAudioSystem audioSystem, DefaultAudioGroups groups, AudioBuffer buffer)

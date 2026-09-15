@@ -5,11 +5,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.WindowConfiguration;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultRendering(
                 new WindowConfig(
@@ -17,7 +16,7 @@ static class Program
                     Title: "Window Configuration Demo",
                     AlwaysOnTop: true));
 
-        builder.OnStart((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
         {
             Window window = windowRegistry.GetWindow();
             Console.WriteLine($"SDL video driver: {platformInfo.SdlVideoDriver ?? "unknown"}");
@@ -53,8 +52,5 @@ static class Program
                 eventArgs.Consume();
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

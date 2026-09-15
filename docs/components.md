@@ -11,7 +11,7 @@ Container for all game objects. Register it and create objects at startup:
 ```csharp
 builder.RegisterType<GameWorld>();
 
-builder.OnStart((GameWorld gameWorld) =>
+builder.OnBuilt((GameWorld gameWorld) =>
 {
     GameObjectBuilder builder = gameWorld.CreateGameObjectBuilder();
     builder

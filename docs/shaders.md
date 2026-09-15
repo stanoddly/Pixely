@@ -202,7 +202,7 @@ builder.AddSingleton(new PixelyConfig(
     EnableGpuValidation: true,
     GpuBackend: GpuBackend.Direct3D12));
 
-builder.OnStart((GpuDevice gpuDevice) =>
+builder.OnBuilt((GpuDevice gpuDevice) =>
 {
     if (gpuDevice.Driver != "direct3d12")
     {

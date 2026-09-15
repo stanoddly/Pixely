@@ -159,11 +159,11 @@ public sealed class NullableDependencyTests
     }
 
     [Test]
-    public void OnStart_MissingNullableDependency_ReceivesNull()
+    public void OnBuilt_MissingNullableDependency_ReceivesNull()
     {
         SimpleService? captured = new();
         ServiceCollection collection = new();
-        collection.OnStart((SimpleService? service) => captured = service);
+        collection.OnBuilt((SimpleService? service) => captured = service);
 
         collection.BuildServiceProvider();
 

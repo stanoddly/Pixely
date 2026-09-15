@@ -7,6 +7,7 @@
         <Nullable>enable</Nullable>
         <PublishAot>true</PublishAot>
         <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <PixelyHosting>true</PixelyHosting>
     </PropertyGroup>
 
     <ItemGroup>

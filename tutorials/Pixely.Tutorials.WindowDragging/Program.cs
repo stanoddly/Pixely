@@ -7,11 +7,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.WindowDragging;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultRendering(
                 new WindowConfig(
@@ -21,7 +20,7 @@ static class Program
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
 
-        builder.OnStart((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
+        builder.OnBuilt((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
             Window window = windowRegistry.GetWindow();
 
@@ -99,9 +98,6 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }
 

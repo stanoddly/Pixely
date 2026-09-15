@@ -191,7 +191,7 @@ Registers a typed transient factory under an interface or base service type. Act
 
 ### Optional injected dependencies
 
-Source-generated constructor registrations, delegate factories, instance factory methods, and `OnStart` callbacks use nullable reference annotations to choose how each parameter is resolved:
+Source-generated constructor registrations, delegate factories, instance factory methods, and `OnBuilt` callbacks use nullable reference annotations to choose how each parameter is resolved:
 
 - Non-nullable and nullable-oblivious reference parameters use `GetRequiredService<T>()` and throw when no service is available.
 - Nullable reference parameters use `GetService<T>()` and receive `null` when no service is available.
@@ -287,12 +287,12 @@ Use when:
 
 ---
 
-### `OnStart(Action<ServiceProvider> action)`
+### `OnBuilt(Action<ServiceProvider> action)`
 
 Registers a callback that runs after all services are constructed but before the provider is frozen. No source generator required.
 
 ```csharp
-services.OnStart(sp =>
+services.OnBuilt(sp =>
 {
     sp.GetRequiredService<IStageManager>().Load(stage =>
     {
@@ -303,12 +303,12 @@ services.OnStart(sp =>
 
 ---
 
-### `OnStart(Delegate action)` — requires source generator
+### `OnBuilt(Delegate action)` — requires source generator
 
 Convenience overload that resolves the delegate's parameters as services.
 
 ```csharp
-services.OnStart((IStageManager stages) =>
+services.OnBuilt((IStageManager stages) =>
 {
     stages.Load(stage =>
     {
@@ -360,7 +360,7 @@ if (!services.IsRegistered<DebugOverlay>())
 
 ### `BuildServiceProvider()`
 
-Resolves all services, fires `OnStart` callbacks, freezes the provider, and returns it. A collection
+Resolves all services, fires `OnBuilt` callbacks, freezes the provider, and returns it. A collection
 created by `ServiceProvider.CreateServiceCollection()` builds a child provider of that provider.
 
 ```csharp
@@ -481,9 +481,9 @@ Disposes provider-owned services in reverse creation order. Transient `IDisposab
 
 ## Lifecycle
 
-1. **Registration** — call `AddSingleton`, `AddTransient`, `AddAlias`, `OnStart`, `OnActivated`, `OnDisposing` on `ServiceCollection`.
+1. **Registration** — call `AddSingleton`, `AddTransient`, `AddAlias`, `OnBuilt`, `OnActivated`, `OnDisposing` on `ServiceCollection`.
 2. **`BuildServiceProvider`** — singleton services are instantiated in dependency order; `OnActivated` callbacks fire per singleton instance.
-3. **`OnStart` callbacks** — fire in registration order after all singleton services exist.
+3. **`OnBuilt` callbacks** — fire in registration order after all singleton services exist.
 4. **Freeze** — the provider becomes immutable; build-time resolvers are cleared.
 5. **Runtime resolution** — `GetRequiredService`, `GetService`, `GetServices` serve singletons from frozen arrays and construct transients on demand.
 6. **`Dispose`** — transient disposables and singleton disposables are visited in reverse creation order: `OnDisposing` callbacks fire, then `IDisposable.Dispose()` runs.
@@ -533,7 +533,7 @@ The following overloads are **intercepted at each call site** by the Roslyn sour
 | `AddTransient<T>()` | `T` must be a named concrete type that does not contain a type parameter from a generic calling scope |
 | `AddTransient<TService, TImplementation>()` | Constructor implementations must be named concrete types that do not contain type parameters from a generic calling scope |
 | `AddTransient<T>(Delegate factory)` | `T` must be a named concrete type; delegate argument must be resolvable at compile time |
-| `OnStart(Delegate action)` | Delegate argument must be resolvable at compile time |
+| `OnBuilt(Delegate action)` | Delegate argument must be resolvable at compile time |
 
 **The generic-scope failure mode.** Constructor registration cannot be used when the implementation type is a type parameter, or is a known generic type containing a type parameter from an enclosing method or type. The generator reports `GK0001` at the registration call and does not emit an interceptor:
 

@@ -12,11 +12,10 @@ namespace Pixely.Tutorials.Hotbar;
 /// which is what a control needs when it wants a look or a pointer behaviour the built-in ones do
 /// not have: here hover has to be reported upwards, so a label can follow it.
 /// </summary>
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
@@ -26,7 +25,7 @@ static class Program
         builder.AddSingleton(new HotbarViewModel());
         builder.AddSingleton<IUiView, HotbarView>();
 
-        builder.OnStart((IKeyboardService keyboardService, HotbarViewModel viewModel) =>
+        builder.OnBuilt((IKeyboardService keyboardService, HotbarViewModel viewModel) =>
         {
             // The UI subscribes ahead of this and takes nothing from the keyboard here, so every
             // number key comes through. Repeats are ignored: holding 3 selects slot 3 once.
@@ -39,8 +38,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

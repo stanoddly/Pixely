@@ -10,7 +10,7 @@ public class ServiceCollection
     private readonly Dictionary<int, List<ServiceDescriptor>> _serviceGroups = new();
 
     internal IEnumerable<ServiceDescriptor> Descriptors => _serviceGroups.Values.SelectMany(group => group);
-    private readonly List<Action<ServiceProvider>> _onStartActions = new();
+    private readonly List<Action<ServiceProvider>> _onBuiltActions = new();
     private readonly List<ServiceActivatedCallback> _activatedCallbacks = new();
     private readonly List<ServiceDisposingCallback> _disposingCallbacks = new();
 
@@ -159,9 +159,9 @@ public class ServiceCollection
 
     /// <summary>Registers a callback that runs after all services are constructed but before the provider is frozen.</summary>
     /// <param name="action">The callback to invoke with the fully constructed <see cref="ServiceProvider"/>.</param>
-    public void OnStart(Action<ServiceProvider> action)
+    public void OnBuilt(Action<ServiceProvider> action)
     {
-        _onStartActions.Add(action);
+        _onBuiltActions.Add(action);
     }
 
     /// <summary>Makes <typeparamref name="TService"/> resolve to the same instance as the already-registered <typeparamref name="TImplementation"/>.</summary>
@@ -202,10 +202,10 @@ public class ServiceCollection
     /// <param name="action">A delegate whose parameter types are all registered services.</param>
     /// <remarks>This overload is intercepted by the source generator at each call site. The delegate argument must be resolvable at compile time — otherwise the method throws at runtime.</remarks>
     /// <exception cref="InvalidOperationException">Thrown at runtime if the source generator did not intercept this call — either because the generator is not referenced or because the delegate is not resolvable at compile time.</exception>
-    public void OnStart(Delegate action)
+    public void OnBuilt(Delegate action)
     {
         throw new InvalidOperationException(
-            "OnStart() was not intercepted by the source generator. Ensure the Pixely.DependencyInjection.Generator is referenced.");
+            "OnBuilt() was not intercepted by the source generator. Ensure the Pixely.DependencyInjection.Generator is referenced.");
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public class ServiceCollection
         });
     }
 
-    /// <summary>Resolves all services, fires <c>OnStart</c> callbacks, freezes the provider, and returns it.</summary>
+    /// <summary>Resolves all services, fires <c>OnBuilt</c> callbacks, freezes the provider, and returns it.</summary>
     /// <returns>The fully constructed and frozen <see cref="ServiceProvider"/>.</returns>
     public ServiceProvider BuildServiceProvider()
     {
@@ -403,12 +403,12 @@ public class ServiceCollection
         }
 
         // Every singleton descriptor has now been evaluated and both collection maps are
-        // complete. OnStart callbacks can only read through the public ServiceProvider API —
-        // there is no supported path to add a new registration during OnStart.
+        // complete. OnBuilt callbacks can only read through the public ServiceProvider API —
+        // there is no supported path to add a new registration during OnBuilt.
         provider.SetServiceCollections(serviceCollections);
         provider.SetServiceCollectionRegistrations(serviceCollectionRegistrations);
 
-        foreach (Action<ServiceProvider> action in _onStartActions)
+        foreach (Action<ServiceProvider> action in _onBuiltActions)
         {
             action(provider);
         }
@@ -417,7 +417,7 @@ public class ServiceCollection
         provider.SetBuildTimeResolver(null, null, null);
 
         // FreezeServices snapshots _pending into the flat _services array for O(1) lookup.
-        // Ordering relative to OnStart is not load-bearing (OnStart only reads), but freezing
+        // Ordering relative to OnBuilt is not load-bearing (OnBuilt only reads), but freezing
         // last keeps the build-time and runtime resolution paths consistent for callbacks.
         provider.FreezeServices();
 

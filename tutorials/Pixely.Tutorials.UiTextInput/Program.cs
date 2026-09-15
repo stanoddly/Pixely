@@ -12,17 +12,17 @@ namespace Pixely.Tutorials.UiTextInput;
 /// passed by reference through a build that runs every frame. Focus belongs to the root, which
 /// tells the field when it has it.
 /// </summary>
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (640, 500), Title: "Pixely.Ui — Text Input"));
 
         builder.UseUi();
         builder.AddSingleton(new SettingsViewModel());
+        builder.AddSingleton<IUiView, SettingsView>();
 
         // Fields take their font, their caret colour and the colour they paint a selection in from
         // the style, so nothing below has to be told about any of them.
@@ -41,7 +41,7 @@ static class Program
             };
         });
 
-        builder.OnStart((AppControl appControl, IKeyboardService keyboardService) =>
+        builder.OnBuilt((AppControl appControl, IKeyboardService keyboardService) =>
         {
             Console.WriteLine("Click a field to edit it. Enter or clicking away commits a valid value, Escape cancels, Escape outside a field quits.");
 
@@ -59,13 +59,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-
-        SettingsView view = new(pixelyApp.ServiceProvider.GetRequiredService<SettingsViewModel>());
-
-        pixelyApp.ServiceProvider.GetUiRoot().AddView(view);
-
-        return pixelyApp.Run();
     }
 }

@@ -4,13 +4,12 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.TaskbarIcon;
 
-static class Program
+static partial class Program
 {
     private static readonly ViewScope SecondaryView = new(1);
 
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder.AddSingleton(new PixelyConfig(
             ApplicationIdentifier: "com.pixely.taskbaricon",
             TaskbarIconPath: "images/taskbar-icon.png"));
@@ -19,7 +18,7 @@ static class Program
             .UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Taskbar Icon — Main Window"))
             .UseDefaultRendering(SecondaryView, new WindowConfig(Size: (480, 360), Title: "Taskbar Icon — Secondary Window"));
 
-        builder.OnStart((IKeyboardService keyboardService, AppControl appControl, PlatformInfo platformInfo) =>
+        builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl, PlatformInfo platformInfo) =>
         {
             Console.WriteLine($"SDL video driver: {platformInfo.SdlVideoDriver ?? "unknown"}");
             Console.WriteLine("Both windows use the taskbar icon configured by PixelyConfig.");
@@ -33,8 +32,5 @@ static class Program
                 }
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

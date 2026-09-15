@@ -4,16 +4,15 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.MouseWindowPresence;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultRendering(
                 new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"));
 
-        builder.OnStart((IMouseService mouseService) =>
+        builder.OnBuilt((IMouseService mouseService) =>
         {
             Console.WriteLine($"Mouse starts in window: {mouseService.IsInWindow()}");
             Console.WriteLine("Move the mouse into and out of the window to see enter and leave events.");
@@ -28,8 +27,5 @@ static class Program
                 Console.WriteLine($"Mouse left window at {eventArgs.Timestamp}. IsInWindow: {mouseService.IsInWindow()}");
             };
         });
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }

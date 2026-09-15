@@ -1,0 +1,76 @@
+<Project>
+
+    <!--
+      Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
+      project's RootNamespace whose Main builds the app from the project's Configure, runs it and
+      hands a failure to the project's OnException, plus a default OnException as an extension member
+      of Program. Consumers get this file through the Pixely package; repository tutorials import it from
+      tutorials/Directory.Build.targets. Both import points come after the SDK has set
+      IntermediateOutputPath, Language and RootNamespace, which an import from a project body does not.
+    -->
+
+    <PropertyGroup>
+        <_PixelyEntryPointFile>$(IntermediateOutputPath)PixelyProgram.g.cs</_PixelyEntryPointFile>
+        <_PixelyGenerateEntryPoint>false</_PixelyGenerateEntryPoint>
+        <_PixelyGenerateEntryPoint Condition="'$(PixelyHosting)' == 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(Language)' == 'C#' and '$(RootNamespace)' != ''">true</_PixelyGenerateEntryPoint>
+    </PropertyGroup>
+
+    <!-- Declared at evaluation time so the file is part of @(Compile) whether or not the writing target runs. -->
+    <ItemGroup Condition="'$(_PixelyGenerateEntryPoint)' == 'true'">
+        <Compile Include="$(_PixelyEntryPointFile)" Link="Properties\PixelyProgram.g.cs" />
+        <FileWrites Include="$(_PixelyEntryPointFile)" />
+    </ItemGroup>
+
+    <!-- No Inputs/Outputs: WriteOnlyWhenDifferent keeps the timestamp stable and the target is cheap. -->
+    <Target Name="GeneratePixelyEntryPoint" BeforeTargets="CoreCompile" Condition="'$(_PixelyGenerateEntryPoint)' == 'true'">
+        <!--
+          One item per line. MSBuild trims an Include and rejects an empty one, so indentation is
+          written as %20 and a blank line as %0A on the end of the line before it; a literal
+          semicolon would split the item, so it is %3B, and a literal question mark would be a
+          wildcard, so it is %3F.
+        -->
+        <ItemGroup>
+            <_PixelyEntryPointLine Include="// &lt;auto-generated/&gt;" />
+            <_PixelyEntryPointLine Include="#nullable enable" />
+            <_PixelyEntryPointLine Include="namespace $(RootNamespace)%3B%0A" />
+            <_PixelyEntryPointLine Include="static partial class Program" />
+            <_PixelyEntryPointLine Include="{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static int Main()" />
+            <_PixelyEntryPointLine Include="%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.PixelyAppBuilder builder = new()%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.IPixelyApp%3F app = null%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return app.Run()%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20catch (global::System.Exception exception)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20// Handled before the finally disposes the app, so a failure during Run still has its window open. Invoked rather than passed as a method group: an invocation binds to a declared OnException whatever it returns, so a wrong return type is a compile error instead of a silent fall-through to the default." />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return Program.OnException(exception)%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20finally" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app%3F.Dispose()%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="}%0A" />
+            <_PixelyEntryPointLine Include="// Lookup prefers a member Program declares over an extension member, so the OnException below applies only when the project declares none." />
+            <_PixelyEntryPointLine Include="static class PixelyProgramDefaults" />
+            <_PixelyEntryPointLine Include="{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20extension(Program)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// Rethrown with its original stack trace, so a failure fails the process as it would from a hand-written Main." />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20internal static int OnException(global::System.Exception exception)" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception)%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return 1%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="%20%20%20%20}" />
+            <_PixelyEntryPointLine Include="}" />
+        </ItemGroup>
+        <WriteLinesToFile File="$(_PixelyEntryPointFile)" Lines="@(_PixelyEntryPointLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    </Target>
+
+</Project>

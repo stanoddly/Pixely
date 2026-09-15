@@ -18,6 +18,7 @@
 - `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, views and view models, pointer and focus routing, text fields, styling
 - `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic
 - `docs/development-packages.md` - Consuming packages from the public development feed
+- `docs/hosting.md` - Hosting: opting in with `PixelyHosting`, the generated `Main`, `Configure` and `OnException`, diagnostics
 - `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
 - `docs/peach-architecture.md` - Peach architecture for games built on Pixely: project layout, Game/Frontend boundary, stages, systems, AI and scenario projects; shipped in the package under `docs/` and enforced by Pixely.Fitness
 - `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, the Pixely conventions rule set, adding other rule sets

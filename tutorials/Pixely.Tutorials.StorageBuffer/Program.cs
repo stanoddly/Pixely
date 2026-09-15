@@ -3,11 +3,10 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Tutorials.StorageBuffer;
 
-static class Program
+static partial class Program
 {
-    static int Main(string[] args)
+    static void Configure(PixelyAppBuilder builder)
     {
-        PixelyAppBuilder builder = new();
         builder
             .UseDefaultContent()
             .UseDefaultRendering(
@@ -15,8 +14,5 @@ static class Program
 
         builder.AddSingleton<StorageBufferRenderer>(StorageBufferRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, StorageBufferRenderer>();
-
-        using IPixelyApp pixelyApp = builder.Build();
-        return pixelyApp.Run();
     }
 }
