@@ -60,7 +60,25 @@ internal class FontSystem: IFontSystem, IUpdatable
             SdlError.ThrowOnNull(sdlStream, nameof(SDL3.SDL_IOFromConstMem));
 
             Pointer<TTF_Font> ttfFont = SDL3_ttf.TTF_OpenFontIO(sdlStream, true, size);
-            SdlError.ThrowOnNull(ttfFont, nameof(SDL3_ttf.TTF_OpenFontIO));
+            if (ttfFont.IsNull)
+            {
+                NativeMemory.Free(nativeFontData);
+                SdlError.Throw(nameof(SDL3_ttf.TTF_OpenFontIO));
+            }
+
+            if (!SDL3_ttf.TTF_FontIsScalable(ttfFont))
+            {
+                try
+                {
+                    SelectBitmapStrike(ttfFont, new ReadOnlySpan<byte>(nativeFontData, fontDataLength), path, size);
+                }
+                catch
+                {
+                    SDL3_ttf.TTF_CloseFont(ttfFont);
+                    NativeMemory.Free(nativeFontData);
+                    throw;
+                }
+            }
 
             SDL3_ttf.TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
 
@@ -151,6 +169,31 @@ internal class FontSystem: IFontSystem, IUpdatable
 
             return new Pointer<SDL_Surface>(surface);
         }
+    }
+
+    // SDL_ttf treats the size of a bitmap-only face as an index into FreeType's strike list, clamped to its bounds, so every
+    // requested size would silently land on some strike. Resolve the pixel size to the strike index from the font file instead.
+    // SDL_ttf rejects a size of zero but truncates the index from a float, so index + 0.5 reaches every strike, including the first.
+    private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, ushort size)
+    {
+        IReadOnlyList<int> strikePixelSizes = SfntBitmapStrikes.ReadPixelSizes(fontData);
+        int strikeIndex = -1;
+        for (int index = 0; index < strikePixelSizes.Count; index++)
+        {
+            if (strikePixelSizes[index] == size)
+            {
+                strikeIndex = index;
+                break;
+            }
+        }
+
+        if (strikeIndex < 0)
+        {
+            string availableSizes = strikePixelSizes.Count == 0 ? "none" : string.Join(", ", strikePixelSizes);
+            throw new PixelyException($"Font '{path}' is a bitmap font without a {size} px strike. Available sizes: {availableSizes}.");
+        }
+
+        SdlError.ThrowOnFalse(SDL3_ttf.TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(SDL3_ttf.TTF_SetFontSize));
     }
 
     private static TTF_HintingFlags ToSdlHintingMode(FontHintingMode hintingMode)

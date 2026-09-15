@@ -29,7 +29,7 @@ static partial class Program
 
         // One style serves both roots: each root reads it from the container when it is built.
         builder.AddSingleton<UiStyle>(provider =>
-            new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 16))
+            new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14))
             {
                 Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255), Muted = new Color(180, 180, 180, 255) }
             });

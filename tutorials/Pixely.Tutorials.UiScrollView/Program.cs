@@ -29,9 +29,9 @@ static partial class Program
         builder.AddSingleton<UiStyle>(provider =>
         {
             IFontSystem fonts = provider.GetRequiredService<IFontSystem>();
-            return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 16))
+            return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 14))
             {
-                Title = fonts.Load("fonts/GohuFont-Medium.ttf", 20),
+                Title = fonts.Load("fonts/GohuFont-Medium.ttf", 14),
                 Scroll = new ScrollAppearance { Track = new SolidDrawable(new Color(255, 255, 255, 20)) }
             };
         });

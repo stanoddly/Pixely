@@ -31,9 +31,9 @@ A style is optional but usually wanted, since it is what saves passing a font to
 builder.AddSingleton<UiStyle>(provider =>
 {
     IFontSystem fonts = provider.GetRequiredService<IFontSystem>();
-    return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 16))
+    return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 11))
     {
-        Title = fonts.Load("fonts/GohuFont-Medium.ttf", 20)
+        Title = fonts.Load("fonts/GohuFont-Medium.ttf", 14)
     };
 });
 ```
