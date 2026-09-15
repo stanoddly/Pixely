@@ -147,8 +147,15 @@ Executable          ──> everything above
 - A form that outlives or replaces a stage, e.g. a save picker, is root-scoped. It MAY reach root
   services and `IStageManager`, it MUST NOT hold a reference into a stage
 - `Rendering` and `Audio` are output. Each presents the items `Frontend` gives it, e.g. a walk along a
-  path or a hit sound, owns timing inside them, reports upward, and MUST NOT mutate State or invoke
-  Mechanics. The item and report types are declared by the output project, `Frontend` constructs them
+  path or a hit sound, owns timing inside them, exposes the progress of each item for `Frontend` to
+  read, and MUST NOT mutate State or invoke Mechanics. The item types are declared by the output
+  project, `Frontend` constructs them
+- `Frontend` and its outputs are one side of the boundary. The split between them is only a
+  dependency direction, `Rendering` and `Audio` never reference `Frontend`, and there is no
+  abstraction layer between them. `Frontend` MAY call or poll anything an output makes public
+- `Frontend` SHOULD NOT subscribe to an output. A handler runs inside the output's `Update`, so a
+  Mechanic invoked from it mutates State while the output reads it. `Frontend` polls an item's
+  progress in its own `Update` instead
 - Output state MUST be presentation only. Dropping it changes what is seen or heard, never game
   state, never the meaning of input
 
@@ -160,7 +167,7 @@ Executable          ──> everything above
 - Decides what `Rendering` and `Audio` present; they do not decide for themselves
 - MAY read State and invoke Mechanics
 - Owns playback: the queue of what one Mechanic call resolved into and what is showing now. It decides
-  what `Rendering` presents next, what a report means, and when input reopens
+  what `Rendering` presents next, what an item's progress means, and when input reopens
 - SHOULD refuse input that targets what playback has not shown yet
 
 ### Foo.Frontend.Forms namespace
@@ -180,11 +187,11 @@ Executable          ──> everything above
 - State is ahead of the screen: the Mechanic already put the unit at the end of its path. While
   `Frontend` has given `Rendering` that walk to present, the unit is drawn from how far the walk has
   got, and from State only once it is done
-- Reports the markers inside an item, e.g. the step on frame 5
+- Exposes the progress of an item, e.g. the step a walk is on and whether it finished
 
 ## Foo.Frontend.Audio project
 
-- Its item and report records name `Vocabulary` types
+- The `Rendering` rules hold here too, except the camera
 
 ## Autonomous actor projects
 
@@ -205,9 +212,10 @@ Executable          ──> everything above
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage
 - State MUST NOT be reset in place. Another run is another stage
 - The frame is single threaded, set by Pixely, so nothing returns a `Task`
-- One frame is three phases. Mutation: input driven Mechanics, `Ai`, `Systems`. Direction: the
-  `Frontend` root drains the log and advances playback. Presentation: output
-- A phase is a band of `UpdateOrder`. Where an updatable sits inside one is composed per game, except
+- One frame runs in this order. First whatever writes State: `Frontend` input handling, `Ai`,
+  `Systems`, `Scenario`. Then the `Frontend` root drains the log and advances playback. Then
+  `Rendering` and `Audio`
+- Each step is a band of `UpdateOrder`. Where an updatable sits inside one is composed per game, except
   where a project states its own constraint, e.g. `Scenario`
 
 ## Out of scope
