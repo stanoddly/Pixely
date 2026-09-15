@@ -19,6 +19,14 @@ namespace Pixely.Ui;
 /// button, or merely moves the pointer, invalidates whatever route it interrupted whichever button
 /// that route belonged to.
 /// </para>
+/// <para>
+/// The wheel is routed here too, because it is a positioned pointer event: it moves hover the way
+/// a move does, hit tests over the same packed area list, and needs the route version to survive a
+/// callback that routes the pointer itself. What differs is the delivery model. A press has one
+/// owner per button, held by capture. A wheel has no owner: it climbs from the hit element through
+/// its ancestors, each scroll target taking the axes it can use, and nothing is remembered once it
+/// ends. See <see cref="Scrolled"/>.
+/// </para>
 /// </remarks>
 internal sealed class PointerRouter
 {
