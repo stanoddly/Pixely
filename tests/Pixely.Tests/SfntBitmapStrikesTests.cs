@@ -112,6 +112,33 @@ public class SfntBitmapStrikesTests
     }
 
     [Test]
+    public void ReadPixelSizes_NonSfntSignature_ReturnsEmptyEvenWithStrikeTable()
+    {
+        byte[] fontData = BuildFont(("EBLC", BuildEblcTable((11, 11))));
+        // The PCF magic, 0x01 'f' 'c' 'p'.
+        fontData[0] = 0x01;
+        fontData[1] = 0x66;
+        fontData[2] = 0x63;
+        fontData[3] = 0x70;
+
+        IReadOnlyList<int> pixelSizes = SfntBitmapStrikes.ReadPixelSizes(fontData);
+
+        Assert.That(pixelSizes, Is.Empty);
+    }
+
+    [TestCase(new byte[] { 0x74, 0x72, 0x75, 0x65 })]
+    [TestCase(new byte[] { 0x4F, 0x54, 0x54, 0x4F })]
+    public void ReadPixelSizes_AppleAndCffSignatures_AreAccepted(byte[] signature)
+    {
+        byte[] fontData = BuildFont(("EBLC", BuildEblcTable((11, 11))));
+        signature.CopyTo(fontData, 0);
+
+        IReadOnlyList<int> pixelSizes = SfntBitmapStrikes.ReadPixelSizes(fontData);
+
+        Assert.That(pixelSizes, Is.EqualTo(new[] { 11 }));
+    }
+
+    [Test]
     public void ReadPixelSizes_TruncatedFile_ReturnsEmpty()
     {
         IReadOnlyList<int> pixelSizes = SfntBitmapStrikes.ReadPixelSizes(new byte[] { 0, 1, 0, 0, 0, 5 });

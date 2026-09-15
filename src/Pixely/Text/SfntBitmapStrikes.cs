@@ -9,6 +9,9 @@ namespace Pixely.Text;
 /// </summary>
 internal static class SfntBitmapStrikes
 {
+    private static readonly uint TrueTypeTag = 0x00010000;
+    private static readonly uint AppleTrueTypeTag = Tag("true");
+    private static readonly uint OpenTypeCffTag = Tag("OTTO");
     private static readonly uint CollectionTag = Tag("ttcf");
     private static readonly uint CblcTag = Tag("CBLC");
     private static readonly uint EblcTag = Tag("EBLC");
@@ -97,9 +100,16 @@ internal static class SfntBitmapStrikes
             return false;
         }
 
+        uint signature = BinaryPrimitives.ReadUInt32BigEndian(fontData);
+        // Only an sfnt container has a table directory; parsing a PCF, BDF, FON or WOFF file as one could produce bogus strikes.
+        if (signature != TrueTypeTag && signature != AppleTrueTypeTag && signature != OpenTypeCffTag && signature != CollectionTag)
+        {
+            return false;
+        }
+
         int tableDirectoryOffset = 0;
         // A collection lists its faces' table directories after the header; SDL_ttf opens the first face by default.
-        if (BinaryPrimitives.ReadUInt32BigEndian(fontData) == CollectionTag)
+        if (signature == CollectionTag)
         {
             uint firstFaceOffset = BinaryPrimitives.ReadUInt32BigEndian(fontData.Slice(12));
             if (firstFaceOffset + 12 > (uint)fontData.Length)
