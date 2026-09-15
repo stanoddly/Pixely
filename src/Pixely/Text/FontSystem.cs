@@ -54,33 +54,35 @@ internal class FontSystem: IFontSystem, IUpdatable
         unsafe
         {
             byte* nativeFontData = (byte*)NativeMemory.Alloc((nuint)fontDataLength);
-            stream.ReadExactly(new Span<byte>(nativeFontData, fontDataLength));
-
-            Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)nativeFontData, (UIntPtr)fontDataLength);
-            SdlError.ThrowOnNull(sdlStream, nameof(SDL3.SDL_IOFromConstMem));
-
-            Pointer<TTF_Font> ttfFont = SDL3_ttf.TTF_OpenFontIO(sdlStream, true, size);
-            if (ttfFont.IsNull)
+            Pointer<TTF_Font> ttfFont = default;
+            try
             {
-                NativeMemory.Free(nativeFontData);
-                SdlError.Throw(nameof(SDL3_ttf.TTF_OpenFontIO));
-            }
+                stream.ReadExactly(new Span<byte>(nativeFontData, fontDataLength));
 
-            if (!SDL3_ttf.TTF_FontIsScalable(ttfFont))
-            {
-                try
+                Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)nativeFontData, (UIntPtr)fontDataLength);
+                SdlError.ThrowOnNull(sdlStream, nameof(SDL3.SDL_IOFromConstMem));
+
+                ttfFont = SDL3_ttf.TTF_OpenFontIO(sdlStream, true, size);
+                SdlError.ThrowOnNull(ttfFont, nameof(SDL3_ttf.TTF_OpenFontIO));
+
+                ReadOnlySpan<byte> fontData = new(nativeFontData, fontDataLength);
+                if (!SDL3_ttf.TTF_FontIsScalable(ttfFont) && SfntBitmapStrikes.IsSfnt(fontData))
                 {
-                    SelectBitmapStrike(ttfFont, new ReadOnlySpan<byte>(nativeFontData, fontDataLength), path, size);
+                    SelectBitmapStrike(ttfFont, fontData, path, size);
                 }
-                catch
+
+                SDL3_ttf.TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
+            }
+            catch
+            {
+                if (!ttfFont.IsNull)
                 {
                     SDL3_ttf.TTF_CloseFont(ttfFont);
-                    NativeMemory.Free(nativeFontData);
-                    throw;
                 }
-            }
 
-            SDL3_ttf.TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
+                NativeMemory.Free(nativeFontData);
+                throw;
+            }
 
             Font font = new Font(this, ttfFont, nativeFontData, path, size, rasterizationMode, hintingMode);
             _fonts.Add(font);
@@ -173,6 +175,7 @@ internal class FontSystem: IFontSystem, IUpdatable
 
     // SDL_ttf treats the size of a bitmap-only face as an index into FreeType's strike list, clamped to its bounds, so every
     // requested size would silently land on some strike. Resolve the pixel size to the strike index from the font file instead.
+    // Only sfnt files carry a strike table Pixely can read; PCF, BDF and FON fonts keep SDL_ttf's index semantics.
     // SDL_ttf rejects a size of zero but truncates the index from a float, so index + 0.5 reaches every strike, including the first.
     private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, ushort size)
     {

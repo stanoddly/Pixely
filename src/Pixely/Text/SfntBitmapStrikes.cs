@@ -9,6 +9,9 @@ namespace Pixely.Text;
 /// </summary>
 internal static class SfntBitmapStrikes
 {
+    private static readonly uint TrueTypeTag = 0x00010000;
+    private static readonly uint AppleTrueTypeTag = Tag("true");
+    private static readonly uint OpenTypeCffTag = Tag("OTTO");
     private static readonly uint CollectionTag = Tag("ttcf");
     private static readonly uint CblcTag = Tag("CBLC");
     private static readonly uint EblcTag = Tag("EBLC");
@@ -18,6 +21,18 @@ internal static class SfntBitmapStrikes
     private const int BitmapSizeTableLength = 48;
     private const int BitmapSizeTablePpemXOffset = 44;
     private const int BitmapSizeTablePpemYOffset = 45;
+
+    /// <summary>Whether the data starts like an sfnt font (TrueType, OpenType or a collection), as opposed to a PCF, BDF or Windows FON bitmap font.</summary>
+    public static bool IsSfnt(ReadOnlySpan<byte> fontData)
+    {
+        if (fontData.Length < 4)
+        {
+            return false;
+        }
+
+        uint tag = BinaryPrimitives.ReadUInt32BigEndian(fontData);
+        return tag == TrueTypeTag || tag == AppleTrueTypeTag || tag == OpenTypeCffTag || tag == CollectionTag;
+    }
 
     /// <summary>
     /// Returns the vertical pixels per em of each usable strike of the first face, or an empty list when the font has no bitmap strikes.
@@ -72,7 +87,7 @@ internal static class SfntBitmapStrikes
         for (int index = 0; index < count; index++)
         {
             uint strikeOffset = BinaryPrimitives.ReadUInt32BigEndian(table.Slice(8 + index * 4));
-            if (strikeOffset + 4 > (uint)table.Length)
+            if ((ulong)strikeOffset + 4 > (ulong)table.Length)
             {
                 continue;
             }
@@ -127,7 +142,8 @@ internal static class SfntBitmapStrikes
 
             uint offset = BinaryPrimitives.ReadUInt32BigEndian(fontData.Slice(recordOffset + 8));
             uint length = BinaryPrimitives.ReadUInt32BigEndian(fontData.Slice(recordOffset + 12));
-            if ((ulong)offset + length > (ulong)fontData.Length)
+            // FreeType treats an empty table record as absent, so the next table in its precedence is tried.
+            if (length == 0 || (ulong)offset + length > (ulong)fontData.Length)
             {
                 return false;
             }
