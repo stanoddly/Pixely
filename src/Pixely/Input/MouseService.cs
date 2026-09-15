@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Pixely.Collections;
 using SDL;
 
 namespace Pixely.Input;
@@ -103,7 +104,7 @@ public class MouseService : IMouseService
 {
     private readonly WindowRegistry _windowRegistry;
     private readonly Dictionary<SDL_MouseID, Mouse> _mice = new();
-    private readonly HashSet<ViewScope> _scopesInWindow = new();
+    private FastListStruct<ViewScope> _scopesInWindow = new(4);
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly MouseButtonEventArgs _buttonEventArgs = new();
@@ -126,7 +127,7 @@ public class MouseService : IMouseService
     public bool IsInWindow(ViewScope viewScope = default)
     {
         _windowRegistry.GetWindow(viewScope);
-        return _scopesInWindow.Contains(viewScope);
+        return _scopesInWindow.AsReadOnlySpan().IndexOf(viewScope) >= 0;
     }
 
     public MouseState GetGlobalState()
@@ -242,10 +243,19 @@ public class MouseService : IMouseService
     // Presence is recorded before the handlers run so a handler observes the new IsInWindow.
     internal void OnMouseWindowPresenceEvent(ViewScope viewScope, bool isInWindow, ulong timestamp)
     {
-        bool changed = isInWindow ? _scopesInWindow.Add(viewScope) : _scopesInWindow.Remove(viewScope);
-        if (!changed)
+        int index = _scopesInWindow.AsReadOnlySpan().IndexOf(viewScope);
+        if (isInWindow == index >= 0)
         {
             return;
+        }
+
+        if (isInWindow)
+        {
+            _scopesInWindow.Add(viewScope);
+        }
+        else
+        {
+            _scopesInWindow.SwapRemove(index);
         }
 
         _windowPresenceEventArgs.IsInWindow = isInWindow;
