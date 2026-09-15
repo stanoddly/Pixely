@@ -73,7 +73,7 @@ internal sealed class InputAutomation
     public void MouseLeave(ViewScope viewScope = default)
     {
         ValidateView(viewScope);
-        _mouseService.OnSyntheticMouseWindowPresence(viewScope, false, GetTimestamp());
+        _mouseService.OnMouseWindowPresenceEvent(viewScope, false, GetTimestamp());
     }
 
     public void KeyDown(Scancode scancode, ViewScope viewScope = default)
@@ -111,7 +111,7 @@ internal sealed class InputAutomation
     // SDL raises the window enter before the first motion of a pointer that arrives; the synthetic mouse does the same.
     private void EnterWindow(ViewScope viewScope)
     {
-        _mouseService.OnSyntheticMouseWindowPresence(viewScope, true, GetTimestamp());
+        _mouseService.OnMouseWindowPresenceEvent(viewScope, true, GetTimestamp());
     }
 
     private static VirtualKey GetVirtualKey(Scancode scancode)

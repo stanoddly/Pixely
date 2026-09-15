@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.Input;
@@ -104,7 +103,7 @@ public class MouseService : IMouseService
 {
     private readonly WindowRegistry _windowRegistry;
     private readonly Dictionary<SDL_MouseID, Mouse> _mice = new();
-    private readonly HashSet<ViewScope> _syntheticMouseScopes = new();
+    private readonly HashSet<ViewScope> _scopesInWindow = new();
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly MouseButtonEventArgs _buttonEventArgs = new();
@@ -126,18 +125,8 @@ public class MouseService : IMouseService
 
     public bool IsInWindow(ViewScope viewScope = default)
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
-        if (_syntheticMouseScopes.Contains(viewScope))
-        {
-            return true;
-        }
-
-        unsafe
-        {
-            Pointer<SDL_Window> mouseFocusWindow = SDL3.SDL_GetMouseFocus();
-            return !mouseFocusWindow.IsNull &&
-                (uint)SDL3.SDL_GetWindowID(mouseFocusWindow) == window.SdlId;
-        }
+        _windowRegistry.GetWindow(viewScope);
+        return _scopesInWindow.Contains(viewScope);
     }
 
     public MouseState GetGlobalState()
@@ -250,8 +239,15 @@ public class MouseService : IMouseService
         _windowLeaveHandlers.Add(viewScope, order, handler);
     }
 
+    // Presence is recorded before the handlers run so a handler observes the new IsInWindow.
     internal void OnMouseWindowPresenceEvent(ViewScope viewScope, bool isInWindow, ulong timestamp)
     {
+        bool changed = isInWindow ? _scopesInWindow.Add(viewScope) : _scopesInWindow.Remove(viewScope);
+        if (!changed)
+        {
+            return;
+        }
+
         _windowPresenceEventArgs.IsInWindow = isInWindow;
         _windowPresenceEventArgs.Timestamp = timestamp;
 
@@ -260,17 +256,6 @@ public class MouseService : IMouseService
             : _windowLeaveHandlers;
 
         handlers.Invoke(viewScope, _windowPresenceEventArgs);
-    }
-
-    // Presence of the synthetic mouse is tracked here rather than read from SDL, which never sees it. The set is
-    // updated before the handlers run so a handler observes the new IsInWindow, as it does for a physical event.
-    internal void OnSyntheticMouseWindowPresence(ViewScope viewScope, bool isInWindow, ulong timestamp)
-    {
-        bool changed = isInWindow ? _syntheticMouseScopes.Add(viewScope) : _syntheticMouseScopes.Remove(viewScope);
-        if (changed)
-        {
-            OnMouseWindowPresenceEvent(viewScope, isInWindow, timestamp);
-        }
     }
 
     internal void OnMouseButtonEvent(ViewScope viewScope, SDL_MouseID mouseId, MouseButton button, Vector2 position, bool isPressed, ulong timestamp)
