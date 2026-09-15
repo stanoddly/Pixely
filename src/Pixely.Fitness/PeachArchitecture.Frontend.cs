@@ -57,38 +57,6 @@ public static partial class PeachArchitecture
         return options.OutputAssemblies.SelectMany(TypeGraph.DeclaredTypes).Where(type => typeof(IUiViewModel).IsAssignableFrom(type)).Select(type => type.FullName!).ToArray();
     }
 
-    // 41. What output shows: its registrar, constants, item and report shapes, a camera, an items collection.
-    private static IReadOnlyList<string> OutputPublicSurfaceIsRegistrarItemsAndCamera(PeachArchitectureOptions options)
-    {
-        return options.OutputAssemblies
-            .SelectMany(assembly => TypeGraph.DeclaredTypes(assembly).Where(type => TypeGraph.IsPublicSurface(type) && !IsAllowed(type)))
-            .Select(type => type.FullName!)
-            .ToArray();
-
-        static bool IsAllowed(Type type)
-        {
-            return type.IsEnum || type.IsValueType || TypeGraph.IsRecord(type) || TypeGraph.IsStatic(type)
-                || type.Name.EndsWith("Camera", StringComparison.Ordinal) || type.Name.EndsWith("Items", StringComparison.Ordinal);
-        }
-    }
-
-    // 41a. Audio's item and report records name Vocabulary types only.
-    private static IReadOnlyList<string> AudioRecordsNameOnlyVocabulary(PeachArchitectureOptions options)
-    {
-        if (options.Audio == null)
-        {
-            return [];
-        }
-
-        return TypeGraph.DeclaredTypes(options.Audio)
-            .Where(type => TypeGraph.IsPublicSurface(type) && (TypeGraph.IsRecord(type) || type.IsValueType && !type.IsEnum))
-            .SelectMany(type => TypeGraph.PublicSignatureTypes(type)
-                .Where(named => named.Assembly == options.Game && named.Namespace != options.VocabularyNamespace)
-                .Select(named => $"{type.FullName} -> {named.FullName}"))
-            .Distinct()
-            .ToArray();
-    }
-
     // 43. An actor owns no state that outlives a call: every field is readonly, and a collection it holds is a read-only one.
     private static IReadOnlyList<string> ActorsOwnNoState(PeachArchitectureOptions options)
     {

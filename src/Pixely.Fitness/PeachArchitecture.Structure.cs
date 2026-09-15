@@ -62,8 +62,6 @@ public static partial class PeachArchitecture
             Run("38 DirectorAndActorPublicSurfaceIsTheRegistrar", DirectorAndActorPublicSurfaceIsTheRegistrar),
             Run("39 OutputReadsNoInput", OutputReadsNoInput),
             Run("40 OutputOwnsNoViewModels", OutputOwnsNoViewModels),
-            Run("41 OutputPublicSurfaceIsRegistrarItemsAndCamera", OutputPublicSurfaceIsRegistrarItemsAndCamera),
-            Run("41a AudioRecordsNameOnlyVocabulary", AudioRecordsNameOnlyVocabulary),
             Run("43 ActorsOwnNoState", ActorsOwnNoState)
         ]);
 

@@ -123,10 +123,8 @@ Executable          ──> everything above
 - A Mechanic or a System appends during the call or tick that caused it
 - Entries MUST be past tense records of ids and value types, never live State. Every entry type MUST
   have an `Entry` suffix, e.g. `UnitMovedEntry`
-- One log per stage, carrying one entry type. The game picks its shape, a tagged value type appends
-  without allocating, a base class costs an allocation per append
-- The game picks the maximum capacity. It is the stall detector, not a working size, so it sits far
-  past any legitimate burst
+- One log per stage, carrying one entry type. The entry shape and the capacity are the game's, see
+  `docs/observations.md`
 - When a game hides information, an entry names the participant that perceived it, a game with one
   participant names none
   - A writer appends one entry per participant that perceived the action, carrying only what that
@@ -141,27 +139,27 @@ Executable          ──> everything above
 - Its state is selection, drafts, previews and what a form shows. Dropping it loses what the player
   was doing, never game state. A tool the player selected decides what the next click means, and
   that is Frontend's to decide
-- Presentation infrastructure is root-scoped and survives stage changes: render contexts, phases,
-  render targets, presentation, atlas and sprite storage, the audio system, clips and groups. Only what
-  is bound to one stage's state belongs to the stage
+- Presentation infrastructure, e.g. render targets and audio clips, is root-scoped and survives stage
+  changes. Only what is bound to one stage's state belongs to the stage
 - A form that outlives or replaces a stage, e.g. a save picker, is root-scoped. It MAY reach root
   services and `IStageManager`, it MUST NOT hold a reference into a stage
-- `Rendering` and `Audio` are output. Each presents the items `Frontend` gives it, e.g. a walk along a
-  path or a hit sound, owns timing inside them, reports upward, and MUST NOT mutate State or invoke
-  Mechanics. The item and report types are declared by the output project, `Frontend` constructs them
+- `Rendering` and `Audio` are output. They present what `Frontend` tells them to, e.g. a walk along a
+  path or a hit sound, and MUST NOT mutate State or invoke Mechanics
+- `Frontend` and its outputs are one side of the boundary. The split between them is only a
+  dependency direction, `Rendering` and `Audio` never reference `Frontend`, and there SHOULD be no
+  abstraction layer between them. `Frontend` MAY call or poll anything an output makes public
+- `Frontend` SHOULD NOT subscribe to an output. A handler runs inside the output's `Update`, so a
+  Mechanic invoked from it mutates State while the output reads it. `Frontend` SHOULD poll the output
+  in its own `Update` instead
 - Output state MUST be presentation only. Dropping it changes what is seen or heard, never game
   state, never the meaning of input
 
 ### Foo.Frontend root namespace
 
-- Owns input interpretation, selection, drafts, previews. The camera is `Rendering`'s, `Frontend`
-  decides where it points
+- Owns input interpretation, selection, drafts, previews
 - Hit testing MUST resolve against State, never against what `Rendering` drew
-- Decides what `Rendering` and `Audio` present; they do not decide for themselves
 - MAY read State and invoke Mechanics
-- Owns playback: the queue of what one Mechanic call resolved into and what is showing now. It decides
-  what `Rendering` presents next, what a report means, and when input reopens
-- SHOULD refuse input that targets what playback has not shown yet
+- SHOULD refuse input that targets what the player has not seen yet
 
 ### Foo.Frontend.Forms namespace
 
@@ -172,19 +170,12 @@ Executable          ──> everything above
 - A ViewModel that shows State SHOULD implement `Pixely.IUpdatable`, read State in `Update` and raise
   `Changed` when what it shows differs. It MAY invoke Mechanics to update the State
 
-## Foo.Frontend.Rendering project
+## Foo.Frontend.Rendering and Foo.Frontend.Audio projects
 
-- Owns the camera. `Frontend` sets it and reads it back to hit test
 - MAY read State. What State says every frame, e.g. a position that advances every tick, is drawn
-  from State without `Frontend` handing it over as an item
-- State is ahead of the screen: the Mechanic already put the unit at the end of its path. While
-  `Frontend` has given `Rendering` that walk to present, the unit is drawn from how far the walk has
-  got, and from State only once it is done
-- Reports the markers inside an item, e.g. the step on frame 5
-
-## Foo.Frontend.Audio project
-
-- Its item and report records name `Vocabulary` types
+  from State directly
+- State is ahead of the screen, e.g. the Mechanic already put the unit at the end of its path while
+  `Rendering` still shows the walk
 
 ## Autonomous actor projects
 
@@ -205,10 +196,9 @@ Executable          ──> everything above
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage
 - State MUST NOT be reset in place. Another run is another stage
 - The frame is single threaded, set by Pixely, so nothing returns a `Task`
-- One frame is three phases. Mutation: input driven Mechanics, `Ai`, `Systems`. Direction: the
-  `Frontend` root drains the log and advances playback. Presentation: output
-- A phase is a band of `UpdateOrder`. Where an updatable sits inside one is composed per game, except
-  where a project states its own constraint, e.g. `Scenario`
+- Pixely delivers input before any updatable runs, so `Frontend` input handlers run first in the frame
+- Updatables MUST run in this order: `Systems`, `Scenario`, `Ai`, `Frontend`, then `Rendering` and
+  `Audio`. Inside a project they run in registration order unless one sets its own `UpdateOrder`
 
 ## Out of scope
 
@@ -223,6 +213,6 @@ Executable          ──> everything above
   second frontend, the frame composition, its own Vocabulary
 - Keep the reason behind a rule and add it back where it was cut. A rule with no reason gets
   extrapolated wrongly on a case it does not cover
-- Decide whether a Mechanic call from a form passes the playback gate the `Frontend` root owns
+- Decide whether a Mechanic call from a form passes the input refusal the `Frontend` root owns
 - Decide whether a bounded exception to what an entry carries is allowed, e.g. naming the tile a
   unit stepped from when it steps into view, so the move can be animated
