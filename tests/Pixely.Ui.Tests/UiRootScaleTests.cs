@@ -136,6 +136,26 @@ public class UiRootScaleTests
         });
     }
 
+    [Test]
+    public void AScaleSetAtConstruction_LaysOutTheFirstBuildAtIt()
+    {
+        UiRoot root = new() { Scale = 2f };
+        List<Vector2Int> reported = new();
+        root.ViewportChanged += reported.Add;
+
+        float scaleBeforeUpdate = root.Scale;
+        root.SetTargetSize(new Vector2Int(1280, 800));
+        root.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scaleBeforeUpdate, Is.EqualTo(2f), "in effect before any update, unlike a request");
+            Assert.That(root.ViewportSize, Is.EqualTo(new Vector2Int(640, 400)));
+            Assert.That(root.PaintedScale, Is.EqualTo(2f));
+            Assert.That(reported, Is.EqualTo(new[] { new Vector2Int(640, 400) }), "the viewport was never derived at 1");
+        });
+    }
+
     [TestCase(0f)]
     [TestCase(0.5f)]
     [TestCase(-2f)]
@@ -145,7 +165,11 @@ public class UiRootScaleTests
     {
         UiRoot root = new();
 
-        Assert.That(() => root.RequestScale(scale), Throws.TypeOf<ArgumentOutOfRangeException>());
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => root.RequestScale(scale), Throws.TypeOf<ArgumentOutOfRangeException>());
+            Assert.That(() => new UiRoot { Scale = scale }, Throws.TypeOf<ArgumentOutOfRangeException>());
+        });
     }
 
     [Test]
