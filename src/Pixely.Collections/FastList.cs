@@ -21,7 +21,7 @@ public class FastList<TValue>
         _items = new TValue[initialLength];
     }
 
-    public int Add(in TValue value)
+    public int Add(TValue value)
     {
         if (Length >= _items.Length)
         {
@@ -36,7 +36,7 @@ public class FastList<TValue>
         return Length++;
     }
 
-    public ref TValue Add(in TValue value, out int index)
+    public ref TValue Add(TValue value, out int index)
     {
         if (Length >= _items.Length)
         {
@@ -182,6 +182,11 @@ public class FastList<TValue>
     public ReadOnlySpan<TValue> AsReadOnlySpan()
     {
         return new ReadOnlySpan<TValue>(_items, 0, Length);
+    }
+
+    public int IndexOf(TValue value)
+    {
+        return Array.IndexOf(_items, value, 0, Length);
     }
 }
 public struct FastListStruct<TValue>
@@ -201,7 +206,7 @@ public struct FastListStruct<TValue>
         _items = new TValue[initialLength];
     }
 
-    public int Add(in TValue value)
+    public int Add(TValue value)
     {
         if (Length >= _items.Length)
         {
@@ -216,7 +221,7 @@ public struct FastListStruct<TValue>
         return Length++;
     }
 
-    public ref TValue Add(in TValue value, out int index)
+    public ref TValue Add(TValue value, out int index)
     {
         if (Length >= _items.Length)
         {
@@ -362,6 +367,11 @@ public struct FastListStruct<TValue>
     public ReadOnlySpan<TValue> AsReadOnlySpan()
     {
         return new ReadOnlySpan<TValue>(_items, 0, Length);
+    }
+
+    public int IndexOf(TValue value)
+    {
+        return Array.IndexOf(_items, value, 0, Length);
     }
 }
 

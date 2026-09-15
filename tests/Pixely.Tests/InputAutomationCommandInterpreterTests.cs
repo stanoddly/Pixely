@@ -12,6 +12,9 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse down Right 1 2\nmouse up Right 1 2", "press Right <1, 2>", "release Right <1, 2>")]
     [TestCase("  mouse  click  Left  330 175", "motion <330, 175>", "press Left <330, 175>", "release Left <330, 175>")]
     [TestCase("mouse wheel 0 -1 330 175", "wheel <0, -1> <330, 175>")]
+    // A leave is only dispatched for a mouse in the window, so the line under test comes after a mouse command.
+    [TestCase("mouse move 1 2\nmouse leave", "motion <1, 2>", "leave")]
+    [TestCase("@7 mouse move 1 2\nmouse leave", "7: motion <1, 2>")]
     [TestCase("key down LeftCtrl", "down LeftCtrl")]
     [TestCase("key up e", "up E")]
     [TestCase("key press Return", "down Return", "up Return")]
@@ -39,6 +42,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("# a comment", null)]
     [TestCase("jump", "error: unknown command 'jump'")]
     [TestCase("mouse move 320", "error: unknown command 'mouse move 320'")]
+    [TestCase("mouse leave 1 2", "error: unknown command 'mouse leave 1 2'")]
     [TestCase("mouse move x 180", "error: invalid number 'x'")]
     [TestCase("mouse click Center 1 2", "error: unknown MouseButton 'Center'")]
     [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
@@ -99,6 +103,7 @@ public sealed class InputAutomationCommandInterpreterTests
         mouseService.SubscribeButtonPress(0, eventArgs => events.Add($"press {eventArgs.Button} {eventArgs.Position}"));
         mouseService.SubscribeButtonRelease(0, eventArgs => events.Add($"release {eventArgs.Button} {eventArgs.Position}"));
         mouseService.SubscribeWheel(0, eventArgs => events.Add($"wheel {eventArgs.Delta} {eventArgs.Position}"));
+        mouseService.SubscribeWindowLeave(0, _ => events.Add("leave"));
         keyboardService.SubscribeKeyDown(0, eventArgs => events.Add($"down {eventArgs.Scancode}"));
         keyboardService.SubscribeKeyUp(0, eventArgs => events.Add($"up {eventArgs.Scancode}"));
         textInputService.SubscribeTextInput(0, eventArgs => events.Add($"text '{eventArgs.Text}'"));

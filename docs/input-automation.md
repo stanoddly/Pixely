@@ -4,6 +4,8 @@ Headless mode (`PixelyConfig.Headless`) runs the app without showing a window (S
 
 Mouse positions use logical coordinates relative to the target window's top-left corner. `mouse move` moves to a window position and derives the relative motion from the synthetic mouse's previous position; `mouse moveby` applies a delta to that position. `mouse click` dispatches a motion, a press and a release. `key press` dispatches a key down followed by a key up. `text` delivers text directly and supports characters that do not have a corresponding keyboard scancode.
 
+The first mouse command on a scope raises `WindowEnter` for it and makes `IMouseService.IsInWindow` true for that scope before the command's own event, the same order SDL uses when the pointer arrives in a window. `mouse leave` raises `WindowLeave` and resets that; it is the only way synthetic input leaves a window and works while a button is held, which real input cannot do, so it can drive a press cancellation. The next mouse command enters again.
+
 Automated input affects Pixely's event-derived synthetic device state; every view scope has its own synthetic mouse and keyboard, so positions, held buttons and held keys never cross windows. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state.
 
 ## Driving the app from standard input
@@ -18,6 +20,7 @@ A headless app reads command lines from the process's standard input and runs ea
 | `mouse up <button> <x> <y>` | Button release at the position |
 | `mouse click <button> <x> <y>` | Motion, press and release at the position |
 | `mouse wheel <dx> <dy> <x> <y>` | Wheel delta at the position |
+| `mouse leave` | Window leave for the scope |
 | `key down <scancode>` | Key down |
 | `key up <scancode>` | Key up |
 | `key press <scancode>` | Key down then key up |
