@@ -1,3 +1,4 @@
+using System.Numerics;
 using Pixely.Input;
 
 namespace Pixely.Ui;
@@ -17,6 +18,14 @@ namespace Pixely.Ui;
 /// route version stays global: position and hover are shared, so a callback that presses a second
 /// button, or merely moves the pointer, invalidates whatever route it interrupted whichever button
 /// that route belonged to.
+/// </para>
+/// <para>
+/// The wheel is routed here too, because it is a positioned pointer event: it moves hover the way
+/// a move does, hit tests over the same packed area list, and needs the route version to survive a
+/// callback that routes the pointer itself. What differs is the delivery model. A press has one
+/// owner per button, held by capture. A wheel has no owner: it climbs from the hit element through
+/// its ancestors, each scroll target taking the axes it can use, and nothing is remembered once it
+/// ends. See <see cref="Scrolled"/>.
 /// </para>
 /// </remarks>
 internal sealed class PointerRouter
@@ -50,6 +59,9 @@ internal sealed class PointerRouter
     // path the pointer reaches every time it leaves the window.
     private readonly Element?[] _cancelScratch = new Element?[CaptureSlotCount];
     private readonly int[] _cancelTokenScratch = new int[CaptureSlotCount];
+
+    // The ancestors a wheel climbs, taken before the first callback runs. See Scrolled.
+    private readonly List<Element> _scrollChain = new();
 
     private Vector2Int _position;
     private bool _isInWindow;
@@ -189,6 +201,105 @@ internal sealed class PointerRouter
         // The callback is where a click is handled, so it may have rearranged the tree. Hover is
         // recomputed rather than reusing the hit above, which by now can name a detached element.
         Track();
+        return true;
+    }
+
+    /// <summary>
+    /// Routes a wheel. The topmost pointer or scroll target under the pointer decides where it
+    /// starts: from there it climbs the ancestors, each scroll target taking the axes it can use,
+    /// until nothing is left or the layer is reached. Returns whether anything was taken.
+    /// </summary>
+    /// <remarks>
+    /// Starting at the topmost target of either kind, rather than the topmost scroll target, is
+    /// what keeps a wheel over a modal backdrop from scrolling the list beneath it, by the same
+    /// rule the pointer follows: a plain panel is transparent, and a backdrop has to be a pointer
+    /// target to be solid. Climbing rather than scanning on is what keeps it from reaching a
+    /// sibling layer at all.
+    /// </remarks>
+    internal bool Scrolled(Vector2Int position, Vector2 delta)
+    {
+        int version = ++_routeVersion;
+        MoveTo(position);
+        Track();
+
+        // A hover callback may have routed the pointer itself. Whatever that settled on is the
+        // current state, and a wheel delivered on top of it would land where the pointer no longer is.
+        if (_routeVersion != version)
+        {
+            return false;
+        }
+
+        bool consumed = false;
+
+        // The chain is taken up front and each link re-checked before the next target is offered,
+        // so a callback that reparents something below cannot send what is left up a chain the
+        // wheel was never over. Cleared in a finally so that a callback that throws does not leave
+        // the router holding elements it may have detached.
+        try
+        {
+            // Cleared here as well as below: a nested route from a callback rebuilds this list under
+            // the outer one, and the outer one stops at the version check as soon as it returns.
+            _scrollChain.Clear();
+
+            for (Element? element = HitTest(position, HitKind.Pointer | HitKind.Scroll); element != null; element = element.Parent)
+            {
+                _scrollChain.Add(element);
+            }
+
+            for (int i = 0; i < _scrollChain.Count && delta != Vector2.Zero; i++)
+            {
+                if (_scrollChain[i] is not IScrollTarget target)
+                {
+                    continue;
+                }
+
+                // An ancestor of something hittable is hittable, until a callback below changes that.
+                if (!IsScrollChainIntact(i) || !_root.CanBeHit(_scrollChain[i]))
+                {
+                    break;
+                }
+
+                ScrollAxes taken = target.OnScroll(position, delta);
+
+                if ((taken & ScrollAxes.Horizontal) != 0)
+                {
+                    delta.X = 0f;
+                    consumed = true;
+                }
+
+                if ((taken & ScrollAxes.Vertical) != 0)
+                {
+                    delta.Y = 0f;
+                    consumed = true;
+                }
+
+                // The callback may have routed the pointer itself. What it took is kept; where the
+                // rest would have gone is not knowable any more.
+                if (_routeVersion != version)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _scrollChain.Clear();
+        }
+
+        return consumed;
+    }
+
+    /// <summary>Whether every link from the element the wheel hit up to <paramref name="index"/> still holds.</summary>
+    private bool IsScrollChainIntact(int index)
+    {
+        for (int i = 0; i < index; i++)
+        {
+            if (!ReferenceEquals(_scrollChain[i].Parent, _scrollChain[i + 1]))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -433,23 +544,24 @@ internal sealed class PointerRouter
     }
 
     /// <summary>
-    /// The topmost target at <paramref name="position"/>. Scanned back to front over the areas the
-    /// last build collected, which is paint order reversed: whatever was drawn on top is what the
-    /// pointer meets first, and a child is allowed to overflow the element that arranged it because
-    /// nothing is pruned by an ancestor's bounds.
+    /// The topmost target of <paramref name="kind"/> at <paramref name="position"/>. Scanned back
+    /// to front over the areas the last build collected, which is paint order reversed: whatever
+    /// was drawn on top is what the pointer meets first, and a child is allowed to overflow the
+    /// element that arranged it because nothing is pruned by an ancestor's bounds.
     /// </summary>
     /// <remarks>
     /// The scan reads rectangles and nothing else, so it walks contiguous memory and touches no
     /// element until something is actually hit. Only then is the candidate checked against the tree
     /// it belongs to, which is where the list being one build old is accounted for.
     /// </remarks>
-    private Element? HitTest(Vector2Int position)
+    private Element? HitTest(Vector2Int position, HitKind kind = HitKind.Pointer)
     {
         List<Rectangle> areas = _root.PointerTargetAreas;
+        List<HitKind> kinds = _root.PointerTargetKinds;
 
         for (int i = areas.Count - 1; i >= 0; i--)
         {
-            if (!areas[i].Contains(position))
+            if ((kinds[i] & kind) == 0 || !areas[i].Contains(position))
             {
                 continue;
             }

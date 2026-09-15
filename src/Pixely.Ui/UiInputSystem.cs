@@ -56,6 +56,16 @@ internal sealed class UiInputSystem
             }
         });
 
+        // Consumed only when something scrolled, so a wheel over a list that has reached its end
+        // still zooms the camera underneath.
+        mouseService.SubscribeWheel(viewScope, inputOrder, eventArgs =>
+        {
+            if (_root.PointerScrolled(ToUiPosition(eventArgs.Position), eventArgs.Delta))
+            {
+                eventArgs.Consume();
+            }
+        });
+
         SubscribeKeyboard(keyboardService, textInputService, viewScope, inputOrder);
     }
 

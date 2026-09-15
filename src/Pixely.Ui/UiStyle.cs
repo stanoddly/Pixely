@@ -53,6 +53,8 @@ public sealed record UiStyle
 
     public FieldAppearance Field { get; init; }
 
+    public ScrollAppearance Scroll { get; init; }
+
     /// <summary>Text that is not inside a control with a look of its own.</summary>
     public TextAppearance Text { get; init; }
 

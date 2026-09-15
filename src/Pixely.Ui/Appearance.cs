@@ -161,3 +161,54 @@ public readonly record struct TextAppearance
         };
     }
 }
+
+/// <summary>What a <see cref="ScrollView"/>'s bars look like.</summary>
+public readonly record struct ScrollAppearance
+{
+    /// <summary>Translucent, since the bars lie over the content rather than beside it.</summary>
+    public static StateDrawables DefaultThumb { get; } = new(new SolidDrawable(new Color(120, 128, 140, 200)))
+    {
+        Hovered = new SolidDrawable(new Color(150, 158, 170, 220)),
+        Pressed = new SolidDrawable(new Color(180, 188, 200, 240))
+    };
+
+    private readonly Drawable? _track;
+    private readonly StateDrawables? _thumb;
+    private readonly int? _thickness;
+    private readonly int? _minimumThumbLength;
+
+    /// <summary>Behind the thumb, along the whole bar. Null paints no track, which is the default.</summary>
+    public Drawable? Track
+    {
+        get => _track;
+        init => _track = value;
+    }
+
+    public StateDrawables Thumb
+    {
+        get => _thumb ?? DefaultThumb;
+        init => _thumb = value;
+    }
+
+    /// <summary>How wide a vertical bar is, and how tall a horizontal one.</summary>
+    public int Thickness
+    {
+        get => _thickness ?? 6;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _thickness = value;
+        }
+    }
+
+    /// <summary>The shortest the thumb gets when the track permits, so it stays visible over very long content.</summary>
+    public int MinimumThumbLength
+    {
+        get => _minimumThumbLength ?? 12;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _minimumThumbLength = value;
+        }
+    }
+}

@@ -62,9 +62,14 @@ internal sealed class FakeKeyboardService : IKeyboardService
     public void SubscribeKeyUp(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler) { }
 }
 
-/// <inheritdoc cref="SilentKeyboardService"/>
-internal sealed class SilentMouseService : IMouseService
+/// <summary>Keeps what subscribed to the wheel, so a test can deliver one; everything else is dropped.</summary>
+internal sealed class FakeMouseService : IMouseService
 {
+    public InputEventHandler<MouseWheelEventArgs>? WheelHandler { get; private set; }
+
+    /// <summary>The scope and order it subscribed with.</summary>
+    public (ViewScope Scope, int Order)? WheelSubscription { get; private set; }
+
     public event InputEventHandler<MouseButtonEventArgs>? ButtonPress { add { } remove { } }
     public event InputEventHandler<MouseButtonEventArgs>? ButtonRelease { add { } remove { } }
     public event InputEventHandler<MouseMotionEventArgs>? Motion { add { } remove { } }
@@ -85,7 +90,11 @@ internal sealed class SilentMouseService : IMouseService
     public void SubscribeButtonPress(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler) { }
     public void SubscribeButtonRelease(ViewScope viewScope, int order, InputEventHandler<MouseButtonEventArgs> handler) { }
     public void SubscribeMotion(ViewScope viewScope, int order, InputEventHandler<MouseMotionEventArgs> handler) { }
-    public void SubscribeWheel(ViewScope viewScope, int order, InputEventHandler<MouseWheelEventArgs> handler) { }
+    public void SubscribeWheel(ViewScope viewScope, int order, InputEventHandler<MouseWheelEventArgs> handler)
+    {
+        WheelHandler = handler;
+        WheelSubscription = (viewScope, order);
+    }
     public void SubscribeWindowEnter(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
     public void SubscribeWindowLeave(ViewScope viewScope, int order, InputEventHandler<MouseWindowPresenceEventArgs> handler) { }
 }
