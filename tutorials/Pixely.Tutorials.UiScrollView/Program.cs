@@ -19,7 +19,6 @@ static partial class Program
 
     static void Configure(PixelyAppBuilder builder)
     {
-        builder.AddSingleton(new PixelyConfig(Headless: Environment.GetCommandLineArgs().Contains("--headless")));
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
             .UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Pixely.Ui — Scroll View"));

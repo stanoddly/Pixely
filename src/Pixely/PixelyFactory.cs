@@ -10,7 +10,6 @@ namespace Pixely;
 public class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
-    internal const string GpuBackendEnvironmentVariable = "PIXELY_GRAPHICS";
 
     private readonly PixelyConfig _config;
     private Image? _taskbarIcon;
@@ -227,9 +226,7 @@ public class PixelyFactory: IDisposable
 
     internal GpuDevice CreateGpuDevice()
     {
-        GpuBackend gpuBackend = ResolveGpuBackend(
-            _config.GpuBackend,
-            Environment.GetEnvironmentVariable(GpuBackendEnvironmentVariable));
+        GpuBackend gpuBackend = _config.GpuBackend;
 
         EnsureSdlInitialized();
 
@@ -301,25 +298,6 @@ public class PixelyFactory: IDisposable
 
             return new GpuDevice(device);
         }
-    }
-
-    internal static GpuBackend ResolveGpuBackend(GpuBackend configuredBackend, string? environmentBackend)
-    {
-        if (string.IsNullOrWhiteSpace(environmentBackend))
-        {
-            return configuredBackend;
-        }
-
-        return environmentBackend.Trim().ToLowerInvariant() switch
-        {
-            "automatic" => GpuBackend.Automatic,
-            "vulkan" => GpuBackend.Vulkan,
-            "direct3d12" => GpuBackend.Direct3D12,
-            "metal" => GpuBackend.Metal,
-            _ => throw new InvalidOperationException(
-                $"Unsupported {GpuBackendEnvironmentVariable} value '{environmentBackend}'. " +
-                "Expected one of: automatic, vulkan, direct3d12, metal.")
-        };
     }
 
     internal KeyboardService CreateKeyboardService(AppControl appControl)
