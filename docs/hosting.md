@@ -13,9 +13,7 @@ what to register.
 ```
 
 The property is the whole opt-in. Without it nothing is generated and the project writes its own
-`Main`, as before; every other Pixely API works either way. Inside this repository a project also
-references `src/Pixely.Hosting/Pixely.Hosting.csproj`, and `tutorials/Directory.Build.targets`
-imports the generator, because a `ProjectReference` imports no package targets.
+`Main`; every other Pixely API works either way.
 
 ## What the project writes
 
@@ -37,11 +35,10 @@ static partial class Program
 - `RootNamespace` defaults to the project file name and is where `dotnet new` puts `Program`. A project
   that wants `Program` elsewhere does not opt in.
 - `Configure` runs before `Build()` and receives the command-line arguments `Main` received. It is the
-  only place that registers into the root container.
-- Everything that used to happen after `Build()` has a registration-side form: `OnBuilt` runs after all
-  services are constructed and before the provider freezes (`docs/class-registration.md`),
-  `IStageManager.Load` before the first frame applies on that frame, and every registered `UiView` is
-  added to its root by `Pixely.Ui` (`docs/ui.md`). Nothing needs the app object.
+  only place that registers into the root container, and nothing after it sees the app object: work
+  that needs built services runs in `OnBuilt` (`docs/class-registration.md`), a stage is loaded
+  through `IStageManager.Load`, and a registered `UiView` is added to its root by `Pixely.Ui`
+  (`docs/ui.md`).
 - `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
   the same class, so nothing needs to be `internal` or `partial` beyond the class itself.
 - A missing `Configure` is CS0117: the generated `Main` names `Program.Configure`.
