@@ -146,7 +146,7 @@ Executable          ──> everything above
 - `Rendering` and `Audio` are output. They present what `Frontend` tells them to, e.g. a walk along a
   path or a hit sound, and MUST NOT mutate State or invoke Mechanics
 - `Frontend` and its outputs are one side of the boundary. The split between them is only a
-  dependency direction, `Rendering` and `Audio` never reference `Frontend`, and there is no
+  dependency direction, `Rendering` and `Audio` never reference `Frontend`, and there SHOULD be no
   abstraction layer between them. `Frontend` MAY call or poll anything an output makes public
 - `Frontend` SHOULD NOT subscribe to an output. A handler runs inside the output's `Update`, so a
   Mechanic invoked from it mutates State while the output reads it. `Frontend` SHOULD poll the output
