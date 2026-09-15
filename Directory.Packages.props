@@ -14,7 +14,7 @@
         <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
         <PackageVersion Include="NUnit" Version="4.6.1" />
-        <PackageVersion Include="NUnit.Analyzers" Version="4.14.0" />
+        <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
         <PackageVersion Include="NUnit3TestAdapter" Version="6.3.0" />
         <PackageVersion Include="ppy.SDL3-CS" Version="2026.722.0" />
         <PackageVersion Include="ppy.SDL3_image-CS" Version="2026.722.0" />
