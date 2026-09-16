@@ -139,7 +139,7 @@ Executable          ──> everything above
 - Its state is selection, drafts, previews and what a form shows. Dropping it loses what the player
   was doing, never game state. A tool the player selected decides what the next click means, and
   that is Frontend's to decide
-- Presentation infrastructure, e.g. render targets and audio clips, is root-scoped and survives stage
+- Output infrastructure, e.g. render targets and audio clips, is root-scoped and survives stage
   changes. Only what is bound to one stage's state belongs to the stage
 - A form that outlives or replaces a stage, e.g. a save picker, is root-scoped. It MAY reach root
   services and `IStageManager`, it MUST NOT hold a reference into a stage
@@ -151,8 +151,13 @@ Executable          ──> everything above
 - `Frontend` SHOULD NOT subscribe to an output. A handler runs inside the output's `Update`, so a
   Mechanic invoked from it mutates State while the output reads it. `Frontend` SHOULD poll the output
   in its own `Update` instead
-- Output state MUST be presentation only. Dropping it changes what is seen or heard, never game
+- Output state MUST NOT carry meaning. Dropping it changes what is seen or heard, never game
   state, never the meaning of input
+- `Frontend` interprets, outputs execute. `Frontend` MUST decide what State means for output, e.g.
+  that a fast unit plays "run", and tell the output what to play. An output MUST NOT read that
+  meaning out of State itself
+- An output answers only for what it is doing now. `Frontend` keeps what it has handed over, what
+  is pending and when input reopens. An output MUST NOT hold that for it
 
 ### Foo.Frontend root namespace
 
@@ -181,7 +186,7 @@ Executable          ──> everything above
 
 - An autonomous actor MUST NOT be reachable from `Frontend`
 - An autonomous actor reads State, MAY read the log, calls Mechanics, and decides nothing about
-  presentation. It MUST NOT own state that outlives a call, a plan spanning turns is State
+  output. It MUST NOT own state that outlives a call, a plan spanning turns is State
 - `Foo.Ai` is a non player participant that acts like a player
 - `Foo.Scenario` is scripted, e.g. triggers that read the log and fire Mechanics. It MUST act after
   the rules that can fire it and before any participant acts on the result
@@ -191,14 +196,15 @@ Executable          ──> everything above
 - Composition and the frame loop, nothing else
 - Its assembly is named `Foo.Executable` or `Foo`
 - It SHOULD set `PixelyHosting`, see `docs/hosting.md`
-- Two containers. Root is the application: platform, window, presentation infrastructure, content,
+- Two containers. Root is the application: platform, window, output infrastructure, content,
   root-scoped forms. A stage is a child container holding its state root, Mechanics, Systems, log,
   `Ai` and the `Frontend` bound to that state. A stage MAY reach root, root MUST NOT reach a stage
 - State MUST NOT be reset in place. Another run is another stage
 - The frame is single threaded, set by Pixely, so nothing returns a `Task`
 - Pixely delivers input before any updatable runs, so `Frontend` input handlers run first in the frame
 - Updatables MUST run in this order: `Systems`, `Scenario`, `Ai`, `Frontend`, then `Rendering` and
-  `Audio`. Inside a project they run in registration order unless one sets its own `UpdateOrder`
+  `Audio`. Each is an `UpdateOrder` band, lower first. The sort is stable: updatables with the same
+  `UpdateOrder` run in registration order, so a game MAY rely on it, see `docs/frame-order.md`
 
 ## Out of scope
 
