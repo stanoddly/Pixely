@@ -10,6 +10,6 @@ public sealed class PeachArchitectureTests
     {
         FitnessReport report = PeachArchitecture.Evaluate(new PeachArchitectureOptions("Peachy"));
 
-        Assert.That(report["00 GameResolvesFromPrefix"].IsFit, Is.True, report.ToString());
+        Assert.That(report["GameResolvesFromPrefix"].IsFit, Is.True, report.ToString());
     }
 }

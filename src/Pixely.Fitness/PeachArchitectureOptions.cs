@@ -10,7 +10,7 @@ public sealed record ExtraNamespace(string Namespace, string Justification);
 
 /// <summary>
 /// What a game tells the generic rules: its prefix, the namespaces it adds beyond the document's, and
-/// which hardened SHOULDs it switches off. Everything else is derived from the prefix, see
+/// whether it switches the hardened SHOULD off. Everything else is derived from the prefix, see
 /// <see cref="PeachGame"/>.
 /// </summary>
 public sealed record PeachArchitectureOptions(string GamePrefix)
@@ -19,10 +19,8 @@ public sealed record PeachArchitectureOptions(string GamePrefix)
 
     public IReadOnlyList<ExtraNamespace> ExtraGameNamespaces { get; init; } = [];
 
-    // Hardened SHOULDs a game may switch off.
-    public bool MechanicsHaveNoPublicConstructors { get; init; } = true;
+    // The hardened SHOULD a game may switch off.
     public bool MechanicsTakeStateRootThroughConstructor { get; init; } = true;
-    public bool GameGrantsNoInternalAccess { get; init; } = true;
 
     internal string GameNamespace => $"{GamePrefix}.Game";
     internal string VocabularyNamespace => $"{GameNamespace}.Vocabulary";

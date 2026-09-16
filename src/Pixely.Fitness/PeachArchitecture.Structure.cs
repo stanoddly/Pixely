@@ -9,7 +9,7 @@ namespace Pixely.Fitness;
 
 /// <summary>
 /// The fitness functions of the Peach architecture document, one per rule, each returning the members
-/// that break it. Numbers refer to the test plan.
+/// that break it. Each rule points at one sentence of the document.
 /// </summary>
 public static partial class PeachArchitecture
 {
@@ -17,7 +17,7 @@ public static partial class PeachArchitecture
 
     public static FitnessReport Evaluate(PeachArchitectureOptions options)
     {
-        FitnessResult resolution = new FitnessResult("00 GameResolvesFromPrefix", options.Resolved.Violations);
+        FitnessResult resolution = new FitnessResult("GameResolvesFromPrefix", options.Resolved.Violations);
         if (!options.Resolved.IsComplete)
         {
             return new FitnessReport([resolution]);
@@ -26,43 +26,38 @@ public static partial class PeachArchitecture
         return new FitnessReport(
         [
             resolution,
-            Run("01 ProjectReferencesMatchTheGraph", static options => options.Resolved.RepositoryRoot == null ? [] : ProjectReferences.Violations(options.Resolved.RepositoryRoot, options)),
-            Run("02 AssemblyReferencesMatchTheGraph", AssemblyReferencesMatchTheGraph),
-            Run("03 NoInternalAccessBetweenProductionAssemblies", NoInternalAccessBetweenProductionAssemblies),
-            Run("05 RegistrarsAreTheOnlyRegistration", RegistrarsAreTheOnlyRegistration),
-            Run("06 ExecutableOnlyComposes", ExecutableOnlyComposes),
-            Run("07 RootDoesNotReachTheStage", RootDoesNotReachTheStage),
-            Run("08 TypesLiveInDocumentedNamespaces", TypesLiveInDocumentedNamespaces),
-            Run("09 NothingReturnsATask", NothingReturnsATask),
-            Run("10 GameNeverPushes", GameNeverPushes),
-            Run("11 PublicGameMembersExposeOnlyPublicTypes", PublicGameMembersExposeOnlyPublicTypes),
-            Run("11a UnexposedMechanicsTypesAreInternal", UnexposedMechanicsTypesAreInternal),
-            Run("12 GamePublicTypesLiveInTheirNamespaces", GamePublicTypesLiveInTheirNamespaces),
-            Run("13 NoCommandsHandlersOrDispatchers", NoCommandsHandlersOrDispatchers),
-            Run("14 VocabularyHoldsOnlyPrimitives", VocabularyHoldsOnlyPrimitives),
-            Run("15 IdsAreTheirOwnTypes", IdsAreTheirOwnTypes),
-            Run("16 StageRegistersExactlyTheStateRoot", StageRegistersExactlyTheStateRoot),
-            Run("17 StateHasNoPublicSetters", StateHasNoPublicSetters),
-            Run("18 StateCollectionsAreReadOnly", StateCollectionsAreReadOnly),
-            Run("19 StateNamesNoRules", StateNamesNoRules),
-            Run("20 StateReadsReturnNoTransportRecords", StateReadsReturnNoTransportRecords),
-            Run("21 StateGraphStaysInState", StateGraphStaysInState),
-            Run("22 StateIsCreatedOnlyByGame", StateIsCreatedOnlyByGame),
-            Run("23 MechanicsPublicSurfaceIsMechanicsAndOutcomes", MechanicsPublicSurfaceIsMechanicsAndOutcomes),
-            Run("24 MechanicsHaveNoPublicConstructors", MechanicsHaveNoPublicConstructors),
-            Run("25 MechanicsTakeTheStateRootThroughConstructors", MechanicsTakeTheStateRootThroughConstructors),
-            Run("26 MechanicsReturnNoStrings", MechanicsReturnNoStrings),
-            Run("27 OnlyDirectorsAndActorsNameMechanics", OnlyDirectorsAndActorsNameMechanics),
-            Run("29 SystemsAreInternalUpdatables", SystemsAreInternalUpdatables),
-            Run("32 EntriesAreRecordsOfIdsAndValues", EntriesAreRecordsOfIdsAndValues),
-            Run("33 StageRegistersOneLogWhenEntriesExist", StageRegistersOneLogWhenEntriesExist),
-            Run("34 OnlyDirectorsAndActorsHoldReaders", OnlyDirectorsAndActorsHoldReaders),
-            Run("35 FormsOwnEveryUiView", FormsOwnEveryUiView),
-            Run("36 FormsNameNoStateOrMechanics", FormsNameNoStateOrMechanics),
-            Run("38 DirectorAndActorPublicSurfaceIsTheRegistrar", DirectorAndActorPublicSurfaceIsTheRegistrar),
-            Run("39 OutputReadsNoInput", OutputReadsNoInput),
-            Run("40 OutputOwnsNoViewModels", OutputOwnsNoViewModels),
-            Run("43 ActorsOwnNoState", ActorsOwnNoState)
+            Run("ProjectReferencesMatchTheGraph", static options => options.Resolved.RepositoryRoot == null ? [] : ProjectReferences.Violations(options.Resolved.RepositoryRoot, options)),
+            Run("AssemblyReferencesMatchTheGraph", AssemblyReferencesMatchTheGraph),
+            Run("NoInternalAccessBetweenProductionAssemblies", NoInternalAccessBetweenProductionAssemblies),
+            Run("RegistrarsAreTheOnlyRegistration", RegistrarsAreTheOnlyRegistration),
+            Run("ExecutableOnlyComposes", ExecutableOnlyComposes),
+            Run("RootDoesNotReachTheStage", RootDoesNotReachTheStage),
+            Run("TypesLiveInDocumentedNamespaces", TypesLiveInDocumentedNamespaces),
+            Run("NothingReturnsATask", NothingReturnsATask),
+            Run("GameNeverPushes", GameNeverPushes),
+            Run("UnexposedMechanicsTypesAreInternal", UnexposedMechanicsTypesAreInternal),
+            Run("NoCommandsHandlersOrDispatchers", NoCommandsHandlersOrDispatchers),
+            Run("VocabularyHoldsOnlyPrimitives", VocabularyHoldsOnlyPrimitives),
+            Run("IdsAreTheirOwnTypes", IdsAreTheirOwnTypes),
+            Run("StageRegistersExactlyTheStateRoot", StageRegistersExactlyTheStateRoot),
+            Run("StateHasNoPublicSetters", StateHasNoPublicSetters),
+            Run("StateCollectionsAreReadOnly", StateCollectionsAreReadOnly),
+            Run("StateNamesNoRules", StateNamesNoRules),
+            Run("StateReadsReturnNoTransportRecords", StateReadsReturnNoTransportRecords),
+            Run("StateGraphStaysInState", StateGraphStaysInState),
+            Run("MechanicsTakeTheStateRootThroughConstructors", MechanicsTakeTheStateRootThroughConstructors),
+            Run("MechanicsReturnNoStrings", MechanicsReturnNoStrings),
+            Run("OnlyFrontendAndActorsNameMechanics", OnlyFrontendAndActorsNameMechanics),
+            Run("SystemsAreInternalUpdatables", SystemsAreInternalUpdatables),
+            Run("EntriesAreRecordsOfIdsAndValues", EntriesAreRecordsOfIdsAndValues),
+            Run("StageRegistersOneLogWhenEntriesExist", StageRegistersOneLogWhenEntriesExist),
+            Run("OnlyFrontendAndActorsHoldReaders", OnlyFrontendAndActorsHoldReaders),
+            Run("FormsOwnEveryUiView", FormsOwnEveryUiView),
+            Run("FormsNameNoStateOrMechanics", FormsNameNoStateOrMechanics),
+            Run("FrontendAndActorPublicSurfaceIsTheRegistrar", FrontendAndActorPublicSurfaceIsTheRegistrar),
+            Run("OutputReadsNoInput", OutputReadsNoInput),
+            Run("OutputOwnsNoViewModels", OutputOwnsNoViewModels),
+            Run("ActorsOwnNoState", ActorsOwnNoState)
         ]);
 
         FitnessResult Run(string name, Func<PeachArchitectureOptions, IReadOnlyList<string>> function)
@@ -71,7 +66,7 @@ public static partial class PeachArchitecture
         }
     }
 
-    // 2. The arrow graph, read from the compiled assemblies rather than the project files. Executable composes, so it may pull in any
+    // The arrow graph, read from the compiled assemblies rather than the project files. Executable composes, so it may pull in any
     // package; of the game's own assemblies it may reference only the production ones.
     private static IReadOnlyList<string> AssemblyReferencesMatchTheGraph(PeachArchitectureOptions options)
     {
@@ -100,28 +95,34 @@ public static partial class PeachArchitecture
         }
     }
 
-    // 3. Mutation is internal, so an assembly that sees another's internals could write State.
+    // Mutation is internal, so a production assembly that sees another's internals could write State.
     private static IReadOnlyList<string> NoInternalAccessBetweenProductionAssemblies(PeachArchitectureOptions options)
     {
         HashSet<string> productionNames = options.ProductionAssemblies.Select(assembly => assembly.GetName().Name!).ToHashSet(StringComparer.Ordinal);
         return options.ProductionAssemblies
-            .SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>().Select(attribute => (Owner: assembly, Friend: attribute.AssemblyName)))
-            .Where(grant => productionNames.Contains(grant.Friend) || options.GameGrantsNoInternalAccess && grant.Owner == options.Game)
+            .SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>().Select(attribute => (Owner: assembly, Friend: new AssemblyName(attribute.AssemblyName).Name!)))
+            .Where(grant => productionNames.Contains(grant.Friend))
             .Select(grant => $"{grant.Owner.GetName().Name} -> {grant.Friend}")
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
 
-    // 5. The public static classes in a project's root namespace are its registrars: Add* extension methods on PixelyAppBuilder for root,
-    // on ServiceCollection for a stage. Nothing else registers.
+    // A registrar is a public static class in the project's root namespace, an Add* extension method on PixelyAppBuilder for root, on
+    // ServiceCollection for a stage. That namespace holds nothing else public, and nothing else registers.
     private static IReadOnlyList<string> RegistrarsAreTheOnlyRegistration(PeachArchitectureOptions options)
     {
         List<string> violations = new List<string>();
         foreach (Assembly assembly in options.ProductionAssemblies.Where(assembly => assembly != options.Executable))
         {
             string rootNamespace = options.RootNamespaceOf(assembly);
-            foreach (Type type in TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == rootNamespace))
+            foreach (Type type in TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && type.Namespace == rootNamespace))
             {
+                if (!TypeGraph.IsStatic(type))
+                {
+                    violations.Add(type.FullName!);
+                    continue;
+                }
+
                 violations.AddRange(TypeGraph.DeclaredMethods(type).Where(method => method.IsPublic && !PeachGame.IsRegistrarMethod(method)).Select(TypeGraph.Describe));
             }
 
@@ -135,7 +136,7 @@ public static partial class PeachArchitecture
         return violations;
     }
 
-    // 6. Executable composes; it takes no part in the frame or the user interface itself.
+    // Executable composes; it takes no part in the frame or the user interface itself.
     private static IReadOnlyList<string> ExecutableOnlyComposes(PeachArchitectureOptions options)
     {
         return TypeGraph.DeclaredTypes(options.Executable)
@@ -145,7 +146,7 @@ public static partial class PeachArchitecture
             .ToArray();
     }
 
-    // 7. Root MUST NOT hold a reference into a stage: nothing root registers keeps or is handed anything the stage registers. A root service
+    // Root MUST NOT hold a reference into a stage: nothing root registers keeps or is handed anything the stage registers. A root service
     // that creates a stage type, e.g. persistence loading the state root, hands it over and keeps nothing.
     private static IReadOnlyList<string> RootDoesNotReachTheStage(PeachArchitectureOptions options)
     {
@@ -172,24 +173,14 @@ public static partial class PeachArchitecture
         }
     }
 
-    // 8. Every type sits in a namespace the document names, or one the game declared on top with a justification. A namespace is reported
-    // once, not once per type.
+    // Every type in Game lives in a namespace the document names, or one the game added with a reason, so the namespace scoped rules see it.
+    // The other projects' rules are project scoped, so their namespaces are theirs. A namespace is reported once, not once per type.
     private static IReadOnlyList<string> TypesLiveInDocumentedNamespaces(PeachArchitectureOptions options)
     {
-        Dictionary<Assembly, HashSet<string>> allowed = new Dictionary<Assembly, HashSet<string>>
-        {
-            [options.Game] = new[] { options.GameNamespace, options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.SystemsNamespace, options.ObservationsNamespace }
-                .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal),
-            [options.Frontend] = [options.FrontendNamespace, options.FormsNamespace],
-            [options.Executable] = [options.ExecutableNamespace]
-        };
-        foreach (Assembly assembly in options.OutputAssemblies.Concat(options.ActorAssemblies))
-        {
-            allowed[assembly] = [options.RootNamespaceOf(assembly)];
-        }
-
-        List<string> violations = allowed
-            .SelectMany(pair => TypeGraph.DeclaredTypes(pair.Key).Where(type => !type.IsNested && !pair.Value.Contains(type.Namespace ?? string.Empty)))
+        HashSet<string> allowed = new[] { options.GameNamespace, options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.SystemsNamespace, options.ObservationsNamespace }
+            .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal);
+        List<string> violations = TypeGraph.DeclaredTypes(options.Game)
+            .Where(type => !type.IsNested && !allowed.Contains(type.Namespace ?? string.Empty))
             .Select(type => type.Namespace ?? "(global)")
             .Distinct()
             .Order(StringComparer.Ordinal)
@@ -201,7 +192,7 @@ public static partial class PeachArchitecture
         return violations;
     }
 
-    // 9. The frame is single threaded, so nothing hands work to another thread.
+    // The frame is single threaded, so nothing hands work to another thread.
     private static IReadOnlyList<string> NothingReturnsATask(PeachArchitectureOptions options)
     {
         return options.ProductionAssemblies

@@ -13,6 +13,8 @@
   `ServiceCollection`, e.g. `AddGamePersistence` for root and `AddGame` for the stage. They are the
   only way `Executable` registers an internal type. A registrar registers the same types whatever
   its arguments; arguments configure values, not what exists
+  - A registrar is a public static class in the project's root namespace, and that namespace holds
+    nothing else public
 - A stage is what the player is in, a mission or a menu. Each has its own state root
 - Not every game needs every part
   - `Systems` exist when rules advance with time. A turn based game where nothing happens between
@@ -45,6 +47,9 @@ Executable          ──> everything above
 - The `Foo.` prefix is omitted. Every other name in this document is a namespace in one of these,
   e.g. `Frontend.Forms`
 - An arrow is what a project MUST reference. Nothing else MAY compile against it
+- Each project sits at `src/Foo.{Part}/Foo.{Part}.csproj`
+- Only `Executable` references `Frontend`, `Ai` and `Scenario`, so they expose nothing public but
+  their registrars
 
 ## What Pixely provides
 
@@ -64,6 +69,9 @@ Executable          ──> everything above
 - It MUST NOT know a frontend, a participant that is a player, or an output
 - It MUST NOT push: no events, observers or callbacks, so it holds no delegate. A reader polls State
   or drains the log
+- Every type in `Game` is a registrar in the root namespace or lives in `Vocabulary`, `State`,
+  `Mechanics`, `Systems` or `Observations`, so the rules of those namespaces see it. A game MAY add a
+  namespace here, each with the reason the named ones did not do
 
 ### Foo.Game.Vocabulary namespace
 
@@ -75,7 +83,8 @@ Executable          ──> everything above
 ### Foo.Game.State namespace
 
 - There MUST be one state root per stage. It is the one `State` class no other `State` type holds.
-  It SHOULD be handed to its readers through the constructor
+  It SHOULD be handed to its readers through the constructor. The stage registers the root and no
+  other `State` type
 - Storage MAY be ECS or not, depends on the game needs
 - Mutation MUST be `internal`, so nothing outside `Game` writes State. `Mechanics` and `Systems`
   write it. A public property MUST NOT have a setter, a public collection MUST be an
@@ -101,8 +110,8 @@ Executable          ──> everything above
 - A Mechanic MAY call other Mechanics
 - A Mechanic method SHOULD return an outcome, semantic, never a user facing message. It MAY return
   what it created, e.g. an id
-- A Mechanic MUST apply its effect during the call. No command records, no dispatcher. Work that
-  spans time is State the call writes, e.g. a construction job a System advances
+- A Mechanic MUST apply its effect during the call. No command records, handlers or dispatchers. Work
+  that spans time is State the call writes, e.g. a construction job a System advances
 - Validation MUST live here. `Frontend` MAY compute the same rule for a preview, the Mechanic's
   answer is authoritative
 - A Mechanic SHOULD take its full payload in one call. E.g. drafts and multi-step flows are `Frontend`
@@ -181,6 +190,7 @@ Executable          ──> everything above
   from State directly
 - State is ahead of the screen, e.g. the Mechanic already put the unit at the end of its path while
   `Rendering` still shows the walk
+- An output MUST NOT own a form or a view model, and MUST NOT read input
 
 ## Autonomous actor projects
 
@@ -211,14 +221,6 @@ Executable          ──> everything above
 - Deliberate, not an omission to fill in. Each game decides these where it needs them
 - Persistence. Where it lives is the game's call. The "no rule" test on `Game` does not exclude it,
   a save schema is not a rule but it is bound to State tighter than to anything else
-- A second frontend, e.g. an editor
-
-## TODO
-
-- Turn `Out of scope` into what a game's own document MUST answer: persistence, stage transitions, a
-  second frontend, the frame composition, its own Vocabulary
-- Keep the reason behind a rule and add it back where it was cut. A rule with no reason gets
-  extrapolated wrongly on a case it does not cover
-- Decide whether a Mechanic call from a form passes the input refusal the `Frontend` root owns
-- Decide whether a bounded exception to what an entry carries is allowed, e.g. naming the tile a
-  unit stepped from when it steps into view, so the move can be animated
+- A second frontend, e.g. an editor. A game might add `Foo.Game.Editor` and `Foo.Frontend.Editor`
+  beside the seven. `Foo.Game.Editor` extends `Game`, so `Foo.Game` opening its internals to it adds
+  no writer outside the stone, `Foo.Frontend.Editor` writes through it like any frontend
