@@ -12,4 +12,13 @@ public sealed class PeachArchitectureTests
 
         Assert.That(report["GameResolvesFromPrefix"].IsFit, Is.True, report.ToString());
     }
+
+    [Test]
+    public void FrameworkValueTypesCountAsPrimitives()
+    {
+        FitnessReport report = PeachArchitecture.Evaluate(new PeachArchitectureOptions("Peachy"));
+
+        Assert.That(report["StateGraphStaysInState"].IsFit, Is.True, report.ToString());
+        Assert.That(report["StateReadsReturnNoTransportRecords"].IsFit, Is.True, report.ToString());
+    }
 }

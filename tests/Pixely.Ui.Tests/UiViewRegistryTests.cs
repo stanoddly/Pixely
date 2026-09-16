@@ -166,7 +166,6 @@ public class UiViewRegistryTests
     private static ServiceCollection Configured(UiRoot first, UiRoot second, out UiViewRegistry registry)
     {
         ServiceCollection services = new();
-        services.AddRegistry<ScopedUiRoot>();
         services.AddSingleton(new ScopedUiRoot(default, first));
         services.AddSingleton(new ScopedUiRoot(new ViewScope(2), second));
         registry = UiViewRegistry.Register(services);

@@ -141,6 +141,27 @@ public class UiUpdateSystemTests
         Assert.That(resolved, Is.SameAs(contextProvider));
     }
 
+    [Test]
+    public void ARootRegisteredAfterItsConsumer_IsStillFoundDuringBuild()
+    {
+        UiRoot root = new();
+        UiRoot? resolved = null;
+
+        PixelyAppBuilder builder = new();
+        builder.AddSingleton<Window>(FakeWindow(default, 1));
+        builder.AddSingleton<RenderContextProvider<BasicRenderContext>>(_ => new SizedContextProvider(new ShortSize(320, 240)));
+        builder.AddSingleton<UiUpdateSystem<BasicRenderContext>>(provider =>
+        {
+            (resolved, Window window, RenderContextProvider<BasicRenderContext> contextProvider) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, default);
+            return new UiUpdateSystem<BasicRenderContext>(resolved, window, contextProvider, 0);
+        });
+        builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(default, root));
+
+        builder.BuildServiceProvider();
+
+        Assert.That(resolved, Is.SameAs(root));
+    }
+
     private static UiUpdateSystem<BasicRenderContext> System(UiRoot root, ShortSize colorTargetSize, int updateOrder = 0)
     {
         return new UiUpdateSystem<BasicRenderContext>(root, FakeWindow(default, 1), new SizedContextProvider(colorTargetSize), updateOrder);
@@ -161,7 +182,6 @@ public class UiUpdateSystemTests
         params (ViewScope ViewScope, UiRoot Root, Window Window)[] scopes)
     {
         PixelyAppBuilder builder = new();
-        builder.AddRegistry<ScopedUiRoot>();
         builder.AddSingleton<RenderContextProvider<BasicRenderContext>>(_ => contextProvider);
 
         foreach ((ViewScope viewScope, UiRoot root, Window window) in scopes)
