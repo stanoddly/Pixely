@@ -25,8 +25,6 @@ UiStyle         the look of everything under a root; elements hold none of their
 builder.UseUi();
 ```
 
-Registration order does not matter: `UseUi` may appear before or after the window, the rendering and the application's own renderers.
-
 A style is optional but usually wanted, since it is what saves passing a font to every label:
 
 ```csharp
