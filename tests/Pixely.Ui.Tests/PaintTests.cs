@@ -163,6 +163,74 @@ public class PaintTests
     }
 
     [Test]
+    public void Paint_LabelScrolledOutOfView_IsNotRasterised()
+    {
+        RasterisingFont font = new();
+        ScrollView view = new() { Height = Sizing.Fixed(RasterisingFont.LineHeight), Children = { new Label(font, "first"), new Label(font, "second") } };
+        view.ScrollOffset = new Vector2Int(0, RasterisingFont.LineHeight);
+
+        Run(view, 100, RasterisingFont.LineHeight);
+
+        Assert.That(font.SpriteCount, Is.EqualTo(1), "only the label scrolled into the viewport paints");
+    }
+
+    [Test]
+    public void Paint_LabelOverflowingItsBoundsIntoTheClip_IsStillRasterised()
+    {
+        RasterisingFont font = new();
+        Label label = new(font, "wide text") { Width = Sizing.Fixed(1), Margin = new Thickness(-20, 0, 0, 0) };
+        Column root = new() { Children = { label } };
+
+        Run(root, 100, 100);
+
+        Assert.That(font.SpriteCount, Is.EqualTo(1), "the sprite starts left of the clip but reaches into it");
+    }
+
+    [Test]
+    public void Paint_EmptyLabelWithoutAFont_PaintsNothingRatherThanThrowing()
+    {
+        Column root = new() { Children = { new Label() } };
+
+        UiRoot uiRoot = Run(root, 100, 100);
+
+        Assert.That(uiRoot.Instructions, Is.Empty);
+    }
+
+    [Test]
+    public void Paint_LabelWhoseContentGrewSinceItWasMeasured_IsNotCulledByItsOldSize()
+    {
+        RasterisingFont font = new();
+        Label label = new(font, "a") { Margin = new Thickness(-RasterisingFont.CharacterWidth, 0, 0, 0) };
+        Column root = new() { Children = { label } };
+        Rectangle viewport = new(0, 0, 100, 100);
+
+        // Laid out one character wide, which sits wholly left of the viewport; the content then
+        // grows before paint, as a callback run between the two passes could make it.
+        Layout.Run(root, 100, 100);
+        label.Content = "ab";
+        PaintContext context = new();
+        context.Reset(viewport);
+        root.Paint(context);
+
+        Assert.That(font.SpriteCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Paint_TextBoxScrolledOutOfView_IsNotRasterised()
+    {
+        RasterisingFont font = new();
+        int rowHeight = RasterisingFont.LineHeight + 4;
+        TextBox first = new(font) { Text = "first", Height = Sizing.Fixed(rowHeight) };
+        TextBox second = new(font) { Text = "second", Height = Sizing.Fixed(rowHeight) };
+        ScrollView view = new() { Height = Sizing.Fixed(rowHeight), Children = { first, second } };
+        view.ScrollOffset = new Vector2Int(0, rowHeight);
+
+        Run(view, 100, rowHeight);
+
+        Assert.That(font.SpriteCount, Is.EqualTo(1), "only the field scrolled into the viewport paints");
+    }
+
+    [Test]
     public void PaintContext_UnbalancedCustomDrawable_DoesNotLeakItsClip()
     {
         MeasuredBox sibling = new(10, 10) { Background = new SolidDrawable(Red) };

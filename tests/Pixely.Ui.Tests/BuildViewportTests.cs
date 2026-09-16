@@ -60,6 +60,25 @@ public class BuildViewportTests
         });
     }
 
+    [Test]
+    public void AHiddenLayer_LeavesTheRootClean_SoItDoesNotBuildEveryFrame()
+    {
+        UiRoot root = new();
+        root.SetTargetSize(new Vector2Int(320, 240));
+        root.AddLayer(new Element { Width = Sizing.Fixed(10), Height = Sizing.Fixed(10) });
+        root.AddLayer(new Element { Width = Sizing.Fixed(10), Height = Sizing.Fixed(10), IsVisible = false });
+
+        root.Update();
+        ulong afterFirstBuild = root.BuildVersion;
+        bool rebuilt = root.Update();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rebuilt, Is.False);
+            Assert.That(root.BuildVersion, Is.EqualTo(afterFirstBuild));
+        });
+    }
+
     /// <summary>
     /// A built root with the pointer parked over a target that resizes the viewport when it is told
     /// the pointer left. Growing the spacer is what pushes the target out from under the pointer.

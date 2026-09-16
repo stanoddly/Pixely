@@ -104,7 +104,7 @@ Anchoring something in the tree to a position in the world means dividing that p
 | `Sizing.Fit` (default) | Size to content. |
 | `Sizing.Fixed(px)` | Exactly that many logical pixels, even when it exceeds what was offered. |
 | `Sizing.Grow(weight)` | On a stack's main axis, a share of what is left after the non-growing siblings are measured. On any other axis, fill it. |
-| `Sizing.Percent(fraction)` | A fraction of the parent's content extent. |
+| `Sizing.Percent(fraction)` | A fraction of the parent's content extent, less the child's margin. |
 
 `Grow` and `Percent` both need a number the parent has already committed to. On an axis whose extent is indefinite there is no such number, so both degrade to `Fit` rather than resolving circularly.
 

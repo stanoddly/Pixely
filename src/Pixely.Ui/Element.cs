@@ -270,8 +270,12 @@ public class Element : ILayoutHost
     {
         if (!_isVisible)
         {
+            // A hidden element neither arranges nor paints, so all three flags go clean here;
+            // becoming visible again invalidates measure, which raises them all.
             DesiredSize = default;
             _measureDirty = false;
+            _arrangeDirty = false;
+            _paintDirty = false;
             return DesiredSize;
         }
 
@@ -672,12 +676,10 @@ public class Element : ILayoutHost
                 return (sizing.Pixels, sizing.Pixels);
 
             // Percent resolves against the host's committed content extent, never the running
-            // budget, so two 50% siblings each get half of the host.
+            // budget, so two 50% siblings each get half of the host. The fraction is of the margin
+            // box, as with Grow and Stretch, so Percent(1f) with a margin still fits the slot.
             case SizingMode.Percent:
-            {
-                int value = Math.Max(0, (int)MathF.Round(sizing.Factor * definiteExtent!.Value));
-                return (value, value);
-            }
+                return Stretched((int)MathF.Round(sizing.Factor * definiteExtent!.Value), margin);
 
             // A Grow child on the layout's own axis is always measured through a forced extent,
             // so a Grow that reaches here is on the cross axis, where it means "fill".
