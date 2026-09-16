@@ -160,15 +160,26 @@ public class ServiceProvider : IDisposable
         }
     }
 
-    internal void RunDisposingCallbacks(
+    // Each callback is isolated so one throwing callback does not skip the others for the same service.
+    private void RunDisposingCallbacks(
         object instance,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type,
+        ref List<Exception>? failures)
     {
-        if (_disposingCallbacks != null)
+        if (_disposingCallbacks == null)
         {
-            foreach (ServiceDisposingCallback callback in _disposingCallbacks)
+            return;
+        }
+
+        foreach (ServiceDisposingCallback callback in _disposingCallbacks)
+        {
+            try
             {
                 callback(instance, type);
+            }
+            catch (Exception ex)
+            {
+                (failures ??= new List<Exception>()).Add(ex);
             }
         }
     }
@@ -613,8 +624,7 @@ public class ServiceProvider : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    failures ??= new List<Exception>();
-                    failures.Add(ex);
+                    (failures ??= new List<Exception>()).Add(ex);
                 }
             }
         }
@@ -679,15 +689,7 @@ public class ServiceProvider : IDisposable
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type concreteType,
         ref List<Exception>? failures)
     {
-        try
-        {
-            RunDisposingCallbacks(service, concreteType);
-        }
-        catch (Exception ex)
-        {
-            failures ??= new List<Exception>();
-            failures.Add(ex);
-        }
+        RunDisposingCallbacks(service, concreteType, ref failures);
 
         if (service is not IDisposable disposable)
         {
@@ -700,8 +702,7 @@ public class ServiceProvider : IDisposable
         }
         catch (Exception ex)
         {
-            failures ??= new List<Exception>();
-            failures.Add(ex);
+            (failures ??= new List<Exception>()).Add(ex);
         }
     }
 }
