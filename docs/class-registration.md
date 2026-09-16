@@ -479,6 +479,8 @@ Returns an empty list if no services of type `T` are registered. Falls back to t
 
 Disposes provider-owned services in reverse creation order. Transient `IDisposable` instances created by the provider are disposed before singleton services, so singleton dependencies remain available while transients are torn down. For each disposed service, `OnDisposing` callbacks fire first, then the service's own `IDisposable.Dispose()` runs. Services that are aliased to multiple types are disposed exactly once (deduplicated by reference).
 
+A throwing `OnDisposing` callback, service `Dispose()`, or child provider does not stop disposal. The provider still disposes every remaining service and child, releases its own references, and then throws one `AggregateException` whose `InnerExceptions` hold every failure in the order they occurred. A throwing callback still lets the other callbacks for that service and the service's own `Dispose()` run. Failures from child providers are flattened into the same list. The provider is disposed either way: a second `Dispose()` call returns without retrying.
+
 ## Lifecycle
 
 1. **Registration** — call `AddSingleton`, `AddTransient`, `AddAlias`, `OnBuilt`, `OnActivated`, `OnDisposing` on `ServiceCollection`.
