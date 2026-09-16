@@ -63,11 +63,10 @@ public static class UiExtensions
         // Refused here rather than when the root is built, so a bad scale names the UseUi call.
         UiRoot.ValidateScale(scale);
 
-        if (!appBuilder.IsRegistered<ServiceRegistry<ScopedUiRoot>>())
+        if (!appBuilder.IsRegistered<ScopedUiRoot>())
         {
             appBuilder.ConfigureContent(contentSourceBuilder =>
                 contentSourceBuilder.AddSource(EmbeddedContentSource.Create(typeof(UiExtensions).Assembly)));
-            appBuilder.AddRegistry<ScopedUiRoot>();
 
             // Built like any other singleton, which is what hands it the provider its views need.
             UiViewRegistry registry = UiViewRegistry.Register(appBuilder);
@@ -162,12 +161,13 @@ internal sealed class ScopedUiRoot
 
     internal UiRoot Root { get; }
 
+    // Resolved through the provider rather than a registry, so a factory that runs earlier in Build, such as
+    // a renderer the application registered before UseUi, still finds a root that has not been built yet.
     internal static ScopedUiRoot GetRequired(ServiceProvider provider, ViewScope viewScope)
     {
-        ServiceRegistry<ScopedUiRoot> registry = provider.GetRequiredService<ServiceRegistry<ScopedUiRoot>>();
         ScopedUiRoot? result = null;
 
-        foreach (ScopedUiRoot candidate in registry)
+        foreach (ScopedUiRoot candidate in provider.GetServices<ScopedUiRoot>())
         {
             if (candidate.ViewScope != viewScope)
             {

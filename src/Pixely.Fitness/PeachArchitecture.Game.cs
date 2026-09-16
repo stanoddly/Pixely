@@ -171,7 +171,7 @@ public static partial class PeachArchitecture
                 return;
             }
 
-            if (type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal) || type == typeof(DateTime) || type == typeof(TimeSpan) || type == typeof(Guid))
+            if (IsRuntimeValue(type))
             {
                 return;
             }
@@ -204,25 +204,37 @@ public static partial class PeachArchitecture
                 return;
             }
 
+            // A framework struct such as Rectangle is a value when its fields are; one wrapping a Texture is not.
+            if (IsFrameworkStruct(type))
+            {
+                VisitFields(type);
+                return;
+            }
+
             if (type.Assembly != options.Game || type.Namespace != options.StateNamespace && type.Namespace != options.VocabularyNamespace)
             {
                 violations.Add(type.FullName!);
                 return;
             }
 
-            for (Type? current = type; current != null && current != typeof(object); current = current.BaseType)
-            {
-                foreach (FieldInfo field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                {
-                    Visit(field.FieldType);
-                }
-            }
+            VisitFields(type);
 
             if (type.IsAbstract || type.IsInterface)
             {
                 foreach (Type implementation in TypeGraph.DeclaredTypes(options.Game).Where(candidate => candidate != type && !candidate.IsAbstract && type.IsAssignableFrom(candidate)))
                 {
                     Visit(implementation);
+                }
+            }
+        }
+
+        void VisitFields(Type type)
+        {
+            for (Type? current = type; current != null && current != typeof(object); current = current.BaseType)
+            {
+                foreach (FieldInfo field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    Visit(field.FieldType);
                 }
             }
         }
@@ -357,7 +369,7 @@ public static partial class PeachArchitecture
     private static bool IsStateReadType(PeachArchitectureOptions options, Type type)
     {
         Type inner = Nullable.GetUnderlyingType(type) ?? type;
-        if (inner.IsPrimitive || inner.IsEnum || inner == typeof(string) || inner == typeof(decimal) || inner == typeof(DateTime) || inner == typeof(TimeSpan) || inner == typeof(Guid))
+        if (IsRuntimeValue(inner))
         {
             return true;
         }
@@ -367,6 +379,22 @@ public static partial class PeachArchitecture
             return inner.GetGenericArguments().All(argument => IsStateReadType(options, argument));
         }
 
+        if (IsFrameworkStruct(inner))
+        {
+            return inner.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).All(field => IsStateReadType(options, field.FieldType));
+        }
+
         return inner.Assembly == options.Game && (inner.Namespace == options.StateNamespace || inner.Namespace == options.VocabularyNamespace);
+    }
+
+    // A runtime value such as TimeSpan or Vector2 is a primitive to the game; a runtime generic is a container and is checked by what it holds.
+    private static bool IsRuntimeValue(Type type)
+    {
+        return type.IsEnum || type == typeof(string) || (type.IsValueType && !type.IsGenericType && IsRuntimeAssembly(type.Assembly));
+    }
+
+    private static bool IsFrameworkStruct(Type type)
+    {
+        return type.IsValueType && !type.IsGenericType && IsFrameworkAssembly(type.Assembly);
     }
 }

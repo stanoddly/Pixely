@@ -13,7 +13,8 @@ namespace Pixely.Fitness;
 /// </summary>
 public static partial class PeachArchitecture
 {
-    private static readonly string[] FrameworkAssemblyPrefixes = ["Pixely", "System", "Microsoft", "netstandard", "mscorlib"];
+    private static readonly string[] RuntimeAssemblyPrefixes = ["System", "Microsoft", "netstandard", "mscorlib"];
+    private static readonly string[] FrameworkAssemblyPrefixes = ["Pixely", .. RuntimeAssemblyPrefixes];
 
     public static FitnessReport Evaluate(PeachArchitectureOptions options)
     {
@@ -207,8 +208,18 @@ public static partial class PeachArchitecture
 
     private static bool IsFrameworkAssembly(Assembly assembly)
     {
+        return HasAnyPrefix(assembly, FrameworkAssemblyPrefixes);
+    }
+
+    private static bool IsRuntimeAssembly(Assembly assembly)
+    {
+        return HasAnyPrefix(assembly, RuntimeAssemblyPrefixes);
+    }
+
+    private static bool HasAnyPrefix(Assembly assembly, string[] prefixes)
+    {
         string name = assembly.GetName().Name!;
-        return FrameworkAssemblyPrefixes.Any(prefix => name == prefix || name.StartsWith(prefix + ".", StringComparison.Ordinal));
+        return prefixes.Any(prefix => name == prefix || name.StartsWith(prefix + ".", StringComparison.Ordinal));
     }
 
     private static IReadOnlyList<ServiceRegistration> RootRegistrations(PeachArchitectureOptions options)
