@@ -13,7 +13,7 @@ PeachArchitectureOptions options = new PeachArchitectureOptions("Foo")
 };
 ```
 
-- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification. `TypesLiveInDocumentedNamespaces` reports a type outside the documented and listed namespaces, a listed namespace without a justification, and a listed namespace that holds no types.
+- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification.
 - `MechanicsTakeStateRootThroughConstructor` is an `init` property that switches off the hardened SHOULD rule. It defaults to true.
 
 From the prefix, `GameResolvesFromPrefix` derives the rest and reports what it could not derive:
