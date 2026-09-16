@@ -48,8 +48,8 @@ Executable          ──> everything above
   e.g. `Frontend.Forms`
 - An arrow is what a project MUST reference. Nothing else MAY compile against it
 - Each project sits at `src/Foo.{Part}/Foo.{Part}.csproj`
-- A project only `Executable` references, `Frontend`, `Ai` and `Scenario`, exposes nothing public
-  but its registrars
+- Only `Executable` references `Frontend`, `Ai` and `Scenario`, so they expose nothing public but
+  their registrars
 
 ## What Pixely provides
 
@@ -69,9 +69,9 @@ Executable          ──> everything above
 - It MUST NOT know a frontend, a participant that is a player, or an output
 - It MUST NOT push: no events, observers or callbacks, so it holds no delegate. A reader polls State
   or drains the log
-- Every type in `Game` lives in `Vocabulary`, `State`, `Mechanics`, `Systems` or `Observations`, so
-  the rules of those namespaces see it. A game MAY add a namespace here, each with the reason the
-  named ones did not do
+- Every type in `Game` is a registrar in the root namespace or lives in `Vocabulary`, `State`,
+  `Mechanics`, `Systems` or `Observations`, so the rules of those namespaces see it. A game MAY add a
+  namespace here, each with the reason the named ones did not do
 
 ### Foo.Game.Vocabulary namespace
 
@@ -83,7 +83,8 @@ Executable          ──> everything above
 ### Foo.Game.State namespace
 
 - There MUST be one state root per stage. It is the one `State` class no other `State` type holds.
-  It SHOULD be handed to its readers through the constructor
+  It SHOULD be handed to its readers through the constructor. The stage registers the root and no
+  other `State` type
 - Storage MAY be ECS or not, depends on the game needs
 - Mutation MUST be `internal`, so nothing outside `Game` writes State. `Mechanics` and `Systems`
   write it. A public property MUST NOT have a setter, a public collection MUST be an
@@ -221,5 +222,5 @@ Executable          ──> everything above
 - Persistence. Where it lives is the game's call. The "no rule" test on `Game` does not exclude it,
   a save schema is not a rule but it is bound to State tighter than to anything else
 - A second frontend, e.g. an editor. A game might add `Foo.Game.Editor` and `Foo.Frontend.Editor`
-  beside the seven and let `Foo.Game` open its internals to `Foo.Game.Editor`, an editor writes what
-  the rules never would
+  beside the seven. `Foo.Game.Editor` extends `Game`, so `Foo.Game` opening its internals to it adds
+  no writer outside the stone, `Foo.Frontend.Editor` writes through it like any frontend

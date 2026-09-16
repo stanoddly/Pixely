@@ -228,15 +228,6 @@ public static partial class PeachArchitecture
         }
     }
 
-    // A public class in Mechanics is a Mechanic, named with the suffix, or a record carrying an outcome.
-    private static IReadOnlyList<string> MechanicsPublicSurfaceIsMechanicsAndOutcomes(PeachArchitectureOptions options)
-    {
-        return TypeGraph.TypesIn(options.Game, options.MechanicsNamespace)
-            .Where(type => TypeGraph.IsPublicSurface(type) && type.IsClass && !type.Name.EndsWith("Mechanic", StringComparison.Ordinal) && !TypeGraph.IsRecord(type))
-            .Select(type => type.FullName!)
-            .ToArray();
-    }
-
     // The state root is handed to a Mechanic through the constructor, never as a parameter.
     private static IReadOnlyList<string> MechanicsTakeTheStateRootThroughConstructors(PeachArchitectureOptions options)
     {

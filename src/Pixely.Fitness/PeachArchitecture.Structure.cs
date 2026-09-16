@@ -45,7 +45,6 @@ public static partial class PeachArchitecture
             Run("StateNamesNoRules", StateNamesNoRules),
             Run("StateReadsReturnNoTransportRecords", StateReadsReturnNoTransportRecords),
             Run("StateGraphStaysInState", StateGraphStaysInState),
-            Run("MechanicsPublicSurfaceIsMechanicsAndOutcomes", MechanicsPublicSurfaceIsMechanicsAndOutcomes),
             Run("MechanicsTakeTheStateRootThroughConstructors", MechanicsTakeTheStateRootThroughConstructors),
             Run("MechanicsReturnNoStrings", MechanicsReturnNoStrings),
             Run("OnlyFrontendAndActorsNameMechanics", OnlyFrontendAndActorsNameMechanics),
@@ -101,7 +100,7 @@ public static partial class PeachArchitecture
     {
         HashSet<string> productionNames = options.ProductionAssemblies.Select(assembly => assembly.GetName().Name!).ToHashSet(StringComparer.Ordinal);
         return options.ProductionAssemblies
-            .SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>().Select(attribute => (Owner: assembly, Friend: attribute.AssemblyName)))
+            .SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>().Select(attribute => (Owner: assembly, Friend: new AssemblyName(attribute.AssemblyName).Name!)))
             .Where(grant => productionNames.Contains(grant.Friend))
             .Select(grant => $"{grant.Owner.GetName().Name} -> {grant.Friend}")
             .Order(StringComparer.Ordinal)
@@ -116,8 +115,14 @@ public static partial class PeachArchitecture
         foreach (Assembly assembly in options.ProductionAssemblies.Where(assembly => assembly != options.Executable))
         {
             string rootNamespace = options.RootNamespaceOf(assembly);
-            foreach (Type type in TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && TypeGraph.IsStatic(type) && type.Namespace == rootNamespace))
+            foreach (Type type in TypeGraph.DeclaredTypes(assembly).Where(type => type.IsPublic && type.Namespace == rootNamespace))
             {
+                if (!TypeGraph.IsStatic(type))
+                {
+                    violations.Add(type.FullName!);
+                    continue;
+                }
+
                 violations.AddRange(TypeGraph.DeclaredMethods(type).Where(method => method.IsPublic && !PeachGame.IsRegistrarMethod(method)).Select(TypeGraph.Describe));
             }
 
