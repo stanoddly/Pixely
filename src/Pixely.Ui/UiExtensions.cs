@@ -63,7 +63,7 @@ public static class UiExtensions
         // Refused here rather than when the root is built, so a bad scale names the UseUi call.
         UiRoot.ValidateScale(scale);
 
-        if (!appBuilder.IsRegistered<ScopedUiRoot>())
+        if (!appBuilder.IsRegistered<UiViewRegistry>())
         {
             appBuilder.ConfigureContent(contentSourceBuilder =>
                 contentSourceBuilder.AddSource(EmbeddedContentSource.Create(typeof(UiExtensions).Assembly)));

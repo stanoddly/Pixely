@@ -204,8 +204,8 @@ public static partial class PeachArchitecture
                 return;
             }
 
-            // A framework struct such as Rectangle is a value when its fields are; one wrapping a Texture is not.
-            if (IsFrameworkStruct(type))
+            // A Pixely struct such as Rectangle is a value when its fields are; one wrapping a Texture is not.
+            if (IsPixelyStruct(type))
             {
                 VisitFields(type);
                 return;
@@ -379,7 +379,7 @@ public static partial class PeachArchitecture
             return inner.GetGenericArguments().All(argument => IsStateReadType(options, argument));
         }
 
-        if (IsFrameworkStruct(inner))
+        if (IsPixelyStruct(inner))
         {
             return inner.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).All(field => IsStateReadType(options, field.FieldType));
         }
@@ -393,8 +393,9 @@ public static partial class PeachArchitecture
         return type.IsEnum || type == typeof(string) || (type.IsValueType && !type.IsGenericType && IsRuntimeAssembly(type.Assembly));
     }
 
-    private static bool IsFrameworkStruct(Type type)
+    // Runtime structs never reach this: IsRuntimeValue takes them first.
+    private static bool IsPixelyStruct(Type type)
     {
-        return type.IsValueType && !type.IsGenericType && IsFrameworkAssembly(type.Assembly);
+        return type.IsValueType && IsFrameworkAssembly(type.Assembly);
     }
 }

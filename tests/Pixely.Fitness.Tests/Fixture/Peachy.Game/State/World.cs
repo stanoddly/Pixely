@@ -8,6 +8,7 @@ public sealed class World
     public Chore CurrentChore = new IdleChore();
     public Vector2 Position;
     public Rectangle Bounds;
+    public Size<int> Extent;
     private readonly Vector2[] path = [];
 
     public ReadOnlySpan<Vector2> Path => path;
