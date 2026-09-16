@@ -122,6 +122,13 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
         using ClipScope scope = context.PushClip(context.CurrentClip.Intersect(content));
 
+        // Everything below is clipped to the content rectangle, so nothing shows once that is empty;
+        // returning here keeps a scrolled-away field from rasterising its text.
+        if (context.CurrentClip.Width <= 0 || context.CurrentClip.Height <= 0)
+        {
+            return;
+        }
+
         if (_editor != null && _editor.HasSelection)
         {
             (int start, int length) = _editor.GetSelectionRange();

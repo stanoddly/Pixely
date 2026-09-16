@@ -47,6 +47,18 @@ public class SizingTests
     }
 
     [Test]
+    public void Percent_IsOfTheMarginBox_SoTheMarginComesOffTheFraction()
+    {
+        MeasuredBox child = new() { Width = Sizing.Percent(0.5f), Margin = new Thickness(10) };
+        Column root = new() { Children = { child } };
+
+        Layout.Run(root, 100, 100);
+
+        // Half of the 100 host is 50, and the margin box is what gets it: 50 less 10 either side.
+        Assert.That(child.Bounds, Is.EqualTo(new Rectangle(10, 10, 30, 0)));
+    }
+
+    [Test]
     public void Percent_OnAnIndefiniteAxis_DegradesToFit()
     {
         MeasuredBox child = new(30, 10) { Width = Sizing.Percent(0.5f) };
@@ -135,6 +147,23 @@ public class SizingTests
             Assert.That(second.Bounds.Height, Is.EqualTo(33));
             Assert.That(third.Bounds.Height, Is.EqualTo(33));
         });
+    }
+
+    /// <summary>
+    /// Every plain element shares one default <see cref="StackLayout"/>, and measuring a nested
+    /// element re-enters it, so the outer Grow bookkeeping must survive that re-entry.
+    /// </summary>
+    [Test]
+    public void Grow_SurvivesANestedElementOnTheSharedDefaultLayout()
+    {
+        MeasuredBox fixedChild = new(10, 40);
+        MeasuredBox growing = new() { Height = Sizing.Grow() };
+        Element nested = new() { Children = { new MeasuredBox(10, 20) } };
+        Element root = new() { Children = { growing, fixedChild, nested } };
+
+        Layout.Run(root, 100, 100);
+
+        Assert.That(growing.Bounds.Height, Is.EqualTo(40));
     }
 
     [Test]

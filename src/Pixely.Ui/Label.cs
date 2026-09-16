@@ -27,6 +27,8 @@ public sealed class Label : Element
     private TextEmphasis _emphasis = TextEmphasis.Normal;
     private TextSpriteAsset? _sprite;
     private IFont? _spriteFont;
+    private Vector2Int _measuredSize;
+    private IFont? _measuredFont;
 
     /// <summary>Takes its font from the root's <see cref="UiStyle"/> according to <see cref="Role"/>.</summary>
     public Label(string content = "")
@@ -61,6 +63,7 @@ public sealed class Label : Element
 
             _content = value;
             _sprite = null;
+            _measuredFont = null;
             InvalidateMeasure();
         }
     }
@@ -141,19 +144,48 @@ public sealed class Label : Element
             return default;
         }
 
-        ShortSize size = ResolveFont().Measure(_content);
-        return new Vector2Int(size.Width, size.Height);
+        IFont font = ResolveFont();
+        ShortSize size = font.Measure(_content);
+        _measuredSize = new Vector2Int(size.Width, size.Height);
+        _measuredFont = font;
+        return _measuredSize;
     }
 
     protected override void PaintContent(PaintContext context)
     {
-        TextSpriteAsset? sprite = ResolveSprite();
-        if (sprite == null)
+        // Text is rasterised on first paint, so a label scrolled out of view is culled before the
+        // sprite exists rather than after the renderer would have dropped the quad. The sprite sits
+        // at the bounds' origin and may overflow them, so the test is against the text's own size.
+        if (_content.Length == 0 || IsCulled(context.CurrentClip))
         {
             return;
         }
 
+        TextSpriteAsset sprite = ResolveSprite();
         context.DrawSprite(sprite, new Rectangle(Bounds.X, Bounds.Y, sprite.Size.X, sprite.Size.Y), ResolvedColor);
+    }
+
+    private bool IsCulled(Rectangle clip)
+    {
+        IFont font = ResolveFont();
+        Vector2Int size;
+
+        if (_sprite != null && ReferenceEquals(font, _spriteFont))
+        {
+            size = new Vector2Int(_sprite.Size.X, _sprite.Size.Y);
+        }
+        else if (_measuredFont != null && ReferenceEquals(font, _measuredFont))
+        {
+            size = _measuredSize;
+        }
+        else
+        {
+            // The font changed underneath the last measure, so the text's size is unknown here.
+            return false;
+        }
+
+        Rectangle visible = clip.Intersect(new Rectangle(Bounds.X, Bounds.Y, size.X, size.Y));
+        return visible.Width <= 0 || visible.Height <= 0;
     }
 
     private IVisualStateSource? FindStateSource()
@@ -169,13 +201,8 @@ public sealed class Label : Element
         return null;
     }
 
-    private TextSpriteAsset? ResolveSprite()
+    private TextSpriteAsset ResolveSprite()
     {
-        if (_content.Length == 0)
-        {
-            return null;
-        }
-
         // The font is resolved every time rather than only on a cache miss, because a style
         // replaced on the root — or a subtree moved to a root with a different one — changes it
         // without anything reaching this label. The walk is an ancestor chain and no allocation.

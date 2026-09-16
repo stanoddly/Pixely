@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace Pixely.Ui;
 
 /// <summary>
@@ -10,9 +12,10 @@ public sealed class StackLayout : ILayout
     public static StackLayout Vertical { get; } = new(Orientation.Vertical, 0);
     public static StackLayout Horizontal { get; } = new(Orientation.Horizontal, 0);
 
-    private readonly List<int> _growIndices = new();
-    private readonly List<float> _growWeights = new();
-    private readonly List<int> _growAllocations = new();
+    // Measuring a child re-enters this method on whatever layout the child uses, which is this
+    // same instance for every element on the shared defaults, so the Grow bookkeeping must be
+    // local to the call: on the stack up to this many children, rented from the pool beyond.
+    private const int StackScratchLimit = 32;
 
     public StackLayout(Orientation orientation, int gap = 0)
     {
@@ -35,11 +38,44 @@ public sealed class StackLayout : ILayout
         }
 
         int gaps = Gap * (count - 1);
+
+        // Two ints (index, allocation) and two floats (weight, remainder) per child.
+        int[]? rentedInts = null;
+        float[]? rentedFloats = null;
+        Span<int> ints = count <= StackScratchLimit ? stackalloc int[count * 2] : (rentedInts = ArrayPool<int>.Shared.Rent(count * 2)).AsSpan(0, count * 2);
+        Span<float> floats = count <= StackScratchLimit ? stackalloc float[count * 2] : (rentedFloats = ArrayPool<float>.Shared.Rent(count * 2)).AsSpan(0, count * 2);
+
+        try
+        {
+            return MeasureChildren(host, contentConstraints, count, gaps, ints[..count], ints[count..], floats[..count], floats[count..]);
+        }
+        finally
+        {
+            if (rentedInts != null)
+            {
+                ArrayPool<int>.Shared.Return(rentedInts);
+            }
+
+            if (rentedFloats != null)
+            {
+                ArrayPool<float>.Shared.Return(rentedFloats);
+            }
+        }
+    }
+
+    private Vector2Int MeasureChildren(
+        ILayoutHost host,
+        Constraints contentConstraints,
+        int count,
+        int gaps,
+        Span<int> growIndices,
+        Span<int> growAllocations,
+        Span<float> growWeights,
+        Span<float> remainders)
+    {
         int mainTotal = 0;
         int crossMax = 0;
-
-        _growIndices.Clear();
-        _growWeights.Clear();
+        int growCount = 0;
 
         for (int i = 0; i < count; i++)
         {
@@ -49,8 +85,9 @@ public sealed class StackLayout : ILayout
             // One that degraded to Fit is not live and is measured here like any other child.
             if (mainSizing.Mode == SizingMode.Grow)
             {
-                _growIndices.Add(i);
-                _growWeights.Add(mainSizing.Factor);
+                growIndices[growCount] = i;
+                growWeights[growCount] = mainSizing.Factor;
+                growCount++;
                 continue;
             }
 
@@ -59,18 +96,18 @@ public sealed class StackLayout : ILayout
             crossMax = Math.Max(crossMax, GetCross(size));
         }
 
-        if (_growIndices.Count > 0)
+        if (growCount > 0)
         {
             // Grow only survives degradation on a definite axis, so the budget is always a real number.
             int budget = host.GetDefiniteContentExtent(Orientation)!.Value;
             int surplus = Math.Max(0, budget - mainTotal - gaps);
 
-            Distribute(surplus, _growWeights, _growAllocations);
+            Distribute(surplus, growWeights[..growCount], growAllocations[..growCount], remainders[..growCount]);
 
-            for (int i = 0; i < _growIndices.Count; i++)
+            for (int i = 0; i < growCount; i++)
             {
-                int childIndex = _growIndices[i];
-                int allocation = _growAllocations[i];
+                int childIndex = growIndices[i];
+                int allocation = growAllocations[i];
 
                 Vector2Int size = host.MeasureChildWithExtent(
                     childIndex,
@@ -115,10 +152,8 @@ public sealed class StackLayout : ILayout
     /// pixels to the largest fractional remainders (ties by order). Weights are arbitrary floats,
     /// so plain division would lose or invent pixels; this always totals exactly the surplus.
     /// </summary>
-    private static void Distribute(int surplus, List<float> weights, List<int> allocations)
+    private static void Distribute(int surplus, ReadOnlySpan<float> weights, Span<int> allocations, Span<float> remainders)
     {
-        allocations.Clear();
-
         float totalWeight = 0f;
         foreach (float weight in weights)
         {
@@ -127,22 +162,17 @@ public sealed class StackLayout : ILayout
 
         if (totalWeight <= 0f)
         {
-            for (int i = 0; i < weights.Count; i++)
-            {
-                allocations.Add(0);
-            }
-
+            allocations.Clear();
             return;
         }
 
-        Span<float> remainders = weights.Count <= 32 ? stackalloc float[weights.Count] : new float[weights.Count];
         int assigned = 0;
 
-        for (int i = 0; i < weights.Count; i++)
+        for (int i = 0; i < weights.Length; i++)
         {
             float exact = surplus * (weights[i] / totalWeight);
             int floor = (int)MathF.Floor(exact);
-            allocations.Add(floor);
+            allocations[i] = floor;
             remainders[i] = exact - floor;
             assigned += floor;
         }
