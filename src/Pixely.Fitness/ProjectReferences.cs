@@ -3,7 +3,7 @@ using System.Xml.Linq;
 namespace Pixely.Fitness;
 
 /// <summary>
-/// The project files carry exactly the arrows of the document. Each project sits at src/Foo.Part/Foo.Part.csproj.
+/// The project files carry exactly the arrows of the document. Each project sits at src/Foo.{Part}/Foo.{Part}.csproj.
 /// </summary>
 internal static class ProjectReferences
 {

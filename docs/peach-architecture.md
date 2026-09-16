@@ -47,7 +47,7 @@ Executable          ──> everything above
 - The `Foo.` prefix is omitted. Every other name in this document is a namespace in one of these,
   e.g. `Frontend.Forms`
 - An arrow is what a project MUST reference. Nothing else MAY compile against it
-- Each project sits at `src/Foo.Part/Foo.Part.csproj`
+- Each project sits at `src/Foo.{Part}/Foo.{Part}.csproj`
 - A project only `Executable` references, `Frontend`, `Ai` and `Scenario`, exposes nothing public
   but its registrars
 - A type MUST live in a namespace this document names. `Game` MAY add one with a stated reason,
@@ -107,7 +107,7 @@ Executable          ──> everything above
   helper that mutates State is callable from outside `Game`
 - A Mechanic MAY call other Mechanics
 - A Mechanic method SHOULD return an outcome, semantic, never a user facing message. It MAY return
-  what it created, e.g. an id. An outcome is an enum or a read-only record struct
+  what it created, e.g. an id
 - A Mechanic MUST apply its effect during the call. No command records, no dispatcher. Work that
   spans time is State the call writes, e.g. a construction job a System advances
 - Validation MUST live here. `Frontend` MAY compute the same rule for a preview, the Mechanic's
@@ -220,13 +220,3 @@ Executable          ──> everything above
 - Persistence. Where it lives is the game's call. The "no rule" test on `Game` does not exclude it,
   a save schema is not a rule but it is bound to State tighter than to anything else
 - A second frontend, e.g. an editor
-
-## TODO
-
-- Turn `Out of scope` into what a game's own document MUST answer: persistence, stage transitions, a
-  second frontend, the frame composition, its own Vocabulary
-- Keep the reason behind a rule and add it back where it was cut. A rule with no reason gets
-  extrapolated wrongly on a case it does not cover
-- Decide whether a Mechanic call from a form passes the input refusal the `Frontend` root owns
-- Decide whether a bounded exception to what an entry carries is allowed, e.g. naming the tile a
-  unit stepped from when it steps into view, so the move can be animated

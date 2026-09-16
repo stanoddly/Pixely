@@ -228,12 +228,11 @@ public static partial class PeachArchitecture
         }
     }
 
-    // Public classes in Mechanics are Mechanics; every other public type there is an outcome, an enum or a read-only record struct.
+    // A public class in Mechanics is a Mechanic, named with the suffix, or a record carrying an outcome.
     private static IReadOnlyList<string> MechanicsPublicSurfaceIsMechanicsAndOutcomes(PeachArchitectureOptions options)
     {
         return TypeGraph.TypesIn(options.Game, options.MechanicsNamespace)
-            .Where(TypeGraph.IsPublicSurface)
-            .Where(type => type.IsClass ? !type.Name.EndsWith("Mechanic", StringComparison.Ordinal) : !type.IsEnum && !TypeGraph.IsReadOnlyRecordStruct(type))
+            .Where(type => TypeGraph.IsPublicSurface(type) && type.IsClass && !type.Name.EndsWith("Mechanic", StringComparison.Ordinal) && !TypeGraph.IsRecord(type))
             .Select(type => type.FullName!)
             .ToArray();
     }
