@@ -9,7 +9,7 @@ namespace Pixely.Fitness;
 /// What the document lets the rules derive from the prefix alone: the assemblies by their fixed names,
 /// the state root as the one State class nothing else in State holds, the two containers composed by
 /// invoking every registrar with default arguments, and the repository root by the Game project file.
-/// What could not be derived is a violation of rule 00, and a rule that needs the missing piece skips.
+/// What could not be derived is a violation of GameResolvesFromPrefix, and a rule that needs the missing piece skips.
 /// </summary>
 internal sealed class PeachGame
 {

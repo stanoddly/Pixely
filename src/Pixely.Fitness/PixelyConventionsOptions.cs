@@ -2,7 +2,7 @@ using System.Reflection;
 
 namespace Pixely.Fitness;
 
-/// <summary>A type that holds an owned GPU object on someone else's behalf, so rule 04 passes it over.</summary>
+/// <summary>A type that holds an owned GPU object on someone else's behalf, so GpuOwnersAreDisposable passes it over.</summary>
 public sealed record GpuBorrower(Type Type, string Justification);
 
 /// <summary>
@@ -14,7 +14,7 @@ public sealed record PixelyConventionsOptions(IReadOnlyList<Assembly> Assemblies
     {
     }
 
-    /// <summary>The production assemblies of a Peach game, none until rule 00 resolved them.</summary>
+    /// <summary>The production assemblies of a Peach game, none until GameResolvesFromPrefix resolved them.</summary>
     public static PixelyConventionsOptions ForPeach(PeachArchitectureOptions options)
     {
         return new PixelyConventionsOptions(options.Resolved.IsComplete ? options.ProductionAssemblies.ToArray() : []);
@@ -26,7 +26,7 @@ public sealed record PixelyConventionsOptions(IReadOnlyList<Assembly> Assemblies
     /// <summary>A type holding a GPU object it owns disposes it.</summary>
     public bool GpuOwnersAreDisposable { get; init; } = true;
 
-    /// <summary>The types rule 04 passes over; each needs a justification and must hold an owned GPU object.</summary>
+    /// <summary>The types GpuOwnersAreDisposable passes over; each needs a justification and must hold an owned GPU object.</summary>
     public IReadOnlyList<GpuBorrower> GpuBorrowers { get; init; } = [];
 
     /// <summary>

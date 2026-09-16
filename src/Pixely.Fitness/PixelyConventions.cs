@@ -27,11 +27,11 @@ public static class PixelyConventions
     {
         return new FitnessReport(
         [
-            Run("Pixely 01 RenderersTakeNoBuilders", RenderersTakeNoBuilders),
-            Run("Pixely 02 VertexTypesMatchTheirElements", VertexTypesMatchTheirElements),
-            Run("Pixely 03 FactoriesHideConstructors", FactoriesHideConstructors, options.FactoriesHideConstructors),
-            Run("Pixely 04 GpuOwnersAreDisposable", GpuOwnersAreDisposable, options.GpuOwnersAreDisposable),
-            Run("Pixely 05 FrameParticipantsAreRegistered", FrameParticipantsAreRegistered, options.FrameParticipantsAreRegistered)
+            Run("Pixely RenderersTakeNoBuilders", RenderersTakeNoBuilders),
+            Run("Pixely VertexTypesMatchTheirElements", VertexTypesMatchTheirElements),
+            Run("Pixely FactoriesHideConstructors", FactoriesHideConstructors, options.FactoriesHideConstructors),
+            Run("Pixely GpuOwnersAreDisposable", GpuOwnersAreDisposable, options.GpuOwnersAreDisposable),
+            Run("Pixely FrameParticipantsAreRegistered", FrameParticipantsAreRegistered, options.FrameParticipantsAreRegistered)
         ]);
 
         // A switched-off rule keeps its name in the report, so tests can index it either way.

@@ -13,6 +13,8 @@
   `ServiceCollection`, e.g. `AddGamePersistence` for root and `AddGame` for the stage. They are the
   only way `Executable` registers an internal type. A registrar registers the same types whatever
   its arguments; arguments configure values, not what exists
+  - A registrar is a public static class in the project's root namespace, and that namespace holds
+    nothing else public
 - A stage is what the player is in, a mission or a menu. Each has its own state root
 - Not every game needs every part
   - `Systems` exist when rules advance with time. A turn based game where nothing happens between
@@ -45,6 +47,11 @@ Executable          ──> everything above
 - The `Foo.` prefix is omitted. Every other name in this document is a namespace in one of these,
   e.g. `Frontend.Forms`
 - An arrow is what a project MUST reference. Nothing else MAY compile against it
+- Each project sits at `src/Foo.Part/Foo.Part.csproj`
+- A project only `Executable` references, `Frontend`, `Ai` and `Scenario`, exposes nothing public
+  but its registrars
+- A type MUST live in a namespace this document names. `Game` MAY add one with a stated reason,
+  e.g. persistence
 
 ## What Pixely provides
 
@@ -100,7 +107,7 @@ Executable          ──> everything above
   helper that mutates State is callable from outside `Game`
 - A Mechanic MAY call other Mechanics
 - A Mechanic method SHOULD return an outcome, semantic, never a user facing message. It MAY return
-  what it created, e.g. an id
+  what it created, e.g. an id. An outcome is an enum or a read-only record struct
 - A Mechanic MUST apply its effect during the call. No command records, no dispatcher. Work that
   spans time is State the call writes, e.g. a construction job a System advances
 - Validation MUST live here. `Frontend` MAY compute the same rule for a preview, the Mechanic's
@@ -181,6 +188,7 @@ Executable          ──> everything above
   from State directly
 - State is ahead of the screen, e.g. the Mechanic already put the unit at the end of its path while
   `Rendering` still shows the walk
+- An output MUST NOT own a form or a view model, and MUST NOT read input
 
 ## Autonomous actor projects
 

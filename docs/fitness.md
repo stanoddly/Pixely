@@ -13,19 +13,19 @@ PeachArchitectureOptions options = new PeachArchitectureOptions("Foo")
 };
 ```
 
-- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification. Rule 08 reports a type outside the documented and listed namespaces, a listed namespace without a justification, and a listed namespace that holds no types.
-- `MechanicsHaveNoPublicConstructors`, `MechanicsTakeStateRootThroughConstructor` and `GameGrantsNoInternalAccess` are `init` properties that switch off hardened SHOULD rules. They default to true.
+- `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification. `TypesLiveInDocumentedNamespaces` reports a type outside the documented and listed namespaces, a listed namespace without a justification, and a listed namespace that holds no types.
+- `MechanicsTakeStateRootThroughConstructor` is an `init` property that switches off the hardened SHOULD rule. It defaults to true.
 
-From the prefix, rule 00 derives the rest and reports what it could not derive:
+From the prefix, `GameResolvesFromPrefix` derives the rest and reports what it could not derive:
 
-- The assemblies, loaded by name: `Foo.Game`, `Foo.Frontend`, `Foo.Frontend.Rendering`, `Foo.Frontend.Audio`, `Foo.Ai`, `Foo.Scenario`, and `Foo.Executable` or `Foo`. The test project must reference the executable project so they sit in its output directory. The optional four are absent when the game has no such project; a missing `Game`, `Frontend` or executable stops the evaluation at rule 00.
+- The assemblies, loaded by name: `Foo.Game`, `Foo.Frontend`, `Foo.Frontend.Rendering`, `Foo.Frontend.Audio`, `Foo.Ai`, `Foo.Scenario`, and `Foo.Executable` or `Foo`. The test project must reference the executable project so they sit in its output directory. The optional four are absent when the game has no such project; a missing `Game`, `Frontend` or executable stops the evaluation at `GameResolvesFromPrefix`.
 - The state root: the one class in `Foo.Game.State` no other `State` type holds in a field.
 - The two containers: every registrar in the production assemblies, a public static `Add*` extension method on `PixelyAppBuilder` or `ServiceCollection` in the project's root namespace, is invoked with default arguments on one `PixelyAppBuilder` and one `ServiceCollection`. A registrar that throws on defaults is a violation.
-- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory. With it, rule 01 checks the `ProjectReference` items of each project and rule 00 compares the `src/Foo.*` directories against the loaded assemblies. Without it, e.g. when the tests run from a package, both checks are skipped.
+- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory. With it, `ProjectReferencesMatchTheGraph` checks the `ProjectReference` items of each project and `GameResolvesFromPrefix` compares the `src/Foo.*` directories against the loaded assemblies. Without it, e.g. when the tests run from a package, both checks are skipped.
 
 ## Running
 
-`PeachArchitecture.Evaluate(options)` returns a `FitnessReport`. `IsFit` is true when no rule has violations; `ToString()` lists every failing rule with its members. `Results` holds one `FitnessResult` per rule, and the indexer looks one up by name, e.g. `report["17 StateHasNoPublicSetters"]`.
+`PeachArchitecture.Evaluate(options)` returns a `FitnessReport`. `IsFit` is true when no rule has violations; `ToString()` lists every failing rule with its members. `Results` holds one `FitnessResult` per rule, and the indexer looks one up by name, e.g. `report["StateHasNoPublicSetters"]`.
 
 The intended shape is one test asserting `report.IsFit` with `report.ToString()` as the message, plus one test case per `Results` name so the test explorer says which rule drifted:
 
@@ -53,11 +53,11 @@ FitnessReport report = FitnessReport.Merge(
     PixelyConventions.Evaluate(PixelyConventionsOptions.ForPeach(peach) with { FrameParticipantsAreRegistered = true }));
 ```
 
-- `Pixely 01 RenderersTakeNoBuilders`: no constructor of an `IRenderer<T>` takes a `GraphicsPipelineBuilder`, `ShaderLoader`, `IShaderLoader` or `GpuMemorySystem`. `Create` builds pipelines and passes them in; a service that owns the buffers uploads geometry, so a renderer only renders.
-- `Pixely 02 VertexTypesMatchTheirElements`: an `IVertexType` struct has sequential or explicit layout, one field per `VertexElements` entry, and the entries add up to the struct's size.
-- `Pixely 03 FactoriesHideConstructors`: a type with a `public static Create` returning itself has no public constructor. Switched off by `FactoriesHideConstructors = false`; a switched-off rule stays in the report with no violations.
-- `Pixely 04 GpuOwnersAreDisposable`: a type with a field holding a `GraphicsPipeline`, `ComputePipeline`, `Texture`, `GpuVertexBuffer`, `GpuIndexBuffer`, `GpuStorageBuffer`, `Sampler` or `GraphicsShaderProgram`, directly or in a collection, implements `IDisposable`. A type that holds one on someone else's behalf is listed in `GpuBorrowers` with a justification; a listed type with no justification, no such field, or outside the scanned assemblies is a violation. Switched off by `GpuOwnersAreDisposable = false`.
-- `Pixely 05 FrameParticipantsAreRegistered`: every class implementing `IUpdatable`, `IRenderer<T>` or `IEventHandler<T>` is registered by a registrar, a public static `Add*` or `Use*` extension method on `PixelyAppBuilder` or `ServiceCollection`, invoked with default arguments. Off by default, `FrameParticipantsAreRegistered = true` switches it on: a delegate factory or instance registration typed by an interface and a registration outside any registrar all hide the concrete type and fail it.
+- `Pixely RenderersTakeNoBuilders`: no constructor of an `IRenderer<T>` takes a `GraphicsPipelineBuilder`, `ShaderLoader`, `IShaderLoader` or `GpuMemorySystem`. `Create` builds pipelines and passes them in; a service that owns the buffers uploads geometry, so a renderer only renders.
+- `Pixely VertexTypesMatchTheirElements`: an `IVertexType` struct has sequential or explicit layout, one field per `VertexElements` entry, and the entries add up to the struct's size.
+- `Pixely FactoriesHideConstructors`: a type with a `public static Create` returning itself has no public constructor. Switched off by `FactoriesHideConstructors = false`; a switched-off rule stays in the report with no violations.
+- `Pixely GpuOwnersAreDisposable`: a type with a field holding a `GraphicsPipeline`, `ComputePipeline`, `Texture`, `GpuVertexBuffer`, `GpuIndexBuffer`, `GpuStorageBuffer`, `Sampler` or `GraphicsShaderProgram`, directly or in a collection, implements `IDisposable`. A type that holds one on someone else's behalf is listed in `GpuBorrowers` with a justification; a listed type with no justification, no such field, or outside the scanned assemblies is a violation. Switched off by `GpuOwnersAreDisposable = false`.
+- `Pixely FrameParticipantsAreRegistered`: every class implementing `IUpdatable`, `IRenderer<T>` or `IEventHandler<T>` is registered by a registrar, a public static `Add*` or `Use*` extension method on `PixelyAppBuilder` or `ServiceCollection`, invoked with default arguments. Off by default, `FrameParticipantsAreRegistered = true` switches it on: a delegate factory or instance registration typed by an interface and a registration outside any registrar all hide the concrete type and fail it.
 
 ## Other rule sets
 
