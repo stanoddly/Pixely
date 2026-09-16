@@ -21,7 +21,7 @@ From the prefix, `GameResolvesFromPrefix` derives the rest and reports what it c
 - The assemblies, loaded by name: `Foo.Game`, `Foo.Frontend`, `Foo.Frontend.Rendering`, `Foo.Frontend.Audio`, `Foo.Ai`, `Foo.Scenario`, and `Foo.Executable` or `Foo`. The test project must reference the executable project so they sit in its output directory. The optional four are absent when the game has no such project; a missing `Game`, `Frontend` or executable stops the evaluation at `GameResolvesFromPrefix`.
 - The state root: the one class in `Foo.Game.State` no other `State` type holds in a field.
 - The two containers: every registrar in the production assemblies, a public static `Add*` extension method on `PixelyAppBuilder` or `ServiceCollection` in the project's root namespace, is invoked with default arguments on one `PixelyAppBuilder` and one `ServiceCollection`. A registrar that throws on defaults is a violation.
-- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory. With it, `ProjectReferencesMatchTheGraph` checks the `ProjectReference` items of each project and `GameResolvesFromPrefix` compares the `src/Foo.*` directories against the loaded assemblies. Without it, e.g. when the tests run from a package, both checks are skipped.
+- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory. With it, `ProjectReferencesMatchTheGraph` checks the `ProjectReference` items of each project and `GameResolvesFromPrefix` reports a loaded part with no `src/Foo.{Part}` directory. Without it, e.g. when the tests run from a package, both checks are skipped.
 
 ## Running
 

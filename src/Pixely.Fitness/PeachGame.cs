@@ -121,16 +121,15 @@ internal sealed class PeachGame
         return null;
     }
 
-    // Projects sit at src/Foo.Part/Foo.Part.csproj. Every Foo.* directory there is a documented part whose assembly loaded, and vice versa.
+    // Projects sit at src/Foo.{Part}/Foo.{Part}.csproj. Every loaded part has its directory there; a directory the document does not name,
+    // e.g. an editor, is out of scope and not reported.
     private IEnumerable<string> ProjectInventory(PeachArchitectureOptions options)
     {
         string source = Path.Combine(RepositoryRoot!, "src");
-        HashSet<string> expected = new[] { Game, Frontend, Rendering, Audio, Ai, Scenario }.OfType<Assembly>().Select(assembly => assembly.GetName().Name!)
-            .Append(options.ExecutableNamespace)
-            .ToHashSet(StringComparer.Ordinal);
-        string[] actual = Directory.EnumerateDirectories(source, $"{options.GamePrefix}.*").Select(directory => Path.GetFileName(directory)).Order(StringComparer.Ordinal).ToArray();
-        return actual.Where(name => !expected.Contains(name)).Select(name => $"project not in the document or not loaded: src/{name}")
-            .Concat(expected.Where(name => !actual.Contains(name)).Order(StringComparer.Ordinal).Select(name => $"project missing: src/{name}"));
+        IEnumerable<string> expected = new[] { Game, Frontend, Rendering, Audio, Ai, Scenario }.OfType<Assembly>().Select(assembly => assembly.GetName().Name!)
+            .Append(options.ExecutableNamespace);
+        HashSet<string> actual = Directory.EnumerateDirectories(source, $"{options.GamePrefix}.*").Select(directory => Path.GetFileName(directory)).ToHashSet(StringComparer.Ordinal);
+        return expected.Where(name => !actual.Contains(name)).Order(StringComparer.Ordinal).Select(name => $"project missing: src/{name}");
     }
 
     // Matched against the loaded assemblies here, not through options.Resolved, because the constructor asks before Resolved is set.

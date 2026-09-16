@@ -220,4 +220,6 @@ Executable          ──> everything above
 - Deliberate, not an omission to fill in. Each game decides these where it needs them
 - Persistence. Where it lives is the game's call. The "no rule" test on `Game` does not exclude it,
   a save schema is not a rule but it is bound to State tighter than to anything else
-- A second frontend, e.g. an editor
+- A second frontend, e.g. an editor. A game might add `Foo.Game.Editor` and `Foo.Frontend.Editor`
+  beside the seven and let `Foo.Game` open its internals to `Foo.Game.Editor`, an editor writes what
+  the rules never would
