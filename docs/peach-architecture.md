@@ -109,8 +109,8 @@ Executable          ──> everything above
 - A Mechanic MAY call other Mechanics
 - A Mechanic method SHOULD return an outcome, semantic, never a user facing message. It MAY return
   what it created, e.g. an id
-- A Mechanic MUST apply its effect during the call. No command records, no dispatcher. Work that
-  spans time is State the call writes, e.g. a construction job a System advances
+- A Mechanic MUST apply its effect during the call. No command records, handlers or dispatchers. Work
+  that spans time is State the call writes, e.g. a construction job a System advances
 - Validation MUST live here. `Frontend` MAY compute the same rule for a preview, the Mechanic's
   answer is authoritative
 - A Mechanic SHOULD take its full payload in one call. E.g. drafts and multi-step flows are `Frontend`

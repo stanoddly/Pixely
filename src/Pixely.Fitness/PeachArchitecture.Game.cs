@@ -46,7 +46,7 @@ public static partial class PeachArchitecture
             .ToArray();
     }
 
-    // No command records, no dispatcher.
+    // No command records, handlers or dispatchers.
     private static IReadOnlyList<string> NoCommandsHandlersOrDispatchers(PeachArchitectureOptions options)
     {
         return TypeGraph.DeclaredTypes(options.Game)
