@@ -57,7 +57,7 @@
     <ItemGroup>
         <None Include="..\..\README.md" Pack="true" PackagePath="\" />
         <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-        <None Include="..\..\docs\peach-architecture.md" Pack="true" PackagePath="docs" />
+        <None Include="..\..\docs\*.md" Pack="true" PackagePath="docs" />
         <None Include="..\..\src\Pixely.DependencyInjection.Generator\bin\$(Configuration)\netstandard2.0\Pixely.DependencyInjection.Generator.dll"
               Pack="true" PackagePath="analyzers\dotnet\cs" />
         <None Include="..\..\src\Pixely.SdlangCompiler\bin\$(Configuration)\net11.0\Pixely.SdlangCompiler.dll"
