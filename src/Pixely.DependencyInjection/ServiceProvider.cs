@@ -581,7 +581,11 @@ public class ServiceProvider : IDisposable
     }
 
     /// <summary>Fires <c>OnDisposing</c> callbacks per instance, then disposes all <see cref="IDisposable"/> services in reverse creation order.</summary>
-    /// <remarks>Services aliased to multiple types are disposed exactly once — deduplication is done by reference, so aliases do not cause double disposal.</remarks>
+    /// <remarks>
+    /// Services aliased to multiple types are disposed exactly once — deduplication is done by reference, so aliases do not cause double disposal.
+    /// A throwing callback, service or child provider does not stop the remaining disposal; the provider finishes its own cleanup and then throws
+    /// an <see cref="AggregateException"/> carrying every failure.
+    /// </remarks>
     public void Dispose()
     {
         if (_disposed)
@@ -595,13 +599,23 @@ public class ServiceProvider : IDisposable
         _parent = null;
         parent?.RemoveChild(this);
 
+        List<Exception>? failures = null;
+
         List<ServiceProvider>? children = _children;
         _children = null;
         if (children != null)
         {
             for (int i = children.Count - 1; i >= 0; i--)
             {
-                children[i].Dispose();
+                try
+                {
+                    children[i].Dispose();
+                }
+                catch (Exception ex)
+                {
+                    failures ??= new List<Exception>();
+                    failures.Add(ex);
+                }
             }
         }
 
@@ -617,9 +631,7 @@ public class ServiceProvider : IDisposable
                 continue;
             }
 
-            RunDisposingCallbacks(service, record.ConcreteType);
-
-            ((IDisposable)service).Dispose();
+            DisposeService(service, record.ConcreteType, ref failures);
         }
 
         for (int i = _creationRecords.Count - 1; i >= 0; i--)
@@ -637,14 +649,7 @@ public class ServiceProvider : IDisposable
                 continue;
             }
 
-            // Disposing callbacks fire before IDisposable.Dispose so callers can still use the
-            // service (e.g. unsubscribe from event buses) while it is operational.
-            RunDisposingCallbacks(service, record.ConcreteType);
-
-            if (service is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
+            DisposeService(service, record.ConcreteType, ref failures);
         }
 
         _services = null;
@@ -658,6 +663,46 @@ public class ServiceProvider : IDisposable
         _buildTimeTryResolver = null;
         _buildTimeCollectionResolver = null;
         _transientDisposalRecords.Clear();
+        _creationRecords.Clear();
+
+        if (failures != null)
+        {
+            throw new AggregateException("Failed to dispose one or more services", failures);
+        }
+    }
+
+    // Disposing callbacks fire before IDisposable.Dispose so callers can still use the
+    // service (e.g. unsubscribe from event buses) while it is operational.
+    // A throwing callback still lets the service dispose, so a bad callback cannot leak the service.
+    private void DisposeService(
+        object service,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type concreteType,
+        ref List<Exception>? failures)
+    {
+        try
+        {
+            RunDisposingCallbacks(service, concreteType);
+        }
+        catch (Exception ex)
+        {
+            failures ??= new List<Exception>();
+            failures.Add(ex);
+        }
+
+        if (service is not IDisposable disposable)
+        {
+            return;
+        }
+
+        try
+        {
+            disposable.Dispose();
+        }
+        catch (Exception ex)
+        {
+            failures ??= new List<Exception>();
+            failures.Add(ex);
+        }
     }
 }
 
