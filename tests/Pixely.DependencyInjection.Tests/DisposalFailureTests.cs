@@ -79,7 +79,7 @@ public sealed class DisposalFailureTests
 
         Assert.That(events, Is.EqualTo(new[] { "second child", "first child", "parent" }));
         Assert.That(exception.InnerExceptions, Has.Count.EqualTo(1));
-        Assert.That(exception.InnerExceptions[0], Is.InstanceOf<AggregateException>());
+        Assert.That(exception.InnerExceptions[0], Is.InstanceOf<InvalidOperationException>().With.Message.EqualTo("second child"));
         Assert.Throws<ObjectDisposedException>(() => firstChild.GetRequiredService<OrderedDisposable>());
         Assert.Throws<ObjectDisposedException>(() => secondChild.GetRequiredService<ThrowingDisposable>());
     }

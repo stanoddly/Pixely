@@ -595,7 +595,7 @@ public class ServiceProvider : IDisposable
     /// <remarks>
     /// Services aliased to multiple types are disposed exactly once — deduplication is done by reference, so aliases do not cause double disposal.
     /// A throwing callback, service or child provider does not stop the remaining disposal; the provider finishes its own cleanup and then throws
-    /// an <see cref="AggregateException"/> carrying every failure.
+    /// an <see cref="AggregateException"/> carrying every failure, with child provider failures flattened into the same list.
     /// </remarks>
     public void Dispose()
     {
@@ -621,6 +621,10 @@ public class ServiceProvider : IDisposable
                 try
                 {
                     children[i].Dispose();
+                }
+                catch (AggregateException ex)
+                {
+                    (failures ??= new List<Exception>()).AddRange(ex.InnerExceptions);
                 }
                 catch (Exception ex)
                 {
