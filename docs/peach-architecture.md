@@ -50,8 +50,6 @@ Executable          ──> everything above
 - Each project sits at `src/Foo.{Part}/Foo.{Part}.csproj`
 - A project only `Executable` references, `Frontend`, `Ai` and `Scenario`, exposes nothing public
   but its registrars
-- A type MUST live in a namespace this document names. `Game` MAY add one with a stated reason,
-  e.g. persistence
 
 ## What Pixely provides
 
@@ -71,6 +69,9 @@ Executable          ──> everything above
 - It MUST NOT know a frontend, a participant that is a player, or an output
 - It MUST NOT push: no events, observers or callbacks, so it holds no delegate. A reader polls State
   or drains the log
+- Every type in `Game` lives in `Vocabulary`, `State`, `Mechanics`, `Systems` or `Observations`, so
+  the rules of those namespaces see it. A game MAY add a namespace here, each with the reason the
+  named ones did not do
 
 ### Foo.Game.Vocabulary namespace
 

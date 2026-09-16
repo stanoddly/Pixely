@@ -168,24 +168,14 @@ public static partial class PeachArchitecture
         }
     }
 
-    // A type MUST live in a namespace the document names, or one Game added with a stated reason. A namespace is reported once, not once
-    // per type.
+    // Every type in Game lives in a namespace the document names, or one the game added with a reason, so the namespace scoped rules see it.
+    // The other projects' rules are project scoped, so their namespaces are theirs. A namespace is reported once, not once per type.
     private static IReadOnlyList<string> TypesLiveInDocumentedNamespaces(PeachArchitectureOptions options)
     {
-        Dictionary<Assembly, HashSet<string>> allowed = new Dictionary<Assembly, HashSet<string>>
-        {
-            [options.Game] = new[] { options.GameNamespace, options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.SystemsNamespace, options.ObservationsNamespace }
-                .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal),
-            [options.Frontend] = [options.FrontendNamespace, options.FormsNamespace],
-            [options.Executable] = [options.ExecutableNamespace]
-        };
-        foreach (Assembly assembly in options.OutputAssemblies.Concat(options.ActorAssemblies))
-        {
-            allowed[assembly] = [options.RootNamespaceOf(assembly)];
-        }
-
-        List<string> violations = allowed
-            .SelectMany(pair => TypeGraph.DeclaredTypes(pair.Key).Where(type => !type.IsNested && !pair.Value.Contains(type.Namespace ?? string.Empty)))
+        HashSet<string> allowed = new[] { options.GameNamespace, options.VocabularyNamespace, options.StateNamespace, options.MechanicsNamespace, options.SystemsNamespace, options.ObservationsNamespace }
+            .Concat(options.ExtraGameNamespaceNames).ToHashSet(StringComparer.Ordinal);
+        List<string> violations = TypeGraph.DeclaredTypes(options.Game)
+            .Where(type => !type.IsNested && !allowed.Contains(type.Namespace ?? string.Empty))
             .Select(type => type.Namespace ?? "(global)")
             .Distinct()
             .Order(StringComparer.Ordinal)
