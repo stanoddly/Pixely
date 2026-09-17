@@ -189,7 +189,7 @@ Set the `PIXELY_GRAPHICS` environment variable to override `PixelyConfig.GpuBack
 PIXELY_GRAPHICS=vulkan dotnet run --project tutorials/Pixely.Tutorials.Triangle
 ```
 
-Supported values are `automatic`, `vulkan`, `direct3d12`, and `metal`, matched case-insensitively. An unset, empty, or whitespace-only value leaves `PixelyConfig.GpuBackend` in effect. Any other value stops `Build()` with an error that lists the supported values. The other `PixelyConfig` variables are listed in input-automation.md.
+Supported values are `automatic`, `vulkan`, `direct3d12`, and `metal`, matched case-insensitively. An unset, empty, or whitespace-only value leaves `PixelyConfig.GpuBackend` in effect. Any other value stops `Build()` with an error that lists the supported values. The other `PixelyConfig` variables are listed in headless.md.
 
 The selected SDL driver is available from `GpuDevice.Driver` for diagnostics.
 

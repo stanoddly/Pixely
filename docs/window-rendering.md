@@ -105,7 +105,7 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
-`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See input-automation.md.
+`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
