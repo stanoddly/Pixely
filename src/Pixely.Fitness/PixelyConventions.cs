@@ -6,6 +6,7 @@ using Pixely.Events;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
+using Pixely.Ui;
 
 namespace Pixely.Fitness;
 
@@ -30,6 +31,7 @@ public static class PixelyConventions
             Run("Pixely RenderersTakeNoBuilders", RenderersTakeNoBuilders),
             Run("Pixely VertexTypesMatchTheirElements", VertexTypesMatchTheirElements),
             Run("Pixely FactoriesHideConstructors", FactoriesHideConstructors, options.FactoriesHideConstructors),
+            Run("Pixely ViewsTakeOneViewModel", ViewsTakeOneViewModel, options.ViewsTakeOneViewModel),
             Run("Pixely GpuOwnersAreDisposable", GpuOwnersAreDisposable, options.GpuOwnersAreDisposable),
             Run("Pixely FrameParticipantsAreRegistered", FrameParticipantsAreRegistered, options.FrameParticipantsAreRegistered)
         ]);
@@ -87,6 +89,42 @@ public static class PixelyConventions
             .Where(type => TypeGraph.Constructors(type).Any(constructor => constructor.IsPublic))
             .Select(type => $"{type.FullName}: has a public constructor beside Create; make the constructor non-public")
             .ToArray();
+    }
+
+    // A view is a function of one model; a second one belongs in the model, not the view.
+    public static IReadOnlyList<string> ViewsTakeOneViewModel(PixelyConventionsOptions options)
+    {
+        List<string> violations = new List<string>();
+        foreach (ConstructorInfo constructor in Classes(options).Where(type => typeof(UiView).IsAssignableFrom(type)).SelectMany(TypeGraph.Constructors))
+        {
+            ParameterInfo[] parameters = constructor.GetParameters();
+            ParameterInfo[] viewModels = parameters.Where(parameter => IsViewModel(parameter.ParameterType)).ToArray();
+            string view = TypeGraph.Describe(constructor.DeclaringType!);
+            violations.AddRange(parameters.Where(parameter => ElementType(parameter.ParameterType) is { } element && IsViewModel(element))
+                .Select(parameter => $"{view}: constructor takes a collection of view models through {parameter.Name}; take one view model"));
+            if (viewModels.Length != 1)
+            {
+                violations.Add($"{view}: constructor takes {viewModels.Length} view models ({string.Join(", ", viewModels.Select(parameter => parameter.ParameterType.Name))}); take exactly one");
+            }
+        }
+
+        return violations;
+    }
+
+    private static bool IsViewModel(Type type)
+    {
+        return typeof(IUiViewModel).IsAssignableFrom(type) || type.IsGenericParameter && type.GetGenericParameterConstraints().Any(IsViewModel);
+    }
+
+    // The T of IEnumerable<T>, Span<T> or ReadOnlySpan<T>, reached through the type's interfaces so a class deriving from List<T> counts.
+    private static Type? ElementType(Type type)
+    {
+        if (type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(Span<>) || type.GetGenericTypeDefinition() == typeof(ReadOnlySpan<>)))
+        {
+            return type.GetGenericArguments()[0];
+        }
+
+        return type.GetInterfaces().Prepend(type).FirstOrDefault(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))?.GetGenericArguments()[0];
     }
 
     public static IReadOnlyList<string> GpuOwnersAreDisposable(PixelyConventionsOptions options)

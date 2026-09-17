@@ -23,6 +23,9 @@ public sealed record PixelyConventionsOptions(IReadOnlyList<Assembly> Assemblies
     /// <summary>A type with a static Create returning itself hides its constructors.</summary>
     public bool FactoriesHideConstructors { get; init; } = true;
 
+    /// <summary>Every constructor of a class deriving from UiView takes exactly one IUiViewModel.</summary>
+    public bool ViewsTakeOneViewModel { get; init; } = true;
+
     /// <summary>A type holding a GPU object it owns disposes it.</summary>
     public bool GpuOwnersAreDisposable { get; init; } = true;
 
