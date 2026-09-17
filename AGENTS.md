@@ -5,7 +5,7 @@
 - `docs/class-registration.md` - ServiceCollection/ServiceProvider API: registration overloads, source generator requirements, lifecycle, aliases, multi-registration, parent/child provider callback merging and scoped lifecycles
 - `docs/events.md` - Pixely.Events EventBus, event handlers, publishing, and DI auto-subscription
 - `docs/observations.md` - Pixely.Observations: the log, its writer and its readers, trimming behind the slowest reader, capacity and stall detection, registration
-- `docs/input-automation.md` - Synchronous synthetic mouse, keyboard, and text input, coordinate semantics, view targeting, physical-input boundaries, the standard-input command protocol, headless mode and screenshots, the `PIXELY_*` environment variables that override `PixelyConfig`
+- `docs/headless.md` - Headless mode: hidden offscreen windows and screenshots, synthetic mouse, keyboard, and text input on standard input, coordinate semantics, view targeting, physical-input boundaries, the `PIXELY_*` environment variables that override `PixelyConfig`
 - `docs/static-factory-methods.md` - Static Create() method pattern
 - `docs/componentize.md` - Pixely.Componentize setup and usage
 - `docs/components.md` - GameWorld, GameObject, GameComponent lifecycle, Services<T>, UpdateSystem
@@ -20,8 +20,11 @@
 - `docs/development-packages.md` - Consuming packages from the public development feed
 - `docs/hosting.md` - Hosting: opting in with `PixelyHosting`, the generated `Main`, `Configure` and `OnException`, diagnostics
 - `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
+- `docs/sprites.md` - Sprite and animated sprite JSON files, the loaders and their cache, mirroring with `flip`
 - `docs/peach-architecture.md` - Peach architecture for games built on Pixely: project layout, Game/Frontend boundary, stages, systems, AI and scenario projects; shipped in the package under `docs/` and enforced by Pixely.Fitness
 - `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, the Pixely conventions rule set, adding other rule sets
+- `docs/logging.md` - Pixely.Logging: registering ZLogger through the service collection, the application logger, logging calls, shutdown and durability
+- `docs/window-rendering.md` - Single- and multi-window rendering: ViewScope, UseDefaultRendering, custom render contexts and window providers, scoped input, activating mouse clicks
 
 ## Maintenance
 
