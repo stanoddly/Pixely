@@ -1,0 +1,11 @@
+<Project>
+
+    <!-- A portable build copies every SDL3 native RID into bin/ (about 210 MB per project). Only the host RID is ever loaded, so pin it. -->
+    <!-- NETCoreSdkRuntimeIdentifier is set by the SDK before this file is imported. -->
+    <!-- On net8.0+ a RuntimeIdentifier no longer implies SelfContained, so it is left unset for PublishAot to infer. -->
+    <PropertyGroup>
+        <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+        <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    </PropertyGroup>
+
+</Project>
