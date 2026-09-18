@@ -15,15 +15,22 @@ public class PixelyApp : IPixelyApp
     private readonly ServiceRegistry<IUpdatable> _updatables;
     private readonly StageManager _stageManager;
 
-    internal PixelyApp(ServiceProvider serviceProvider)
+    internal PixelyApp(
+        ServiceProvider serviceProvider,
+        PixelyFrameContext frameContext,
+        EventService eventService,
+        AppControl appControl,
+        ServiceRegistry<IRenderCoordinator> renderCoordinators,
+        ServiceRegistry<IUpdatable> updatables,
+        StageManager stageManager)
     {
         ServiceProvider = serviceProvider;
-        _frameContext = serviceProvider.GetRequiredService<PixelyFrameContext>();
-        _eventService = serviceProvider.GetRequiredService<EventService>();
-        _appControl = serviceProvider.GetRequiredService<AppControl>();
-        _renderCoordinators = serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
-        _updatables = serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>();
-        _stageManager = serviceProvider.GetRequiredService<StageManager>();
+        _frameContext = frameContext;
+        _eventService = eventService;
+        _appControl = appControl;
+        _renderCoordinators = renderCoordinators;
+        _updatables = updatables;
+        _stageManager = stageManager;
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
