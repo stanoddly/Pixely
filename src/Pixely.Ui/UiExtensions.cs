@@ -71,6 +71,8 @@ public static class UiExtensions
         // Refused here rather than when the root is built, so a bad scale names the UseUi call.
         UiRoot.ValidateScale(scale);
 
+        appBuilder.UseGpu();
+
         if (!appBuilder.IsRegistered<UiViewRegistry>())
         {
             appBuilder.ConfigureContent(contentSourceBuilder =>

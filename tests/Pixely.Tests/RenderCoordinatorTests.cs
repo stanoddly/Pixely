@@ -128,6 +128,7 @@ public class RenderCoordinatorTests
     public void ChildProviderCoordinator_UsesChildWindow()
     {
         PixelyAppBuilder builder = new();
+        builder.AddSingleton(CreateGpuDeviceStub());
         builder.AddSingleton(new GpuMemorySystem(null!));
         ServiceProvider parent = builder.BuildServiceProvider();
         ServiceCollection childCollection = parent.CreateServiceCollection();
@@ -243,6 +244,7 @@ public class RenderCoordinatorTests
         ViewScope viewScope = default)
     {
         PixelyAppBuilder builder = new();
+        builder.AddSingleton(CreateGpuDeviceStub());
         builder.UseWindowRendering<TestRenderContext>(viewScope);
         builder.AddSingleton(CreateWindow(viewScope, 42));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
@@ -250,6 +252,12 @@ public class RenderCoordinatorTests
         builder.AddSingleton(new GpuMemorySystem(null!));
         builder.AddSingleton(calls);
         return builder;
+    }
+
+    // A registered device keeps UseGpu from registering the real one, which would need SDL. Providers holding the stub are never disposed: it cannot survive GpuDevice.Dispose.
+    private static GpuDevice CreateGpuDeviceStub()
+    {
+        return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
     }
 
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)

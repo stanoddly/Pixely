@@ -1,10 +1,8 @@
 using Pixely.Content;
 using Pixely.DependencyInjection;
-using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
-using Pixely.Text;
 
 namespace Pixely.App;
 
@@ -51,10 +49,6 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<PlatformInfo, PixelyFactory>();
 
-        AddSingleton<GpuDevice, PixelyFactory>();
-
-        AddSingleton<GpuMemorySystem>();
-
         AddSingleton<KeyboardService, PixelyFactory>();
         AddAlias<IKeyboardService, KeyboardService>();
 
@@ -82,25 +76,10 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<GraphicsShaderProgramMetadataLoader>();
 
-        AddSingleton<ShaderLoader>();
-        AddAlias<IShaderLoader, ShaderLoader>();
-
-        AddSingleton<ITextureLoader, TextureLoader>();
-
-        AddSingleton<GraphicsPipelineBuilder>();
-
         AddSingleton<ComputeShaderMetadataLoader>();
-
-        AddSingleton<ComputeShaderLoader>();
-        AddAlias<IComputeShaderLoader, ComputeShaderLoader>();
-
-        AddSingleton<ComputePipelineBuilder>();
 
         AddSingleton<PixelyFrameContext>();
         AddAlias<FrameContext, PixelyFrameContext>();
-
-        AddSingleton<FontSystem>(FontSystem.Create);
-        AddAlias<IFontSystem, FontSystem>();
 
         AddSingleton<AppControl>();
         AddSingleton<UpdateSystem>();

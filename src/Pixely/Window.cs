@@ -94,6 +94,7 @@ public class Window : IDisposable
     {
         get
         {
+            ThrowIfNoGpuDevice();
             unsafe
             {
                 return (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
@@ -392,6 +393,7 @@ public class Window : IDisposable
 
     public virtual bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
+        ThrowIfNoGpuDevice();
         swapchainTexture = default!;
         uint width, height;
 
@@ -612,9 +614,21 @@ public class Window : IDisposable
         ClearHitTestCallback();
         unsafe
         {
-            SDL3.SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
+            if (!SdlGpuDevice.IsNull)
+            {
+                SDL3.SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
+            }
+
             SDL3.SDL_DestroyWindow(SdlWindow);
             SdlWindow = null;
+        }
+    }
+
+    private void ThrowIfNoGpuDevice()
+    {
+        if (SdlGpuDevice.IsNull)
+        {
+            throw new InvalidOperationException("The window has no GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
         }
     }
 

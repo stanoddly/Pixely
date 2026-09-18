@@ -9,6 +9,7 @@ public static class RenderingExtensions
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.UseGpu();
         ConfigureWindowRendering<TRenderContext>(services, viewScope);
         return services;
     }
@@ -21,6 +22,7 @@ public static class RenderingExtensions
     public static ServiceCollection UseDefaultRendering(this ServiceCollection services, ViewScope viewScope, WindowConfig? config = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.UseGpu();
         services.AddWindow(viewScope, config);
         AddDefaultRendering(services, viewScope);
         return services;

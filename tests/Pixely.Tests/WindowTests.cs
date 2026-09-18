@@ -28,6 +28,22 @@ public class WindowTests
         Assert.That(window.Raise(), Is.False);
     }
 
+    [Test]
+    public void ColorTargetFormat_WindowWithoutGpuDevice_Throws()
+    {
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+
+        Assert.Throws<InvalidOperationException>(() => _ = window.ColorTargetFormat);
+    }
+
+    [Test]
+    public void TryWaitAndAcquireSwapchainTexture_WindowWithoutGpuDevice_Throws()
+    {
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+
+        Assert.Throws<InvalidOperationException>(() => window.TryWaitAndAcquireSwapchainTexture(null!, out _));
+    }
+
     private static Window CreateDisposedWindow()
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));

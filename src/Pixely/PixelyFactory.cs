@@ -67,9 +67,10 @@ public class PixelyFactory: IDisposable
         return new PlatformInfo(GetCurrentVideoDriver());
     }
 
+    // A null device is an app that registered no rendering: the window is created without being claimed for a device.
     internal Window CreateWindow(
         ViewScope viewScope,
-        GpuDevice gpuDevice,
+        GpuDevice? gpuDevice,
         PixelyFrameContext frameContext,
         WindowConfig config,
         PlatformInfo platformInfo,
@@ -77,6 +78,11 @@ public class PixelyFactory: IDisposable
     {
         if (_config.Headless)
         {
+            if (gpuDevice == null)
+            {
+                throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
+            }
+
             return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
         }
 
@@ -119,7 +125,7 @@ public class PixelyFactory: IDisposable
 
     private Window CreateWindow(
         ViewScope viewScope,
-        GpuDevice gpuDevice,
+        GpuDevice? gpuDevice,
         PixelyFrameContext frameContext,
         PlatformInfo platformInfo,
         Size<uint>? size = null,
@@ -169,14 +175,14 @@ public class PixelyFactory: IDisposable
         return new Window(
             viewScope,
             sdlWindow,
-            gpuDevice.SdlGpuDevice,
+            gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null,
             sdlWindowId,
             frameContext,
             platformInfo,
             closeBehavior);
     }
 
-    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
+    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
     {
         EnsureSdlInitialized();
 
@@ -204,7 +210,7 @@ public class PixelyFactory: IDisposable
 
         unsafe
         {
-            if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
+            if (gpuDevice != null && SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
             {
                 throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
             }
