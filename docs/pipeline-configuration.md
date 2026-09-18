@@ -87,5 +87,5 @@ GraphicsPipeline pipeline = graphicsPipelineBuilder
 
 - Call `.Build()` last to create the pipeline
 - Pipeline is immutable after build
-- GraphicsPipelineBuilder is injected as a dependency and available by default from Pixely
+- GraphicsPipelineBuilder is injected as a dependency once rendering or `UseGpu()` is registered (`docs/window-rendering.md`)
 - Store pipelines, don't rebuild every frame

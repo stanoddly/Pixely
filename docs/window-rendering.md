@@ -16,7 +16,7 @@ builder
             Title: "Game"));
 ```
 
-Omitting `UseDefaultRendering` creates no window.
+Omitting `UseDefaultRendering` creates no window; `AddWindow` alone creates one without rendering (see below).
 
 Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
 
@@ -47,6 +47,21 @@ graphicsPipelineBuilder.AddColorFormatFromDisplay();
 textInputService.Start();
 bool containsMouse = mouseService.IsInWindow();
 ```
+
+## The GPU device
+
+The GPU device and the services that need it (`GpuMemorySystem`, the shader loaders, `ITextureLoader`, the
+pipeline builders and `IFontSystem`) are registered by `UseGpu()`. `UseDefaultRendering`,
+`UseWindowRendering<T>`, `UseUi`, `RegisterSpriteLoading` and `RegisterAtlas` call it, so an app that renders
+never calls it directly. Call it yourself when the app needs the GPU without a window renderer, such as a
+compute-only app. It is idempotent, and a registered `GpuDevice` from any source makes it a no-op, so it belongs
+at the root when any stage renders: `IsRegistered` sees the parent, and a stage calling `UseDefaultRendering`
+under a root without the device would register a second one in the child.
+
+Without `UseGpu()` there is no device: `AddWindow` alone creates an SDL window that is not claimed for a device,
+the frame loop processes events and updates, and the window's `ColorTargetFormat` and
+`TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an
+app spins the loop.
 
 ## Custom render contexts
 

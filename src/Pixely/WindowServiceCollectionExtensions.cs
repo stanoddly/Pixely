@@ -17,7 +17,7 @@ public static class WindowServiceCollectionExtensions
         services.AddSingleton<Window>(provider =>
             provider.GetRequiredService<PixelyFactory>().CreateWindow(
                 viewScope,
-                provider.GetRequiredService<GpuDevice>(),
+                provider.GetService<GpuDevice>(),
                 provider.GetRequiredService<PixelyFrameContext>(),
                 config ?? new WindowConfig(),
                 provider.GetRequiredService<PlatformInfo>(),
