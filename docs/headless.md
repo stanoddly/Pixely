@@ -38,7 +38,7 @@ printf 'key down LeftCtrl\nkey press E\nkey up LeftCtrl\n' >> commands.txt
 cat replies.txt
 ```
 
-Keep logging off standard output while doing this; replies share the stream. SDL's own log output, which otherwise goes to standard output below warning priority, goes to standard error in headless mode for the same reason.
+Keep logging off standard output while doing this; replies share the stream.
 
 ### Headless mode and screenshots
 

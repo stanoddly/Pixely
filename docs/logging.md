@@ -81,7 +81,7 @@ Child stage providers resolve the application logger from the root provider. Unl
 
 ## SDL messages
 
-Once an `ILoggerFactory` is registered, SDL's own log messages (see `PixelyConfig.EnableSdlLogging`) are written to the `SDL` category, with SDL's priority mapped to the log level: trace and verbose to `Trace`, then debug, info, warn, error and critical to their namesakes. Without a logger factory they go to the console: warnings and above to standard error with SDL's `WARNING: `, `ERROR: ` and `CRITICAL: ` prefixes, the rest to standard output (standard error in headless mode, see `docs/headless.md`).
+Once an `ILoggerFactory` is registered, SDL's own log messages (see `PixelyConfig.EnableSdlLogging`) are written to the `SDL` category, with SDL's priority mapped to the log level: trace and verbose to `Trace`, then debug, info, warn, error and critical to their namesakes. Without a logger factory they go to the console: warnings and above to standard error with SDL's `WARNING: `, `ERROR: ` and `CRITICAL: ` prefixes, the rest to standard output.
 
 ## Logging calls
 
