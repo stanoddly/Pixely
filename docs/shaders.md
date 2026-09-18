@@ -287,7 +287,7 @@ For each graphics shader program, the build generates one `.metadata.json` file:
       {
         "format": "SpirV",
         "filename": "shader.vertex.spv",
-        "entryPoint": "main"
+        "entryPoint": "vertexMain"
       }
     ]
   },
@@ -297,7 +297,7 @@ For each graphics shader program, the build generates one `.metadata.json` file:
       {
         "format": "SpirV",
         "filename": "shader.fragment.spv",
-        "entryPoint": "main"
+        "entryPoint": "fragmentMain"
       }
     ]
   },
@@ -309,11 +309,11 @@ For each graphics shader program, the build generates one `.metadata.json` file:
 
 Each stage has its own binding layout because resources are reflected for the entry point that uses them. This metadata is used by the loader to validate bindings and create both native GPU shader objects transactionally. You don't need to edit it manually.
 
-The source entry points remain `vertexMain` and `fragmentMain`. Per-target shader records contain the names exported by generated code; Slang exports SPIR-V entry points as `main`.
+Per-target shader records carry the source entry point name for every format. `main` is never a valid entry point name: Metal reserves it, so Slang would rename it in the MSL output and the name would differ between backends.
 
 ## Notes
 
-- Graphics programs use the fixed source entry points `vertexMain` and `fragmentMain`
+- Graphics programs use the fixed source entry points `vertexMain` and `fragmentMain`; compute shaders use `computeMain`
 - Shader compilation is cached based on the source hash, Slang version, and expected target formats
 - SPIR-V is used by Vulkan, DXIL by Direct3D 12, and MSL by Metal
 - Always use explicit register bindings for constant buffers

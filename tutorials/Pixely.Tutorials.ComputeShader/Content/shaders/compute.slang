@@ -4,7 +4,7 @@ ConstantBuffer<float> time : register(b0, space2);
 
 [numthreads(8, 8, 1)]
 [shader("compute")]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID)
+void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
     uint2 pos = dispatchThreadID.xy;
     float2 uv = float2(pos) / 512.0;
