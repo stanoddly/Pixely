@@ -48,6 +48,13 @@ public static class UiExtensions
     /// starts at it, so the first build is laid out at it; <see cref="UiRoot.RequestScale"/> changes
     /// it at runtime. Must be finite and at least 1.
     /// </param>
+    /// <param name="selectColorTarget">
+    /// The texture the UI is presented into, picked from the frame's render context. Defaults to
+    /// <see cref="IRenderContext.ColorTarget"/>. A game that post-processes the UI on its own
+    /// selects a texture of its own here and composites it in a later renderer; the texture must be
+    /// the size <see cref="RenderContextProvider{TRenderContext}.GetColorTargetSize"/> reports and
+    /// in the window's colour format.
+    /// </param>
     public static PixelyAppBuilder UseUi<TRenderContext>(
         this PixelyAppBuilder appBuilder,
         ViewScope viewScope,
@@ -55,7 +62,8 @@ public static class UiExtensions
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        float scale = 1f)
+        float scale = 1f,
+        Func<TRenderContext, Texture>? selectColorTarget = null)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
@@ -103,6 +111,7 @@ public static class UiExtensions
                 viewScope,
                 renderOrder,
                 clearTarget,
+                selectColorTarget ?? (static renderContext => renderContext.ColorTarget),
                 provider.GetRequiredService<GraphicsPipelineBuilder>(),
                 provider.GetRequiredService<GpuMemorySystem>(),
                 provider.GetRequiredService<ShaderLoader>(),

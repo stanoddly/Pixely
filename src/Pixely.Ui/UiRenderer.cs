@@ -11,7 +11,8 @@ namespace Pixely.Ui;
 /// blits that texture over the frame at the source's scale. The texture is only repainted when the
 /// instructions changed, so a static UI costs one quad per frame; the scale costs nothing beyond the
 /// blit, and nearest sampling is what makes an integer scale pixel-exact. The build itself belongs
-/// to <see cref="UiUpdateSystem"/>, which is why this holds a source rather than the root.
+/// to <see cref="UiUpdateSystem"/>, which is why this holds a source rather than the root. Where the
+/// blit lands is the selector's answer for the frame's context, by default its colour target.
 /// </summary>
 internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, IDisposable
     where TRenderContext : IRenderContext
@@ -31,6 +32,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private readonly GpuDevice _gpuDevice;
     private readonly TextureFormat _colorTargetFormat;
     private readonly IUiPaintSource _source;
+    private readonly Func<TRenderContext, Texture> _selectColorTarget;
     private readonly bool _clearTarget;
 
     // Solid fills sample this, which is what keeps colours and sprites on one pipeline.
@@ -54,6 +56,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         ViewScope viewScope,
         int renderOrder,
         bool clearTarget,
+        Func<TRenderContext, Texture> selectColorTarget,
         GraphicsPipelineBuilder graphicsPipelineBuilder,
         GpuMemorySystem gpuMemorySystem,
         ShaderLoader shaderLoader,
@@ -104,7 +107,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             gpuMemorySystem.CreateTexture(whitePixel),
             colorTargetFormat);
 
-        return new UiRenderer<TRenderContext>(source, viewScope, renderOrder, clearTarget, gpuDevice, resources);
+        return new UiRenderer<TRenderContext>(source, viewScope, renderOrder, clearTarget, selectColorTarget, gpuDevice, resources);
     }
 
     private UiRenderer(
@@ -112,6 +115,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         ViewScope viewScope,
         int renderOrder,
         bool clearTarget,
+        Func<TRenderContext, Texture> selectColorTarget,
         GpuDevice gpuDevice,
         GpuResources resources)
     {
@@ -119,6 +123,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         ViewScope = viewScope;
         RenderOrder = renderOrder;
         _clearTarget = clearTarget;
+        _selectColorTarget = selectColorTarget;
         _gpuDevice = gpuDevice;
 
         _vertexBuffer = resources.VertexBuffer;
@@ -140,7 +145,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     public void Render(TRenderContext renderContext)
     {
-        ShortSize targetSize = renderContext.ColorTarget.Size;
+        Texture colorTarget = _selectColorTarget(renderContext);
+        ShortSize targetSize = colorTarget.Size;
         Vector2Int target = new(targetSize.Width, targetSize.Height);
         Vector2Int viewport = _source.PaintedViewportSize;
 
@@ -152,7 +158,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
             if (_clearTarget)
             {
-                ClearTarget(renderContext.CommandBuffer, renderContext.ColorTarget);
+                ClearTarget(renderContext.CommandBuffer, colorTarget);
             }
 
             return;
@@ -167,7 +173,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             _retainedTextureDirty = false;
         }
 
-        Present(renderContext.CommandBuffer, renderContext.ColorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
+        Present(renderContext.CommandBuffer, colorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
     }
 
     /// <summary>

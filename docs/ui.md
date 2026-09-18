@@ -71,6 +71,16 @@ A hidden or zero-area window does not build. A window resized between the update
 
 The build lays out against the render context's colour target, divided by the root's scale, see below. A render context whose colour target is a different size than the window is not supported: the UI is laid out for that target and the renderer refuses to draw it into a target of another size, so it stays blank.
 
+## Where the UI is presented
+
+The renderer paints the tree into a retained texture at its logical size and presents that texture into the render context's colour target. `selectColorTarget` picks another texture from the context instead, for a game that wants the UI on its own, for instance to post-process the UI and not the scene:
+
+```csharp
+builder.UseUi<GameRenderContext>(default, selectColorTarget: static renderContext => renderContext.UiColor);
+```
+
+The selector runs every frame against the context the provider built, so the provider decides what the texture is. A menu that shades the UI has the provider hand out an offscreen texture and a renderer after `RenderOrders.Ui` that samples it and draws the result over the colour target; a stage that does not can have the provider hand out the swapchain texture again, and nothing else changes. The selected texture must be the size `GetColorTargetSize` reports and in the window's colour format, since the tree was laid out for that size and the present pipeline is built for that format. `clearTarget` applies to whatever is selected and clears to opaque grey, so a game that selects its own texture clears it to transparent itself, in the provider that owns it, and leaves `clearTarget` false.
+
 ## Scale
 
 Everything in the tree is in logical pixels: sizes, margins, paddings, offsets, anchors, border and nine-patch thicknesses, font sizes and pointer positions. `UiRoot.Scale` says how many target pixels one logical pixel covers, and defaults to 1, where logical and target pixels are the same thing.
