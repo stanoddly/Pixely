@@ -208,14 +208,11 @@ public class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateWindow failed: {SDL3.SDL_GetError()}");
         }
 
-        if (gpuDevice != null)
+        unsafe
         {
-            unsafe
+            if (gpuDevice != null && SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
             {
-                if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
-                {
-                    throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
-                }
+                throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
             }
         }
 

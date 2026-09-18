@@ -56,7 +56,8 @@ pipeline builders and `IFontSystem`) are registered by `UseGpu()`. `UseDefaultRe
 never calls it directly. Call it yourself when the app needs the GPU without a window renderer, such as a
 compute-only app. It is idempotent, and a registered `GpuDevice` from any source makes it a no-op, so it belongs
 at the root when any stage renders: `IsRegistered` sees the parent, and a stage calling `UseDefaultRendering`
-under a root without the device would register a second one in the child.
+under a root without the device registers the device in that child, so each such stage creates its own device and
+a root window created by `AddWindow` stays unclaimed.
 
 Without `UseGpu()` there is no device: `AddWindow` alone creates an SDL window that is not claimed for a device,
 the frame loop processes events and updates, and the window's `ColorTargetFormat` and

@@ -254,7 +254,7 @@ public class RenderCoordinatorTests
         return builder;
     }
 
-    // A registered device keeps UseGpu from registering the real one, which would need SDL.
+    // A registered device keeps UseGpu from registering the real one, which would need SDL. Providers holding the stub are never disposed: it cannot survive GpuDevice.Dispose.
     private static GpuDevice CreateGpuDeviceStub()
     {
         return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));

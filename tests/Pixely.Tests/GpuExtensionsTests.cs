@@ -45,7 +45,7 @@ public class GpuExtensionsTests
     }
 
     [Test]
-    public void UseGpu_CalledTwice_BuildsWithoutADuplicateDevice()
+    public void UseGpu_DeviceAlreadyRegistered_BuildsWithThatDevice()
     {
         ServiceCollection services = new();
         GpuDevice gpuDevice = CreateGpuDeviceStub();
@@ -60,7 +60,7 @@ public class GpuExtensionsTests
     }
 
     [Test]
-    public void Builder_DoesNotRegisterTheGpuDeviceWithoutRendering()
+    public void AddWindow_DoesNotRegisterTheGpuDevice()
     {
         PixelyAppBuilder builder = new();
         builder.AddWindow();
