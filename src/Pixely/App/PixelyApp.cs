@@ -8,19 +8,22 @@ public class PixelyApp : IPixelyApp
 {
     public ServiceProvider ServiceProvider { get; }
 
-    // Resolved on the first frame rather than in the constructor, so building the application does
-    // not force SDL-backed singletons into existence.
-    private bool _frameServicesResolved;
-    private PixelyFrameContext _frameContext = null!;
-    private EventService _eventService = null!;
-    private AppControl _appControl = null!;
-    private ServiceRegistry<IRenderCoordinator> _renderCoordinators = null!;
-    private ServiceRegistry<IUpdatable> _updatables = null!;
-    private StageManager _stageManager = null!;
+    private readonly PixelyFrameContext _frameContext;
+    private readonly EventService _eventService;
+    private readonly AppControl _appControl;
+    private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
+    private readonly ServiceRegistry<IUpdatable> _updatables;
+    private readonly StageManager _stageManager;
 
     internal PixelyApp(ServiceProvider serviceProvider)
     {
         ServiceProvider = serviceProvider;
+        _frameContext = serviceProvider.GetRequiredService<PixelyFrameContext>();
+        _eventService = serviceProvider.GetRequiredService<EventService>();
+        _appControl = serviceProvider.GetRequiredService<AppControl>();
+        _renderCoordinators = serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
+        _updatables = serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>();
+        _stageManager = serviceProvider.GetRequiredService<StageManager>();
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -41,17 +44,6 @@ public class PixelyApp : IPixelyApp
     // requestAnimationFrame, calls this instead of Run, which never yields to its caller.
     public bool RunFrame()
     {
-        if (!_frameServicesResolved)
-        {
-            _frameContext = ServiceProvider.GetRequiredService<PixelyFrameContext>();
-            _eventService = ServiceProvider.GetRequiredService<EventService>();
-            _appControl = ServiceProvider.GetRequiredService<AppControl>();
-            _renderCoordinators = ServiceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
-            _updatables = ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>();
-            _stageManager = ServiceProvider.GetRequiredService<StageManager>();
-            _frameServicesResolved = true;
-        }
-
         // start the frame before applying queued stage transitions
         _frameContext.StartFrame();
         _stageManager.ApplyPendingTransition();

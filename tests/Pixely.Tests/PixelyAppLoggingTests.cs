@@ -1,5 +1,4 @@
 using Pixely.App;
-using Pixely.DependencyInjection;
 using Pixely.Logging;
 using Microsoft.Extensions.Logging;
 using ZLogger;
@@ -15,8 +14,9 @@ public class PixelyAppLoggingTests
 
         try
         {
-            ServiceCollection services = new();
-            services.AddZLogger(logging =>
+            PixelyAppBuilder builder = new();
+            builder.AddSingleton(new PixelyConfig(Headless: true));
+            builder.AddZLogger(logging =>
             {
                 logging.AddZLoggerFileWithRetention(
                     directoryPath,
@@ -27,8 +27,7 @@ public class PixelyAppLoggingTests
                     });
             });
 
-            ServiceProvider serviceProvider = services.BuildServiceProvider();
-            IPixelyApp app = new PixelyApp(serviceProvider);
+            IPixelyApp app = builder.Build();
             ILogger logger = app.GetRequiredService<ILogger>();
             logger.ZLogInformation($"last message");
 
