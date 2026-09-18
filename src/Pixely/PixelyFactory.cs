@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
@@ -12,12 +14,16 @@ public class PixelyFactory: IDisposable
     private static readonly Size<uint> DefaultSize = (640, 480);
 
     private readonly PixelyConfig _config;
+    private readonly ILogger? _sdlLogger;
     private Image? _taskbarIcon;
     private bool _initialized;
+    private GCHandle _sdlLogHandle;
 
-    public PixelyFactory(PixelyConfig config)
+    // The logger factory is optional: without one SDL's messages go to the console.
+    public PixelyFactory(PixelyConfig config, ILoggerFactory? loggerFactory)
     {
         _config = config;
+        _sdlLogger = loggerFactory?.CreateLogger("SDL");
     }
 
     private void EnsureSdlInitialized()
@@ -41,6 +47,14 @@ public class PixelyFactory: IDisposable
             SDL3.SDL_SetHint(SDL3.SDL_HINT_LOGGING, "*=debug");
         }
 
+        // SDL writes every log message to standard error, which a browser console shows as an error, so the messages
+        // go to the application's logger or, without one, to the console by priority.
+        _sdlLogHandle = GCHandle.Alloc(this);
+        unsafe
+        {
+            SDL3.SDL_SetLogOutputFunction(&OnSdlLogMessage, GCHandle.ToIntPtr(_sdlLogHandle));
+        }
+
         // SDL swallows the mouse click that activates an unfocused window by default, which loses the first
         // click whenever the user switches windows, including between two windows of the same application.
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
@@ -53,6 +67,59 @@ public class PixelyFactory: IDisposable
         }
 
         _initialized = true;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnSdlLogMessage(IntPtr userdata, int category, SDL_LogPriority priority, byte* message)
+    {
+        try
+        {
+            PixelyFactory factory = (PixelyFactory)GCHandle.FromIntPtr(userdata).Target!;
+            factory.WriteSdlLogMessage(priority, Marshal.PtrToStringUTF8((IntPtr)message) ?? string.Empty);
+        }
+        catch
+        {
+            // An exception must not cross into SDL.
+        }
+    }
+
+    // A headless app answers its input commands on standard output, so everything stays on standard error there.
+    internal void WriteSdlLogMessage(SDL_LogPriority priority, string message)
+    {
+        if (_sdlLogger != null)
+        {
+            _sdlLogger.Log(ToLogLevel(priority), "{SdlMessage}", message);
+            return;
+        }
+
+        switch (priority)
+        {
+            case SDL_LogPriority.SDL_LOG_PRIORITY_CRITICAL:
+                Console.Error.WriteLine("CRITICAL: " + message);
+                break;
+            case SDL_LogPriority.SDL_LOG_PRIORITY_ERROR:
+                Console.Error.WriteLine("ERROR: " + message);
+                break;
+            case SDL_LogPriority.SDL_LOG_PRIORITY_WARN:
+                Console.Error.WriteLine("WARNING: " + message);
+                break;
+            default:
+                (_config.Headless ? Console.Error : Console.Out).WriteLine(message);
+                break;
+        }
+    }
+
+    internal static LogLevel ToLogLevel(SDL_LogPriority priority)
+    {
+        return priority switch
+        {
+            SDL_LogPriority.SDL_LOG_PRIORITY_CRITICAL => LogLevel.Critical,
+            SDL_LogPriority.SDL_LOG_PRIORITY_ERROR => LogLevel.Error,
+            SDL_LogPriority.SDL_LOG_PRIORITY_WARN => LogLevel.Warning,
+            SDL_LogPriority.SDL_LOG_PRIORITY_INFO => LogLevel.Information,
+            SDL_LogPriority.SDL_LOG_PRIORITY_DEBUG => LogLevel.Debug,
+            _ => LogLevel.Trace,
+        };
     }
 
     private static unsafe string? GetCurrentVideoDriver()
@@ -394,6 +461,11 @@ public class PixelyFactory: IDisposable
         }
 
         SDL3.SDL_Quit();
+        unsafe
+        {
+            SDL3.SDL_SetLogOutputFunction(SDL3.SDL_GetDefaultLogOutputFunction(), IntPtr.Zero);
+        }
+        _sdlLogHandle.Free();
         _initialized = false;
     }
 }
