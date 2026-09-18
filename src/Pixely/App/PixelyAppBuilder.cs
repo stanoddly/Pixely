@@ -94,6 +94,13 @@ public class PixelyAppBuilder : ServiceCollection
         }
 
         ServiceProvider serviceProvider = BuildServiceProvider();
-        return new PixelyApp(serviceProvider);
+        return new PixelyApp(
+            serviceProvider,
+            serviceProvider.GetRequiredService<PixelyFrameContext>(),
+            serviceProvider.GetRequiredService<EventService>(),
+            serviceProvider.GetRequiredService<AppControl>(),
+            serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
+            serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
+            serviceProvider.GetRequiredService<StageManager>());
     }
 }

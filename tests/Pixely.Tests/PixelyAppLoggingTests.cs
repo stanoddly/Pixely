@@ -1,11 +1,12 @@
 using Pixely.App;
-using Pixely.DependencyInjection;
+using SDL;
 using Pixely.Logging;
 using Microsoft.Extensions.Logging;
 using ZLogger;
 
 namespace Pixely.Tests;
 
+[NonParallelizable]
 public class PixelyAppLoggingTests
 {
     [Test]
@@ -15,8 +16,11 @@ public class PixelyAppLoggingTests
 
         try
         {
-            ServiceCollection services = new();
-            services.AddZLogger(logging =>
+            // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
+            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+            PixelyAppBuilder builder = new();
+            builder.AddSingleton(new PixelyConfig(Headless: true));
+            builder.AddZLogger(logging =>
             {
                 logging.AddZLoggerFileWithRetention(
                     directoryPath,
@@ -27,8 +31,7 @@ public class PixelyAppLoggingTests
                     });
             });
 
-            ServiceProvider serviceProvider = services.BuildServiceProvider();
-            IPixelyApp app = new PixelyApp(serviceProvider);
+            IPixelyApp app = builder.Build();
             ILogger logger = app.GetRequiredService<ILogger>();
             logger.ZLogInformation($"last message");
 

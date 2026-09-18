@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
@@ -11,13 +12,19 @@ public class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
 
+    // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings. Emscripten only; other backends drop it.
+    private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)SDL3.SDL_WINDOW_FILL_DOCUMENT;
+
     private readonly PixelyConfig _config;
+    private readonly ILogger? _sdlLogger;
     private Image? _taskbarIcon;
     private bool _initialized;
 
-    public PixelyFactory(PixelyConfig config)
+    // The logger factory is optional: without one SDL's messages go to the console.
+    public PixelyFactory(PixelyConfig config, ILoggerFactory? loggerFactory)
     {
         _config = config;
+        _sdlLogger = loggerFactory?.CreateLogger("SDL");
     }
 
     private void EnsureSdlInitialized()
@@ -45,10 +52,13 @@ public class PixelyFactory: IDisposable
         // click whenever the user switches windows, including between two windows of the same application.
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
 
+        // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
+        SdlLogOutput.Install(_sdlLogger);
         SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO |
                                   SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
         if (SDL3.SDL_Init(initFlags) == false)
         {
+            SdlLogOutput.Uninstall();
             throw new PixelyInitializationException($"SDL_Init failed: {SDL3.SDL_GetError()}");
         }
 
@@ -138,6 +148,11 @@ public class PixelyFactory: IDisposable
         bool initiallyVisible = true,
         WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication)
     {
+        if (OperatingSystem.IsBrowser())
+        {
+            return CreateBrowserWindow(viewScope, gpuDevice, frameContext, platformInfo, title, initiallyVisible, closeBehavior);
+        }
+
         (uint width, uint height) = fullscreen ? (0, 0) : size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
         if (fullscreen)
@@ -182,25 +197,26 @@ public class PixelyFactory: IDisposable
             closeBehavior);
     }
 
+    // The browser has one "screen", the page, so the window fills it and follows the browser window's size. The configured
+    // size and the desktop window options do not apply.
+    private Window CreateBrowserWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameContext frameContext, PlatformInfo platformInfo, string? title, bool initiallyVisible, WindowCloseBehavior closeBehavior)
+    {
+        SDL_WindowFlags windowFlags = FillDocumentWindowFlag | (initiallyVisible ? 0 : SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, title, DefaultSize.Width, DefaultSize.Height, windowFlags);
+        return new Window(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, closeBehavior);
+    }
+
     private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
     {
         EnsureSdlInitialized();
 
-        string windowTitle;
-        if (title == null)
-        {
-            using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
-            windowTitle = process.ProcessName;
-        }
-        else
-        {
-            windowTitle = title;
-        }
+        // The entry assembly's name, which the browser has too, unlike a process name.
+        string windowTitle = title ?? AppDomain.CurrentDomain.FriendlyName;
 
         Pointer<SDL_Window> sdlWindow;
         unsafe
         {
-             sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
+            sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
         }
 
         if (sdlWindow.IsNull)
@@ -356,7 +372,7 @@ public class PixelyFactory: IDisposable
         }
 
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
+        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()));
     }
 
     internal EventService CreateEventService(
@@ -394,6 +410,7 @@ public class PixelyFactory: IDisposable
         }
 
         SDL3.SDL_Quit();
+        SdlLogOutput.Uninstall();
         _initialized = false;
     }
 }

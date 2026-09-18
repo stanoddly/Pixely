@@ -28,39 +28,47 @@ public sealed class InputAutomationCommandInterpreterTests
     {
         (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
 
-        List<string?> replies = lines.Split('\n').Select(interpreter.Execute).ToList();
-
-        Assert.Multiple(() =>
+        foreach (string line in lines.Split('\n'))
         {
-            Assert.That(replies, Is.All.EqualTo("ok"));
-            Assert.That(events, Is.EqualTo(expectedEvents));
-        });
+            interpreter.Execute(line);
+        }
+
+        Assert.That(events, Is.EqualTo(expectedEvents));
     }
 
-    [TestCase("", null)]
-    [TestCase("   ", null)]
-    [TestCase("# a comment", null)]
-    [TestCase("jump", "error: unknown command 'jump'")]
-    [TestCase("mouse move 320", "error: unknown command 'mouse move 320'")]
-    [TestCase("mouse leave 1 2", "error: unknown command 'mouse leave 1 2'")]
-    [TestCase("mouse move x 180", "error: invalid number 'x'")]
-    [TestCase("mouse click Center 1 2", "error: unknown MouseButton 'Center'")]
-    [TestCase("mouse click 9 1 2", "error: unknown MouseButton '9'")]
-    [TestCase("key press Ctrl", "error: unknown Scancode 'Ctrl'")]
-    [TestCase("screenshot", "error: unknown command 'screenshot'")]
-    [TestCase("@x key press A", "error: invalid view scope 'x'")]
-    [TestCase("@7", "error: unknown command ''")]
-    [TestCase("@9 key press A", "error: no window for view scope 9")]
-    [TestCase("@9 screenshot frame.png", "error: no window for view scope 9")]
-    public void Execute_RejectsMalformedLineWithoutDispatching(string line, string? expectedReply)
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("# a comment")]
+    public void Execute_IgnoresBlankAndCommentLines(string line)
     {
         (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
 
-        string? reply = interpreter.Execute(line);
+        interpreter.Execute(line);
+
+        Assert.That(events, Is.Empty);
+    }
+
+    [TestCase("jump", "unknown command 'jump'")]
+    [TestCase("mouse move 320", "unknown command 'mouse move 320'")]
+    [TestCase("mouse leave 1 2", "unknown command 'mouse leave 1 2'")]
+    [TestCase("mouse move x 180", "invalid number 'x'")]
+    [TestCase("mouse click Center 1 2", "unknown MouseButton 'Center'")]
+    [TestCase("mouse click 9 1 2", "unknown MouseButton '9'")]
+    [TestCase("key press Ctrl", "unknown Scancode 'Ctrl'")]
+    [TestCase("screenshot", "unknown command 'screenshot'")]
+    [TestCase("@x key press A", "invalid view scope 'x'")]
+    [TestCase("@7", "unknown command ''")]
+    [TestCase("@9 key press A", "no window for view scope 9")]
+    [TestCase("@9 screenshot frame.png", "no window for view scope 9")]
+    public void Execute_RejectsMalformedLineWithoutDispatching(string line, string expectedMessage)
+    {
+        (InputAutomationCommandInterpreter interpreter, List<string> events) = CreateInterpreter();
+
+        FormatException? exception = Assert.Throws<FormatException>(() => interpreter.Execute(line));
 
         Assert.Multiple(() =>
         {
-            Assert.That(reply, Is.EqualTo(expectedReply));
+            Assert.That(exception!.Message, Is.EqualTo(expectedMessage));
             Assert.That(events, Is.Empty);
         });
     }
@@ -85,8 +93,8 @@ public sealed class InputAutomationCommandInterpreterTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(interpreter.Execute("key press A"), Is.EqualTo("error: no window for view scope 0"));
-            Assert.That(interpreter.Execute("screenshot frame.png"), Is.EqualTo("error: no window for view scope 0"));
+            Assert.That(() => interpreter.Execute("key press A"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
+            Assert.That(() => interpreter.Execute("screenshot frame.png"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
         });
     }
 

@@ -8,9 +8,29 @@ public class PixelyApp : IPixelyApp
 {
     public ServiceProvider ServiceProvider { get; }
 
-    internal PixelyApp(ServiceProvider serviceProvider)
+    private readonly PixelyFrameContext _frameContext;
+    private readonly EventService _eventService;
+    private readonly AppControl _appControl;
+    private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
+    private readonly ServiceRegistry<IUpdatable> _updatables;
+    private readonly StageManager _stageManager;
+
+    internal PixelyApp(
+        ServiceProvider serviceProvider,
+        PixelyFrameContext frameContext,
+        EventService eventService,
+        AppControl appControl,
+        ServiceRegistry<IRenderCoordinator> renderCoordinators,
+        ServiceRegistry<IUpdatable> updatables,
+        StageManager stageManager)
     {
         ServiceProvider = serviceProvider;
+        _frameContext = frameContext;
+        _eventService = eventService;
+        _appControl = appControl;
+        _renderCoordinators = renderCoordinators;
+        _updatables = updatables;
+        _stageManager = stageManager;
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -20,32 +40,33 @@ public class PixelyApp : IPixelyApp
 
     public int Run()
     {
-        PixelyFrameContext frameContext = ServiceProvider.GetRequiredService<PixelyFrameContext>();
-        EventService eventService = ServiceProvider.GetRequiredService<EventService>();
-        AppControl appControl = ServiceProvider.GetRequiredService<AppControl>();
-        ServiceRegistry<IRenderCoordinator> renderCoordinators =
-            ServiceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
-        ServiceRegistry<IUpdatable> updatables = ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>();
-        StageManager stageManager = ServiceProvider.GetRequiredService<StageManager>();
-
-        while (true)
+        while (RunFrame())
         {
-            // start the frame before applying queued stage transitions
-            frameContext.StartFrame();
-            stageManager.ApplyPendingTransition();
-            // then process events
-            eventService.Process();
-
-            Update(updatables);
-
-            if (appControl.QuitRequested)
-            {
-                return 0;
-            }
-
-            // finally render
-            Render(renderCoordinators);
         }
+
+        return 0;
+    }
+
+    // One frame, and whether another should follow. A host that owns the loop, such as a browser driving frames from
+    // requestAnimationFrame, calls this instead of Run, which never yields to its caller.
+    public bool RunFrame()
+    {
+        // start the frame before applying queued stage transitions
+        _frameContext.StartFrame();
+        _stageManager.ApplyPendingTransition();
+        // then process events
+        _eventService.Process();
+
+        Update(_updatables);
+
+        if (_appControl.QuitRequested)
+        {
+            return false;
+        }
+
+        // finally render
+        Render(_renderCoordinators);
+        return true;
     }
 
     public void Dispose()

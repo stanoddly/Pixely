@@ -6,9 +6,9 @@ namespace Pixely.Tests;
 public sealed class InputAutomationConsoleTests
 {
     [Test]
-    public void Update_RunsQueuedLinesOnCallingThreadAndRepliesInOrder()
+    public void Update_RunsQueuedLinesOnCallingThreadInOrder()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses, StringWriter output) = CreateConsole("key press A\n\nbogus\nkey press B\n");
+        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A\n\n# comment\nkey press B\n");
 
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         while (presses.Count < 2 && DateTime.UtcNow < deadline)
@@ -21,22 +21,49 @@ public sealed class InputAutomationConsoleTests
         {
             Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A, Scancode.B }));
             Assert.That(presses.Select(press => press.ThreadId), Is.All.EqualTo(Environment.CurrentManagedThreadId));
-            Assert.That(output.ToString(), Is.EqualTo($"ok{Environment.NewLine}error: unknown command 'bogus'{Environment.NewLine}ok{Environment.NewLine}"));
+        });
+    }
+
+    [Test]
+    public void Update_MalformedLine_ThrowsOutOfTheFrame()
+    {
+        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("bogus\n");
+
+        // The reader thread queues the line at its own pace, so the first updates may find nothing.
+        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        FormatException? exception = null;
+        while (exception == null && DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                console.Update();
+                Thread.Yield();
+            }
+            catch (FormatException caught)
+            {
+                exception = caught;
+            }
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception?.Message, Is.EqualTo("unknown command 'bogus'"));
+            Assert.That(presses, Is.Empty);
         });
     }
 
     [Test]
     public void Update_WithEmptyInput_DoesNothing()
     {
-        (InputAutomationConsole console, _, StringWriter output) = CreateConsole("");
+        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("");
 
         console.Update();
         console.Update();
 
-        Assert.That(output.ToString(), Is.Empty);
+        Assert.That(presses, Is.Empty);
     }
 
-    private static (InputAutomationConsole Console, List<(Scancode Scancode, int ThreadId)> Presses, StringWriter Output) CreateConsole(string input)
+    private static (InputAutomationConsole Console, List<(Scancode Scancode, int ThreadId)> Presses) CreateConsole(string input)
     {
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
@@ -45,9 +72,8 @@ public sealed class InputAutomationConsoleTests
         List<(Scancode Scancode, int ThreadId)> presses = new();
         keyboardService.SubscribeKeyDown(0, eventArgs => presses.Add((eventArgs.Scancode, Environment.CurrentManagedThreadId)));
 
-        StringWriter output = new();
-        InputAutomationConsole console = new(automation, windowRegistry, new NoImageWriter(), new StringReader(input), output);
-        return (console, presses, output);
+        InputAutomationConsole console = new(automation, windowRegistry, new NoImageWriter(), new StringReader(input));
+        return (console, presses);
     }
 
     private sealed class NoImageWriter : IImageWriter
