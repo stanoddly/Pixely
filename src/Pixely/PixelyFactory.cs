@@ -13,6 +13,9 @@ public class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
 
+    // SDL_WINDOW_FILL_DOCUMENT from SDL_video.h (SDL 3.4), missing from the bindings. Emscripten only; other backends drop it.
+    private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)0x0000000000200000;
+
     private readonly PixelyConfig _config;
     private readonly ILogger? _sdlLogger;
     private Image? _taskbarIcon;
@@ -205,6 +208,11 @@ public class PixelyFactory: IDisposable
         bool initiallyVisible = true,
         WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication)
     {
+        if (OperatingSystem.IsBrowser())
+        {
+            return CreateBrowserWindow(viewScope, gpuDevice, frameContext, platformInfo, title, initiallyVisible, closeBehavior);
+        }
+
         (uint width, uint height) = fullscreen ? (0, 0) : size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
         if (fullscreen)
@@ -247,6 +255,15 @@ public class PixelyFactory: IDisposable
             frameContext,
             platformInfo,
             closeBehavior);
+    }
+
+    // The browser has one "screen", the page, so the window fills it and follows the browser window's size. The configured
+    // size and the desktop window options do not apply.
+    private Window CreateBrowserWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameContext frameContext, PlatformInfo platformInfo, string? title, bool initiallyVisible, WindowCloseBehavior closeBehavior)
+    {
+        SDL_WindowFlags windowFlags = FillDocumentWindowFlag | (initiallyVisible ? 0 : SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, title, DefaultSize.Width, DefaultSize.Height, windowFlags);
+        return new Window(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, closeBehavior);
     }
 
     private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
