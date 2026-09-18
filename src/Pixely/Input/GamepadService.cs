@@ -133,7 +133,7 @@ public class GamepadService : IGamepadService
 
     internal void SetupGamepads()
     {
-        SDL3.SDL_SetGamepadEventsEnabled(true);
+        SdlBoolInterop.SDL_SetGamepadEventsEnabled(true);
         unsafe
         {
             int count;

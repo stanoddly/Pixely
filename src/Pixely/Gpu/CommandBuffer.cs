@@ -82,7 +82,7 @@ public class CommandBuffer: IDisposable
                     _gpuDevice.WaitForFences([fence]);
                 }
 
-                byte* mapped = (byte*)SDL3.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer, false);
+                byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer, false);
                 SdlError.ThrowOnNull(mapped);
                 new ReadOnlySpan<byte>(mapped, pixels.Length).CopyTo(pixels);
                 SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
