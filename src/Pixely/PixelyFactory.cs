@@ -379,7 +379,7 @@ public class PixelyFactory: IDisposable
         }
 
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()), Console.Out);
+        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()));
     }
 
     internal EventService CreateEventService(

@@ -5,9 +5,9 @@ using Pixely.Content;
 namespace Pixely.Input;
 
 /// <summary>
-/// Runs one line of the text command grammar against <see cref="InputAutomation"/> and returns the reply line:
-/// <c>ok</c>, <c>error: ...</c> for a line that cannot run, or null for a blank or <c>#</c> comment line that gets no reply.
-/// Exceptions from input handlers propagate, the same as for real input.
+/// Runs one line of the text command grammar against <see cref="InputAutomation"/>. A blank or <c>#</c> comment line does
+/// nothing; a line that cannot run throws <see cref="FormatException"/>. Exceptions from input handlers propagate, the same
+/// as for real input.
 /// </summary>
 internal sealed class InputAutomationCommandInterpreter
 {
@@ -22,26 +22,14 @@ internal sealed class InputAutomationCommandInterpreter
         _imageWriter = imageWriter;
     }
 
-    public string? Execute(string line)
+    public void Execute(string line)
     {
         string command = line.TrimStart();
         if (command.Length == 0 || command[0] == '#')
         {
-            return null;
+            return;
         }
 
-        try
-        {
-            return Run(command);
-        }
-        catch (FormatException exception)
-        {
-            return $"error: {exception.Message}";
-        }
-    }
-
-    private string Run(string command)
-    {
         ViewScope viewScope = default;
         // An optional "@<n>" prefix picks the window by ViewScope value; the default scope needs none.
         if (command[0] == '@')
@@ -99,27 +87,18 @@ internal sealed class InputAutomationCommandInterpreter
                 _automation.TextInput(command["text".Length..].TrimStart(), viewScope);
                 break;
             case ["screenshot", _, ..]:
-                return Screenshot(window, command["screenshot".Length..].Trim());
+                Screenshot(window, command["screenshot".Length..].Trim());
+                break;
             default:
                 throw new FormatException($"unknown command '{command}'");
         }
-
-        return "ok";
     }
 
-    private string Screenshot(Window window, string path)
+    private void Screenshot(Window window, string path)
     {
-        try
-        {
-            // Every window is offscreen in headless mode, which is the only mode this console exists in.
-            using Image image = ((OffscreenWindow)window).CaptureLastFrame();
-            _imageWriter.SavePng(image, path);
-            return "ok";
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            return $"error: {exception.Message}";
-        }
+        // Every window is offscreen in headless mode, which is the only mode this console exists in.
+        using Image image = ((OffscreenWindow)window).CaptureLastFrame();
+        _imageWriter.SavePng(image, path);
     }
 
     private static Vector2 ParseVector(string x, string y)

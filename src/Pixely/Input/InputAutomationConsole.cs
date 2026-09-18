@@ -4,21 +4,19 @@ using Pixely.Content;
 namespace Pixely.Input;
 
 /// <summary>
-/// Reads command lines from a text stream on a background thread and runs them on the frame loop, one reply line per command.
+/// Reads command lines from a text stream on a background thread and runs them on the frame loop.
 /// </summary>
 internal sealed class InputAutomationConsole : IUpdatable
 {
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
-    private readonly TextWriter _output;
     private readonly ConcurrentQueue<string> _pendingLines = new();
     private Thread? _readerThread;
 
-    internal InputAutomationConsole(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, TextReader input, TextWriter output)
+    internal InputAutomationConsole(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, TextReader input)
     {
         _interpreter = new InputAutomationCommandInterpreter(automation, windowRegistry, imageWriter);
         _input = input;
-        _output = output;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
@@ -31,11 +29,7 @@ internal sealed class InputAutomationConsole : IUpdatable
         int pendingCount = _pendingLines.Count;
         for (int i = 0; i < pendingCount && _pendingLines.TryDequeue(out string? line); i++)
         {
-            string? reply = _interpreter.Execute(line);
-            if (reply is not null)
-            {
-                _output.WriteLine(reply);
-            }
+            _interpreter.Execute(line);
         }
     }
 
