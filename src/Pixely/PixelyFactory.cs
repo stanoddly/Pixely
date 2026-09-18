@@ -12,8 +12,8 @@ public class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
 
-    // SDL_WINDOW_FILL_DOCUMENT from SDL_video.h (SDL 3.4), missing from the bindings. Emscripten only; other backends drop it.
-    private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)0x0000000000200000;
+    // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings. Emscripten only; other backends drop it.
+    private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)SDL3.SDL_WINDOW_FILL_DOCUMENT;
 
     private readonly PixelyConfig _config;
     private readonly ILogger? _sdlLogger;
@@ -48,16 +48,17 @@ public class PixelyFactory: IDisposable
             SDL3.SDL_SetHint(SDL3.SDL_HINT_LOGGING, "*=debug");
         }
 
-        SdlLogOutput.Install(_sdlLogger);
-
         // SDL swallows the mouse click that activates an unfocused window by default, which loses the first
         // click whenever the user switches windows, including between two windows of the same application.
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
 
+        // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
+        SdlLogOutput.Install(_sdlLogger);
         SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO |
                                   SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
         if (SDL3.SDL_Init(initFlags) == false)
         {
+            SdlLogOutput.Uninstall();
             throw new PixelyInitializationException($"SDL_Init failed: {SDL3.SDL_GetError()}");
         }
 
@@ -209,21 +210,13 @@ public class PixelyFactory: IDisposable
     {
         EnsureSdlInitialized();
 
-        string windowTitle;
-        if (title == null)
-        {
-            using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
-            windowTitle = process.ProcessName;
-        }
-        else
-        {
-            windowTitle = title;
-        }
+        // The entry assembly's name, which the browser has too, unlike a process name.
+        string windowTitle = title ?? AppDomain.CurrentDomain.FriendlyName;
 
         Pointer<SDL_Window> sdlWindow;
         unsafe
         {
-             sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
+            sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
         }
 
         if (sdlWindow.IsNull)

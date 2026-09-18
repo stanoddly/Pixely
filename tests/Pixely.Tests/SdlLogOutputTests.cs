@@ -23,6 +23,30 @@ public class SdlLogOutputTests
         Assert.That(logger.Entries, Is.EqualTo(new[] { (LogLevel.Warning, "careful") }));
     }
 
+    // SDL's own log entry points are varargs, which .NET cannot call, so the installed function is invoked directly.
+    [Test]
+    public unsafe void Install_RoutesSdlMessagesThroughTheCallback()
+    {
+        RecordingLogger logger = new();
+        SdlLogOutput.Install(logger);
+        try
+        {
+            delegate* unmanaged[Cdecl]<IntPtr, int, SDL_LogPriority, byte*, void> callback;
+            IntPtr userdata;
+            SDL3.SDL_GetLogOutputFunction(&callback, &userdata);
+            fixed (byte* message = "careful\0"u8)
+            {
+                callback(userdata, (int)SDL_LogCategory.SDL_LOG_CATEGORY_APPLICATION, SDL_LogPriority.SDL_LOG_PRIORITY_WARN, message);
+            }
+        }
+        finally
+        {
+            SdlLogOutput.Uninstall();
+        }
+
+        Assert.That(logger.Entries, Is.EqualTo(new[] { (LogLevel.Warning, "careful") }));
+    }
+
     [TestCase(SDL_LogPriority.SDL_LOG_PRIORITY_TRACE, LogLevel.Trace)]
     [TestCase(SDL_LogPriority.SDL_LOG_PRIORITY_VERBOSE, LogLevel.Trace)]
     [TestCase(SDL_LogPriority.SDL_LOG_PRIORITY_DEBUG, LogLevel.Debug)]

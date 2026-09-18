@@ -39,9 +39,11 @@ internal static class SdlLogOutput
 
     internal static void Write(SDL_LogPriority priority, string message)
     {
-        if (_logger != null)
+        // Read once: Uninstall clears the field while an SDL thread may still be logging.
+        ILogger? logger = _logger;
+        if (logger != null)
         {
-            _logger.Log(ToLogLevel(priority), "{SdlMessage}", message);
+            logger.Log(ToLogLevel(priority), "{SdlMessage}", message);
             return;
         }
 
