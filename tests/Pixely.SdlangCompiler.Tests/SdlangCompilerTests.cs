@@ -186,7 +186,7 @@ public class SdlangCompilerTests
 
                                                           [numthreads(8, 8, 1)]
                                                           [shader("compute")]
-                                                          void main(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                          void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                                                           {
                                                               outputTexture[dispatchThreadID.xy] = float4(time, 0.0, 0.0, 1.0);
                                                           }
@@ -364,7 +364,7 @@ public class SdlangCompilerTests
 
                                                                [numthreads(8, 8, 1)]
                                                                [shader("compute")]
-                                                               void main(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                               void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                                                                {
                                                                    float2 uv = float2(dispatchThreadID.xy) / float2(8.0, 8.0);
                                                                    outputTexture[dispatchThreadID.xy] = inputTexture.SampleLevel(inputSampler, uv, 0.0);
@@ -602,7 +602,7 @@ public class SdlangCompilerTests
         JsonObject metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
         JsonArray vertexShaders = metadata["vertex"]!["shaders"]!.AsArray();
         JsonNode vertexSpirv = vertexShaders.Single(shader => shader!["format"]!.GetValue<string>() == "SpirV")!;
-        vertexSpirv["entryPoint"] = "vertexMain";
+        vertexSpirv["entryPoint"] = "main";
         File.WriteAllText(metadataPath, metadata.ToJsonString());
         File.WriteAllBytes(spirvPath, [0]);
 
@@ -788,7 +788,19 @@ public class SdlangCompilerTests
         Assert.That(metadata.ThreadCountX, Is.EqualTo(8));
         Assert.That(metadata.ThreadCountY, Is.EqualTo(8));
         Assert.That(metadata.ThreadCountZ, Is.EqualTo(1));
-        AssertGeneratedTargets(metadata.Shaders, "valid_compute");
+        AssertGeneratedTargets(metadata.Shaders, "valid_compute", "computeMain");
+    }
+
+    [Test]
+    public void CompileShader_ComputeEntryPointNamedMain_ThrowsCompilationException()
+    {
+        string shaderPath = Path.Combine(_testDir, "main_compute.slang");
+        File.WriteAllText(shaderPath, ValidComputeShaderWithBindings.Replace("computeMain", "main", StringComparison.Ordinal));
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        ShaderCompilationException? exception = Assert.Throws<ShaderCompilationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(exception.Message, Does.Contain("must be named 'computeMain'"));
     }
 
     [Test]
@@ -1063,24 +1075,14 @@ public class SdlangCompilerTests
         AssertGeneratedTargets(metadata.Fragment.Shaders, $"{filename}.fragment", "fragmentMain");
     }
 
-    private void AssertGeneratedTargets(
-        IReadOnlyCollection<ShaderInstanceDto> shaders,
-        string filename,
-        string sourceEntryPoint = "main")
+    private void AssertGeneratedTargets(IReadOnlyCollection<ShaderInstanceDto> shaders, string filename, string sourceEntryPoint)
     {
         Assert.Multiple(() =>
         {
             Assert.That(
                 shaders.Select(shader => shader.Format),
                 Is.EqualTo(new[] { ShaderFormatDto.SpirV, ShaderFormatDto.Dxil, ShaderFormatDto.Msl }));
-            Assert.That(
-                shaders.Select(shader => shader.EntryPoint),
-                Is.EqualTo(new[]
-                {
-                    "main",
-                    sourceEntryPoint,
-                    sourceEntryPoint == "main" ? "main_0" : sourceEntryPoint
-                }));
+            Assert.That(shaders.Select(shader => shader.EntryPoint), Is.All.EqualTo(sourceEntryPoint));
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.metal")), Is.True);

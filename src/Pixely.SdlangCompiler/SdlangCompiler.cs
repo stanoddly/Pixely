@@ -146,9 +146,11 @@ public class SdlangCompiler
         "-fvk-u-shift", "0", "all"
     ];
 
+    // Slang exports every SPIR-V entry point as "main" unless told to keep the source name. Keeping it makes
+    // the generated entry point the source entry point for every target.
     private static readonly Dictionary<ShaderFormatDto, List<string>> CommandLineOptions = new()
     {
-        { ShaderFormatDto.SpirV, [] },
+        { ShaderFormatDto.SpirV, ["-fvk-use-entrypoint-name"] },
         { ShaderFormatDto.Dxil, ["-profile", "sm_6_0"] },
         { ShaderFormatDto.Msl, [] }
     };
@@ -301,7 +303,7 @@ public class SdlangCompiler
                 throw new ShaderCompilationException("A compute shader source must declare exactly one compute entry point.");
             }
 
-            ValidateEntryPointName(computeEntryPoints[0], "main");
+            ValidateEntryPointName(computeEntryPoints[0], "computeMain");
             return ShaderSourceKind.Compute;
         }
 
@@ -971,7 +973,7 @@ public class SdlangCompiler
         _ => type.ToString()
     };
 
-    private static (string entryPoint, ShaderStageDto stage, ShaderBindingLayout resources, ShaderSystemValueInputs systemValueInputs, uint threadCountX, uint threadCountY, uint threadCountZ) ParseReflectionData(
+    private static (ShaderStageDto stage, ShaderBindingLayout resources, ShaderSystemValueInputs systemValueInputs, uint threadCountX, uint threadCountY, uint threadCountZ) ParseReflectionData(
         FileInfo reflectionFile,
         string expectedEntryPoint)
     {
@@ -979,7 +981,6 @@ public class SdlangCompiler
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement root = document.RootElement;
 
-        string entryPoint = "main";
         ShaderStageDto stage = ShaderStageDto.Vertex;
         uint threadCountX = 1;
         uint threadCountY = 1;
@@ -1005,11 +1006,6 @@ public class SdlangCompiler
         {
             throw new ShaderCompilationException(
                 $"Reflection output does not contain entry point '{expectedEntryPoint}'.");
-        }
-
-        if (selectedEntryPoint.TryGetProperty("name", out JsonElement nameElement))
-        {
-            entryPoint = nameElement.GetString() ?? expectedEntryPoint;
         }
 
         if (selectedEntryPoint.TryGetProperty("stage", out JsonElement stageElement))
@@ -1138,7 +1134,7 @@ public class SdlangCompiler
             shaderUniformSlots,
             BuildStorageBufferElementSizes(storageBufferElementSizesBySlot),
             BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesBySlot));
-        return (entryPoint, stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ);
+        return (stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ);
     }
 
     internal static HashSet<string> GetUsedParameterNames(JsonElement entryPoint)
@@ -1444,7 +1440,7 @@ public class SdlangCompiler
                     return false;
                 }
 
-                shaderCollections.Add((shaders, "main"));
+                shaderCollections.Add((shaders, "computeMain"));
             }
 
             foreach ((JsonElement shaders, string sourceEntryPoint) in shaderCollections)
@@ -1464,7 +1460,7 @@ public class SdlangCompiler
                         filenameElement.ValueKind != JsonValueKind.String ||
                         !shader.TryGetProperty("entryPoint", out JsonElement entryPointElement) ||
                         entryPointElement.ValueKind != JsonValueKind.String ||
-                        entryPointElement.GetString() != GetGeneratedEntryPointName(format, sourceEntryPoint))
+                        entryPointElement.GetString() != sourceEntryPoint)
                     {
                         return false;
                     }
@@ -1614,18 +1610,17 @@ public class SdlangCompiler
                     filePath,
                     tempDir,
                     outputDir,
-                    "main",
+                    "computeMain",
                     filenameWithoutExt);
                 List<string> sourceDependencies = ReadSourceDependencies(filePath, dependencyFile);
                 string sourceHash = CalculateSourceHash(filePath, sourceDependencies);
-                (string entryPoint, ShaderStageDto stage, ShaderBindingLayout bindingLayout, ShaderSystemValueInputs _, uint threadCountX, uint threadCountY, uint threadCountZ) =
-                    ParseReflectionData(reflectionFile, "main");
+                (ShaderStageDto stage, ShaderBindingLayout bindingLayout, ShaderSystemValueInputs _, uint threadCountX, uint threadCountY, uint threadCountZ) =
+                    ParseReflectionData(reflectionFile, "computeMain");
                 if (stage != ShaderStageDto.Compute)
                 {
-                    throw new ShaderCompilationException("Entry point 'main' is not a compute shader.");
+                    throw new ShaderCompilationException("Entry point 'computeMain' is not a compute shader.");
                 }
 
-                shaderInstances = NormalizeEntryPointNames(shaderInstances, entryPoint);
                 WriteComputeMetadata(
                     outputDir,
                     filenameWithoutExt,
@@ -1648,7 +1643,7 @@ public class SdlangCompiler
                 $"{filenameWithoutExt}.vertex");
             List<string> graphicsSourceDependencies = ReadSourceDependencies(filePath, graphicsDependencyFile);
             string graphicsSourceHash = CalculateSourceHash(filePath, graphicsSourceDependencies);
-            (string vertexEntryPoint, ShaderStageDto vertexStage, ShaderBindingLayout vertexBindingLayout, ShaderSystemValueInputs vertexSystemValueInputs, uint _, uint _, uint _) =
+            (ShaderStageDto vertexStage, ShaderBindingLayout vertexBindingLayout, ShaderSystemValueInputs vertexSystemValueInputs, uint _, uint _, uint _) =
                 ParseReflectionData(vertexReflectionFile, "vertexMain");
             if (vertexStage != ShaderStageDto.Vertex)
             {
@@ -1661,7 +1656,7 @@ public class SdlangCompiler
                 outputDir,
                 "fragmentMain",
                 $"{filenameWithoutExt}.fragment");
-            (string fragmentEntryPoint, ShaderStageDto fragmentStage, ShaderBindingLayout fragmentBindingLayout, ShaderSystemValueInputs _, uint _, uint _, uint _) =
+            (ShaderStageDto fragmentStage, ShaderBindingLayout fragmentBindingLayout, ShaderSystemValueInputs _, uint _, uint _, uint _) =
                 ParseReflectionData(fragmentReflectionFile, "fragmentMain");
             if (fragmentStage != ShaderStageDto.Fragment)
             {
@@ -1673,9 +1668,9 @@ public class SdlangCompiler
                 filenameWithoutExt,
                 vertexBindingLayout,
                 vertexSystemValueInputs,
-                NormalizeEntryPointNames(vertexShaders, vertexEntryPoint),
+                vertexShaders,
                 fragmentBindingLayout,
-                NormalizeEntryPointNames(fragmentShaders, fragmentEntryPoint),
+                fragmentShaders,
                 graphicsSourceHash,
                 graphicsSourceDependencies);
             CleanupGeneratedFiles(parentDir, outputDir);
@@ -1747,25 +1742,4 @@ public class SdlangCompiler
             }
         }
     }
-
-    private static List<ShaderInstanceDto> NormalizeEntryPointNames(
-        IEnumerable<ShaderInstanceDto> shaderInstances,
-        string entryPoint)
-    {
-        return shaderInstances.Select(instance =>
-            new ShaderInstanceDto(
-                instance.Format,
-                instance.Filename,
-                GetGeneratedEntryPointName(instance.Format, entryPoint))).ToList();
-    }
-
-    private static string GetGeneratedEntryPointName(ShaderFormatDto format, string sourceEntryPoint) => format switch
-    {
-        ShaderFormatDto.SpirV => "main",
-        // Slang renames "main" to "main_0" in MSL output because "main" is reserved in C/C++.
-        // Other source entry point names remain unchanged.
-        ShaderFormatDto.Msl when sourceEntryPoint == "main" => "main_0",
-        _ => sourceEntryPoint
-    };
-
 }
