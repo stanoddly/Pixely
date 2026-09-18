@@ -115,7 +115,7 @@ public class Window : IDisposable
         {
             unsafe
             {
-                SDL3.SDL_SetWindowMouseGrab(SdlWindow, value);
+                SdlBoolInterop.SDL_SetWindowMouseGrab(SdlWindow, value);
             }
         }
     }
@@ -133,7 +133,7 @@ public class Window : IDisposable
         {
             unsafe
             {
-                SDL3.SDL_SetWindowRelativeMouseMode(SdlWindow, value);
+                SdlBoolInterop.SDL_SetWindowRelativeMouseMode(SdlWindow, value);
             }
         }
     }
@@ -175,7 +175,7 @@ public class Window : IDisposable
         {
             unsafe
             {
-                if (SDL3.SDL_SetWindowAlwaysOnTop(SdlWindow, value) == false)
+                if (SdlBoolInterop.SDL_SetWindowAlwaysOnTop(SdlWindow, value) == false)
                 {
                     throw new PixelyException($"SDL_SetWindowAlwaysOnTop failed: {SDL3.SDL_GetError()}");
                 }
@@ -422,7 +422,7 @@ public class Window : IDisposable
     {
         unsafe
         {
-            SDL3.SDL_SetWindowFullscreen(SdlWindow, fullscreen);
+            SdlBoolInterop.SDL_SetWindowFullscreen(SdlWindow, fullscreen);
         }
     }
 
@@ -529,7 +529,7 @@ public class Window : IDisposable
 
                 if (kind == FileDialogKind.Open)
                 {
-                    SDL3.SDL_ShowOpenFileDialog(
+                    SdlBoolInterop.SDL_ShowOpenFileDialog(
                         &OnFileDialogCompleted,
                         userdata,
                         SdlWindow,

@@ -70,7 +70,7 @@ internal class SdlImageLoader : IImageLoader
                 throw new InvalidOperationException($"SDL_IOFromConstMem failed: {SDL3.SDL_GetError()}");
             }
 
-            Pointer<SDL_Surface> surface = SDL3_image.IMG_Load_IO(sdlStream, true);
+            Pointer<SDL_Surface> surface = SdlBoolInterop.IMG_Load_IO(sdlStream, true);
             if (surface.IsNull)
             {
                 throw new InvalidOperationException($"IMG_Load_IO failed: {SDL3.SDL_GetError()}");

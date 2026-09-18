@@ -62,7 +62,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)nativeFontData, (UIntPtr)fontDataLength);
                 SdlError.ThrowOnNull(sdlStream, nameof(SDL3.SDL_IOFromConstMem));
 
-                ttfFont = SDL3_ttf.TTF_OpenFontIO(sdlStream, true, size);
+                ttfFont = SdlBoolInterop.TTF_OpenFontIO(sdlStream, true, size);
                 SdlError.ThrowOnNull(ttfFont, nameof(SDL3_ttf.TTF_OpenFontIO));
 
                 ReadOnlySpan<byte> fontData = new(nativeFontData, fontDataLength);
