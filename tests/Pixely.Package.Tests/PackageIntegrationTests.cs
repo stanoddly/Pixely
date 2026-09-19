@@ -466,16 +466,17 @@ public class PackageIntegrationTests
 
         string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
         AssertSdkRequiredMessage(output);
+        // The guard runs before the referenced project is built.
+        Assert.That(Directory.Exists(Path.Combine(GetConsumerDirectory("LibraryConsumer"), "bin")), Is.False);
     }
 
     private void AssertSdkRequiredMessage(string output)
     {
         Assert.Multiple(() =>
         {
-            Assert.That(output, Does.Contain("Pixely is an MSBuild project SDK"));
+            Assert.That(output, Does.Contain("error PIXELY0002").And.Contain("Pixely is an MSBuild project SDK"));
             Assert.That(output, Does.Contain($"<Sdk Name=\"Pixely\" Version=\"{_packageVersion}\" />"));
             Assert.That(output, Does.Contain($"\"msbuild-sdks\": {{ \"Pixely\": \"{_packageVersion}\" }} in global.json"));
-            Assert.That(output, Does.Not.Contain("CoreCompile"));
         });
     }
 
@@ -554,7 +555,7 @@ public class PackageIntegrationTests
         }
 
         string buildOutput = await RunConsumerDotnetAsync(consumerDirectory, buildArguments.ToArray());
-        // MSB4011 would mean the SDK and build/Pixely.targets both imported the version props.
+        // MSB4011 would mean the SDK and buildTransitive/Pixely.targets both imported the version props.
         Assert.That(restoreOutput + buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
         return restoreOutput + buildOutput;
     }

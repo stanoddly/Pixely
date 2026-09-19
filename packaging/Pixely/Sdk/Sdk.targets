@@ -1,7 +1,8 @@
 <Project>
     <!--
       The library follows the SDK version exactly. The toolchain is a build-host tool of this project, so it stays
-      out of the nuspec of a library built on Pixely; its consumers add the Sdk line themselves when they compile shaders.
+      out of the nuspec of a library built on Pixely; its consumers add the Sdk line, as every project reaching Pixely
+      must, and get the toolchain from it.
       This file is evaluated after the project body, so a reference or central pin the project declares for either
       package is replaced here rather than overriding the SDK's (the .NET SDK keeps an explicit reference over an
       implicit one). Implicit references carry their own version under central package management (NU1008 exempts

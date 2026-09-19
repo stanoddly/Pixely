@@ -71,7 +71,7 @@
         <None Include="buildTransitive\Pixely.targets" Pack="true" PackagePath="buildTransitive" />
     </ItemGroup>
 
-    <!-- The SDK cannot otherwise learn its own version; Sdk.props pins the library and build/Pixely.targets names the version in its message. -->
+    <!-- The SDK cannot otherwise learn its own version; Sdk.targets pins the library and buildTransitive/Pixely.targets names the version in its message. -->
     <Target Name="GeneratePixelyVersionProps" Returns="@(TfmSpecificPackageFile)">
         <PropertyGroup>
             <_PixelyVersionPropsPath>$(IntermediateOutputPath)Sdk\Pixely.Version.props</_PixelyVersionPropsPath>

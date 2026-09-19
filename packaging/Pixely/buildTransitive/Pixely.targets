@@ -8,6 +8,6 @@
     <Import Project="$(MSBuildThisFileDirectory)..\Sdk\Pixely.Version.props" Condition="'$(_PixelySdkImported)' != 'true'" />
 
     <Target Name="_PixelyRequireSdk" BeforeTargets="BeforeBuild" Condition="'$(_PixelySdkImported)' != 'true'">
-        <Error Text="Pixely is an MSBuild project SDK. Add &lt;Sdk Name=&quot;Pixely&quot; Version=&quot;$(PixelyVersion)&quot; /&gt; to this project, or &lt;Sdk Name=&quot;Pixely&quot; /&gt; with &quot;msbuild-sdks&quot;: { &quot;Pixely&quot;: &quot;$(PixelyVersion)&quot; } in global.json. Every project that references Pixely, directly or through a project or package reference, needs the SDK; a PackageReference to Pixely alone does not import it." />
+        <Error Code="PIXELY0002" File="$(MSBuildProjectFullPath)" Text="Pixely is an MSBuild project SDK. Add &lt;Sdk Name=&quot;Pixely&quot; Version=&quot;$(PixelyVersion)&quot; /&gt; to this project, or &lt;Sdk Name=&quot;Pixely&quot; /&gt; with &quot;msbuild-sdks&quot;: { &quot;Pixely&quot;: &quot;$(PixelyVersion)&quot; } in global.json. Every project that references Pixely, directly or through a project or package reference, needs the SDK; a PackageReference to Pixely alone does not import it." />
     </Target>
 </Project>

@@ -34,7 +34,7 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 ## What the SDK adds
 
 - A `PackageReference` to `Pixely` pinned to the SDK's own version, so the library, the source generator and the SDK never drift apart.
-- A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library that compiles shaders itself adds the `<Sdk>` line and gets the toolchain from it.
+- A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
 - `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
@@ -47,7 +47,7 @@ The SDK also removes a `PackageReference` to either package that the project dec
 
 ## Every project needs the line
 
-The `<Sdk>` line belongs in every project that references Pixely, directly or through a project or package reference. A project without it would get the library through the reference graph but not the source generator, and dependency-injection registrations would fail at run time instead of at build time. The package therefore fails the build of such a project with a message that names the `<Sdk>` line and the `global.json` alternative. The check runs at build, not at restore, because a package's `buildTransitive/` folder is not evaluated while the restore graph is built.
+The `<Sdk>` line belongs in every project that references Pixely, directly or through a project or package reference. A project without it would get the library through the reference graph but not the source generator, and dependency-injection registrations would fail at run time instead of at build time. The package therefore fails the build of such a project with error PIXELY0002, which names the `<Sdk>` line and the `global.json` alternative. The check runs at build, not at restore, because a package's `buildTransitive/` folder is not evaluated while the restore graph is built.
 
 ## Package layout
 
