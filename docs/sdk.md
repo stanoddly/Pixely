@@ -45,16 +45,6 @@ The SDK's two references are implicit and carry their own versions, as the .NET 
 
 The SDK also removes a `PackageReference` to either package that the project declares itself, with or without a version, and warns PIXELY0001 at build. The SDK's pin always wins.
 
-## Migrating from PackageReference
-
-Replace
-
-```xml
-<PackageReference Include="Pixely" Version="0.0.N" />
-```
-
-with the `<Sdk>` line. A project that keeps the `PackageReference` fails its build with a message that names the exact `<Sdk>` line to use. The check runs at build, not at restore, because a package's `build/` folder is not evaluated while the restore graph is built. A project that has both lines builds against the SDK's version and warns PIXELY0001 until the leftover reference is removed.
-
 ## Package layout
 
 ```
