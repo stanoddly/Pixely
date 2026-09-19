@@ -426,6 +426,24 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("Package consumer succeeded."));
     }
 
+    [TestCase("ShaderFreeConsumer", "Pixely")]
+    [TestCase("CentralConsumer", "Pixely and to SlangDxcBundle.Toolchain")]
+    public async Task RedundantPackageReferenceIsReplacedByTheSdkPinWithAWarning(string consumer, string redundant)
+    {
+        string consumerDirectory = GetConsumerDirectory(consumer);
+        DeleteConsumerOutputs(consumer);
+
+        string buildOutput = await BuildConsumerAsync(consumerDirectory, properties: ["PixelyRedundantReference=true"]);
+        string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(buildOutput, Does.Contain("warning PIXELY0001").And.Contain($"package reference to {redundant};"));
+            Assert.That(buildOutput, Does.Not.Contain("NU1504").And.Not.Contain("NU1010").And.Not.Contain("NETSDK1023"));
+            Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
+        });
+    }
+
     [Test]
     public async Task PlainPackageReferenceFailsWithTheMigrationMessage()
     {
@@ -463,7 +481,7 @@ public class PackageIntegrationTests
         });
     }
 
-    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true)
+    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -502,6 +520,11 @@ public class PackageIntegrationTests
         if (defineConstants is not null)
         {
             buildArguments.Add($"--property:DefineConstants={defineConstants}");
+        }
+        foreach (string property in properties ?? [])
+        {
+            restoreArguments.Add($"--property:{property}");
+            buildArguments.Add($"--property:{property}");
         }
 
         await RunConsumerDotnetAsync(consumerDirectory, restoreArguments.ToArray());

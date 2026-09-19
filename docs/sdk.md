@@ -43,6 +43,8 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 
 The SDK's two references are implicit and carry their own versions, as the .NET SDK's own implicit references do, so central package management needs no `PackageVersion` for them. The SDK removes any `Pixely` or `SlangDxcBundle.Toolchain` entries a `Directory.Packages.props` lists; the SDK owns those pins. Nothing else in the file changes.
 
+The SDK also removes a `PackageReference` to either package that the project declares itself, with or without a version, and warns PIXELY0001 at build. The SDK's pin always wins.
+
 ## Migrating from PackageReference
 
 Replace
@@ -51,7 +53,7 @@ Replace
 <PackageReference Include="Pixely" Version="0.0.N" />
 ```
 
-with the `<Sdk>` line. A project that keeps the `PackageReference` fails its build with a message that names the exact `<Sdk>` line to use. The check runs at build, not at restore, because a package's `build/` folder is not evaluated while the restore graph is built. A project that has both lines builds: the SDK's reference is implicit, so the leftover one is dropped with warning NETSDK1023.
+with the `<Sdk>` line. A project that keeps the `PackageReference` fails its build with a message that names the exact `<Sdk>` line to use. The check runs at build, not at restore, because a package's `build/` folder is not evaluated while the restore graph is built. A project that has both lines builds against the SDK's version and warns PIXELY0001 until the leftover reference is removed.
 
 ## Package layout
 

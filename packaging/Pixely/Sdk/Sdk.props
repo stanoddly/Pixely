@@ -13,18 +13,4 @@
 
     <!-- SlangVersion pins the toolchain from here so package consumers and source builds share one pin. -->
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.props" />
-
-    <!--
-      The library follows the SDK version exactly. The toolchain is a build-host tool of this project, so it stays
-      out of the nuspec of a library built on Pixely; its consumers add the Sdk line themselves when they compile shaders.
-      Implicit references carry their own version under central package management too (NU1008 exempts them, NU1009
-      forbids a PackageVersion for them), and a PackageReference left over from the migration is dropped with NETSDK1023
-      instead of duplicated (NU1504). Directory.Packages.props is already imported here; the SDK owns both pins, so a
-      consumer's entries are removed (NU1009).
-    -->
-    <ItemGroup>
-        <PackageVersion Remove="Pixely;SlangDxcBundle.Toolchain" />
-        <PackageReference Include="Pixely" Version="[$(PixelyVersion)]" IsImplicitlyDefined="true" />
-        <PackageReference Include="SlangDxcBundle.Toolchain" Version="[$(SlangVersion)]" PrivateAssets="all" IsImplicitlyDefined="true" />
-    </ItemGroup>
 </Project>

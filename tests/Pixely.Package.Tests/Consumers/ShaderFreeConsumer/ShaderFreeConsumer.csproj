@@ -11,4 +11,9 @@
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     </PropertyGroup>
 
+    <!-- A leftover reference with a wrong version; PackageIntegrationTests enables it to check that the SDK's pin wins. -->
+    <ItemGroup Condition="'$(PixelyRedundantReference)' == 'true'">
+        <PackageReference Include="Pixely" Version="0.0.0" />
+    </ItemGroup>
+
 </Project>
