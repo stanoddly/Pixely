@@ -3,6 +3,8 @@
 
     <PropertyGroup>
         <_PixelySdkImported>true</_PixelySdkImported>
+        <!-- Microsoft.NET.Sdk must come first: its props import the restored packages' props and Directory.Packages.props, which this file reads. -->
+        <_PixelyBaseSdkFirst>$(UsingMicrosoftNETSdk)</_PixelyBaseSdkFirst>
         <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
         <PixelyDocsDirectory>$(MSBuildThisFileDirectory)..\docs\</PixelyDocsDirectory>
     </PropertyGroup>
@@ -11,6 +13,6 @@
         <CompilerVisibleProperty Include="PixelyDIEmitTrimAnnotations" />
     </ItemGroup>
 
-    <!-- SlangVersion pins the toolchain from here so package consumers and source builds share one pin. -->
+    <!-- SlangVersion pins the toolchain for package consumers here and for source builds in the same file. -->
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.props" />
 </Project>

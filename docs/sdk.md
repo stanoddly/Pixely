@@ -23,7 +23,7 @@ The `Version` attribute of `<Sdk>` takes a literal, not a property. To keep the 
 }
 ```
 
-The `<Sdk>` element must follow `Microsoft.NET.Sdk`; in the attribute form that is `Sdk="Microsoft.NET.Sdk;Pixely/0.0.N"`. Pixely's props read the restored packages' props and a `Directory.Packages.props`, which `Microsoft.NET.Sdk` imports first.
+The `<Sdk>` element must follow `Microsoft.NET.Sdk`; in the attribute form that is `Sdk="Microsoft.NET.Sdk;Pixely/0.0.N"`. Pixely's props read the restored packages' props and a `Directory.Packages.props`, which `Microsoft.NET.Sdk` imports first; the other order fails the build with PIXELY0003.
 
 The SDK resolver downloads the package from the sources in the `NuGet.Config` found from the project directory upwards into the global packages folder (`NUGET_PACKAGES`). It does not read `dotnet restore --source`, `--configfile` or `RestorePackagesPath`.
 
@@ -35,6 +35,8 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 
 - A `PackageReference` to `Pixely` pinned to the SDK's own version, so the library, the source generator and the SDK never drift apart.
 - A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it.
+
+A library packed on Pixely X depends on exactly `[X]`, so only projects on Pixely X can consume it; a different pin fails restore with NU1107.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
 - `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
@@ -63,4 +65,4 @@ tools/net11.0/any/                             the shader compilation task and i
 docs/                                          this documentation
 ```
 
-An additive SDK's `Sdk.targets` is imported after `Microsoft.NET.Sdk.targets`. When that is not the case, the file registers `Pixely.AfterSdk.targets` on `AfterMicrosoftNETSdkTargets`, which the base SDK imports as its last line; repository tutorials, which reference Pixely as a project, use the same hook from `tutorials/Directory.Build.targets`.
+An additive SDK's `Sdk.targets` is imported after `Microsoft.NET.Sdk.targets`, so `Pixely.AfterSdk.targets` sees the base SDK's properties. Repository tutorials, which reference Pixely as a project, register the hosting targets on `AfterMicrosoftNETSdkTargets`, which the base SDK imports as its last line, from `tutorials/Directory.Build.targets`.

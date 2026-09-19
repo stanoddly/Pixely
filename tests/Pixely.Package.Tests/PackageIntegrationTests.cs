@@ -40,7 +40,8 @@ public class PackageIntegrationTests
         "CentralConsumer",
         "PackageReferenceConsumer",
         "LibraryConsumer",
-        "TransitiveConsumer"
+        "TransitiveConsumer",
+        "ReversedSdkConsumer"
     ];
 
     private string _repositoryDirectory = null!;
@@ -468,6 +469,16 @@ public class PackageIntegrationTests
         AssertSdkRequiredMessage(output);
         // The guard runs before the referenced project is built.
         Assert.That(Directory.Exists(Path.Combine(GetConsumerDirectory("LibraryConsumer"), "bin")), Is.False);
+    }
+
+    [Test]
+    public async Task SdkListedBeforeTheBaseSdkFailsWithTheOrderMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("ReversedSdkConsumer");
+        DeleteConsumerOutputs("ReversedSdkConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        Assert.That(output, Does.Contain("error PIXELY0003").And.Contain("Microsoft.NET.Sdk;Pixely/" + _packageVersion));
     }
 
     private void AssertSdkRequiredMessage(string output)

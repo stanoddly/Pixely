@@ -21,6 +21,7 @@
     <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.csproj')">
         <PackageReference Include="SlangDxcBundle.Toolchain">
             <Version Condition="'$(ManagePackageVersionsCentrally)' != 'true'">[$(SlangVersion)]</Version>
+            <VersionOverride Condition="'$(ManagePackageVersionsCentrally)' == 'true'">[$(SlangVersion)]</VersionOverride>
         </PackageReference>
     </ItemGroup>
 </Project>

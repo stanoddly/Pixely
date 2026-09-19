@@ -22,12 +22,13 @@
         <Warning Code="PIXELY0001" Text="The Pixely SDK declares the package reference to @(_PixelyRedundantPackageReference, ' and to '); the project's own reference was ignored. Remove it." />
     </Target>
 
+    <Target Name="_PixelyRequireBaseSdkFirst" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBaseSdkFirst)' != 'true'">
+        <Error Code="PIXELY0003" Text="The Pixely SDK must follow Microsoft.NET.Sdk: put &lt;Sdk Name=&quot;Pixely&quot; /&gt; inside &lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;, or write Sdk=&quot;Microsoft.NET.Sdk;Pixely/$(PixelyVersion)&quot;." />
+    </Target>
+
     <!--
-      Additive SDK targets are imported after Microsoft.NET.Sdk.targets, which alone sets TargetFrameworkIdentifier.
-      Import directly when it is set; otherwise defer to the hook the base SDK imports as its last line.
+      Additive SDK targets are imported after Microsoft.NET.Sdk.targets, which alone sets TargetFrameworkIdentifier
+      (it is also empty in the outer build of a multi-targeting project, which compiles nothing).
     -->
     <Import Project="$(MSBuildThisFileDirectory)Pixely.AfterSdk.targets" Condition="'$(TargetFrameworkIdentifier)' != ''" />
-    <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == ''">
-        <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.AfterSdk.targets</AfterMicrosoftNETSdkTargets>
-    </PropertyGroup>
 </Project>

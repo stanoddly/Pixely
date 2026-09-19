@@ -37,7 +37,7 @@ Reference an exact version through the Pixely SDK (see [Pixely SDK](sdk.md)):
 </Project>
 ```
 
-Do not use a floating Pixely version across the development and nuget.org feeds. The SDK resolver reads the `NuGet.Config` found from the project directory upwards and the `NUGET_PACKAGES` variable; it does not see `--configfile` or `--packages`. Test an unauthenticated restore with a clean package directory:
+The SDK resolver reads the `NuGet.Config` found from the project directory upwards and the `NUGET_PACKAGES` variable; it does not see `--configfile` or `--packages`. Test an unauthenticated restore with a clean package directory:
 
 ```bash
 export NUGET_PACKAGES="$(mktemp -d)"
