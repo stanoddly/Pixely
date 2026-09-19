@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- No Sdk line on purpose: Pixely arrives only through the project reference and the package must reject that. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <!-- The fixture intentionally stays outside repository-wide central package management. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\LibraryConsumer\LibraryConsumer.csproj" />
+    </ItemGroup>
+
+</Project>

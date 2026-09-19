@@ -68,7 +68,7 @@
         <None Include="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets"
               Pack="true" PackagePath="tools\net11.0\any\build" />
         <None Include="Sdk\*.props;Sdk\*.targets" Pack="true" PackagePath="Sdk" />
-        <None Include="build\Pixely.targets" Pack="true" PackagePath="build" />
+        <None Include="buildTransitive\Pixely.targets" Pack="true" PackagePath="buildTransitive" />
     </ItemGroup>
 
     <!-- The SDK cannot otherwise learn its own version; Sdk.props pins the library and build/Pixely.targets names the version in its message. -->

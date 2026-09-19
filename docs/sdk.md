@@ -45,6 +45,10 @@ The SDK's two references are implicit and carry their own versions, as the .NET 
 
 The SDK also removes a `PackageReference` to either package that the project declares itself, with or without a version, and warns PIXELY0001 at build. The SDK's pin always wins.
 
+## Every project needs the line
+
+The `<Sdk>` line belongs in every project that references Pixely, directly or through a project or package reference. A project without it would get the library through the reference graph but not the source generator, and dependency-injection registrations would fail at run time instead of at build time. The package therefore fails the build of such a project with a message that names the `<Sdk>` line and the `global.json` alternative. The check runs at build, not at restore, because a package's `buildTransitive/` folder is not evaluated while the restore graph is built.
+
 ## Package layout
 
 ```
@@ -54,7 +58,7 @@ Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator
 Sdk/Pixely.Version.props                       the package version, generated at pack time
-build/Pixely.targets                           the PackageReference guard
+buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK
 tools/net11.0/any/                             the shader compilation task and its props and targets
 docs/                                          this documentation
 ```

@@ -39,7 +39,8 @@ public class PackageIntegrationTests
         "HostedConsumer",
         "CentralConsumer",
         "PackageReferenceConsumer",
-        "LibraryConsumer"
+        "LibraryConsumer",
+        "TransitiveConsumer"
     ];
 
     private string _repositoryDirectory = null!;
@@ -144,8 +145,8 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("Sdk/Pixely.AfterSdk.targets"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Hosting.targets"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Version.props"));
-            Assert.That(entries, Does.Contain("build/Pixely.targets"));
-            Assert.That(entries.Any(entry => entry.StartsWith("buildTransitive/", StringComparison.Ordinal)), Is.False);
+            Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
+            Assert.That(entries.Any(entry => entry.StartsWith("build/", StringComparison.Ordinal)), Is.False);
             Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.ShaderCommon.dll"));
             Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.props"));
@@ -451,10 +452,29 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("PackageReferenceConsumer");
 
         string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        AssertSdkRequiredMessage(output);
+    }
+
+    // The guard is transitive: a project that reaches Pixely only through a project reference needs the SDK too.
+    [Test]
+    public async Task ProjectReferencingAPixelyProjectWithoutTheSdkFailsWithTheMigrationMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("TransitiveConsumer");
+        DeleteConsumerOutputs("TransitiveConsumer");
+        DeleteConsumerOutputs("LibraryConsumer");
+        WriteConsumerConfiguration(GetConsumerDirectory("LibraryConsumer"));
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        AssertSdkRequiredMessage(output);
+    }
+
+    private void AssertSdkRequiredMessage(string output)
+    {
         Assert.Multiple(() =>
         {
             Assert.That(output, Does.Contain("Pixely is an MSBuild project SDK"));
             Assert.That(output, Does.Contain($"<Sdk Name=\"Pixely\" Version=\"{_packageVersion}\" />"));
+            Assert.That(output, Does.Contain($"\"msbuild-sdks\": {{ \"Pixely\": \"{_packageVersion}\" }} in global.json"));
             Assert.That(output, Does.Not.Contain("CoreCompile"));
         });
     }
@@ -487,11 +507,8 @@ public class PackageIntegrationTests
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
         string projectPath = projectPaths[0];
         string projectContents = File.ReadAllText(projectPath);
-        Assert.Multiple(() =>
-        {
-            Assert.That(projectContents, Does.Not.Contain("ProjectReference"));
-            Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
-        });
+        // Fixtures consume the package, never the repository sources.
+        Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
         WriteConsumerConfiguration(consumerDirectory);
         List<string> restoreArguments =
         [

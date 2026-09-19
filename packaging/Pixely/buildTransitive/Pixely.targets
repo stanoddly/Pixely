@@ -1,0 +1,13 @@
+<Project>
+    <!--
+      Imported by a PackageReference to Pixely, which the SDK itself declares for every consumer, and by every project
+      that reaches Pixely through a project or package reference; the SDK resolver never imports buildTransitive/. Both
+      the import and the target are conditioned on the SDK marker so an SDK consumer imports the version props once
+      (MSB4011) and builds. buildTransitive/ is excluded during restore, so the build is the earliest hook.
+    -->
+    <Import Project="$(MSBuildThisFileDirectory)..\Sdk\Pixely.Version.props" Condition="'$(_PixelySdkImported)' != 'true'" />
+
+    <Target Name="_PixelyRequireSdk" BeforeTargets="BeforeBuild" Condition="'$(_PixelySdkImported)' != 'true'">
+        <Error Text="Pixely is an MSBuild project SDK. Add &lt;Sdk Name=&quot;Pixely&quot; Version=&quot;$(PixelyVersion)&quot; /&gt; to this project, or &lt;Sdk Name=&quot;Pixely&quot; /&gt; with &quot;msbuild-sdks&quot;: { &quot;Pixely&quot;: &quot;$(PixelyVersion)&quot; } in global.json. Every project that references Pixely, directly or through a project or package reference, needs the SDK; a PackageReference to Pixely alone does not import it." />
+    </Target>
+</Project>
