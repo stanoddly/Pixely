@@ -23,7 +23,13 @@ The `Version` attribute of `<Sdk>` takes a literal, not a property. To keep the 
 }
 ```
 
+The `<Sdk>` element must follow `Microsoft.NET.Sdk`; in the attribute form that is `Sdk="Microsoft.NET.Sdk;Pixely/0.0.N"`. Pixely's props read the restored packages' props and a `Directory.Packages.props`, which `Microsoft.NET.Sdk` imports first.
+
 The SDK resolver downloads the package from the sources in the `NuGet.Config` found from the project directory upwards into the global packages folder (`NUGET_PACKAGES`). It does not read `dotnet restore --source`, `--configfile` or `RestorePackagesPath`.
+
+## One version per build
+
+MSBuild resolves a named SDK once per build and keeps the first version it resolves. When projects in one build pin different Pixely versions, the others silently get that first version; the only signal is warning MSB4240, which `TreatWarningsAsErrors` does not promote. Pin one version per build, for example through `global.json`.
 
 ## What the SDK adds
 
@@ -35,7 +41,7 @@ The SDK resolver downloads the package from the sources in the `NuGet.Config` fo
 
 ## Central package management
 
-With `ManagePackageVersionsCentrally=true` the SDK declares its two `PackageVersion` items itself and removes any `Pixely` or `SlangDxcBundle.Toolchain` entries a `Directory.Packages.props` already lists; the SDK owns those pins. Nothing else in the file changes.
+The SDK's two references are implicit and carry their own versions, as the .NET SDK's own implicit references do, so central package management needs no `PackageVersion` for them. The SDK removes any `Pixely` or `SlangDxcBundle.Toolchain` entries a `Directory.Packages.props` lists; the SDK owns those pins. Nothing else in the file changes.
 
 ## Migrating from PackageReference
 
@@ -45,7 +51,7 @@ Replace
 <PackageReference Include="Pixely" Version="0.0.N" />
 ```
 
-with the `<Sdk>` line. A project that keeps the `PackageReference` fails its build with a message that names the exact `<Sdk>` line to use. The check runs at build, not at restore, because a package's `build/` folder is not evaluated while the restore graph is built.
+with the `<Sdk>` line. A project that keeps the `PackageReference` fails its build with a message that names the exact `<Sdk>` line to use. The check runs at build, not at restore, because a package's `build/` folder is not evaluated while the restore graph is built. A project that has both lines builds: the SDK's reference is implicit, so the leftover one is dropped with warning NETSDK1023.
 
 ## Package layout
 

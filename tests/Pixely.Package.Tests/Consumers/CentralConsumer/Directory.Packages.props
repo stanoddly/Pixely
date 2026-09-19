@@ -1,6 +1,6 @@
 <Project>
 
-    <!-- Both pins are wrong on purpose: the SDK owns them and must replace them without NU1506. -->
+    <!-- Both pins are wrong on purpose: the SDK owns them and must remove them without NU1009. -->
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     </PropertyGroup>

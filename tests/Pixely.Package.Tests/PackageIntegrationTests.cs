@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Xml.Linq;
 
@@ -408,12 +409,15 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("CentralConsumer");
 
         string buildOutput = await BuildConsumerAsync(consumerDirectory);
-        Assert.That(buildOutput, Does.Not.Contain("NU1506").And.Not.Contain("NU1008"));
+        Assert.That(buildOutput, Does.Not.Contain("NU1009").And.Not.Contain("NU1008"));
 
         string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
+        string slangVersion = XDocument.Load(Path.Combine(_repositoryDirectory, "src", "Pixely.SdlangCompiler", "build", "Pixely.SdlangCompiler.props"))
+            .Descendants().Single(element => element.Name.LocalName == "SlangVersion").Value;
         Assert.Multiple(() =>
         {
             Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
+            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{slangVersion}\""));
             Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
             Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
         });
@@ -433,7 +437,6 @@ public class PackageIntegrationTests
         {
             Assert.That(output, Does.Contain("Pixely is an MSBuild project SDK"));
             Assert.That(output, Does.Contain($"<Sdk Name=\"Pixely\" Version=\"{_packageVersion}\" />"));
-            Assert.That(output, Does.Not.Contain("MSB4011"));
             Assert.That(output, Does.Not.Contain("CoreCompile"));
         });
     }
@@ -510,7 +513,8 @@ public class PackageIntegrationTests
         }
 
         string buildOutput = await RunConsumerDotnetAsync(consumerDirectory, buildArguments.ToArray());
-        Assert.That(buildOutput, Does.Not.Contain("Downloading Slang"));
+        // MSB4011 would mean the SDK and build/Pixely.targets both imported the version props.
+        Assert.That(buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
         return buildOutput;
     }
 
@@ -524,7 +528,7 @@ public class PackageIntegrationTests
               <packageSources>
                 <clear />
                 <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-                <add key="pixely-package-tests" value="{_packageDirectory}" />
+                <add key="pixely-package-tests" value="{SecurityElement.Escape(_packageDirectory)}" />
               </packageSources>
               <packageSourceMapping>
                 <packageSource key="nuget.org">

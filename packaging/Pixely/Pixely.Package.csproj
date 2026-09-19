@@ -83,6 +83,7 @@
             <_PixelyVersionPropsLine Include="%20%20%20%20&lt;/PropertyGroup&gt;" />
             <_PixelyVersionPropsLine Include="&lt;/Project&gt;" />
             <TfmSpecificPackageFile Include="$(_PixelyVersionPropsPath)" PackagePath="Sdk" />
+            <FileWrites Include="$(_PixelyVersionPropsPath)" />
         </ItemGroup>
         <WriteLinesToFile File="$(_PixelyVersionPropsPath)" Lines="@(_PixelyVersionPropsLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     </Target>
