@@ -7,12 +7,12 @@
         <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <!-- The fixture intentionally stays outside repository-wide central package management. -->
-        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     </PropertyGroup>
 
-    <ItemGroup>
-        <SdlangShader Include="Content\shaders\package.slang" />
+    <!-- A leftover unversioned reference; PackageIntegrationTests enables it to check that the SDK's pin wins under central package management. -->
+    <ItemGroup Condition="'$(PixelyRedundantReference)' == 'true'">
+        <PackageReference Include="Pixely" />
+        <PackageReference Include="SlangDxcBundle.Toolchain" />
     </ItemGroup>
 
 </Project>

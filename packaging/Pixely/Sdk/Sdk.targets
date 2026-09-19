@@ -1,0 +1,34 @@
+<Project>
+    <!--
+      The library follows the SDK version exactly. The toolchain is a build-host tool of this project, so it stays
+      out of the nuspec of a library built on Pixely; its consumers add the Sdk line, as every project reaching Pixely
+      must, and get the toolchain from it.
+      This file is evaluated after the project body, so a reference or central pin the project declares for either
+      package is replaced here rather than overriding the SDK's (the .NET SDK keeps an explicit reference over an
+      implicit one). Implicit references carry their own version under central package management (NU1008 exempts
+      them, NU1009 forbids a PackageVersion for them).
+    -->
+    <ItemGroup>
+        <_PixelyOtherPackageReference Include="@(PackageReference)" />
+        <_PixelyOtherPackageReference Remove="Pixely;SlangDxcBundle.Toolchain" />
+        <_PixelyRedundantPackageReference Include="@(PackageReference)" Exclude="@(_PixelyOtherPackageReference)" />
+        <PackageReference Remove="Pixely;SlangDxcBundle.Toolchain" />
+        <PackageVersion Remove="Pixely;SlangDxcBundle.Toolchain" />
+        <PackageReference Include="Pixely" Version="[$(PixelyVersion)]" IsImplicitlyDefined="true" />
+        <PackageReference Include="SlangDxcBundle.Toolchain" Version="[$(SlangVersion)]" PrivateAssets="all" IsImplicitlyDefined="true" />
+    </ItemGroup>
+
+    <Target Name="_PixelyWarnOnRedundantPackageReference" BeforeTargets="BeforeBuild" Condition="'@(_PixelyRedundantPackageReference)' != ''">
+        <Warning Code="PIXELY0001" File="$(MSBuildProjectFullPath)" Text="The Pixely SDK declares the package reference to @(_PixelyRedundantPackageReference, ' and to '); the project's own reference was ignored. Remove it." />
+    </Target>
+
+    <Target Name="_PixelyRequireBaseSdkFirst" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBaseSdkFirst)' != 'true'">
+        <Error Code="PIXELY0003" File="$(MSBuildProjectFullPath)" Text="The Pixely SDK must follow Microsoft.NET.Sdk: put &lt;Sdk Name=&quot;Pixely&quot; /&gt; inside &lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;, or write Sdk=&quot;Microsoft.NET.Sdk;Pixely/$(PixelyVersion)&quot;." />
+    </Target>
+
+    <!--
+      Additive SDK targets are imported after Microsoft.NET.Sdk.targets, which alone sets TargetFrameworkIdentifier
+      (it is also empty in the outer build of a multi-targeting project, which compiles nothing).
+    -->
+    <Import Project="$(MSBuildThisFileDirectory)Pixely.AfterSdk.targets" Condition="'$(TargetFrameworkIdentifier)' != ''" />
+</Project>

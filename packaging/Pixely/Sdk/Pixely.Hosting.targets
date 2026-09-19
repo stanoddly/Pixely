@@ -4,9 +4,10 @@
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
       project's RootNamespace whose Main builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
-      of Program. Consumers get this file through the Pixely package; repository tutorials import it from
-      tutorials/Directory.Build.targets. Both import points come after the SDK has set
-      IntermediateOutputPath, Language and RootNamespace, which an import from a project body does not.
+      of Program. Consumers get this file through the Pixely SDK (Sdk/Pixely.AfterSdk.targets); repository
+      tutorials register it on AfterMicrosoftNETSdkTargets from tutorials/Directory.Build.targets. Both import
+      points come after the base SDK has set IntermediateOutputPath, Language and RootNamespace, which an import
+      from a project body does not.
     -->
 
     <PropertyGroup>

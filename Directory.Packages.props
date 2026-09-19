@@ -20,7 +20,6 @@
         <PackageVersion Include="ppy.SDL3_image-CS" Version="2026.722.0" />
         <PackageVersion Include="ppy.SDL3_mixer-CS" Version="2026.722.0" />
         <PackageVersion Include="ppy.SDL3_ttf-CS" Version="2026.722.0" />
-        <PackageVersion Include="SlangDxcBundle.Toolchain" Version="[2026.17.1]" />
         <PackageVersion Include="ZLogger" Version="2.5.10" />
     </ItemGroup>
 </Project>

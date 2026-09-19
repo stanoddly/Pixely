@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Xml.Linq;
 
@@ -29,6 +30,18 @@ public class PackageIntegrationTests
         "Pixely.ShaderCommon",
         "Pixely.Utils",
         "Pixely"
+    ];
+
+    private static readonly string[] ConsumerNames =
+    [
+        "ShaderConsumer",
+        "ShaderFreeConsumer",
+        "HostedConsumer",
+        "CentralConsumer",
+        "PackageReferenceConsumer",
+        "LibraryConsumer",
+        "TransitiveConsumer",
+        "ReversedSdkConsumer"
     ];
 
     private string _repositoryDirectory = null!;
@@ -87,9 +100,10 @@ public class PackageIntegrationTests
     [OneTimeTearDown]
     public void CleanPackageConsumers()
     {
-        DeleteConsumerOutputs("ShaderConsumer");
-        DeleteConsumerOutputs("ShaderFreeConsumer");
-        DeleteConsumerOutputs("HostedConsumer");
+        foreach (string consumer in ConsumerNames)
+        {
+            DeleteConsumerOutputs(consumer);
+        }
         DeleteDirectory(_testArtifactsDirectory);
     }
 
@@ -127,9 +141,13 @@ public class PackageIntegrationTests
         Assert.Multiple(() =>
         {
             Assert.That(entries, Does.Contain("analyzers/dotnet/cs/Pixely.DependencyInjection.Generator.dll"));
-            Assert.That(entries, Does.Contain("buildTransitive/Pixely.props"));
+            Assert.That(entries, Does.Contain("Sdk/Sdk.props"));
+            Assert.That(entries, Does.Contain("Sdk/Sdk.targets"));
+            Assert.That(entries, Does.Contain("Sdk/Pixely.AfterSdk.targets"));
+            Assert.That(entries, Does.Contain("Sdk/Pixely.Hosting.targets"));
+            Assert.That(entries, Does.Contain("Sdk/Pixely.Version.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
-            Assert.That(entries, Does.Contain("buildTransitive/Pixely.Hosting.targets"));
+            Assert.That(entries.Any(entry => entry.StartsWith("build/", StringComparison.Ordinal)), Is.False);
             Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Contain("tools/net11.0/any/Pixely.ShaderCommon.dll"));
             Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.props"));
@@ -148,9 +166,11 @@ public class PackageIntegrationTests
         string shaderTargets = ReadPackageEntry(
             package,
             "tools/net11.0/any/build/Pixely.SdlangCompiler.targets");
-        string pixelyProps = ReadPackageEntry(package, "buildTransitive/Pixely.props");
+        string pixelyProps = ReadPackageEntry(package, "Sdk/Sdk.props");
+        string versionProps = ReadPackageEntry(package, "Sdk/Pixely.Version.props");
         Assert.Multiple(() =>
         {
+            Assert.That(versionProps, Does.Contain($"<PixelyVersion>{_packageVersion}</PixelyVersion>"));
             Assert.That(shaderProps, Does.Not.Contain("SlangDownloadUrl"));
             Assert.That(shaderProps, Does.Not.Contain("SlangZipSha256"));
             Assert.That(shaderTargets, Does.Not.Contain("DownloadFile"));
@@ -197,6 +217,7 @@ public class PackageIntegrationTests
             Assert.That((string?)repository.Attribute("commit"), Is.Not.Empty);
             Assert.That(dependencies, Is.EqualTo(expectedDependencies.Order(StringComparer.Ordinal)));
             Assert.That(dependencies.Any(dependency => dependency.StartsWith("Pixely", StringComparison.Ordinal)), Is.False);
+            Assert.That(dependencies.Any(dependency => dependency.StartsWith("SlangDxcBundle.Toolchain", StringComparison.Ordinal)), Is.False);
             Assert.That(nuspecContents, Does.Not.Contain("Package Description"));
             Assert.That(nuspecContents, Does.Not.Contain("_._"));
         });
@@ -320,7 +341,7 @@ public class PackageIntegrationTests
         await BuildConsumerAsync(consumerDirectory);
         Assert.That(File.GetLastWriteTimeUtc(generatedFile), Is.EqualTo(written));
 
-        await RunDotnetAsync(consumerDirectory, "clean", "--configuration", "Release", $"--property:PixelyPackageVersion={_packageVersion}", $"--property:RestorePackagesPath={_packagesDirectory}", "--nologo");
+        await RunConsumerDotnetAsync(consumerDirectory, "clean", "--configuration", "Release", "--nologo");
         Assert.That(File.Exists(generatedFile), Is.False);
     }
 
@@ -383,28 +404,129 @@ public class PackageIntegrationTests
         });
     }
 
-    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true)
+    [Test]
+    public async Task CentrallyManagedConsumerTakesThePinsFromTheSdk()
+    {
+        string consumerDirectory = GetConsumerDirectory("CentralConsumer");
+        DeleteConsumerOutputs("CentralConsumer");
+
+        string buildOutput = await BuildConsumerAsync(consumerDirectory);
+        Assert.That(buildOutput, Does.Not.Contain("NU1009").And.Not.Contain("NU1008"));
+
+        string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
+            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
+        });
+
+        string output = await RunDotnetAsync(consumerDirectory, Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "CentralConsumer.dll"));
+        Assert.That(output, Does.Contain("Package consumer succeeded."));
+    }
+
+    [TestCase("ShaderFreeConsumer", "Pixely")]
+    [TestCase("CentralConsumer", "Pixely and to SlangDxcBundle.Toolchain")]
+    public async Task RedundantPackageReferenceIsReplacedByTheSdkPinWithAWarning(string consumer, string redundant)
+    {
+        string consumerDirectory = GetConsumerDirectory(consumer);
+        DeleteConsumerOutputs(consumer);
+
+        string buildOutput = await BuildConsumerAsync(consumerDirectory, properties: ["PixelyRedundantReference=true"]);
+        string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(buildOutput, Does.Contain("warning PIXELY0001").And.Contain($"package reference to {redundant};"));
+            Assert.That(buildOutput, Does.Not.Contain("NU1504").And.Not.Contain("NU1010").And.Not.Contain("NETSDK1023"));
+            Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
+            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
+        });
+    }
+
+    [Test]
+    public async Task PlainPackageReferenceFailsWithTheMigrationMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("PackageReferenceConsumer");
+        DeleteConsumerOutputs("PackageReferenceConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        AssertSdkRequiredMessage(output);
+    }
+
+    // The guard is transitive: a project that reaches Pixely only through a project reference needs the SDK too.
+    [Test]
+    public async Task ProjectReferencingAPixelyProjectWithoutTheSdkFailsWithTheMigrationMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("TransitiveConsumer");
+        DeleteConsumerOutputs("TransitiveConsumer");
+        DeleteConsumerOutputs("LibraryConsumer");
+        WriteConsumerConfiguration(GetConsumerDirectory("LibraryConsumer"));
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        AssertSdkRequiredMessage(output);
+        // The guard runs before the referenced project is built.
+        Assert.That(Directory.Exists(Path.Combine(GetConsumerDirectory("LibraryConsumer"), "bin")), Is.False);
+    }
+
+    [Test]
+    public async Task SdkListedBeforeTheBaseSdkFailsWithTheOrderMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("ReversedSdkConsumer");
+        DeleteConsumerOutputs("ReversedSdkConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false);
+        Assert.That(output, Does.Contain("error PIXELY0003").And.Contain("Microsoft.NET.Sdk;Pixely/" + _packageVersion));
+    }
+
+    private void AssertSdkRequiredMessage(string output)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("error PIXELY0002").And.Contain("Pixely is an MSBuild project SDK"));
+            Assert.That(output, Does.Contain($"<Sdk Name=\"Pixely\" Version=\"{_packageVersion}\" />"));
+            Assert.That(output, Does.Contain($"\"msbuild-sdks\": {{ \"Pixely\": \"{_packageVersion}\" }} in global.json"));
+        });
+    }
+
+    [Test]
+    public async Task LibraryBuiltOnTheSdkDependsOnPixelyButNotOnTheToolchain()
+    {
+        string consumerDirectory = GetConsumerDirectory("LibraryConsumer");
+        DeleteConsumerOutputs("LibraryConsumer");
+
+        await BuildConsumerAsync(consumerDirectory);
+        Assert.That(File.Exists(Path.Combine(consumerDirectory, "Content", "shaders", ".generated", "library.vertex.spv")), Is.True);
+
+        await RunConsumerDotnetAsync(consumerDirectory, "pack", "--configuration", "Release", "--no-build", "--nologo");
+        string packagePath = Path.Combine(consumerDirectory, "bin", "Release", "LibraryConsumer.1.0.0-preview.nupkg");
+        using ZipArchive package = ZipFile.OpenRead(packagePath);
+        XDocument nuspec = XDocument.Parse(ReadPackageEntry(package, "LibraryConsumer.nuspec"));
+        XNamespace ns = nuspec.Root?.Name.Namespace ?? throw new InvalidOperationException("LibraryConsumer.nuspec has no root element.");
+        string[] dependencies = nuspec.Descendants(ns + "dependency").Select(dependency => (string?)dependency.Attribute("id") ?? "").ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(dependencies, Does.Contain("Pixely"));
+            Assert.That(dependencies, Does.Not.Contain("SlangDxcBundle.Toolchain"));
+        });
+    }
+
+    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
         string projectPath = projectPaths[0];
         string projectContents = File.ReadAllText(projectPath);
-        Assert.Multiple(() =>
-        {
-            Assert.That(projectContents, Does.Not.Contain("ProjectReference"));
-            Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
-        });
-        // NuGet on Windows interprets a remote source after a local source as a relative path.
+        // Fixtures consume the package, never the repository sources.
+        Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
+        WriteConsumerConfiguration(consumerDirectory);
         List<string> restoreArguments =
         [
             "restore",
             projectPath,
-            "--source",
-            "https://api.nuget.org/v3/index.json",
-            "--source",
-            _packageDirectory,
             $"--property:PixelyPackageVersion={_packageVersion}",
-            $"--property:RestorePackagesPath={_packagesDirectory}",
             "--nologo"
         ];
         List<string> buildArguments =
@@ -415,7 +537,6 @@ public class PackageIntegrationTests
             "Release",
             "--no-restore",
             $"--property:PixelyPackageVersion={_packageVersion}",
-            $"--property:RestorePackagesPath={_packagesDirectory}",
             "--nologo"
         ];
         if (runtimeIdentifier is not null)
@@ -429,18 +550,75 @@ public class PackageIntegrationTests
         {
             buildArguments.Add($"--property:DefineConstants={defineConstants}");
         }
-
-        await RunDotnetAsync(consumerDirectory, restoreArguments.ToArray());
-        if (!expectSuccess)
+        foreach (string property in properties ?? [])
         {
-            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, buildArguments.ToArray());
-            Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
-            return failedOutput;
+            restoreArguments.Add($"--property:{property}");
+            buildArguments.Add($"--property:{property}");
         }
 
-        string buildOutput = await RunDotnetAsync(consumerDirectory, buildArguments.ToArray());
-        Assert.That(buildOutput, Does.Not.Contain("Downloading Slang"));
-        return buildOutput;
+        // Restore warnings (NU*) only appear in the restore output, so callers get both outputs.
+        string restoreOutput = await RunConsumerDotnetAsync(consumerDirectory, restoreArguments.ToArray());
+        if (!expectSuccess)
+        {
+            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, buildArguments.ToArray());
+            Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
+            return restoreOutput + failedOutput;
+        }
+
+        string buildOutput = await RunConsumerDotnetAsync(consumerDirectory, buildArguments.ToArray());
+        // MSB4011 would mean the SDK and buildTransitive/Pixely.targets both imported the version props.
+        Assert.That(restoreOutput + buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
+        return restoreOutput + buildOutput;
+    }
+
+    private string GetSlangVersion()
+    {
+        return XDocument.Load(Path.Combine(_repositoryDirectory, "src", "Pixely.SdlangCompiler", "build", "Pixely.SdlangCompiler.props"))
+            .Descendants().Single(element => element.Name.LocalName == "SlangVersion").Value;
+    }
+
+    // The SDK resolver reads NuGet.Config from the project directory and NUGET_PACKAGES, not restore's --source or RestorePackagesPath.
+    // Pixely comes only from the local feed; source mapping keeps NU1507 away from the centrally managed consumer.
+    private void WriteConsumerConfiguration(string consumerDirectory)
+    {
+        File.WriteAllText(Path.Combine(consumerDirectory, "NuGet.Config"), $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+                <add key="pixely-package-tests" value="{SecurityElement.Escape(_packageDirectory)}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="nuget.org">
+                  <package pattern="*" />
+                </packageSource>
+                <packageSource key="pixely-package-tests">
+                  <package pattern="Pixely" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(consumerDirectory, "global.json"), $$"""
+            {
+              "msbuild-sdks": {
+                "Pixely": "{{_packageVersion}}"
+              }
+            }
+            """);
+    }
+
+    private Dictionary<string, string> ConsumerEnvironment => new() { ["NUGET_PACKAGES"] = _packagesDirectory };
+
+    private async Task<string> RunConsumerDotnetAsync(string consumerDirectory, params string[] arguments)
+    {
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, arguments);
+        if (exitCode != 0)
+        {
+            Assert.Fail($"dotnet {string.Join(' ', arguments)} failed with exit code {exitCode}.{Environment.NewLine}{output}");
+        }
+
+        return output;
     }
 
     private string[] GetPackageDependencies()
@@ -555,6 +733,8 @@ public class PackageIntegrationTests
         DeleteDirectory(Path.Combine(consumerDirectory, "bin"));
         DeleteDirectory(Path.Combine(consumerDirectory, "obj"));
         DeleteDirectory(Path.Combine(consumerDirectory, "Content", "shaders", ".generated"));
+        File.Delete(Path.Combine(consumerDirectory, "NuGet.Config"));
+        File.Delete(Path.Combine(consumerDirectory, "global.json"));
     }
 
     private static string GetRepositoryDirectory()
@@ -571,7 +751,7 @@ public class PackageIntegrationTests
 
     private static async Task<string> RunDotnetAsync(string workingDirectory, params string[] arguments)
     {
-        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(workingDirectory, arguments);
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(workingDirectory, null, arguments);
         if (exitCode != 0)
         {
             Assert.Fail($"dotnet {string.Join(' ', arguments)} failed with exit code {exitCode}.{Environment.NewLine}{output}");
@@ -580,7 +760,12 @@ public class PackageIntegrationTests
         return output;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, params string[] arguments)
+    private static Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, params string[] arguments)
+    {
+        return RunDotnetExpectingExitCodeAsync(workingDirectory, null, arguments);
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, Dictionary<string, string>? environment, params string[] arguments)
     {
         ProcessStartInfo startInfo = new("dotnet")
         {
@@ -594,6 +779,10 @@ public class PackageIntegrationTests
             startInfo.ArgumentList.Add(argument);
         }
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        foreach ((string name, string value) in environment ?? [])
+        {
+            startInfo.Environment[name] = value;
+        }
 
         using Process process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start dotnet.");

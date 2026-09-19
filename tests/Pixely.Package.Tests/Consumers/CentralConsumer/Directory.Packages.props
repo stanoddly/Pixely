@@ -1,0 +1,13 @@
+<Project>
+
+    <!-- Both pins are wrong on purpose: the SDK owns them and must remove them without NU1009. -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageVersion Include="Pixely" Version="0.0.0" />
+        <PackageVersion Include="SlangDxcBundle.Toolchain" Version="1.0.0" />
+    </ItemGroup>
+
+</Project>
