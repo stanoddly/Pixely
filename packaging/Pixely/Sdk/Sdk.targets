@@ -19,11 +19,11 @@
     </ItemGroup>
 
     <Target Name="_PixelyWarnOnRedundantPackageReference" BeforeTargets="BeforeBuild" Condition="'@(_PixelyRedundantPackageReference)' != ''">
-        <Warning Code="PIXELY0001" Text="The Pixely SDK declares the package reference to @(_PixelyRedundantPackageReference, ' and to '); the project's own reference was ignored. Remove it." />
+        <Warning Code="PIXELY0001" File="$(MSBuildProjectFullPath)" Text="The Pixely SDK declares the package reference to @(_PixelyRedundantPackageReference, ' and to '); the project's own reference was ignored. Remove it." />
     </Target>
 
     <Target Name="_PixelyRequireBaseSdkFirst" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBaseSdkFirst)' != 'true'">
-        <Error Code="PIXELY0003" Text="The Pixely SDK must follow Microsoft.NET.Sdk: put &lt;Sdk Name=&quot;Pixely&quot; /&gt; inside &lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;, or write Sdk=&quot;Microsoft.NET.Sdk;Pixely/$(PixelyVersion)&quot;." />
+        <Error Code="PIXELY0003" File="$(MSBuildProjectFullPath)" Text="The Pixely SDK must follow Microsoft.NET.Sdk: put &lt;Sdk Name=&quot;Pixely&quot; /&gt; inside &lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;, or write Sdk=&quot;Microsoft.NET.Sdk;Pixely/$(PixelyVersion)&quot;." />
     </Target>
 
     <!--

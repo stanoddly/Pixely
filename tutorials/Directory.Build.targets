@@ -2,7 +2,7 @@
 
     <!--
       Tutorials reference Pixely as a project, so the Pixely SDK is not imported. The generator is registered on the
-      hook the SDK uses; a direct import here would also work, but this keeps one import point for both consumers.
+      hook Microsoft.NET.Sdk.targets imports as its last line, after IntermediateOutputPath, Language and RootNamespace are set.
     -->
     <PropertyGroup>
         <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Hosting.targets</AfterMicrosoftNETSdkTargets>

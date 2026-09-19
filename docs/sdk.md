@@ -35,11 +35,11 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 
 - A `PackageReference` to `Pixely` pinned to the SDK's own version, so the library, the source generator and the SDK never drift apart.
 - A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it.
-
-A library packed on Pixely X depends on exactly `[X]`, so only projects on Pixely X can consume it; a different pin fails restore with NU1107.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
 - `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
+
+A library packed on Pixely X depends on exactly `[X]`. A consumer pinned lower fails restore with NU1605; a consumer pinned higher gets its own version with warning NU1608, which `TreatWarningsAsErrors` promotes.
 
 ## Central package management
 
