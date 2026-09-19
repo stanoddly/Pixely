@@ -1,6 +1,11 @@
 <Project>
 
-    <!-- Tutorials reference Pixely as a project, which imports no package targets, so the generator is imported here. -->
-    <Import Project="$(MSBuildThisFileDirectory)..\packaging\Pixely\buildTransitive\Pixely.Hosting.targets" />
+    <!--
+      Tutorials reference Pixely as a project, so the Pixely SDK is not imported. The generator is registered on the
+      hook the SDK uses; a direct import here would also work, but this keeps one import point for both consumers.
+    -->
+    <PropertyGroup>
+        <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Hosting.targets</AfterMicrosoftNETSdkTargets>
+    </PropertyGroup>
 
 </Project>

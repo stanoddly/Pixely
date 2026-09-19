@@ -18,6 +18,7 @@
 - `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, scrolling, views and view models, pointer, wheel and focus routing, text fields, styling
 - `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic
 - `docs/development-packages.md` - Consuming packages from the public development feed
+- `docs/sdk.md` - Pixely as an MSBuild project SDK: the `<Sdk Name="Pixely" />` line, what it adds to a project, central package management, the PackageReference migration error, the package layout
 - `docs/hosting.md` - Hosting: opting in with `PixelyHosting`, the generated `Main`, `Configure` and `OnException`, diagnostics
 - `docs/taskbar-icons.md` - Application-wide taskbar and Dock icons loaded from virtual content
 - `docs/sprites.md` - Sprite and animated sprite JSON files, the loaders and their cache, mirroring with `flip`

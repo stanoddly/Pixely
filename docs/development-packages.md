@@ -29,16 +29,18 @@ Add the development feed alongside nuget.org:
 </configuration>
 ```
 
-Reference an exact version:
+Reference an exact version through the Pixely SDK (see [Pixely SDK](sdk.md)):
 
 ```xml
-<PackageReference Include="Pixely" Version="0.0.N" />
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Pixely" Version="0.0.N" />
+</Project>
 ```
 
-Do not use a floating Pixely version across the development and nuget.org feeds. Test an unauthenticated restore with a clean package directory:
+Do not use a floating Pixely version across the development and nuget.org feeds. The SDK resolver reads the `NuGet.Config` found from the project directory upwards and the `NUGET_PACKAGES` variable; it does not see `--configfile` or `--packages`. Test an unauthenticated restore with a clean package directory:
 
 ```bash
-packages_directory="$(mktemp -d)"
-dotnet restore --configfile NuGet.config --packages "$packages_directory"
+export NUGET_PACKAGES="$(mktemp -d)"
+dotnet restore
 dotnet build --no-restore
 ```

@@ -1,16 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+    <!-- The version comes from the global.json PackageIntegrationTests writes beside this project. -->
+    <Sdk Name="Pixely" />
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <!-- PackageIntegrationTests passes PixelyPackageVersion when restoring and building this fixture, which intentionally stays outside repository-wide central package management. -->
+        <!-- The fixture intentionally stays outside repository-wide central package management. -->
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Pixely" Version="$(PixelyPackageVersion)" />
-    </ItemGroup>
 
 </Project>

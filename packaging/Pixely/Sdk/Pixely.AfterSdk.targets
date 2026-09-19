@@ -1,4 +1,5 @@
 <Project>
+    <!-- Both files read IntermediateOutputPath, Language and RootNamespace at evaluation time, which only the base SDK targets set. -->
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.targets" />
     <Import Project="$(MSBuildThisFileDirectory)Pixely.Hosting.targets" />
 </Project>

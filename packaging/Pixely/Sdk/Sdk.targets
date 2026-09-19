@@ -1,0 +1,10 @@
+<Project>
+    <!--
+      Additive SDK targets are imported after Microsoft.NET.Sdk.targets, which alone sets TargetFrameworkIdentifier.
+      Import directly when it is set; otherwise defer to the hook the base SDK imports as its last line.
+    -->
+    <Import Project="$(MSBuildThisFileDirectory)Pixely.AfterSdk.targets" Condition="'$(TargetFrameworkIdentifier)' != ''" />
+    <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == ''">
+        <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.AfterSdk.targets</AfterMicrosoftNETSdkTargets>
+    </PropertyGroup>
+</Project>

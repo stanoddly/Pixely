@@ -21,16 +21,19 @@ Shaders are automatically compiled during build. The build system generates SPIR
 
 ## Build Integration
 
-Reference the `Pixely` package and declare the shaders to compile:
+Reference the [Pixely SDK](sdk.md) and declare the shaders to compile:
 
 ```xml
-<ItemGroup>
-    <PackageReference Include="Pixely" Version="0.0.N" />
-    <SdlangShader Include="Content\shaders\*.slang" />
-</ItemGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Sdk Name="Pixely" Version="0.0.N" />
+
+    <ItemGroup>
+        <SdlangShader Include="Content\shaders\*.slang" />
+    </ItemGroup>
+</Project>
 ```
 
-The package imports the shader build integration automatically. It compiles every `SdlangShader` item before `CoreCompile` and exposes the generated files as `@(SdlangShaderOutput)`. Generated files remain beside their shader sources; the compilation targets do not copy, package, or embed them. This lets each project own its complete content pipeline independently of shader compilation. The shader task and its dependencies are build tools and do not enter the application's references or output.
+The SDK imports the shader build integration automatically. It compiles every `SdlangShader` item before `CoreCompile` and exposes the generated files as `@(SdlangShaderOutput)`. Generated files remain beside their shader sources; the compilation targets do not copy, package, or embed them. This lets each project own its complete content pipeline independently of shader compilation. The shader task and its dependencies are build tools and do not enter the application's references or output.
 
 Generated shaders are runtime content. See [Content distribution](content-distribution.md) for the loose-directory, embedded-resource, and ZIP policies, with runnable tutorials for embedding generated shaders in an assembly and publishing content in a ZIP archive.
 
