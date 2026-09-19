@@ -412,12 +412,10 @@ public class PackageIntegrationTests
         Assert.That(buildOutput, Does.Not.Contain("NU1009").And.Not.Contain("NU1008"));
 
         string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
-        string slangVersion = XDocument.Load(Path.Combine(_repositoryDirectory, "src", "Pixely.SdlangCompiler", "build", "Pixely.SdlangCompiler.props"))
-            .Descendants().Single(element => element.Name.LocalName == "SlangVersion").Value;
         Assert.Multiple(() =>
         {
             Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
-            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{slangVersion}\""));
+            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
             Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
             Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
         });
@@ -440,7 +438,9 @@ public class PackageIntegrationTests
             Assert.That(buildOutput, Does.Contain("warning PIXELY0001").And.Contain($"package reference to {redundant};"));
             Assert.That(buildOutput, Does.Not.Contain("NU1504").And.Not.Contain("NU1010").And.Not.Contain("NETSDK1023"));
             Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
+            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
             Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
+            Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
         });
     }
 
@@ -527,18 +527,25 @@ public class PackageIntegrationTests
             buildArguments.Add($"--property:{property}");
         }
 
-        await RunConsumerDotnetAsync(consumerDirectory, restoreArguments.ToArray());
+        // Restore warnings (NU*) only appear in the restore output, so callers get both outputs.
+        string restoreOutput = await RunConsumerDotnetAsync(consumerDirectory, restoreArguments.ToArray());
         if (!expectSuccess)
         {
             (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, buildArguments.ToArray());
             Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
-            return failedOutput;
+            return restoreOutput + failedOutput;
         }
 
         string buildOutput = await RunConsumerDotnetAsync(consumerDirectory, buildArguments.ToArray());
         // MSB4011 would mean the SDK and build/Pixely.targets both imported the version props.
-        Assert.That(buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
-        return buildOutput;
+        Assert.That(restoreOutput + buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
+        return restoreOutput + buildOutput;
+    }
+
+    private string GetSlangVersion()
+    {
+        return XDocument.Load(Path.Combine(_repositoryDirectory, "src", "Pixely.SdlangCompiler", "build", "Pixely.SdlangCompiler.props"))
+            .Descendants().Single(element => element.Name.LocalName == "SlangVersion").Value;
     }
 
     // The SDK resolver reads NuGet.Config from the project directory and NUGET_PACKAGES, not restore's --source or RestorePackagesPath.
