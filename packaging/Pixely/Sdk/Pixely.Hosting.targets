@@ -4,10 +4,12 @@
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
       project's RootNamespace whose Main builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
-      of Program. Consumers get this file through the Pixely SDK (Sdk/Pixely.AfterSdk.targets); repository
-      tutorials register it on AfterMicrosoftNETSdkTargets from tutorials/Directory.Build.targets. Both import
-      points come after the base SDK has set IntermediateOutputPath, Language and RootNamespace, which an import
-      from a project body does not.
+      of Program. On browser-wasm the browser owns the frame loop, so Main is async and awaits
+      Pixely.App.BrowserHost.RunAsync in place of app.Run(); every other line is shared. Consumers get this
+      file through the Pixely SDK (Sdk/Pixely.AfterSdk.targets); repository tutorials register it on
+      AfterMicrosoftNETSdkTargets from tutorials/Directory.Build.targets. Both import points come after the
+      base SDK has set IntermediateOutputPath, Language and RootNamespace, which an import from a project
+      body does not.
     -->
 
     <PropertyGroup>
@@ -36,7 +38,10 @@
             <_PixelyEntryPointLine Include="namespace $(RootNamespace)%3B%0A" />
             <_PixelyEntryPointLine Include="static partial class Program" />
             <_PixelyEntryPointLine Include="{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20private static int Main()" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static int Main()" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <!-- CA1416 flags an unguarded call to a browser-only method whatever the SupportedPlatform set is; the attribute on Main is what satisfies it. -->
+            <_PixelyEntryPointLine Include="%20%20%20%20[global::System.Runtime.Versioning.SupportedOSPlatform(&quot;browser&quot;)]" Condition="'$(_PixelyBrowser)' == 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20private static async global::System.Threading.Tasks.Task&lt;int&gt; Main()" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20{" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.PixelyAppBuilder builder = new()%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.IPixelyApp%3F app = null%3B" />
@@ -44,7 +49,8 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return app.Run()%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return app.Run()%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return await global::Pixely.App.BrowserHost.RunAsync(app)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20catch (global::System.Exception exception)" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />

@@ -1,0 +1,73 @@
+<Project>
+    <!--
+      Imported on BeforeMicrosoftNETSdkTargets, the one slot after the project body and before the base targets, which
+      is where a body property can still be replaced before Microsoft.NET.RuntimeIdentifierInference.targets and the
+      ILCompiler import read it. PublishAot fails framework reference resolution on browser-wasm, and the WebAssembly
+      pack's props stop appending the RID to the output paths, which would make desktop and browser share obj/ and bin/.
+    -->
+    <!--
+      Only an executable is a browser app. A library evaluated with the RID (a solution-wide publish, or the restore of
+      a referenced project) has already imported the WebAssembly props, which force SelfContained and PublishTrimmed;
+      without this its restore would add the WebAssembly pack, whose props then default the RID and set OutputType to
+      exe in every later evaluation, including the RID-agnostic reference build, and the library fails with CS5001.
+      UsingMicrosoftNETSdkWebAssembly is a ProcessFrameworkReferences parameter read at execution, so clearing it here
+      keeps the pack out of the graph; the two publish properties are reset so the library's restore pulls neither
+      the Mono browser runtime pack nor ILLink and its publish is a plain library publish.
+    -->
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(OutputType)' != 'Exe' and '$(OutputType)' != 'WinExe'">
+        <_PixelyBrowser>false</_PixelyBrowser>
+        <UsingMicrosoftNETSdkWebAssembly>false</UsingMicrosoftNETSdkWebAssembly>
+        <SelfContained>false</SelfContained>
+        <PublishTrimmed>false</PublishTrimmed>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
+        <PublishAot>false</PublishAot>
+        <SelfContained>true</SelfContained>
+        <PublishTrimmed>true</PublishTrimmed>
+        <AppendRuntimeIdentifierToOutputPath>true</AppendRuntimeIdentifierToOutputPath>
+        <PixelyBrowserDefaultAssets Condition="'$(PixelyBrowserDefaultAssets)' == ''">true</PixelyBrowserDefaultAssets>
+        <PixelyBrowserIndexHtml Condition="'$(PixelyBrowserIndexHtml)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\index.html</PixelyBrowserIndexHtml>
+        <PixelyBrowserMainJs Condition="'$(PixelyBrowserMainJs)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\main.js</PixelyBrowserMainJs>
+        <_PixelyBrowserHostJs>$(MSBuildThisFileDirectory)..\wwwroot\pixely-host.js</_PixelyBrowserHostJs>
+    </PropertyGroup>
+
+    <!-- The RID was set in the project body, which the SDK props evaluated before it cannot see; the WebAssembly SDK was not imported. -->
+    <Target Name="_PixelyRequireBrowserSdk" BeforeTargets="BeforeBuild" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(UsingMicrosoftNETSdkWebAssembly)' == ''">
+        <Error Code="PIXELY0004" File="$(MSBuildProjectFullPath)" Text="RuntimeIdentifier browser-wasm must be a global property so the Pixely SDK can import the WebAssembly SDK: pass -r browser-wasm on the command line, not in the project file." />
+    </Target>
+
+    <!--
+      The default page, its bootstrap and the frame loop, as static web assets of the project, each only when the
+      project has no wwwroot file at that relative path (two assets with one path fail manifest generation; a linked
+      or generated file at that path needs PixelyBrowserDefaultAssets=false). Copied into obj/ first so two projects
+      on one SDK do not share an asset identity. The recipe is the WebAssembly SDK's own hot-reload injection.
+    -->
+    <Target Name="_PixelyDefineBrowserDefaultAssets" BeforeTargets="ResolveProjectStaticWebAssets" AfterTargets="ResolveStaticWebAssetsConfiguration"
+            Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserDefaultAssets)' == 'true'">
+        <PropertyGroup>
+            <_PixelyBrowserAssetsRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-browser'))</_PixelyBrowserAssetsRoot>
+        </PropertyGroup>
+        <ItemGroup>
+            <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserIndexHtml)" RelativePath="index.html" />
+            <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserMainJs)" RelativePath="main.js" />
+            <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserHostJs)" RelativePath="pixely-host.js" />
+            <_PixelyBrowserDefaultAssetSource Remove="@(_PixelyBrowserDefaultAssetSource)" Condition="Exists('$(MSBuildProjectDirectory)/wwwroot/%(RelativePath)')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_PixelyBrowserDefaultAssetSource)" DestinationFiles="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" SkipUnchangedFiles="true" />
+        <ItemGroup>
+            <_PixelyBrowserDefaultAsset Include="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" />
+            <_PixelyBrowserDefaultAsset Update="@(_PixelyBrowserDefaultAsset)" OriginalItemSpec="%(Identity)" />
+            <FileWrites Include="@(_PixelyBrowserDefaultAsset)" />
+        </ItemGroup>
+        <DefineStaticWebAssets CandidateAssets="@(_PixelyBrowserDefaultAsset)" FingerprintCandidates="$(StaticWebAssetsFingerprintContent)" FingerprintPatterns="@(StaticWebAssetFingerprintPattern)"
+                               SourceId="$(PackageId)" SourceType="Computed" ContentRoot="$(_PixelyBrowserAssetsRoot)" BasePath="$(StaticWebAssetBasePath)" AssetKind="All"
+                               Condition="'@(_PixelyBrowserDefaultAsset)' != ''">
+            <Output TaskParameter="Assets" ItemName="StaticWebAsset" />
+            <Output TaskParameter="Assets" ItemName="_PixelyBrowserDefaultStaticWebAsset" />
+        </DefineStaticWebAssets>
+        <DefineStaticWebAssetEndpoints CandidateAssets="@(_PixelyBrowserDefaultStaticWebAsset)" ContentTypeMappings="@(StaticWebAssetContentTypeMapping)" Condition="'@(_PixelyBrowserDefaultAsset)' != ''">
+            <Output TaskParameter="Endpoints" ItemName="StaticWebAssetEndpoint" />
+        </DefineStaticWebAssetEndpoints>
+    </Target>
+</Project>

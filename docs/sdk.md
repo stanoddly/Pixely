@@ -37,6 +37,7 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 - A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
+- The browser build: with `RuntimeIdentifier` `browser-wasm` the SDK imports `Microsoft.NET.Sdk.WebAssembly` on top of `Microsoft.NET.Sdk`, forces `PublishAot=false`, `SelfContained=true`, `PublishTrimmed=true`, keeps the RID in the output paths and adds the default page, bootstrap and frame loop as static web assets. The RID must be a global property (`-r browser-wasm` on the executable project), because the SDK props run before the project body; in the body it fails with PIXELY0004. A project whose `OutputType` is not `Exe` or `WinExe` gets neither the WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, so a library on the SDK stays a library when the app that references it is restored for the browser or when it is published with the RID itself.
 - `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
 
 A library packed on Pixely X depends on exactly `[X]`. A consumer pinned lower fails restore with NU1605; a consumer pinned higher gets its own version with warning NU1608, which `TreatWarningsAsErrors` promotes.
@@ -57,12 +58,15 @@ The `<Sdk>` line belongs in every project that references Pixely, directly or th
 lib/net11.0/                                   the library
 analyzers/dotnet/cs/                           the dependency-injection generator
 Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
-Sdk/Pixely.AfterSdk.targets                    shader and hosting targets, imported once the base SDK has set its properties
+Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator
+Sdk/Pixely.Browser.props                       imports the WebAssembly SDK props on browser-wasm
+Sdk/Pixely.Browser.targets                     browser property overrides, PIXELY0004, the default web assets
 Sdk/Pixely.Version.props                       the package version, generated at pack time
 buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK
 tools/net11.0/any/                             the shader compilation task and its props and targets
+wwwroot/                                       index.html, main.js and pixely-host.js for the browser
 docs/                                          this documentation
 ```
 
-An additive SDK's `Sdk.targets` is imported after `Microsoft.NET.Sdk.targets`, so `Pixely.AfterSdk.targets` sees the base SDK's properties. Repository tutorials, which reference Pixely as a project, register the hosting targets on `AfterMicrosoftNETSdkTargets`, which the base SDK imports as its last line, from `tutorials/Directory.Build.targets`.
+An additive SDK's `Sdk.targets` is imported after `Microsoft.NET.Sdk.targets`, so `Pixely.AfterSdk.targets` sees the base SDK's properties. `Pixely.Browser.targets` is imported on `BeforeMicrosoftNETSdkTargets`, after the project body and before the base targets, the one slot where a body property can be replaced before the base targets read it. Repository tutorials, which reference Pixely as a project, import `Pixely.Browser.props` on `AfterMicrosoftNetSdkProps` from `tutorials/Directory.Build.props` and a wrapper for the WebAssembly and hosting targets on `AfterMicrosoftNETSdkTargets`, which the base SDK imports as its last line, from `tutorials/Directory.Build.targets`.

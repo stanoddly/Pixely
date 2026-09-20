@@ -1,0 +1,16 @@
+<Project>
+    <!--
+      A browser build layers Microsoft.NET.Sdk.WebAssembly on top of Microsoft.NET.Sdk. Its Sdk.props must be imported
+      here, after the base SDK's props (they read _WebAssemblyPropsFile from the restored WebAssembly pack through
+      nuget.g.props) and before the project body. Consumers get this file from Sdk.props; repository tutorials import
+      it on AfterMicrosoftNetSdkProps. The switch is RuntimeIdentifier, a global property from -r that restore sees too.
+    -->
+    <PropertyGroup>
+        <_PixelyBrowser>false</_PixelyBrowser>
+        <_PixelyBrowser Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">true</_PixelyBrowser>
+        <!-- Imported by Microsoft.NET.Sdk/Sdk/Sdk.targets before Microsoft.NET.Sdk.BeforeCommon.targets: after the project body, before the base targets. -->
+        <BeforeMicrosoftNETSdkTargets>$(BeforeMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.Browser.targets</BeforeMicrosoftNETSdkTargets>
+    </PropertyGroup>
+
+    <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk.WebAssembly" Condition="'$(_PixelyBrowser)' == 'true'" />
+</Project>

@@ -1,0 +1,61 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Versioning;
+using Pixely.App;
+using Pixely.DependencyInjection;
+
+namespace BrowserLoopConsumer;
+
+// A hand-written browser Main around a fake app, so BrowserHost and pixely-host.js run under node without SDL: the loop
+// ends after three frames, or the third frame throws when PackageIntegrationTests defines BROWSER_LOOP_THROWS.
+static class Program
+{
+    [SupportedOSPlatform("browser")]
+    private static async Task<int> Main()
+    {
+        FrameApp app = new();
+        try
+        {
+            int exitCode = await BrowserHost.RunAsync(app);
+            Console.WriteLine($"Loop ended after {app.Frames} frames with {exitCode}.");
+            return exitCode + 40;
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"Caught {exception.GetType().Name}: {exception.Message}");
+            return 1;
+        }
+        finally
+        {
+            app.Dispose();
+        }
+    }
+}
+
+sealed class FrameApp : IPixelyApp
+{
+    public int Frames { get; private set; }
+
+    public ServiceProvider ServiceProvider => throw new NotSupportedException();
+
+    public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class => throw new NotSupportedException();
+
+    public int Run() => throw new NotSupportedException();
+
+    public bool RunFrame()
+    {
+        Frames++;
+#if BROWSER_LOOP_THROWS
+        if (Frames == 3)
+        {
+            throw new InvalidOperationException("Frame 3 failed on purpose.");
+        }
+#endif
+        Console.WriteLine($"Frame {Frames}.");
+        return Frames < 3;
+    }
+
+    public void Dispose()
+    {
+        Console.WriteLine("Disposed.");
+    }
+}

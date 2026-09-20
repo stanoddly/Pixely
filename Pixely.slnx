@@ -46,6 +46,7 @@
     <Project Path="tutorials/Pixely.Tutorials.DepthOnly/Pixely.Tutorials.DepthOnly.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Triangle/Pixely.Tutorials.Triangle.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.Browser/Pixely.Tutorials.Browser.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.WindowCreation/Pixely.Tutorials.WindowCreation.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.StorageBuffer/Pixely.Tutorials.StorageBuffer.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.TextureArray/Pixely.Tutorials.TextureArray.csproj" />

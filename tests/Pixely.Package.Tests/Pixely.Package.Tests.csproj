@@ -19,7 +19,7 @@
         <Using Include="NUnit.Framework" />
         <Compile Remove="Consumers\**\*.cs" />
         <None Include="Consumers\**\*"
-              Exclude="Consumers\**\bin\**;Consumers\**\obj\**;Consumers\**\Content\shaders\.generated\**" />
+              Exclude="Consumers\**\bin\**;Consumers\**\obj\**;Consumers\**\wwwroot\**;Consumers\**\Content\shaders\.generated\**" />
     </ItemGroup>
 
 </Project>

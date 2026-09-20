@@ -1,0 +1,5 @@
+<Project>
+    <!-- The source-tree counterpart of packaging/Pixely/Sdk/Pixely.AfterSdk.targets without the shader targets, which tutorials get from the SdlangCompiler project. -->
+    <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk.WebAssembly" Condition="'$(_PixelyBrowser)' == 'true'" />
+    <Import Project="$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Hosting.targets" />
+</Project>
