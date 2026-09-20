@@ -8,8 +8,14 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!-- The fixture intentionally stays outside repository-wide central package management. -->
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The relink variant: PackageIntegrationTests sets the property with the wasm-tools workload installed. -->
+        <NativeFileReference Include="native.c" Condition="'$(BrowserLoopConsumerNative)' == 'true'" />
+    </ItemGroup>
 
 </Project>

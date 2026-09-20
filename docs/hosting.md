@@ -119,9 +119,9 @@ WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, whether 
 reference of the browser app or published with the RID itself, so a solution-wide
 `dotnet publish -r browser-wasm` publishes the executables for the browser and the libraries as
 libraries. Prefer `-r` on the executable project all the same; a RID in `Directory.Build.props` makes
-every desktop build of the repository a browser build. No `wasm-tools` workload is needed while
-nothing native is linked, for publishing or for `dotnet run -r browser-wasm`, which serves the app
-from a local host.
+every desktop build of the repository a browser build. Without native references no `wasm-tools`
+workload is needed, for publishing or for `dotnet run -r browser-wasm`, which serves the app from a
+local host; with them the runtime is relinked and the workload is required (see below).
 
 The page is under `bin/<Configuration>/net11.0/browser-wasm/publish/wwwroot/`. Serve that directory
 over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the project's
@@ -133,6 +133,48 @@ build) is a browser build until the next desktop restore. `dotnet build` and `do
 
 For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`;
 the project's own values apply to the desktop. Trim analysis warnings stay on.
+
+### SDL3 in the browser
+
+The .NET runtime for the browser contains no SDL, and Pixely's native calls (`DllImport("SDL3")`,
+`"SDL3_image"`, `"SDL3_ttf"`, `"SDL3_mixer"`) fail with `DllNotFoundException` until SDL is linked
+into `dotnet.native.wasm`. That is a relink of the runtime, which needs the `wasm-tools` workload
+(`dotnet workload install wasm-tools`) and takes Emscripten static libraries as ordinary
+`NativeFileReference` items:
+
+```xml
+<ItemGroup>
+  <NativeFileReference Include="wasm/SDL3.a" />
+  <NativeFileReference Include="wasm/SDL3_image.a" />
+</ItemGroup>
+```
+
+The file name matters: the wasm build registers each native reference under its file name as a
+P/Invoke module and matches `DllImport` names against it literally (.NET 11, Mono runtime), so the
+archive for `DllImport("SDL3")` is `SDL3.a`, not `libSDL3.a`, and so on for `SDL3_image.a`,
+`SDL3_ttf.a` and `SDL3_mixer.a`. Any further archive those libraries need (FreeType, HarfBuzz, libpng,
+Ogg, Vorbis) is one more `NativeFileReference`; the runtime already links zlib. A reachable native
+call whose symbol no archive provides fails the link (`WasmAllowUndefinedSymbols=true` defers that to
+run time); a library that is not linked at all leaves its calls failing at run time as before. The
+Pixely SDK adds nothing here; a relink happens whenever native references exist.
+
+Getting the archives: Emscripten has ports for SDL3 (3.4.2 in the Emscripten .NET 11 bundles, so
+`SDL_WINDOW_FILL_DOCUMENT` works) and `sdl3_ttf`, but a port is fetched and compiled into the
+Emscripten cache at link time and the workload's cache is frozen, so `--use-port=sdl3` fails in a
+normal build. Linking the port directly would not bind the calls anyway: the P/Invoke table is keyed
+by native-reference file names, and a port adds none (the SDK warns PIXELY0005 about the related
+mistake of a `libSDL3*.a` reference). So the port is a way to build the archive once:
+
+1. Copy the workload's cache (`packs/Microsoft.NET.Runtime.Emscripten.*.Cache.*/<version>/tools/emscripten/cache`) to a writable directory.
+2. Run the workload's `emcc --use-port=sdl3` on any C file with `EM_CACHE` set to that copy and `EM_FROZEN_CACHE=0` (the workload's `emcc` reads `DOTNET_EMSCRIPTEN_LLVM_ROOT`, `DOTNET_EMSCRIPTEN_BINARYEN_ROOT` and `DOTNET_EMSCRIPTEN_NODE_JS` for its toolchain, `packs/Microsoft.NET.Runtime.Emscripten.*.Sdk.*/<version>/tools/bin`, `.../tools` and the Node pack's `tools/bin/node`). Pointing a project's `WasmCachePath` at the copy and adding `--use-port=sdl3` to `EmccExtraLDFlags` builds the port the same way during a publish.
+3. Copy `sysroot/lib/wasm32-emscripten/libSDL3.a` out of the cache as `SDL3.a` and reference it.
+
+The satellite libraries and their dependencies come from their own Emscripten builds the same way.
+
+`tutorials/Pixely.Tutorials.Browser` links every `*.a` in `BrowserNativeLibraryDirectory`:
+`dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives`.
+With `SDL3.a` alone the window fills the page and `ResolutionChanged` fires; the GPU is not
+available in the browser yet.
 
 ### The frame loop
 
@@ -175,4 +217,4 @@ so such a project sets `PixelyBrowserDefaultAssets=false`.
 
 `tutorials/Pixely.Tutorials.Browser` is the smallest example: `AddWindow` only, no GPU, it logs
 `ResolutionChanged`. On the desktop a window without a GPU spins its loop (see
-[Window rendering](window-rendering.md)).
+[Window rendering](window-rendering.md)); in the browser it needs `SDL3.a` linked as described above.

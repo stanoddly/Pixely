@@ -10,6 +10,23 @@
         <PixelyHosting>true</PixelyHosting>
     </PropertyGroup>
 
+    <!--
+      The browser needs SDL3 linked into the runtime (docs/hosting.md): point BrowserNativeLibraryDirectory at a directory
+      of Emscripten static libraries named after their P/Invoke modules (SDL3.a at least) when publishing for browser-wasm.
+    -->
+    <PropertyGroup Condition="'$(BrowserNativeLibraryDirectory)' != ''">
+      <BrowserNativeLibraryDirectory>$([MSBuild]::EnsureTrailingSlash('$(BrowserNativeLibraryDirectory)'))</BrowserNativeLibraryDirectory>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(BrowserNativeLibraryDirectory)' != ''">
+      <NativeFileReference Include="$(BrowserNativeLibraryDirectory)*.a" />
+    </ItemGroup>
+
+    <!-- An empty glob would publish a bundle that fails at run time. -->
+    <Target Name="_RequireBrowserSdlLibrary" BeforeTargets="BeforeBuild" Condition="'$(BrowserNativeLibraryDirectory)' != '' and !Exists('$(BrowserNativeLibraryDirectory)SDL3.a')">
+      <Error Text="BrowserNativeLibraryDirectory $(BrowserNativeLibraryDirectory) has no SDL3.a; see docs/hosting.md, SDL3 in the browser." />
+    </Target>
+
     <ItemGroup>
       <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
       <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />

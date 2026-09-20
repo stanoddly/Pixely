@@ -440,15 +440,28 @@ public class PackageIntegrationTests
     }
 
     // A hand-written Main around a fake app reaches BrowserHost and pixely-host.js, which a generated Main cannot without SDL.
-    [TestCase(null, "Frame 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40")]
-    [TestCase("BROWSER_LOOP_THROWS", "Frame 2.", "Caught InvalidOperationException: Frame 3 failed on purpose.", "RESULT exit code 1")]
-    public async Task BrowserHostRunsTheFrameLoopUnderNode(string? variant, string lastFrame, string outcome, string expectedResult)
+    [TestCase(null, "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40")]
+    [TestCase("BROWSER_LOOP_THROWS", "Frame 2 of 3.", "Caught InvalidOperationException: Frame 3 failed on purpose.", "RESULT exit code 1")]
+    public Task BrowserHostRunsTheFrameLoopUnderNode(string? variant, string lastFrame, string outcome, string expectedResult)
+    {
+        return RunBrowserLoopConsumerAsync(variant, lastFrame, outcome, expectedResult, properties: null);
+    }
+
+    // A native reference relinks the runtime (wasm-tools workload) and its file name is the P/Invoke module DllImport binds to.
+    [Test]
+    public async Task NativeReferenceIsRelinkedAndBoundInTheBrowserBuild()
+    {
+        await RequireWasmToolsAsync();
+        await RunBrowserLoopConsumerAsync("BROWSER_LOOP_NATIVE", "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40", properties: ["BrowserLoopConsumerNative=true"]);
+    }
+
+    private async Task RunBrowserLoopConsumerAsync(string? variant, string lastFrame, string outcome, string expectedResult, string[]? properties)
     {
         RequireNode();
         string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
         DeleteConsumerOutputs("BrowserLoopConsumer");
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: variant);
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: variant, properties: properties);
         string result = await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory));
         Assert.Multiple(() =>
         {
@@ -782,6 +795,15 @@ public class PackageIntegrationTests
         (int exitCode, string output) = await RunProcessExpectingExitCodeAsync("node", wwwroot, null, script);
         Assert.That(exitCode, Is.EqualTo(0), output);
         return output;
+    }
+
+    private static async Task RequireWasmToolsAsync()
+    {
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(Path.GetTempPath(), "workload", "list");
+        if (exitCode != 0 || !output.Contains("wasm-tools", StringComparison.Ordinal))
+        {
+            Assert.Ignore("The wasm-tools workload is not installed; the runtime cannot be relinked.");
+        }
     }
 
     private static void RequireNode()

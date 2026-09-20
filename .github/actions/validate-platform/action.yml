@@ -55,6 +55,12 @@ runs:
       env:
         INPUT_RUNTIME: ${{ inputs.runtime }}
 
+    # The browser tests that relink the runtime with a native reference skip without the workload.
+    - name: Install the wasm-tools workload
+      if: inputs['package-integration'] == 'true'
+      shell: bash
+      run: dotnet workload install wasm-tools
+
     - name: Run package integration tests
       if: inputs['package-integration'] == 'true'
       shell: bash
