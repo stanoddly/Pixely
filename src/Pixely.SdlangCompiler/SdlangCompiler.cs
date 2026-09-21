@@ -1175,7 +1175,7 @@ public class SdlangCompiler
                 string paramName = reflectedParameterName;
                 if (!param.TryGetProperty("type", out JsonElement paramType) || !paramType.TryGetProperty("kind", out JsonElement kindElement))
                 {
-                    throw new ShaderCompilationException($"Reflection of parameter '{paramName}' in the {DescribeStage(stage)} shader has no type kind.");
+                    throw new ShaderCompilationException($"Reflection of parameter '{paramName}' in the {DescribeStage(stage)} shader has no type or type kind.");
                 }
 
                 string? kind = kindElement.GetString();
