@@ -24,7 +24,7 @@ public class ComputePipelineBuilder
                 SDL_GPUComputePipelineCreateInfo createInfo = new()
                 {
                     code = shaderCodePointer,
-                    code_size = (nuint)computeShader.Code.Length,
+                    code_size = (nuint)computeShader.CodeSize,
                     entrypoint = entryPointPointer,
                     format = (SDL_GPUShaderFormat)computeShader.Format,
                     num_samplers = (uint)bindingLayout.NumSamplers(),

@@ -176,8 +176,59 @@ The satellite libraries and their dependencies come from their own Emscripten bu
 
 `tutorials/Pixely.Tutorials.Browser` links every `*.a` in `BrowserNativeLibraryDirectory`:
 `dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives`.
-With `SDL3.a` alone the window fills the page and `ResolutionChanged` fires; the GPU is not
-available in the browser yet.
+With the port's `SDL3.a` alone the window fills the page and `ResolutionChanged` fires; the GPU
+needs the WebGPU backend below.
+
+### WebGPU in the browser
+
+SDL has no WebGPU backend in its releases. Pixely uses the one in the
+[stanoddly/SDL_wgpu](https://github.com/stanoddly/SDL_wgpu) fork, branch `webgpu-fixes`, on top of
+the upstream pull request libsdl-org/SDL#16020. `SDL3.a` is built from that fork with
+`-DSDL_WEBGPU=ON -DSDL_WEBGPU_EMSCRIPTEN=ON` under the workload's Emscripten (the recipe above, with
+`emcmake cmake` and `cmake --build --target SDL3-static` in place of the port), and takes the place
+of the port's archive. `UseGpu()` creates the font system too, so `SDL3_ttf.a` is linked with it,
+built against the fork's build directory (`SDL3_DIR`) with `SDLTTF_VENDORED=ON`: the Emscripten
+FreeType port is built with legacy exception instructions, which the .NET link rejects.
+
+The backend is implemented on emdawnwebgpu, the WebGPU binding Emscripten ships as a remote port.
+The publish opts into it with `PixelyBrowserWebGpu=true`, which adds `--use-port=emdawnwebgpu` to
+the link, exports the entry points `pixely-host.js` uses, and requires `WasmCachePath` to name a
+writable copy of the workload's Emscripten cache (PIXELY0006 otherwise), because the port is fetched
+and built into the cache at link time. Building `SDL3.a` against that same copy builds the port
+once. The whole publish:
+
+```shell
+dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives -p:PixelyBrowserWebGpu=true -p:WasmCachePath=/path/to/emcache
+```
+
+Requesting a WebGPU adapter and device is asynchronous, and SDL would wait it out by suspending the
+wasm stack, which no managed frame survives. So the page requests them: the generated `Main` awaits
+`BrowserHost.PrepareAsync(builder)` before `Build()`, and when the builder has a `GpuDevice`
+registered, `pixely-host.js` requests an adapter, requests a device with the features SDL requires,
+imports both into emdawnwebgpu beneath an instance of its own, and `PixelyFactory` hands the three
+pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiting. A hand-written
+`Main` awaits `PrepareAsync` the same way. `GpuBackend.Automatic` advertises WGSL only in the
+browser; `GpuBackend.WebGpu` (`PIXELY_GRAPHICS=webgpu`) names the driver explicitly.
+
+SDL cannot install callbacks on an adopted device, so `pixely-host.js` observes `device.lost` and
+`uncapturederror` itself: an error is logged, and a lost device ends the frame loop with the loss
+as the exception, since SDL would keep recording against the dead device without noticing.
+
+Teardown is the page's too. Destroying SDL's device spins until every submission has drained, and
+the fences that drain them complete only after the event loop turns, so `GpuDevice.Dispose` in the
+browser releases the managed resources and hands the device to `pixely-host.js`, which awaits
+`queue.onSubmittedWorkDone()`, destroys the SDL device, releases the imported handles and destroys
+the WebGPU device. Nothing awaits that: the app is already disposed, and a failure is logged.
+
+Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
+and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
+stack under a managed frame; headless screenshots stay desktop-only). The swapchain is acquired
+with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no texture ready is skipped;
+`requestAnimationFrame` paces the frames anyway.
+
+Shaders reach the browser as the WGSL the shader compiler emits beside SPIR-V, DXIL and MSL (see
+[Shaders](shaders.md), WGSL bindings). A content directory beside the executable has no browser
+counterpart yet, so the tutorial embeds the generated shaders in the assembly, on both hosts.
 
 ### The frame loop
 
@@ -208,9 +259,9 @@ The package ships three static web assets and adds each to the project only when
   stylesheet and `<script type="module" src="main.js">`.
 - `main.js`: imports `./_framework/dotnet.js`, passes the canvas as `Module.canvas`, awaits
   `dotnet.runMain()`, logs the exit code, and logs and rethrows a rejection.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, which `BrowserHost` imports as module
-  `pixely-host` from `../pixely-host.js`, relative to `dotnet.js`. A replacement keeps the export and
-  the location.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()` and
+  `destroyGpuDevice(destroy)`, which `BrowserHost` imports as module `pixely-host` from
+  `../pixely-host.js`, relative to `dotnet.js`. A replacement keeps the exports and the location.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
 setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;
@@ -218,6 +269,7 @@ setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at
 that reaches `wwwroot/` as a linked `Content` item or generated content collides with the default,
 so such a project sets `PixelyBrowserDefaultAssets=false`.
 
-`tutorials/Pixely.Tutorials.Browser` is the smallest example: `AddWindow` only, no GPU, it logs
-`ResolutionChanged`. On the desktop a window without a GPU spins its loop (see
-[Window rendering](window-rendering.md)); in the browser it needs `SDL3.a` linked as described above.
+`tutorials/Pixely.Tutorials.Browser` is the smallest example: `UseDefaultRendering` and one renderer
+drawing a magenta quad from embedded shaders, logging `ResolutionChanged`. On the desktop it runs as
+any other tutorial (see [Window rendering](window-rendering.md)); in the browser it needs the WebGPU
+`SDL3.a`, `SDL3_ttf.a` and `PixelyBrowserWebGpu` as described above.

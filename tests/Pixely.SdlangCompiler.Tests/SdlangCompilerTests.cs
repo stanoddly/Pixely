@@ -192,6 +192,60 @@ public class SdlangCompilerTests
                                                           }
                                                           """;
 
+    private const string FragmentShaderWithTwoTextureSamplerPairsAndStorageBuffer = """
+                                                                                    struct FragmentInput {
+                                                                                        float4 position : SV_Position;
+                                                                                        float2 texCoord : TEXCOORD0;
+                                                                                    };
+
+                                                                                    struct VertexInput {
+                                                                                        float3 position : POSITION;
+                                                                                        float2 texCoord : TEXCOORD0;
+                                                                                    };
+
+                                                                                    cbuffer FragmentUniforms : register(b0, space3) {
+                                                                                        float4 tintColor;
+                                                                                    };
+
+                                                                                    Texture2D<float4> albedo : register(t0, space2);
+                                                                                    SamplerState albedoSampler : register(s0, space2);
+                                                                                    Texture2D<float4> normal : register(t1, space2);
+                                                                                    SamplerState normalSampler : register(s1, space2);
+                                                                                    StructuredBuffer<float4> palette : register(t2, space2);
+
+                                                                                    [shader("vertex")]
+                                                                                    FragmentInput vertexMain(VertexInput input) {
+                                                                                        FragmentInput output;
+                                                                                        output.position = float4(input.position, 1.0);
+                                                                                        output.texCoord = input.texCoord;
+                                                                                        return output;
+                                                                                    }
+
+                                                                                    [shader("fragment")]
+                                                                                    float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                                                        return albedo.Sample(albedoSampler, input.texCoord) * tintColor + normal.Sample(normalSampler, input.texCoord) + palette[0];
+                                                                                    }
+                                                                                    """;
+
+    private const string ComputeShaderWithReadOnlyAndReadWriteResources = """
+                                                                          Texture2D<float4> source : register(t0, space0);
+                                                                          SamplerState sourceSampler : register(s0, space0);
+                                                                          StructuredBuffer<float4> weights : register(t1, space0);
+                                                                          RWTexture2D<float4> outputTexture : register(u0, space1);
+                                                                          RWStructuredBuffer<float4> totals : register(u1, space1);
+
+                                                                          ConstantBuffer<float> time : register(b0, space2);
+
+                                                                          [numthreads(8, 8, 1)]
+                                                                          [shader("compute")]
+                                                                          void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                                          {
+                                                                              float4 sample = source.SampleLevel(sourceSampler, float2(dispatchThreadID.xy) / 8.0, 0.0);
+                                                                              outputTexture[dispatchThreadID.xy] = sample * weights[0] * time;
+                                                                              totals[0] += sample;
+                                                                          }
+                                                                          """;
+
     private const string FragmentShaderWrongUniformSpace = """
                                                            struct FragmentInput {
                                                                float4 position : SV_Position;
@@ -879,6 +933,92 @@ public class SdlangCompilerTests
         Assert.That(ex.Message, Does.Contain("same index and space"));
     }
 
+    [Test]
+    public void CompileShader_ValidFragmentShaderWithBindings_InterleavesTextureAndSamplerInWgsl()
+    {
+        string shaderPath = CreateTemporaryShaderFile(ValidFragmentShaderWithBindings);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = ReadGeneratedWgsl(shaderPath, "fragment");
+
+        // SDL GPU's WebGPU backend reads the bind group layout out of the WGSL text and expects each sampled
+        // texture to be followed by its sampler, with no gap, and uniforms in their own group by slot.
+        Assert.Multiple(() =>
+        {
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(0\) var albedo_\d+ : texture_2d<f32>"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(1\) var albedoSampler_\d+ : sampler"));
+            Assert.That(wgsl, Does.Match(@"@group\(3\) @binding\(0\) var<uniform> FragmentUniforms_\d+ :"));
+        });
+    }
+
+    [Test]
+    public void CompileShader_TwoTextureSamplerPairsAndStorageBuffer_AssignsDenseWgslBindings()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderWithTwoTextureSamplerPairsAndStorageBuffer);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = ReadGeneratedWgsl(shaderPath, "fragment");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(0\) var albedo_\d+ : texture_2d<f32>"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(1\) var albedoSampler_\d+ : sampler"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(2\) var normal_\d+ : texture_2d<f32>"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(3\) var normalSampler_\d+ : sampler"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(4\) var<storage, read> palette_\d+ :"));
+            Assert.That(wgsl, Does.Match(@"@group\(3\) @binding\(0\) var<uniform> FragmentUniforms_\d+ :"));
+        });
+    }
+
+    [Test]
+    public void CompileShader_ComputeShaderWithReadOnlyAndReadWriteResources_AssignsWgslBindingsPerGroup()
+    {
+        string shaderPath = CreateTemporaryShaderFile(ComputeShaderWithReadOnlyAndReadWriteResources);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = ReadGeneratedWgsl(shaderPath, null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(wgsl, Does.Match(@"@group\(0\) @binding\(0\) var source_\d+ : texture_2d<f32>"));
+            Assert.That(wgsl, Does.Match(@"@group\(0\) @binding\(1\) var sourceSampler_\d+ : sampler"));
+            Assert.That(wgsl, Does.Match(@"@group\(0\) @binding\(2\) var<storage, read> weights_\d+ :"));
+            Assert.That(wgsl, Does.Match(@"@group\(1\) @binding\(0\) var outputTexture_\d+ : texture_storage_2d<"));
+            Assert.That(wgsl, Does.Match(@"@group\(1\) @binding\(1\) var<storage, read_write> totals_\d+ :"));
+            Assert.That(wgsl, Does.Match(@"@group\(2\) @binding\(0\) var<uniform> time_\d+ :"));
+        });
+    }
+
+    [Test]
+    public void CompileShader_WgslDeclaresEveryBindingOnce()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderWithTwoTextureSamplerPairsAndStorageBuffer);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = ReadGeneratedWgsl(shaderPath, "fragment");
+        List<string> bindings = System.Text.RegularExpressions.Regex.Matches(wgsl, @"@group\(\d+\) @binding\(\d+\)")
+            .Select(match => match.Value)
+            .ToList();
+
+        Assert.That(bindings, Is.Unique);
+        Assert.That(wgsl, Does.Not.Match(@"@binding\(\d+\) @group"), "every declaration was rewritten");
+    }
+
+    private string ReadGeneratedWgsl(string shaderPath, string? stage)
+    {
+        string shaderName = Path.GetFileNameWithoutExtension(shaderPath);
+        string filename = stage == null ? $"{shaderName}.wgsl" : $"{shaderName}.{stage}.wgsl";
+        return File.ReadAllText(Path.Combine(_testDir, ".generated", filename));
+    }
+
     private const string FragmentShaderWithStructStorageBuffer = """
                                                                  struct FragmentInput {
                                                                      float4 position : SV_Position;
@@ -1081,11 +1221,12 @@ public class SdlangCompilerTests
         {
             Assert.That(
                 shaders.Select(shader => shader.Format),
-                Is.EqualTo(new[] { ShaderFormatDto.SpirV, ShaderFormatDto.Dxil, ShaderFormatDto.Msl }));
+                Is.EqualTo(new[] { ShaderFormatDto.SpirV, ShaderFormatDto.Dxil, ShaderFormatDto.Msl, ShaderFormatDto.Wgsl }));
             Assert.That(shaders.Select(shader => shader.EntryPoint), Is.All.EqualTo(sourceEntryPoint));
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(_testDir, ".generated", $"{filename}.wgsl")), Is.True);
         });
     }
 }

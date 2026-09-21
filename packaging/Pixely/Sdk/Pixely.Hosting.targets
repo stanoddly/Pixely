@@ -4,7 +4,8 @@
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
       project's RootNamespace whose Main builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
-      of Program. On browser-wasm the browser owns the frame loop, so Main is async and awaits
+      of Program. On browser-wasm the browser owns the frame loop and the WebGPU device is requested
+      asynchronously, so Main is async, awaits Pixely.App.BrowserHost.PrepareAsync before building and
       Pixely.App.BrowserHost.RunAsync in place of app.Run(); every other line is shared. Consumers get this
       file through the Pixely SDK (Sdk/Pixely.AfterSdk.targets); repository tutorials register it on
       AfterMicrosoftNETSdkTargets from tutorials/Directory.Build.targets. Both import points come after the
@@ -48,6 +49,7 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20await global::Pixely.App.BrowserHost.PrepareAsync(builder)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return app.Run()%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return await global::Pixely.App.BrowserHost.RunAsync(app)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />

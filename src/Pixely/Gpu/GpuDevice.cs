@@ -388,6 +388,12 @@ public class GpuDevice : IDisposable
             return;
         }
 
+        // SDL's WebGPU backend waits by suspending the wasm stack, which a managed frame cannot survive.
+        if (OperatingSystem.IsBrowser())
+        {
+            throw new PlatformNotSupportedException("Waiting for GPU fences is not supported in the browser.");
+        }
+
         Span<Pointer<SDL_GPUFence>> fencePointers = stackalloc Pointer<SDL_GPUFence>[fences.Length];
         for (int i = 0; i < fences.Length; i++)
         {
@@ -452,7 +458,17 @@ public class GpuDevice : IDisposable
         
         unsafe
         {
-            SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
+            // Destroying SDL's WebGPU device spins until every submission has drained, which needs the page's event loop
+            // to turn, so the page destroys it once the queue is idle.
+            if (OperatingSystem.IsBrowser())
+            {
+                App.BrowserHost.DestroyGpuDevice((IntPtr)(SDL_GPUDevice*)SdlGpuDevice);
+            }
+            else
+            {
+                SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
+            }
+
             SdlGpuDevice = null;
         }
     }

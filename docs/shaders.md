@@ -1,6 +1,6 @@
 # Shaders
 
-Guide to writing and using shaders with Pixely. Shaders are written in Slang and compiled to SPIR-V, DXIL, and MSL at build time.
+Guide to writing and using shaders with Pixely. Shaders are written in Slang and compiled to SPIR-V, DXIL, MSL and WGSL at build time.
 
 ## File Structure
 
@@ -11,13 +11,15 @@ Content/shaders/
     ├── shader.vertex.spv
     ├── shader.vertex.dxil
     ├── shader.vertex.metal
+    ├── shader.vertex.wgsl
     ├── shader.fragment.spv
     ├── shader.fragment.dxil
     ├── shader.fragment.metal
+    ├── shader.fragment.wgsl
     └── shader.metadata.json
 ```
 
-Shaders are automatically compiled during build. The build system generates SPIR-V binaries for Vulkan, DXIL binaries for Direct3D 12, MSL source for Metal, and metadata files in the `.generated/` directory.
+Shaders are automatically compiled during build. The build system generates SPIR-V binaries for Vulkan, DXIL binaries for Direct3D 12, MSL source for Metal, WGSL source for WebGPU in the browser, and metadata files in the `.generated/` directory.
 
 ## Build Integration
 
@@ -184,7 +186,7 @@ Pixely lets SDL choose the GPU backend automatically by default. Register `Pixel
 builder.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Direct3D12));
 ```
 
-`GpuBackend` supports `Automatic`, `Vulkan`, `Direct3D12`, and `Metal`. An explicit choice is passed to SDL as `vulkan`, `direct3d12`, or `metal` and advertises only that backend's shader format; device creation fails if the requested driver is unavailable. Automatic Windows device creation advertises both SPIR-V and DXIL, allowing SDL to select Vulkan or Direct3D 12. Vulkan-specific device options remain enabled whenever Vulkan can be selected.
+`GpuBackend` supports `Automatic`, `Vulkan`, `Direct3D12`, `Metal` and `WebGpu`. An explicit choice is passed to SDL as `vulkan`, `direct3d12`, `metal` or `webgpu` and advertises only that backend's shader format; device creation fails if the requested driver is unavailable. Automatic Windows device creation advertises both SPIR-V and DXIL, allowing SDL to select Vulkan or Direct3D 12; in the browser it advertises WGSL only. Vulkan-specific device options remain enabled whenever Vulkan can be selected. `WebGpu` exists only in the browser, see [Hosting](hosting.md).
 
 Set the `PIXELY_GRAPHICS` environment variable to override `PixelyConfig.GpuBackend` without changing application code:
 
@@ -192,7 +194,7 @@ Set the `PIXELY_GRAPHICS` environment variable to override `PixelyConfig.GpuBack
 PIXELY_GRAPHICS=vulkan dotnet run --project tutorials/Pixely.Tutorials.Triangle
 ```
 
-Supported values are `automatic`, `vulkan`, `direct3d12`, and `metal`, matched case-insensitively. An unset, empty, or whitespace-only value leaves `PixelyConfig.GpuBackend` in effect. Any other value stops `Build()` with an error that lists the supported values. The other `PixelyConfig` variables are listed in headless.md.
+Supported values are `automatic`, `vulkan`, `direct3d12`, `metal` and `webgpu`, matched case-insensitively. An unset, empty, or whitespace-only value leaves `PixelyConfig.GpuBackend` in effect. Any other value stops `Build()` with an error that lists the supported values. The other `PixelyConfig` variables are listed in headless.md.
 
 The selected SDL driver is available from `GpuDevice.Driver` for diagnostics.
 
@@ -313,6 +315,12 @@ For each graphics shader program, the build generates one `.metadata.json` file:
 Each stage has its own binding layout because resources are reflected for the entry point that uses them. This metadata is used by the loader to validate bindings and create both native GPU shader objects transactionally. You don't need to edit it manually.
 
 Per-target shader records carry the source entry point name for every format. `main` is never a valid entry point name: Metal reserves it, so Slang would rename it in the MSL output and the name would differ between backends.
+
+### WGSL bindings
+
+SDL's WebGPU backend reads the bind group layout out of the WGSL text, and WebGPU has no combined image sampler: a sampled texture and its sampler need two bindings. SDL requires the read-only group's bindings to be dense from 0 with each sampled texture followed by its sampler, then the storage textures, then the storage buffers, all in slot order; read-write and uniform groups use the slot as the binding. Slang emits the register index as the binding, so a texture would collide with its sampler, and no register shift produces the interleave. The compiler rewrites the `@binding` numbers of the generated WGSL from the reflected resources instead, so the register convention above is all a shader needs; the desktop formats are unchanged. A shader whose WGSL declares a resource the reflection does not list, or the other way round, fails the build.
+
+Two limits: the reflection classifies every read-only texture as sampled, so a read-only storage texture (`Texture2D` read with `Load` beside a storage buffer) is numbered as a sampled one; and a depth texture sampled as a float texture needs SDL's `//SDLGPU_ForceAllowSamplingForTexture(group, binding)` directive in the WGSL, which nothing emits yet. Comparison sampling needs nothing, Slang emits `texture_depth_2d` and `sampler_comparison` for it.
 
 ## Notes
 

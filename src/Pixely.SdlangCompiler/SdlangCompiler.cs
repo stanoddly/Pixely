@@ -24,6 +24,15 @@ internal enum ResourceType
 
 internal record struct ResourceBinding(string Name, ResourceType Type, int Space, int Index);
 
+internal sealed record ShaderReflection(
+    ShaderStageDto Stage,
+    ShaderBindingLayout BindingLayout,
+    ShaderSystemValueInputs SystemValueInputs,
+    uint ThreadCountX,
+    uint ThreadCountY,
+    uint ThreadCountZ,
+    List<ResourceBinding> Bindings);
+
 internal enum ShaderSourceKind
 {
     Graphics,
@@ -40,7 +49,7 @@ public class SdlangCompiler
     private const int MaxReflectionTraversalDepth = 64;
     private static readonly string SlangVersion = GetSlangVersion();
     private static readonly ShaderFormatDto[] AdditionalTargetFormats =
-        [ShaderFormatDto.Dxil, ShaderFormatDto.Msl];
+        [ShaderFormatDto.Dxil, ShaderFormatDto.Msl, ShaderFormatDto.Wgsl];
     private static readonly ShaderFormatDto[] TargetFormats =
         [ShaderFormatDto.SpirV, .. AdditionalTargetFormats];
 
@@ -51,7 +60,8 @@ public class SdlangCompiler
     {
         { ShaderFormatDto.SpirV, "spv" },
         { ShaderFormatDto.Dxil, "dxil" },
-        { ShaderFormatDto.Msl, "metal" }
+        { ShaderFormatDto.Msl, "metal" },
+        { ShaderFormatDto.Wgsl, "wgsl" }
     };
 
     /// <param name="slangCompilerPath">Path to the slangc executable to compile shaders with.</param>
@@ -129,6 +139,7 @@ public class SdlangCompiler
         ShaderFormatDto.SpirV => "spirv",
         ShaderFormatDto.Dxil => "dxil",
         ShaderFormatDto.Msl => "metal",
+        ShaderFormatDto.Wgsl => "wgsl",
         _ => throw new ArgumentException($"Unsupported shader format: {format}")
     };
 
@@ -152,10 +163,11 @@ public class SdlangCompiler
     {
         { ShaderFormatDto.SpirV, ["-fvk-use-entrypoint-name"] },
         { ShaderFormatDto.Dxil, ["-profile", "sm_6_0"] },
-        { ShaderFormatDto.Msl, [] }
+        { ShaderFormatDto.Msl, [] },
+        { ShaderFormatDto.Wgsl, [] }
     };
 
-    private (FileInfo reflectionFile, FileInfo dependencyFile, List<ShaderInstanceDto> shaderInstances) CompileTargets(
+    private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
         FileInfo filePath,
         DirectoryInfo tempDir,
         DirectoryInfo outputDir,
@@ -175,12 +187,14 @@ public class SdlangCompiler
             reflectionFile,
             dependencyFile));
 
+        // The SPIR-V compile is the one that reflects, and the WGSL target is rewritten from that reflection.
+        ShaderReflection reflection = ParseReflectionData(reflectionFile, entryPoint);
         foreach (ShaderFormatDto format in AdditionalTargetFormats)
         {
-            shaderInstances.Add(CompileTarget(filePath, outputDir, format, entryPoint, outputName));
+            shaderInstances.Add(CompileTarget(filePath, outputDir, format, entryPoint, outputName, reflection: reflection));
         }
 
-        return (reflectionFile, dependencyFile, shaderInstances);
+        return (dependencyFile, reflection, shaderInstances);
     }
 
     private ShaderInstanceDto CompileTarget(
@@ -190,7 +204,8 @@ public class SdlangCompiler
         string entryPoint,
         string outputName,
         FileInfo? reflectionFile = null,
-        FileInfo? dependencyFile = null)
+        FileInfo? dependencyFile = null,
+        ShaderReflection? reflection = null)
     {
         string target = GetTargetString(format);
         string extension = TargetsWithExtensions[format];
@@ -214,6 +229,10 @@ public class SdlangCompiler
         if (format == ShaderFormatDto.Msl)
         {
             NormalizeMetalBufferBindings(outputFile);
+        }
+        else if (format == ShaderFormatDto.Wgsl)
+        {
+            NormalizeWebGpuBindings(outputFile, reflection!.Stage, reflection.Bindings);
         }
 
         return new ShaderInstanceDto(format, outputFile.Name, entryPoint);
@@ -791,6 +810,95 @@ public class SdlangCompiler
             || declaration.Contains(" device *", StringComparison.Ordinal);
     }
 
+    // A WGSL resource declaration: both attributes in either order, then the variable and its type.
+    private static readonly Regex WebGpuDeclarationPattern = new(
+        @"(?<attributes>(?:@(?:binding|group)\(\d+\)\s*){2})var(?<address><[^>]*>)?\s+(?<name>\w+)\s*:\s*(?<type>[^;]+);",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // SDL GPU's WebGPU backend infers a bind group layout from the WGSL text and needs the read-only group's
+    // bindings dense from 0: each sampled texture followed by its own sampler, then the storage textures, then
+    // the storage buffers. Slang emits the register index as the binding, so a texture collides with its
+    // sampler and a storage buffer sits where a sampler belongs. No register shift expresses the interleave,
+    // so the bindings are rewritten from the reflected resources. Read-write and uniform groups use the index.
+    private static void NormalizeWebGpuBindings(FileInfo outputFile, ShaderStageDto stage, List<ResourceBinding> bindings)
+    {
+        string wgsl = File.ReadAllText(outputFile.FullName);
+        int sampledTextureCount = bindings.Count(binding => binding.Type == ResourceType.SampledTexture);
+        HashSet<ResourceBinding> rewritten = new();
+
+        string normalized = WebGpuDeclarationPattern.Replace(wgsl, match =>
+        {
+            string attributes = match.Groups["attributes"].Value;
+            int group = int.Parse(Regex.Match(attributes, @"@group\((\d+)\)").Groups[1].Value);
+            int index = int.Parse(Regex.Match(attributes, @"@binding\((\d+)\)").Groups[1].Value);
+            string name = match.Groups["name"].Value;
+            ResourceType type = ClassifyWebGpuDeclaration(match.Groups["address"].Value, match.Groups["type"].Value.Trim(), name, stage);
+
+            ResourceBinding binding = bindings.FirstOrDefault(candidate => candidate.Space == group && candidate.Index == index && candidate.Type == type);
+            if (binding.Name == null)
+            {
+                throw new ShaderBindingValidationException(
+                    $"WGSL declares '{name}' as {GetResourceTypeName(type)} at group {group} binding {index} in the {stage} shader, " +
+                    "but the reflection lists no such resource.");
+            }
+
+            rewritten.Add(binding);
+            return $"@group({group}) @binding({GetWebGpuBinding(binding, sampledTextureCount)}) {match.Value[attributes.Length..]}";
+        });
+
+        foreach (ResourceBinding binding in bindings)
+        {
+            if (!rewritten.Contains(binding))
+            {
+                throw new ShaderBindingValidationException(
+                    $"Parameter '{binding.Name}' in the {stage} shader has no declaration in the generated WGSL, so its WebGPU binding could not be assigned.");
+            }
+        }
+
+        File.WriteAllText(outputFile.FullName, normalized);
+    }
+
+    private static int GetWebGpuBinding(ResourceBinding binding, int sampledTextureCount) => binding.Type switch
+    {
+        ResourceType.SampledTexture => 2 * binding.Index,
+        ResourceType.Sampler => 2 * binding.Index + 1,
+        // Read-only storage resources keep the order the read-only index space already gives them, moved
+        // past the sampler each sampled texture adds. The reflection never classifies a read-only storage
+        // texture today, so in practice this places storage buffers.
+        ResourceType.StorageTexture or ResourceType.StorageBuffer => sampledTextureCount + binding.Index,
+        _ => binding.Index
+    };
+
+    private static ResourceType ClassifyWebGpuDeclaration(string addressSpace, string type, string name, ShaderStageDto stage)
+    {
+        if (type.StartsWith("sampler", StringComparison.Ordinal))
+        {
+            return ResourceType.Sampler;
+        }
+
+        if (type.StartsWith("texture_storage_", StringComparison.Ordinal))
+        {
+            return type.Contains("write", StringComparison.Ordinal) ? ResourceType.ReadWriteStorageTexture : ResourceType.StorageTexture;
+        }
+
+        if (type.StartsWith("texture_", StringComparison.Ordinal))
+        {
+            return ResourceType.SampledTexture;
+        }
+
+        if (addressSpace.Contains("storage", StringComparison.Ordinal))
+        {
+            return addressSpace.Contains("read_write", StringComparison.Ordinal) ? ResourceType.ReadWriteStorageBuffer : ResourceType.StorageBuffer;
+        }
+
+        if (addressSpace.Contains("uniform", StringComparison.Ordinal))
+        {
+            return ResourceType.UniformBuffer;
+        }
+
+        throw new ShaderBindingValidationException($"WGSL declares '{name}' in the {stage} shader as var{addressSpace} : {type}, which is not a resource the WebGPU binding rewrite knows.");
+    }
+
     private static void ValidateBindings(ShaderStageDto stage, List<ResourceBinding> bindings)
     {
         // Determine expected spaces based on shader stage.
@@ -973,9 +1081,7 @@ public class SdlangCompiler
         _ => type.ToString()
     };
 
-    private static (ShaderStageDto stage, ShaderBindingLayout resources, ShaderSystemValueInputs systemValueInputs, uint threadCountX, uint threadCountY, uint threadCountZ) ParseReflectionData(
-        FileInfo reflectionFile,
-        string expectedEntryPoint)
+    private static ShaderReflection ParseReflectionData(FileInfo reflectionFile, string expectedEntryPoint)
     {
         string json = File.ReadAllText(reflectionFile.FullName);
         using JsonDocument document = JsonDocument.Parse(json);
@@ -1134,7 +1240,7 @@ public class SdlangCompiler
             shaderUniformSlots,
             BuildStorageBufferElementSizes(storageBufferElementSizesBySlot),
             BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesBySlot));
-        return (stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ);
+        return new ShaderReflection(stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ, resourceBindings);
     }
 
     internal static HashSet<string> GetUsedParameterNames(JsonElement entryPoint)
@@ -1606,7 +1712,7 @@ public class SdlangCompiler
 
             if (shaderSourceKind == ShaderSourceKind.Compute)
             {
-                (FileInfo reflectionFile, FileInfo dependencyFile, List<ShaderInstanceDto> shaderInstances) = CompileTargets(
+                (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) = CompileTargets(
                     filePath,
                     tempDir,
                     outputDir,
@@ -1614,9 +1720,7 @@ public class SdlangCompiler
                     filenameWithoutExt);
                 List<string> sourceDependencies = ReadSourceDependencies(filePath, dependencyFile);
                 string sourceHash = CalculateSourceHash(filePath, sourceDependencies);
-                (ShaderStageDto stage, ShaderBindingLayout bindingLayout, ShaderSystemValueInputs _, uint threadCountX, uint threadCountY, uint threadCountZ) =
-                    ParseReflectionData(reflectionFile, "computeMain");
-                if (stage != ShaderStageDto.Compute)
+                if (reflection.Stage != ShaderStageDto.Compute)
                 {
                     throw new ShaderCompilationException("Entry point 'computeMain' is not a compute shader.");
                 }
@@ -1624,18 +1728,18 @@ public class SdlangCompiler
                 WriteComputeMetadata(
                     outputDir,
                     filenameWithoutExt,
-                    bindingLayout,
+                    reflection.BindingLayout,
                     shaderInstances,
                     sourceHash,
                     sourceDependencies,
-                    threadCountX,
-                    threadCountY,
-                    threadCountZ);
+                    reflection.ThreadCountX,
+                    reflection.ThreadCountY,
+                    reflection.ThreadCountZ);
                 CleanupGeneratedFiles(parentDir, outputDir);
                 return;
             }
 
-            (FileInfo vertexReflectionFile, FileInfo graphicsDependencyFile, List<ShaderInstanceDto> vertexShaders) = CompileTargets(
+            (FileInfo graphicsDependencyFile, ShaderReflection vertexReflection, List<ShaderInstanceDto> vertexShaders) = CompileTargets(
                 filePath,
                 tempDir,
                 outputDir,
@@ -1643,22 +1747,18 @@ public class SdlangCompiler
                 $"{filenameWithoutExt}.vertex");
             List<string> graphicsSourceDependencies = ReadSourceDependencies(filePath, graphicsDependencyFile);
             string graphicsSourceHash = CalculateSourceHash(filePath, graphicsSourceDependencies);
-            (ShaderStageDto vertexStage, ShaderBindingLayout vertexBindingLayout, ShaderSystemValueInputs vertexSystemValueInputs, uint _, uint _, uint _) =
-                ParseReflectionData(vertexReflectionFile, "vertexMain");
-            if (vertexStage != ShaderStageDto.Vertex)
+            if (vertexReflection.Stage != ShaderStageDto.Vertex)
             {
                 throw new ShaderCompilationException("Entry point 'vertexMain' is not a vertex shader.");
             }
 
-            (FileInfo fragmentReflectionFile, FileInfo _, List<ShaderInstanceDto> fragmentShaders) = CompileTargets(
+            (FileInfo _, ShaderReflection fragmentReflection, List<ShaderInstanceDto> fragmentShaders) = CompileTargets(
                 filePath,
                 tempDir,
                 outputDir,
                 "fragmentMain",
                 $"{filenameWithoutExt}.fragment");
-            (ShaderStageDto fragmentStage, ShaderBindingLayout fragmentBindingLayout, ShaderSystemValueInputs _, uint _, uint _, uint _) =
-                ParseReflectionData(fragmentReflectionFile, "fragmentMain");
-            if (fragmentStage != ShaderStageDto.Fragment)
+            if (fragmentReflection.Stage != ShaderStageDto.Fragment)
             {
                 throw new ShaderCompilationException("Entry point 'fragmentMain' is not a fragment shader.");
             }
@@ -1666,10 +1766,10 @@ public class SdlangCompiler
             WriteGraphicsMetadata(
                 outputDir,
                 filenameWithoutExt,
-                vertexBindingLayout,
-                vertexSystemValueInputs,
+                vertexReflection.BindingLayout,
+                vertexReflection.SystemValueInputs,
                 vertexShaders,
-                fragmentBindingLayout,
+                fragmentReflection.BindingLayout,
                 fragmentShaders,
                 graphicsSourceHash,
                 graphicsSourceDependencies);

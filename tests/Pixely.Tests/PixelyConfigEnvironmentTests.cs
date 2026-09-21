@@ -33,6 +33,7 @@ public class PixelyConfigEnvironmentTests
     [TestCase("vulkan", GpuBackend.Vulkan)]
     [TestCase("direct3d12", GpuBackend.Direct3D12)]
     [TestCase("metal", GpuBackend.Metal)]
+    [TestCase("webgpu", GpuBackend.WebGpu)]
     [TestCase(" VULKAN ", GpuBackend.Vulkan)]
     public void Apply_WithSupportedGpuBackend_OverridesGpuBackend(string value, GpuBackend expected)
     {

@@ -400,9 +400,15 @@ public class Window : IDisposable
         unsafe
         {
             SDL_GPUTexture* swapchainTexturePointer;
-            if (SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height) == false)
+            // The waiting form spins on SDL_DelayNS, which in the browser suspends the wasm stack, and a managed frame
+            // cannot be in the suspended region. The page paces frames from requestAnimationFrame there anyway, so a
+            // frame with no texture ready is skipped.
+            bool acquired = OperatingSystem.IsBrowser()
+                ? SDL3.SDL_AcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height)
+                : SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height);
+            if (acquired == false)
             {
-                throw new PixelyInitializationException($"SDL_WaitAndAcquireGPUSwapchainTexture failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"SDL_AcquireGPUSwapchainTexture failed: {SDL3.SDL_GetError()}");
             }
 
             if (swapchainTexturePointer == null)

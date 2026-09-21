@@ -104,13 +104,15 @@ public sealed class GraphicsShaderProgramCompilerTests
             {
                 "program.vertex.spv",
                 "program.vertex.dxil",
-                "program.vertex.metal"
+                "program.vertex.metal",
+                "program.vertex.wgsl"
             }));
             Assert.That(metadata.Fragment.Shaders.Select(shader => shader.Filename), Is.EqualTo(new[]
             {
                 "program.fragment.spv",
                 "program.fragment.dxil",
-                "program.fragment.metal"
+                "program.fragment.metal",
+                "program.fragment.wgsl"
             }));
         });
     }

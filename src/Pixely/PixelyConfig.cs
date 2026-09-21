@@ -5,7 +5,8 @@ public enum GpuBackend
     Automatic,
     Vulkan,
     Direct3D12,
-    Metal
+    Metal,
+    WebGpu
 }
 
 // The settable properties are overridden from PIXELY_* environment variables by PixelyAppBuilder, see PixelyConfigEnvironment.

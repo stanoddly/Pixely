@@ -48,6 +48,12 @@ public class CommandBuffer: IDisposable
         ThrowIfDisposed();
         texture.ThrowIfDisposed();
 
+        // Mapping a download buffer and waiting for its fence both suspend the wasm stack under a managed frame.
+        if (OperatingSystem.IsBrowser())
+        {
+            throw new PlatformNotSupportedException("Downloading a texture is not supported in the browser.");
+        }
+
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
         long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
         if (layerSizeInBytes > int.MaxValue)

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using Pixely.App;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
@@ -14,6 +15,13 @@ public class PixelyFactory: IDisposable
 
     // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings. Emscripten only; other backends drop it.
     private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)SDL3.SDL_WINDOW_FILL_DOCUMENT;
+
+    // SDL's WebGPU backend, which ppy.SDL3-CS does not know: its shader format property, and the properties through which
+    // it adopts the WebGPU instance, adapter and device the page created (SDL_gpu.h in stanoddly/SDL_wgpu).
+    private static ReadOnlySpan<byte> WgslShadersProperty => "SDL.gpu.device.create.shaders.wgsl\0"u8;
+    private const string WebGpuInstanceProperty = "SDL.gpu.device.create.webgpu.instance";
+    private const string WebGpuAdapterProperty = "SDL.gpu.device.create.webgpu.adapter";
+    private const string WebGpuDeviceProperty = "SDL.gpu.device.create.webgpu.device";
 
     private readonly PixelyConfig _config;
     private readonly ILogger? _sdlLogger;
@@ -263,6 +271,7 @@ public class PixelyFactory: IDisposable
                 GpuBackend.Vulkan => "vulkan",
                 GpuBackend.Direct3D12 => "direct3d12",
                 GpuBackend.Metal => "metal",
+                GpuBackend.WebGpu => "webgpu",
                 _ => throw new ArgumentOutOfRangeException(nameof(_config.GpuBackend), gpuBackend, "Unknown GPU backend")
             };
             if (driverName != null)
@@ -271,11 +280,13 @@ public class PixelyFactory: IDisposable
             }
 
             bool advertiseSpirV = gpuBackend == GpuBackend.Vulkan ||
-                                  (gpuBackend == GpuBackend.Automatic && !OperatingSystem.IsMacOS());
+                                  (gpuBackend == GpuBackend.Automatic && !OperatingSystem.IsMacOS() && !OperatingSystem.IsBrowser());
             bool advertiseDxil = gpuBackend == GpuBackend.Direct3D12 ||
                                  (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsWindows());
             bool advertiseMsl = gpuBackend == GpuBackend.Metal ||
                                 (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsMacOS());
+            bool advertiseWgsl = gpuBackend == GpuBackend.WebGpu ||
+                                 (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsBrowser());
 
             if (advertiseSpirV)
             {
@@ -290,6 +301,22 @@ public class PixelyFactory: IDisposable
             if (advertiseMsl)
             {
                 SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+            }
+
+            if (advertiseWgsl)
+            {
+                SdlBoolInterop.SDL_SetBooleanProperty(props, WgslShadersProperty, true);
+            }
+
+            // Requesting a WebGPU adapter and device is asynchronous, which SDL would wait out by suspending the wasm
+            // stack under this managed frame. The page requests them instead, before the app is built, and SDL adopts them.
+            if (OperatingSystem.IsBrowser())
+            {
+                WebGpuHandles handles = BrowserHost.WebGpuHandles
+                    ?? throw new PixelyInitializationException("The browser has no WebGPU device for Pixely to adopt. Await BrowserHost.PrepareAsync(builder) before building the app.");
+                SDL3.SDL_SetPointerProperty(props, WebGpuInstanceProperty, handles.Instance);
+                SDL3.SDL_SetPointerProperty(props, WebGpuAdapterProperty, handles.Adapter);
+                SDL3.SDL_SetPointerProperty(props, WebGpuDeviceProperty, handles.Device);
             }
 
             if (advertiseSpirV)
