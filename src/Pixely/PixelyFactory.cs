@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using Pixely.Content;
 using Pixely.Gpu;
@@ -8,12 +9,9 @@ using SDL;
 
 namespace Pixely;
 
-public class PixelyFactory: IDisposable
+public partial class PixelyFactory: IDisposable
 {
     private static readonly Size<uint> DefaultSize = (640, 480);
-
-    // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings. Emscripten only; other backends drop it.
-    private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)SDL3.SDL_WINDOW_FILL_DOCUMENT;
 
     private readonly PixelyConfig _config;
     private readonly ILogger? _sdlLogger;
@@ -96,20 +94,7 @@ public class PixelyFactory: IDisposable
             return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
         }
 
-        Window window = CreateWindow(
-            viewScope,
-            gpuDevice,
-            frameContext,
-            platformInfo,
-            config.Size,
-            config.Title,
-            config.Fullscreen,
-            config.Resizable,
-            config.Transparent,
-            config.Borderless,
-            config.AlwaysOnTop,
-            config.InitiallyVisible,
-            config.CloseBehavior);
+        Window window = CreateWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -131,79 +116,6 @@ public class PixelyFactory: IDisposable
         (uint width, uint height) = config.Size ?? DefaultSize;
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
         return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
-    }
-
-    private Window CreateWindow(
-        ViewScope viewScope,
-        GpuDevice? gpuDevice,
-        PixelyFrameContext frameContext,
-        PlatformInfo platformInfo,
-        Size<uint>? size = null,
-        string? title = null,
-        bool fullscreen = false,
-        bool resizable = false,
-        bool transparent = false,
-        bool borderless = false,
-        bool alwaysOnTop = false,
-        bool initiallyVisible = true,
-        WindowCloseBehavior closeBehavior = WindowCloseBehavior.QuitApplication)
-    {
-        if (OperatingSystem.IsBrowser())
-        {
-            return CreateBrowserWindow(viewScope, gpuDevice, frameContext, platformInfo, title, initiallyVisible, closeBehavior);
-        }
-
-        (uint width, uint height) = fullscreen ? (0, 0) : size ?? DefaultSize;
-        SDL_WindowFlags windowFlags = 0;
-        if (fullscreen)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_FULLSCREEN;
-        }
-
-        if (resizable)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
-        }
-
-        if (transparent)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_TRANSPARENT;
-        }
-
-        if (borderless)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_BORDERLESS;
-        }
-
-        if (alwaysOnTop)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP;
-        }
-
-        if (!initiallyVisible)
-        {
-            windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
-        }
-
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, title, width, height, windowFlags);
-
-        return new Window(
-            viewScope,
-            sdlWindow,
-            gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null,
-            sdlWindowId,
-            frameContext,
-            platformInfo,
-            closeBehavior);
-    }
-
-    // The browser has one "screen", the page, so the window fills it and follows the browser window's size. The configured
-    // size and the desktop window options do not apply.
-    private Window CreateBrowserWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameContext frameContext, PlatformInfo platformInfo, string? title, bool initiallyVisible, WindowCloseBehavior closeBehavior)
-    {
-        SDL_WindowFlags windowFlags = FillDocumentWindowFlag | (initiallyVisible ? 0 : SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, title, DefaultSize.Width, DefaultSize.Height, windowFlags);
-        return new Window(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, closeBehavior);
     }
 
     private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
@@ -364,6 +276,7 @@ public class PixelyFactory: IDisposable
         return _config.Headless ? new SdlImageWriter() : null;
     }
 
+    [UnsupportedOSPlatform("browser")]
     internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter)
     {
         if (inputAutomation is null || imageWriter is null)

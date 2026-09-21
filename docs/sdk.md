@@ -37,7 +37,7 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 - A `PackageReference` to `SlangDxcBundle.Toolchain` with `PrivateAssets="all"`, pinned to the version the shader targets were built against. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
-- The browser build: with `RuntimeIdentifier` `browser-wasm` the SDK imports `Microsoft.NET.Sdk.WebAssembly` on top of `Microsoft.NET.Sdk`, forces `PublishAot=false`, `SelfContained=true`, `PublishTrimmed=true`, keeps the RID in the output paths and adds the default page, bootstrap and frame loop as static web assets. The RID must be a global property (`-r browser-wasm` on the executable project), because the SDK props run before the project body; in the body it fails with PIXELY0004. A project whose `OutputType` is not `Exe` or `WinExe` gets neither the WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, so a library on the SDK stays a library when the app that references it is restored for the browser or when it is published with the RID itself.
+- The browser build: with `RuntimeIdentifier` `browser-wasm` the SDK imports `Microsoft.NET.Sdk.WebAssembly` on top of `Microsoft.NET.Sdk`, switches a single `net11.0` to `net11.0-browser` after the project body so the app takes the browser build of the library from `lib/net11.0-browser1.0/`, forces `PublishAot=false`, `SelfContained=true`, `PublishTrimmed=true`, keeps the RID in the output paths and adds the default page, bootstrap and frame loop as static web assets. The RID must be a global property (`-r browser-wasm` on the executable project), because the SDK props run before the project body; in the body it fails with PIXELY0004. The framework switch is later than the project body, so a body condition on `TargetFramework` sees `net11.0` on a browser publish; condition on `RuntimeIdentifier` instead. A project with `TargetFrameworks` lists `net11.0-browser` itself and publishes with `dotnet publish -f net11.0-browser -r browser-wasm`; an inner build under the RID whose framework is not a browser one fails with PIXELY0007. A project whose `OutputType` is not `Exe` or `WinExe` gets neither the WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, so a library on the SDK stays a library when the app that references it is restored for the browser or when it is published with the RID itself.
 - `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
 
 A library packed on Pixely X depends on exactly `[X]`. A consumer pinned lower fails restore with NU1605; a consumer pinned higher gets its own version with warning NU1608, which `TreatWarningsAsErrors` promotes.
@@ -55,13 +55,14 @@ The `<Sdk>` line belongs in every project that references Pixely, directly or th
 ## Package layout
 
 ```
-lib/net11.0/                                   the library
+lib/net11.0/                                   the library, the desktop build
+lib/net11.0-browser1.0/                        the library, the browser build of Pixely and copies of the other assemblies (NuGet takes one folder per consumer)
 analyzers/dotnet/cs/                           the dependency-injection generator
 Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator
 Sdk/Pixely.Browser.props                       imports the WebAssembly SDK props on browser-wasm
-Sdk/Pixely.Browser.targets                     browser property overrides, PIXELY0004, the default web assets
+Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, PIXELY0004, PIXELY0007, the default web assets
 Sdk/Pixely.Version.props                       the package version, generated at pack time
 buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK
 tools/net11.0/any/                             the shader compilation task and its props and targets

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net11.0</TargetFramework>
+        <!-- One lib/ folder per framework, every assembly in both: NuGet picks lib/net11.0-browser1.0/ for a net11.0-browser consumer and takes nothing from lib/net11.0/. -->
+        <TargetFrameworks>net11.0;net11.0-browser</TargetFrameworks>
         <!-- Keep the packaging project's own output out of lib while retaining pack's build-output and symbol extension points. -->
         <TargetExt>.packaging</TargetExt>
         <DebugType>none</DebugType>
@@ -25,6 +26,8 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);CollectPixelyBuildOutputs</TargetsForTfmSpecificBuildOutput>
         <TargetsForTfmSpecificDebugSymbolsInPackage>$(TargetsForTfmSpecificDebugSymbolsInPackage);CollectPixelyDebugSymbols</TargetsForTfmSpecificDebugSymbolsInPackage>
         <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);GeneratePixelyVersionProps</TargetsForTfmSpecificContentInPackage>
+        <!-- The compatible-framework check compares lib/net11.0-browser/ against lib/net11.0/, so the browser build of Pixely must keep the desktop build's public surface. -->
+        <EnablePackageValidation>true</EnablePackageValidation>
     </PropertyGroup>
 
     <ItemGroup>
@@ -72,8 +75,8 @@
         <None Include="buildTransitive\Pixely.targets" Pack="true" PackagePath="buildTransitive" />
     </ItemGroup>
 
-    <!-- The SDK cannot otherwise learn its own version; Sdk.targets pins the library and buildTransitive/Pixely.targets names the version in its message. -->
-    <Target Name="GeneratePixelyVersionProps" Returns="@(TfmSpecificPackageFile)">
+    <!-- The SDK cannot otherwise learn its own version; Sdk.targets pins the library and buildTransitive/Pixely.targets names the version in its message. Framework-independent, so one inner build packs it. -->
+    <Target Name="GeneratePixelyVersionProps" Returns="@(TfmSpecificPackageFile)" Condition="'$(TargetFramework)' == 'net11.0'">
         <PropertyGroup>
             <_PixelyVersionPropsPath>$(IntermediateOutputPath)Sdk\Pixely.Version.props</_PixelyVersionPropsPath>
         </PropertyGroup>
@@ -88,10 +91,19 @@
         <WriteLinesToFile File="$(_PixelyVersionPropsPath)" Lines="@(_PixelyVersionPropsLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     </Target>
 
+    <!--
+      This inner build's TargetFramework is a global property that flows into the referenced projects: Pixely multi-targets and
+      builds for it; the other projects build for net11.0 alone, so it is undefined for them and they are copied into both folders.
+    -->
     <Target Name="ResolvePixelyRuntimeOutputs">
-        <MSBuild Projects="@(ProjectReference)"
+        <ItemGroup>
+            <_PixelyRuntimeProject Include="@(ProjectReference)" Exclude="..\..\src\Pixely\Pixely.csproj" RemoveProperties="TargetFramework" />
+            <_PixelyRuntimeProject Include="..\..\src\Pixely\Pixely.csproj" RemoveProperties="" />
+        </ItemGroup>
+        <MSBuild Projects="@(_PixelyRuntimeProject)"
                  Targets="GetTargetPath"
                  BuildInParallel="true"
+                 RemoveProperties="%(_PixelyRuntimeProject.RemoveProperties)"
                  Properties="Configuration=$(Configuration);Version=$(Version);PackageVersion=$(PackageVersion);RepositoryCommit=$(RepositoryCommit);RepositoryBranch=$(RepositoryBranch);ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)">
             <Output TaskParameter="TargetOutputs" ItemName="_PixelyRuntimeAssembly" />
         </MSBuild>

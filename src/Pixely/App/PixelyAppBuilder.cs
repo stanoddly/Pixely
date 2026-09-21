@@ -72,7 +72,9 @@ public class PixelyAppBuilder : ServiceCollection
         {
             AddSingleton<IImageWriter, PixelyFactory>();
         }
+#if !BROWSER
         AddSingleton<InputAutomationConsole, PixelyFactory>();
+#endif
 
         AddSingleton<GraphicsShaderProgramMetadataLoader>();
 

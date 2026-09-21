@@ -3,7 +3,7 @@ using Pixely.App;
 namespace Pixely.Tutorials.Browser;
 
 // One project, two hosts: `dotnet run` opens a desktop window, `dotnet publish -r browser-wasm` produces a page under
-// bin/Release/net11.0/browser-wasm/publish/wwwroot that fills the browser window. No GPU is used, so the desktop window
+// bin/Release/net11.0-browser/browser-wasm/publish/wwwroot that fills the browser window. No GPU is used, so the desktop window
 // stays black and its loop spins (nothing waits for vsync); in the browser requestAnimationFrame paces the frames.
 static partial class Program
 {
