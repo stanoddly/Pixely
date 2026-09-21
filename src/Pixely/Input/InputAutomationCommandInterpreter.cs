@@ -96,9 +96,13 @@ internal sealed class InputAutomationCommandInterpreter
 
     private void Screenshot(Window window, string path)
     {
+#if BROWSER
+        throw new PlatformNotSupportedException("Headless mode is not supported in the browser.");
+#else
         // Every window is offscreen in headless mode, which is the only mode this console exists in.
         using Image image = ((OffscreenWindow)window).CaptureLastFrame();
         _imageWriter.SavePng(image, path);
+#endif
     }
 
     private static Vector2 ParseVector(string x, string y)

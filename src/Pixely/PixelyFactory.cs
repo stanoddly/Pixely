@@ -91,7 +91,12 @@ public partial class PixelyFactory: IDisposable
                 throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
             }
 
+#if BROWSER
+            // Headless mode reads commands from standard input and frames back from the GPU, neither of which the page has.
+            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
+#else
             return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
+#endif
         }
 
         Window window = CreateWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
@@ -103,19 +108,6 @@ public partial class PixelyFactory: IDisposable
         }
 
         return window;
-    }
-
-    private OffscreenWindow CreateOffscreenWindow(
-        ViewScope viewScope,
-        GpuDevice gpuDevice,
-        PixelyFrameContext frameContext,
-        PlatformInfo platformInfo,
-        WindowConfig config)
-    {
-        // Only size and title matter: the SDL window is never shown, it just backs the GPU device, events and text input.
-        (uint width, uint height) = config.Size ?? DefaultSize;
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 
     private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)

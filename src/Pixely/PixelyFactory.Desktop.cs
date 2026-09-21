@@ -98,5 +98,18 @@ public partial class PixelyFactory
 
         return new Window(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, config.CloseBehavior);
     }
+
+    private OffscreenWindow CreateOffscreenWindow(
+        ViewScope viewScope,
+        GpuDevice gpuDevice,
+        PixelyFrameContext frameContext,
+        PlatformInfo platformInfo,
+        WindowConfig config)
+    {
+        // Only size and title matter: the SDL window is never shown, it just backs the GPU device, events and text input.
+        (uint width, uint height) = config.Size ?? DefaultSize;
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
+    }
 }
 #endif
