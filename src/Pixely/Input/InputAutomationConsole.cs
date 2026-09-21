@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
+using System.Runtime.Versioning;
 using Pixely.Content;
 
 namespace Pixely.Input;
 
 /// <summary>
-/// Reads command lines from a text stream on a background thread and runs them on the frame loop.
+/// Reads command lines from a text stream on a background thread and runs them on the frame loop. The browser has neither a standard
+/// input nor a reader thread, so the factory registers no console there.
 /// </summary>
+[UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable
 {
     private readonly InputAutomationCommandInterpreter _interpreter;

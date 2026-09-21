@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- The version comes from the global.json PackageIntegrationTests writes beside this project. -->
+    <Sdk Name="Pixely" />
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <!-- A project that names the browser framework itself; the SDK switches only a single net11.0. PackageIntegrationTests overrides the list for the PIXELY0007 case. -->
+        <TargetFrameworks>net11.0;net11.0-browser</TargetFrameworks>
+        <TargetFrameworks Condition="'$(MultiTargetConsumerFrameworks)' != ''">$(MultiTargetConsumerFrameworks)</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PixelyHosting>true</PixelyHosting>
+        <!-- The fixture intentionally stays outside repository-wide central package management. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+</Project>

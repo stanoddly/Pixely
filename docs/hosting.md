@@ -104,6 +104,9 @@ content changes, and is removed by `dotnet clean`.
   identifier. Set `RootNamespace` in the project.
 - PIXELY0004: `RuntimeIdentifier` is `browser-wasm` in the project body. Pass `-r browser-wasm`
   instead.
+- PIXELY0007: a browser build whose framework is not `net11.0-browser`. The SDK switches a single
+  `net11.0`; a project with `TargetFrameworks` lists `net11.0-browser` itself and publishes with
+  `dotnet publish -f net11.0-browser -r browser-wasm` (see below).
 
 ## The browser
 
@@ -123,13 +126,34 @@ every desktop build of the repository a browser build. Without native references
 workload is needed, for publishing or for `dotnet run -r browser-wasm`, which serves the app from a
 local host; with them the runtime is relinked and the workload is required (see below).
 
-The page is under `bin/<Configuration>/net11.0/browser-wasm/publish/wwwroot/`. Serve that directory
-over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the project's
-`*.json` and `*.config` files, `global.json` and `NuGet.Config` included, beside `wwwroot`, so serve
-`wwwroot` only. Desktop and browser keep separate `obj/` and `bin/` directories, but they share the
-restore state: after a browser restore the WebAssembly pack's props default the RID to `browser-wasm`,
-so an evaluation without `-r` and without a restore (`--no-restore`, `dotnet msbuild`, a design-time
-build) is a browser build until the next desktop restore. `dotnet build` and `dotnet run` restore first.
+### The browser target framework
+
+A browser app targets `net11.0-browser`. Browser-specific code in Pixely is selected at compile time,
+so the package carries a browser build of the library under `lib/net11.0-browser1.0/` (NuGet's folder
+name carries the platform version) and the desktop build under `lib/net11.0/`, and NuGet hands a
+project one folder, by its target framework. The project keeps its one `TargetFramework` line: with
+`-r browser-wasm` the SDK switches `net11.0` to `net11.0-browser` after the project body, restore reads
+the switched value, and the compiler gets the `BROWSER` symbol, so `#if BROWSER` selects the project's
+own browser code. The switch is late: the project body and every props file evaluate with `net11.0`,
+so a condition on `TargetFramework` in the project body does not see a browser publish; condition on
+`RuntimeIdentifier` (a global property, `browser-wasm`) instead.
+
+A project that multi-targets is not switched: it lists `net11.0-browser` in `TargetFrameworks` itself
+and publishes that inner build with `dotnet publish -f net11.0-browser -r browser-wasm`. Without `-f`
+every inner build gets the RID, and one whose framework is not `net11.0-browser` fails with
+PIXELY0007, as does a list without the browser framework. Every Pixely assembly has a `net11.0-browser`
+copy, so `Pixely.Ui` and the others bind to the browser `Pixely.dll` at run time; assembly identity is
+name and version, not framework, which is why the browser build's public surface is kept a superset
+of the desktop one (package validation checks it at pack).
+
+The page is under `bin/<Configuration>/net11.0-browser/browser-wasm/publish/wwwroot/`. Serve that
+directory over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the
+project's `*.json` and `*.config` files, `global.json` and `NuGet.Config` included, beside `wwwroot`,
+so serve `wwwroot` only. Desktop and browser keep separate `obj/` and `bin/` directories, but they
+share the restore state: after a browser restore the WebAssembly pack's props default the RID to
+`browser-wasm`, so an evaluation without `-r` and without a restore (`--no-restore`, `dotnet msbuild`,
+a design-time build) is a browser build, `net11.0-browser` included, until the next desktop restore.
+`dotnet build` and `dotnet run` restore first.
 
 For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`;
 the project's own values apply to the desktop. Trim analysis warnings stay on.
@@ -187,7 +211,9 @@ A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync(app)` takes t
 and is rethrown by `RunAsync` as the original managed exception, so the generated `catch`,
 `OnException` and the `finally` that disposes the app run as on the desktop. `BrowserHost` is public
 for a hand-written `Main`, which is `async Task<int>` and carries `[SupportedOSPlatform("browser")]`;
-without the attribute CA1416 fires on the browser compile.
+without the attribute CA1416 fires on the browser compile. The desktop build of Pixely declares
+`BrowserHost` too, so the public surface is the same in both builds; there `RunAsync` throws
+`PlatformNotSupportedException`.
 
 `dotnet.runMain()` in `main.js` resolves with the value `Main` returns. When `OnException` returns,
 that value is the result; when it throws, including the default that rethrows, `runMain()` rejects
