@@ -16,6 +16,9 @@ namespace Pixely.Package.Tests;
 public class PackageIntegrationTests
 {
     private const long NuGetPackageSizeLimitBytes = 250_000_000;
+    // NuGet's folder name for net11.0-browser carries the platform version.
+    private const string BrowserLibFolder = "lib/net11.0-browser1.0";
+    private static readonly string[] LibFolders = ["lib/net11.0", BrowserLibFolder];
     private static readonly string[] RuntimeAssemblies =
     [
         "Pixely.PathFinding",
@@ -29,6 +32,7 @@ public class PackageIntegrationTests
         "Pixely.Logging",
         "Pixely.Observations",
         "Pixely.ShaderCommon",
+        "Pixely.Ui",
         "Pixely.Utils",
         "Pixely"
     ];
@@ -43,7 +47,8 @@ public class PackageIntegrationTests
         "LibraryConsumer",
         "TransitiveConsumer",
         "ReversedSdkConsumer",
-        "BrowserLoopConsumer"
+        "BrowserLoopConsumer",
+        "MultiTargetConsumer"
     ];
 
     private string _repositoryDirectory = null!;
@@ -119,25 +124,26 @@ public class PackageIntegrationTests
         using ZipArchive package = ZipFile.OpenRead(_packagePath);
         HashSet<string> entries = package.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
 
-        foreach (string assembly in RuntimeAssemblies)
+        // Every assembly is in both folders: NuGet takes one lib/ folder per consumer. Only Pixely has a browser build; the others are the same file.
+        string[] versionComponents = _packageVersion.Split('-')[0].Split('.');
+        Version expectedAssemblyVersion = new(int.Parse(versionComponents[0]), int.Parse(versionComponents[1]), int.Parse(versionComponents[2]), 0);
+        foreach (string libFolder in LibFolders)
         {
-            string entryName = $"lib/net11.0/{assembly}.dll";
-            Assert.That(entries, Does.Contain(entryName));
-            ZipArchiveEntry assemblyEntry = package.GetEntry(entryName)
-                ?? throw new InvalidOperationException($"{entryName} is missing from the package.");
-            using Stream assemblyStream = assemblyEntry.Open();
-            using MemoryStream assemblyBytes = new();
-            assemblyStream.CopyTo(assemblyBytes);
-            assemblyBytes.Position = 0;
-            using PEReader peReader = new(assemblyBytes);
-            Version assemblyVersion = peReader.GetMetadataReader().GetAssemblyDefinition().Version;
-            string[] versionComponents = _packageVersion.Split('-')[0].Split('.');
-            Version expectedAssemblyVersion = new(
-                int.Parse(versionComponents[0]),
-                int.Parse(versionComponents[1]),
-                int.Parse(versionComponents[2]),
-                0);
-            Assert.That(assemblyVersion, Is.EqualTo(expectedAssemblyVersion));
+            foreach (string assembly in RuntimeAssemblies)
+            {
+                string entryName = $"{libFolder}/{assembly}.dll";
+                Assert.That(entries, Does.Contain(entryName));
+                byte[] assemblyBytes = ReadPackageEntryBytes(package, entryName);
+                using PEReader peReader = new(new MemoryStream(assemblyBytes));
+                Assert.That(peReader.GetMetadataReader().GetAssemblyDefinition().Version, Is.EqualTo(expectedAssemblyVersion), entryName);
+                if (libFolder != BrowserLibFolder)
+                {
+                    continue;
+                }
+
+                byte[] desktopBytes = ReadPackageEntryBytes(package, $"lib/net11.0/{assembly}.dll");
+                Assert.That(assemblyBytes.AsSpan().SequenceEqual(desktopBytes), Is.EqualTo(assembly != "Pixely"), $"{entryName} against the desktop build");
+            }
         }
 
         Assert.Multiple(() =>
@@ -161,6 +167,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.targets"));
             Assert.That(entries, Does.Contain("THIRD-PARTY-NOTICES.md"));
             Assert.That(entries, Does.Contain("docs/peach-architecture.md"));
+            Assert.That(entries.Where(entry => entry.StartsWith("lib/", StringComparison.Ordinal)).Select(entry => entry[..entry.LastIndexOf('/')]).Distinct(), Is.EquivalentTo(LibFolders));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.DependencyInjection.Generator.dll"));
             Assert.That(entries.Any(entry => entry.StartsWith("tools/slang/", StringComparison.Ordinal)), Is.False);
@@ -206,11 +213,17 @@ public class PackageIntegrationTests
         XElement repository = metadata.Element(ns + "repository")
             ?? throw new InvalidOperationException("Pixely.nuspec has no repository element.");
         string[] expectedDependencies = GetPackageDependencies();
-        string[] dependencies = metadata
-            .Descendants(ns + "dependency")
-            .Select(dependency => $"{(string?)dependency.Attribute("id")}:{(string?)dependency.Attribute("version")}")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        // One group per framework with the same dependencies, so a browser consumer restores the same packages as a desktop one.
+        Dictionary<string, string[]> dependencyGroups = metadata
+            .Descendants(ns + "group")
+            .ToDictionary(
+                group => (string?)group.Attribute("targetFramework") ?? throw new InvalidOperationException("Pixely.nuspec has a dependency group without a target framework."),
+                group => group.Elements(ns + "dependency")
+                    .Select(dependency => $"{(string?)dependency.Attribute("id")}:{(string?)dependency.Attribute("version")}")
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        string[] dependencies = dependencyGroups.Values.SelectMany(group => group).Distinct().Order(StringComparer.Ordinal).ToArray();
 
         Assert.Multiple(() =>
         {
@@ -222,7 +235,8 @@ public class PackageIntegrationTests
             Assert.That((string?)metadata.Element(ns + "license"), Is.EqualTo("MIT"));
             Assert.That((string?)repository.Attribute("url"), Is.EqualTo("https://github.com/stanoddly/Pixely"));
             Assert.That((string?)repository.Attribute("commit"), Is.Not.Empty);
-            Assert.That(dependencies, Is.EqualTo(expectedDependencies.Order(StringComparer.Ordinal)));
+            Assert.That(dependencyGroups.Keys, Is.EquivalentTo(["net11.0", "net11.0-browser1.0"]));
+            Assert.That(dependencyGroups.Values, Has.All.EqualTo(expectedDependencies.Order(StringComparer.Ordinal)));
             Assert.That(dependencies.Any(dependency => dependency.StartsWith("Pixely", StringComparison.Ordinal)), Is.False);
             Assert.That(dependencies.Any(dependency => dependency.StartsWith("SlangDxcBundle.Toolchain", StringComparison.Ordinal)), Is.False);
             Assert.That(nuspecContents, Does.Not.Contain("Package Description"));
@@ -233,9 +247,12 @@ public class PackageIntegrationTests
         HashSet<string> symbolEntries = symbols.Entries
             .Select(entry => entry.FullName)
             .ToHashSet(StringComparer.Ordinal);
-        foreach (string assembly in RuntimeAssemblies)
+        foreach (string libFolder in LibFolders)
         {
-            Assert.That(symbolEntries, Does.Contain($"lib/net11.0/{assembly}.pdb"));
+            foreach (string assembly in RuntimeAssemblies)
+            {
+                Assert.That(symbolEntries, Does.Contain($"{libFolder}/{assembly}.pdb"));
+            }
         }
 
         ZipArchiveEntry sourceLinkEntry = symbols.GetEntry("lib/net11.0/Pixely.pdb")
@@ -402,7 +419,7 @@ public class PackageIntegrationTests
         File.WriteAllText(Path.Combine(consumerWwwroot, "main.js"), "// consumer bootstrap\n");
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "HOSTED_CONSUMER_NO_HANDLER", properties: ["HostedConsumerReferencesLibrary=true"]);
-        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "browser-wasm", "PixelyProgram.g.cs");
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm", "PixelyProgram.g.cs");
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         // Without the guard the library's restore pulls the WebAssembly pack, whose props turn it into an exe (CS5001) in the reference build,
         // and the WebAssembly props' SelfContained and PublishTrimmed pull the Mono browser runtime pack and ILLink into its restore.
@@ -481,9 +498,9 @@ public class PackageIntegrationTests
     public async Task NativeReferenceIsRelinkedAndBoundInTheBrowserBuild()
     {
         RequireNode();
-        await RequireWasmToolsAsync();
         string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
         DeleteConsumerOutputs("BrowserLoopConsumer");
+        await RequireWasmToolsAsync(consumerDirectory);
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: ["BrowserLoopConsumerNative=true"]);
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
@@ -506,6 +523,82 @@ public class PackageIntegrationTests
 
         string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false, properties: ["HostedConsumerBodyRuntimeIdentifier=true"]);
         Assert.That(output, Does.Contain("error PIXELY0004").And.Contain("pass -r browser-wasm on the command line"));
+    }
+
+    // The one command a consumer runs, with its implicit restore: the SDK switches the framework after the project body, restore
+    // reads the switched value, and the browser build of Pixely, not the desktop one, is what the app references.
+    [Test]
+    public async Task BrowserPublishWithImplicitRestoreSelectsTheBrowserFramework()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        WriteConsumerConfiguration(consumerDirectory);
+
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        await RunConsumerDotnetAsync(consumerDirectory, "publish", projectPath, "--configuration", "Release", "--runtime", "browser-wasm", "--property:UseAppHost=false", $"--property:PixelyPackageVersion={_packageVersion}", "--nologo");
+
+        using JsonDocument assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json")));
+        string[] targets = assets.RootElement.GetProperty("targets").EnumerateObject().Select(target => target.Name).ToArray();
+        using ZipArchive package = ZipFile.OpenRead(_packagePath);
+        byte[] browserPixely = ReadPackageEntryBytes(package, $"{BrowserLibFolder}/Pixely.dll");
+        byte[] referencedPixely = File.ReadAllBytes(Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "Pixely.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(targets, Is.EquivalentTo(["net11.0-browser", "net11.0-browser/browser-wasm"]));
+            Assert.That(referencedPixely.AsSpan().SequenceEqual(browserPixely), Is.True, "The app referenced the desktop build of Pixely.");
+            Assert.That(File.Exists(Path.Combine(GetPublishedWwwroot(consumerDirectory), "_framework", "dotnet.js")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(consumerDirectory, "bin", "Release", "net11.0")), Is.False);
+        });
+    }
+
+    // A project that lists net11.0-browser itself is not switched: its browser inner build is selected with -f, and its desktop
+    // build stays a desktop build. The framework may carry its platform version; the SDK recognises both spellings as browser 1.0.
+    [TestCase("net11.0-browser")]
+    [TestCase("net11.0-browser1.0")]
+    public async Task MultiTargetingConsumerPublishesTheBrowserFrameworkItNames(string browserFramework)
+    {
+        string consumerDirectory = GetConsumerDirectory("MultiTargetConsumer");
+        DeleteConsumerOutputs("MultiTargetConsumer");
+
+        // A semicolon in a command-line property value splits it; %3B is what MSBuild unescapes to one.
+        string frameworks = $"MultiTargetConsumerFrameworks=net11.0%3B{browserFramework}";
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: [frameworks, $"TargetFramework={browserFramework}"]);
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", browserFramework, "browser-wasm", "PixelyProgram.g.cs");
+        string wwwroot = Path.Combine(consumerDirectory, "bin", "Release", browserFramework, "browser-wasm", "publish", "wwwroot");
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllText(generatedFile), Does.Contain("BrowserHost.RunAsync"));
+            Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "MultiTargetConsumer.*.wasm"), Has.Length.EqualTo(1));
+        });
+        if (HasNode())
+        {
+            string result = await RunBrowserBundleAsync(wwwroot, environment: null);
+            Assert.That(result, Does.Contain("Configure ran for the browser.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
+        }
+
+        await BuildConsumerAsync(consumerDirectory, properties: [frameworks]);
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "MultiTargetConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran for the desktop.").And.Contain("OnException ran: Configure failed on purpose."));
+            Assert.That(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs")), Does.Contain("private static int Main()"));
+        });
+    }
+
+    // Without -f every inner build gets the browser RID, and one that is not net11.0-browser cannot be a browser app; a list without
+    // the browser framework has no inner build that could be. Built rather than published: publish refuses a multi-targeting
+    // project without -f on its own (NETSDK1129).
+    [TestCase(null)]
+    [TestCase("net11.0")]
+    public async Task MultiTargetingConsumerWithoutTheBrowserFrameworkSelectedFailsWithTheFrameworkMessage(string? frameworks)
+    {
+        string consumerDirectory = GetConsumerDirectory("MultiTargetConsumer");
+        DeleteConsumerOutputs("MultiTargetConsumer");
+
+        string[] properties = frameworks is null ? [] : [$"MultiTargetConsumerFrameworks={frameworks}"];
+        string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false, properties: properties);
+        Assert.That(output, Does.Contain("error PIXELY0007").And.Contain("dotnet publish -f net11.0-browser -r browser-wasm"));
     }
 
     [Test]
@@ -657,7 +750,7 @@ public class PackageIntegrationTests
 
     private static string GetPublishedWwwroot(string consumerDirectory)
     {
-        return Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "browser-wasm", "publish", "wwwroot");
+        return Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "publish", "wwwroot");
     }
 
     private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties)
@@ -789,12 +882,17 @@ public class PackageIntegrationTests
         return output;
     }
 
-    private static async Task RequireWasmToolsAsync()
+    // The workload is per SDK band, so the fixture is asked whether the toolchain that would relink it is installed: the wasm-tools
+    // manifest sets WasmNativeWorkloadAvailable for the target framework. A workload listing can name wasm-tools for another SDK on
+    // the machine, and the WebAssembly pack alone then ignores the native reference instead of failing.
+    private async Task RequireWasmToolsAsync(string consumerDirectory)
     {
-        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(Path.GetTempPath(), "workload", "list");
-        if (exitCode != 0 || !output.Contains("wasm-tools", StringComparison.Ordinal))
+        WriteConsumerConfiguration(consumerDirectory);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, "msbuild", projectPath, "-p:RuntimeIdentifier=browser-wasm", "-getProperty:WasmNativeWorkloadAvailable");
+        if (exitCode != 0 || output.Trim() != "true")
         {
-            Assert.Ignore("The wasm-tools workload is not installed; the runtime cannot be relinked.");
+            Assert.Ignore("The wasm-tools workload is not installed for this SDK; the runtime cannot be relinked.");
         }
     }
 
@@ -866,11 +964,19 @@ public class PackageIntegrationTests
 
     private static string ReadPackageEntry(ZipArchive package, string entryName)
     {
+        // A StreamReader drops the byte order mark, which XDocument.Parse rejects.
+        using StreamReader reader = new(new MemoryStream(ReadPackageEntryBytes(package, entryName)));
+        return reader.ReadToEnd();
+    }
+
+    private static byte[] ReadPackageEntryBytes(ZipArchive package, string entryName)
+    {
         ZipArchiveEntry entry = package.GetEntry(entryName)
             ?? throw new InvalidOperationException($"{entryName} is missing from the package.");
         using Stream stream = entry.Open();
-        using StreamReader reader = new(stream);
-        return reader.ReadToEnd();
+        using MemoryStream bytes = new();
+        stream.CopyTo(bytes);
+        return bytes.ToArray();
     }
 
     private static string GetCurrentSlangPlatform()

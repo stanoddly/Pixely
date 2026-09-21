@@ -11,7 +11,7 @@ public readonly record struct ResolutionChangedEventArgs(ShortSize OldSize, Shor
 
 public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventArgs);
 
-public class Window : IDisposable
+public partial class Window : IDisposable
 {
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
     internal Pointer<SDL_Window> SdlWindow { get; private set; }
@@ -400,16 +400,9 @@ public class Window : IDisposable
         unsafe
         {
             SDL_GPUTexture* swapchainTexturePointer;
-            // The waiting form spins on SDL_DelayNS, which in the browser suspends the wasm stack, and a managed frame
-            // cannot be in the suspended region. The page paces frames from requestAnimationFrame there anyway, so a
-            // frame with no texture ready is skipped.
-            bool acquired = OperatingSystem.IsBrowser()
-                ? SDL3.SDL_AcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height)
-                : SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height);
-            if (acquired == false)
+            if (!AcquireSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, &swapchainTexturePointer, &width, &height))
             {
-                string call = OperatingSystem.IsBrowser() ? "SDL_AcquireGPUSwapchainTexture" : "SDL_WaitAndAcquireGPUSwapchainTexture";
-                throw new PixelyInitializationException($"{call} failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SDL3.SDL_GetError()}");
             }
 
             if (swapchainTexturePointer == null)

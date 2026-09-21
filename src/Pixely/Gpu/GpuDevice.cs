@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Pixely.Shaders;
 using Pixely.Utilities;
 using SDL;
@@ -381,17 +382,16 @@ public class GpuDevice : IDisposable
         }
     }
 
+    // SDL's WebGPU backend waits by suspending the wasm stack, which a managed frame cannot survive.
+    [UnsupportedOSPlatform("browser")]
     public void WaitForFences(ReadOnlySpan<GpuFence> fences, bool waitAll = true)
     {
+#if BROWSER
+        throw new PlatformNotSupportedException("Waiting for GPU fences is not supported in the browser.");
+#else
         if (fences.Length == 0)
         {
             return;
-        }
-
-        // SDL's WebGPU backend waits by suspending the wasm stack, which a managed frame cannot survive.
-        if (OperatingSystem.IsBrowser())
-        {
-            throw new PlatformNotSupportedException("Waiting for GPU fences is not supported in the browser.");
         }
 
         Span<Pointer<SDL_GPUFence>> fencePointers = stackalloc Pointer<SDL_GPUFence>[fences.Length];
@@ -410,6 +410,7 @@ public class GpuDevice : IDisposable
                 }
             }
         }
+#endif
     }
 
     public void Dispose()
@@ -458,14 +459,13 @@ public class GpuDevice : IDisposable
         
         unsafe
         {
-            // In the browser BrowserHost.RunAsync has waited for the queue to drain, so the destroy's spin on the last
-            // submissions completes at once; the page's own references to the adopted device go afterwards.
             SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
             SdlGpuDevice = null;
-            if (OperatingSystem.IsBrowser())
-            {
-                App.BrowserHost.ReleaseGpuDevice();
-            }
+#if BROWSER
+            // BrowserHost.RunAsync waited for the queue to drain, so the destroy's spin on the last submissions completed at
+            // once; the page's own references to the adopted device go afterwards.
+            App.BrowserHost.ReleaseGpuDevice();
+#endif
         }
     }
 

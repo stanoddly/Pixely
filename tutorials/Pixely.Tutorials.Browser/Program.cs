@@ -6,10 +6,8 @@ using Pixely.RenderOrchestration;
 namespace Pixely.Tutorials.Browser;
 
 // One project, two hosts: `dotnet run` opens a desktop window, `dotnet publish -r browser-wasm` produces a page under
-// bin/Release/net11.0/browser-wasm/publish/wwwroot that fills the browser window. Both draw the same magenta quad: on the desktop
-// through Vulkan, Direct3D 12 or Metal, in the browser through SDL's WebGPU backend and the WGSL the shader compiler emits.
-// The shaders are embedded in the assembly (see the project file) because a content directory has no browser equivalent.
-// Escape quits, which in the browser ends the frame loop and tears the GPU device down.
+// bin/Release/net11.0-browser/browser-wasm/publish/wwwroot that fills the browser window. No GPU is used, so the desktop window
+// stays black and its loop spins (nothing waits for vsync); in the browser requestAnimationFrame paces the frames.
 static partial class Program
 {
     static void Configure(PixelyAppBuilder builder)

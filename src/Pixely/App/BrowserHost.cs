@@ -4,21 +4,25 @@ using Pixely.Gpu;
 
 namespace Pixely.App;
 
+#if BROWSER
 /// <summary>
 /// The WebGPU objects the page requested and imported into the runtime's WebGPU binding, as the pointers SDL adopts through its
 /// device creation properties.
 /// </summary>
 internal sealed record WebGpuHandles(IntPtr Instance, IntPtr Adapter, IntPtr Device);
+#endif
 
 /// <summary>
 /// Runs an app in a browser, where the page owns the frame loop: <see cref="IPixelyApp.RunFrame"/> is called once per animation frame
 /// from the package's <c>pixely-host.js</c> until it returns <see langword="false"/>. Scheduling is host policy, so it stays out of
 /// <see cref="IPixelyApp"/>. The generated entry point awaits <see cref="PrepareAsync"/> before building the app and
-/// <see cref="RunAsync"/> after; a hand-written one can too.
+/// <see cref="RunAsync"/> after; a hand-written one can too. The desktop build declares the same surface and throws
+/// <see cref="PlatformNotSupportedException"/>.
 /// </summary>
 [SupportedOSPlatform("browser")]
 public static partial class BrowserHost
 {
+#if BROWSER
     // Resolved against the runtime's own module URL, so the script beside _framework/ is found wherever the page is served from.
     private const string HostModuleName = "pixely-host";
     private const string HostModuleUrl = "../pixely-host.js";
@@ -36,6 +40,7 @@ public static partial class BrowserHost
 
     [JSImport("releaseGpuDevice", HostModuleName)]
     private static partial void ReleaseGpuDeviceHandles();
+#endif
 
     /// <summary>
     /// Imports the host module and, when the app uses the GPU, has the page request a WebGPU adapter and device for SDL to adopt.
@@ -45,6 +50,7 @@ public static partial class BrowserHost
     public static async Task PrepareAsync(PixelyAppBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+#if BROWSER
         await JSHost.ImportAsync(HostModuleName, HostModuleUrl);
         if (!builder.IsRegistered<GpuDevice>())
         {
@@ -56,6 +62,9 @@ public static partial class BrowserHost
             (IntPtr)handles.GetPropertyAsInt32("instance"),
             (IntPtr)handles.GetPropertyAsInt32("adapter"),
             (IntPtr)handles.GetPropertyAsInt32("device"));
+#else
+        throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
+#endif
     }
 
     /// <summary>
@@ -68,6 +77,7 @@ public static partial class BrowserHost
     public static async Task<int> RunAsync(IPixelyApp app)
     {
         ArgumentNullException.ThrowIfNull(app);
+#if BROWSER
         await JSHost.ImportAsync(HostModuleName, HostModuleUrl);
         try
         {
@@ -79,12 +89,17 @@ public static partial class BrowserHost
         }
 
         return 0;
+#else
+        throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
+#endif
     }
 
+#if BROWSER
     // After SDL_DestroyGPUDevice, which dropped SDL's own references: the page drops its references and destroys the WebGPU device.
     internal static void ReleaseGpuDevice()
     {
         WebGpuHandles = null;
         ReleaseGpuDeviceHandles();
     }
+#endif
 }

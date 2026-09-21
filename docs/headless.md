@@ -10,7 +10,7 @@ Automated input affects Pixely's event-derived synthetic device state; every vie
 
 ## Driving the app from standard input
 
-A headless app reads command lines from the process's standard input and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Blank lines and lines starting with `#` are ignored. A malformed line throws `FormatException` out of the frame loop, so a bad script ends the app. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+A headless app reads command lines from the process's standard input (on the desktop; the browser build registers no console, a page has no standard input) and runs each one on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Blank lines and lines starting with `#` are ignored. A malformed line throws `FormatException` out of the frame loop, so a bad script ends the app. Lines queued before a frame starts run in that frame; a chord written in one go usually lands in one frame but may split across two. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
 
 | Command | Dispatches |
 | --- | --- |

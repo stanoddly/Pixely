@@ -21,6 +21,20 @@
         <PublishTrimmed>false</PublishTrimmed>
     </PropertyGroup>
 
+    <!--
+      The browser build of Pixely is lib/net11.0-browser1.0/, which NuGet hands only to a net11.0-browser project, so a browser
+      app targets net11.0-browser. A single-framework net11.0 project is switched here, after its body: it keeps one
+      TargetFramework line for both hosts, restore reads the switched value, and the outputs land under net11.0-browser/.
+      Only the targets see the switch; the project body and every props file evaluated with net11.0, so a body condition
+      on TargetFramework does not see a browser publish (condition on RuntimeIdentifier or _PixelyBrowser instead). A
+      multi-targeting project is not switched: its browser inner build passes, and any other inner build under the browser
+      RID is PIXELY0007, which names the publish command that selects the browser framework. The check reads the platform the
+      base targets inferred, so net11.0-browser1.0, the same framework with its platform version, passes too.
+    -->
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(TargetFrameworks)' == '' and '$(TargetFramework)' == 'net11.0'">
+        <TargetFramework>net11.0-browser</TargetFramework>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
         <PublishAot>false</PublishAot>
         <SelfContained>true</SelfContained>
@@ -77,6 +91,10 @@
         </ItemGroup>
         <Warning Code="PIXELY0005" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyLibPrefixedSdlArchive)' != ''"
                  Text="The native reference @(_PixelyLibPrefixedSdlArchive->'%(Filename)%(Extension)', ', ') registers a P/Invoke module named after its file; Pixely imports SDL3, SDL3_image, SDL3_ttf and SDL3_mixer, so name the archive without the lib prefix (SDL3.a)." />
+    </Target>
+
+    <Target Name="_PixelyRequireBrowserTargetFramework" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBrowser)' == 'true' and '$(TargetPlatformIdentifier)' != 'browser'">
+        <Error Code="PIXELY0007" File="$(MSBuildProjectFullPath)" Text="A browser app targets net11.0-browser; this build targets $(TargetFramework). The Pixely SDK selects net11.0-browser for a project with the single TargetFramework net11.0 and no -f. A project with TargetFrameworks lists net11.0-browser and publishes with dotnet publish -f net11.0-browser -r browser-wasm." />
     </Target>
 
     <!-- The RID was set in the project body, which the SDK props evaluated before it cannot see; the WebAssembly SDK was not imported. -->
