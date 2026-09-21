@@ -458,18 +458,14 @@ public class GpuDevice : IDisposable
         
         unsafe
         {
-            // Destroying SDL's WebGPU device spins until every submission has drained, which needs the page's event loop
-            // to turn, so the page destroys it once the queue is idle.
+            // In the browser BrowserHost.RunAsync has waited for the queue to drain, so the destroy's spin on the last
+            // submissions completes at once; the page's own references to the adopted device go afterwards.
+            SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
+            SdlGpuDevice = null;
             if (OperatingSystem.IsBrowser())
             {
-                App.BrowserHost.DestroyGpuDevice((IntPtr)(SDL_GPUDevice*)SdlGpuDevice);
+                App.BrowserHost.ReleaseGpuDevice();
             }
-            else
-            {
-                SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
-            }
-
-            SdlGpuDevice = null;
         }
     }
 

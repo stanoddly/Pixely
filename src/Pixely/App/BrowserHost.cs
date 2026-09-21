@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Pixely.Gpu;
-using SDL;
 
 namespace Pixely.App;
 
@@ -26,18 +25,17 @@ public static partial class BrowserHost
 
     internal static WebGpuHandles? WebGpuHandles { get; private set; }
 
-    // SDL_Quit handed over by PixelyFactory while a device destruction is pending, to run after it.
-    private static Action? _deferredQuit;
-    private static bool _destroyPending;
-
     [JSImport("runFrameLoop", HostModuleName)]
     private static partial Task RunFrameLoop([JSMarshalAs<JSType.Function<JSType.Boolean>>] Func<bool> runFrame);
 
     [JSImport("createGpuDevice", HostModuleName)]
     private static partial Task<JSObject> CreateGpuDevice();
 
-    [JSImport("destroyGpuDevice", HostModuleName)]
-    private static partial Task DestroyGpuDeviceAsync([JSMarshalAs<JSType.Function>] Action destroy);
+    [JSImport("waitForGpuIdle", HostModuleName)]
+    private static partial Task WaitForGpuIdle();
+
+    [JSImport("releaseGpuDevice", HostModuleName)]
+    private static partial void ReleaseGpuDeviceHandles();
 
     /// <summary>
     /// Imports the host module and, when the app uses the GPU, has the page request a WebGPU adapter and device for SDL to adopt.
@@ -63,48 +61,30 @@ public static partial class BrowserHost
     /// <summary>
     /// Completes with 0 when <see cref="IPixelyApp.RunFrame"/> returns <see langword="false"/>. An exception thrown by a frame rejects the
     /// loop's promise and is rethrown here as the original managed exception, so a caller's catch and finally run as they would after
-    /// <see cref="IPixelyApp.Run"/>.
+    /// <see cref="IPixelyApp.Run"/>. Before returning either way it waits for the GPU queue to drain: destroying SDL's WebGPU device
+    /// spins until every submission has completed, and a submission completes only after the page's event loop turns, which the
+    /// caller's synchronous Dispose cannot wait for.
     /// </summary>
     public static async Task<int> RunAsync(IPixelyApp app)
     {
         ArgumentNullException.ThrowIfNull(app);
         await JSHost.ImportAsync(HostModuleName, HostModuleUrl);
-        await RunFrameLoop(app.RunFrame);
+        try
+        {
+            await RunFrameLoop(app.RunFrame);
+        }
+        finally
+        {
+            await WaitForGpuIdle();
+        }
+
         return 0;
     }
 
-    // Destroying SDL's WebGPU device spins until every submission has drained, and the fence callbacks that drain them only run
-    // once the page's event loop turns, so the page calls back to destroy the device after the queue reports idle. Nothing awaits
-    // it: the app is being disposed from a synchronous Dispose, and a failure has nowhere to go but the console.
-    internal static void DestroyGpuDevice(IntPtr device)
+    // After SDL_DestroyGPUDevice, which dropped SDL's own references: the page drops its references and destroys the WebGPU device.
+    internal static void ReleaseGpuDevice()
     {
         WebGpuHandles = null;
-        _destroyPending = true;
-        _ = DestroyGpuDeviceAsync(() =>
-        {
-            unsafe
-            {
-                SDL3.SDL_DestroyGPUDevice((SDL_GPUDevice*)device);
-            }
-
-            _destroyPending = false;
-            Action? quit = _deferredQuit;
-            _deferredQuit = null;
-            quit?.Invoke();
-        });
-    }
-
-    // SDL_Quit must follow the device destruction, and PixelyFactory is disposed before the deferred destruction runs, so it
-    // hands its quit here: run after the pending destruction, or now when none is pending.
-    internal static void QuitSdl(Action quit)
-    {
-        if (_destroyPending)
-        {
-            _deferredQuit = quit;
-        }
-        else
-        {
-            quit();
-        }
+        ReleaseGpuDeviceHandles();
     }
 }

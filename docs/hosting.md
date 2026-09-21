@@ -214,14 +214,13 @@ SDL cannot install callbacks on an adopted device, so `pixely-host.js` observes 
 `uncapturederror` itself: an error is logged, and a lost device ends the frame loop with the loss
 as the exception, since SDL would keep recording against the dead device without noticing.
 
-Teardown is the page's too. Destroying SDL's device spins until every submission has drained, and
-the fences that drain them complete only after the event loop turns, so `GpuDevice.Dispose` in the
-browser releases the managed resources and hands the device to `pixely-host.js`, which awaits
-`queue.onSubmittedWorkDone()`, destroys the SDL device, runs the `SDL_Quit` that `PixelyFactory`
-deferred behind it, releases the imported handles and destroys the WebGPU device, then logs
-`Pixely GPU device destroyed`. Nothing awaits that: the app is already disposed, and a failure is
-logged. A `Configure` or `Build()` that fails after `PrepareAsync` leaves the page's device
-until the page unloads or the next `PrepareAsync`, which releases it first.
+Destroying SDL's device spins, without yielding, until every submission has completed, and a
+submission completes only after the page's event loop turns, which a synchronous `Dispose` cannot
+wait for. So `RunAsync` awaits `queue.onSubmittedWorkDone()` once the frame loop has ended, on the
+exception path too, and `GpuDevice.Dispose` then destroys the SDL device as on the desktop, after
+which `pixely-host.js` releases the imported handles and destroys the WebGPU device. A `Configure`
+or `Build()` that fails after `PrepareAsync` leaves the page's device until the page unloads or the
+next `PrepareAsync`, which releases it first.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
@@ -262,8 +261,8 @@ The package ships three static web assets and adds each to the project only when
   stylesheet and `<script type="module" src="main.js">`.
 - `main.js`: imports `./_framework/dotnet.js`, passes the canvas as `Module.canvas`, awaits
   `dotnet.runMain()`, logs the exit code, and logs and rethrows a rejection.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()` and
-  `destroyGpuDevice(destroy)`, which `BrowserHost` imports as module `pixely-host` from
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `waitForGpuIdle()` and
+  `releaseGpuDevice()`, which `BrowserHost` imports as module `pixely-host` from
   `../pixely-host.js`, relative to `dotnet.js`. A replacement keeps the exports and the location.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further

@@ -436,16 +436,7 @@ public class PixelyFactory: IDisposable
             return;
         }
 
-        // In the browser the GPU device is destroyed by the page once its queue is idle, and SDL_Quit has to follow that.
-        if (OperatingSystem.IsBrowser())
-        {
-            BrowserHost.QuitSdl(SDL3.SDL_Quit);
-        }
-        else
-        {
-            SDL3.SDL_Quit();
-        }
-
+        SDL3.SDL_Quit();
         SdlLogOutput.Uninstall();
         _initialized = false;
     }
