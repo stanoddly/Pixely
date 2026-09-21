@@ -129,6 +129,14 @@ renderPass.PushFragmentUniformData(0, FColors.Magenta);  // Slot 0
 
 **Slot limits:** 4 uniform slots per shader stage (0-3). Each slot can hold up to a certain size (check metadata).
 
+## Storage Buffers and Resource Types
+
+A storage buffer is a `StructuredBuffer<T>` or a `ByteAddressBuffer` on a `t` register. A sampled texture is `Texture2D` or another `Texture*` type on a `t` register, with its `SamplerState` on the `s` register of the same index. Compute shaders may also bind the read-write forms, `RWStructuredBuffer<T>`, `RWByteAddressBuffer` and `RWTexture2D<T>`, on `u` registers.
+
+The reflection records the element size of a `StructuredBuffer<T>` and the runtime rejects a bound `GpuStorageBuffer<T>` whose element size differs. A `ByteAddressBuffer` has no element type, so its recorded size is 0 and the element-size check is skipped for its slot; any storage buffer may be bound to it.
+
+SDL GPU has no binding slot for `Buffer<T>` and `RWBuffer<T>` (use a structured buffer) or for arrays of bindings such as `Texture2D textures[2]`, `SamplerState samplers[2]` and `ConstantBuffer<T> cbs[2]` (declare each element as its own parameter). The build fails with a `ShaderBindingValidationException` naming the parameter.
+
 ## Shader Stage Attribute
 
 Always mark the two fixed entry points with the shader stage attribute:
