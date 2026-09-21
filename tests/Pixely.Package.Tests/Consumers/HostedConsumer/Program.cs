@@ -10,6 +10,15 @@ static partial class Program
 #if !HOSTED_CONSUMER_NO_CONFIGURE
     static void Configure(PixelyAppBuilder builder)
     {
+#if HOSTED_CONSUMER_NARROW_HANDLER
+        // The exception leaves Main unhandled. On Linux the runtime would abort() and leave a core dump; exiting from the
+        // event keeps the failure observable through the exit code without one.
+        AppDomain.CurrentDomain.UnhandledException += (_, arguments) =>
+        {
+            Console.WriteLine($"Unhandled: {((Exception)arguments.ExceptionObject).Message}");
+            Environment.Exit(3);
+        };
+#endif
         Console.WriteLine("Configure ran.");
         throw new InvalidOperationException("Configure failed on purpose.");
     }
