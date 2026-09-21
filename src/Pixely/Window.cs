@@ -11,7 +11,7 @@ public readonly record struct ResolutionChangedEventArgs(ShortSize OldSize, Shor
 
 public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventArgs);
 
-public class Window : IDisposable
+public partial class Window : IDisposable
 {
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
     internal Pointer<SDL_Window> SdlWindow { get; private set; }
@@ -400,9 +400,9 @@ public class Window : IDisposable
         unsafe
         {
             SDL_GPUTexture* swapchainTexturePointer;
-            if (SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height) == false)
+            if (!AcquireSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, &swapchainTexturePointer, &width, &height))
             {
-                throw new PixelyInitializationException($"SDL_WaitAndAcquireGPUSwapchainTexture failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SDL3.SDL_GetError()}");
             }
 
             if (swapchainTexturePointer == null)

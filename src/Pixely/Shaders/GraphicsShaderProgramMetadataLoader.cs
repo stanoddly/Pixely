@@ -76,6 +76,7 @@ internal sealed class GraphicsShaderProgramMetadataLoader
         ShaderFormatDto.Dxil => ShaderFormat.Dxil,
         ShaderFormatDto.Msl => ShaderFormat.Msl,
         ShaderFormatDto.MetalLib => ShaderFormat.MetalLib,
+        ShaderFormatDto.Wgsl => ShaderFormat.Wgsl,
         _ => throw new InvalidOperationException($"Unknown shader format: {format}")
     };
 

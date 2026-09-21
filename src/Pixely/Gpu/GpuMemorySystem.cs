@@ -81,9 +81,14 @@ public class GpuMemorySystem: ICopyPass
         return GetOrCreateCopyPass().CreateTextureArray(images);
     }
 
+    // Nothing consumes uploads once the app tears down and the device is destroyed next, so a pending command buffer is cancelled
+    // rather than submitted; submitting would make the device destruction wait for work nobody reads.
     public void Dispose()
     {
-        Submit();
+        _copyPassImplementation?.Dispose();
+        _copyPassImplementation = null;
+        _commandBuffer?.Cancel();
+        _commandBuffer = null;
     }
 
     public void Submit()

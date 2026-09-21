@@ -1,4 +1,5 @@
 #if BROWSER
+using Pixely.App;
 using Pixely.Gpu;
 using Pixely.Utilities;
 using SDL;
@@ -7,6 +8,37 @@ namespace Pixely;
 
 public partial class PixelyFactory
 {
+    // SDL's WebGPU backend, which ppy.SDL3-CS does not know: its shader format property, and the properties through which
+    // it adopts the WebGPU instance, adapter and device the page created (SDL_gpu.h in stanoddly/SDL_wgpu).
+    private static ReadOnlySpan<byte> WgslShadersProperty => "SDL.gpu.device.create.shaders.wgsl\0"u8;
+    private const string WebGpuInstanceProperty = "SDL.gpu.device.create.webgpu.instance";
+    private const string WebGpuAdapterProperty = "SDL.gpu.device.create.webgpu.adapter";
+    private const string WebGpuDeviceProperty = "SDL.gpu.device.create.webgpu.device";
+
+    // WGSL is the only format here. Requesting a WebGPU adapter and device is asynchronous, which SDL would wait out by
+    // suspending the wasm stack under this managed frame, so the page requested them before the app was built and SDL adopts them.
+    private GpuDevice CreateGpuDevice(SDL_PropertiesID props, GpuBackend gpuBackend)
+    {
+        SdlBoolInterop.SDL_SetBooleanProperty(props, WgslShadersProperty, true);
+
+        WebGpuHandles handles = BrowserHost.WebGpuHandles
+            ?? throw new PixelyInitializationException("The browser has no WebGPU device for Pixely to adopt. Await BrowserHost.PrepareAsync(builder) before building the app.");
+        SDL3.SDL_SetPointerProperty(props, WebGpuInstanceProperty, handles.Instance);
+        SDL3.SDL_SetPointerProperty(props, WebGpuAdapterProperty, handles.Adapter);
+        SDL3.SDL_SetPointerProperty(props, WebGpuDeviceProperty, handles.Device);
+
+        try
+        {
+            return CreateGpuDeviceFromProperties(props);
+        }
+        catch
+        {
+            // SDL adopted nothing, so the page's device would otherwise stay until the page unloads.
+            BrowserHost.ReleaseGpuDevice();
+            throw;
+        }
+    }
+
     // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings.
     private const SDL_WindowFlags FillDocumentWindowFlag = (SDL_WindowFlags)SDL3.SDL_WINDOW_FILL_DOCUMENT;
 

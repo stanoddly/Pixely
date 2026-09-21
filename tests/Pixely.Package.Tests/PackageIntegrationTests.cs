@@ -283,9 +283,11 @@ public class PackageIntegrationTests
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.metadata.json")), Is.True);
             Assert.That(File.Exists(Path.Combine(
                 slangDirectory,
@@ -618,9 +620,11 @@ public class PackageIntegrationTests
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.vertex.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.spv")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.dxil")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.metal")), Is.True);
+            Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.fragment.wgsl")), Is.True);
             Assert.That(File.Exists(Path.Combine(generatedDirectory, "package.metadata.json")), Is.True);
         });
     }

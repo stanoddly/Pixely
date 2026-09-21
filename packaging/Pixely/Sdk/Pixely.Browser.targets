@@ -59,6 +59,29 @@
     </ItemGroup>
 
     <!--
+      SDL's WebGPU backend (stanoddly/SDL_wgpu) is implemented on emdawnwebgpu, the WebGPU binding Emscripten ships as a remote
+      port: its archive, its JavaScript libraries, and the entry points pixely-host.js uses to hand the page's adapter and device
+      to SDL. The port is fetched and built at link time, which the workload's frozen cache cannot hold, so WasmCachePath has to
+      name a writable copy of it (docs/hosting.md). Opt in with PixelyBrowserWebGpu=true alongside an SDL3.a built with the backend.
+    -->
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserWebGpu)' == 'true'">
+        <EmccExtraLDFlags>$(EmccExtraLDFlags) --use-port=emdawnwebgpu</EmccExtraLDFlags>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserWebGpu)' == 'true'">
+        <EmccExportedRuntimeMethod Include="WebGPU" />
+        <EmccExportedFunction Include="_wgpuCreateInstance" />
+        <EmccExportedFunction Include="_wgpuInstanceRelease" />
+        <EmccExportedFunction Include="_wgpuAdapterRelease" />
+        <EmccExportedFunction Include="_wgpuDeviceRelease" />
+    </ItemGroup>
+
+    <Target Name="_PixelyRequireWritableWasmCache" BeforeTargets="BeforeBuild"
+            Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserWebGpu)' == 'true' and ('$(WasmCachePath)' == '' or '$(WasmCachePath)' == '$(EmscriptenCacheSdkCacheDir)')">
+        <Error Code="PIXELY0006" File="$(MSBuildProjectFullPath)" Text="PixelyBrowserWebGpu builds the emdawnwebgpu port at link time, which needs a writable Emscripten cache: set WasmCachePath to a writable copy of the workload's cache (docs/hosting.md, WebGPU in the browser)." />
+    </Target>
+
+    <!--
       The wasm build keys its P/Invoke table by the native reference's file name and matches DllImport names literally, so
       libSDL3.a registers a module libSDL3 that nothing imports and SDL fails at run time with DllNotFoundException.
     -->

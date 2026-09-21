@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using System.Runtime.Versioning;
 using Pixely.Content;
 
 namespace Pixely.Input;
@@ -9,6 +10,7 @@ namespace Pixely.Input;
 /// nothing; a line that cannot run throws <see cref="FormatException"/>. Exceptions from input handlers propagate, the same
 /// as for real input.
 /// </summary>
+[UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationCommandInterpreter
 {
     private readonly InputAutomation _automation;

@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.ShaderCommon;
@@ -41,12 +42,17 @@ public class CommandBuffer: IDisposable
 
     /// <summary>
     /// Submits the recorded work, waits for the GPU to finish it and returns the pixels of the texture's first layer, tightly packed.
+    /// Not in the browser: mapping a download buffer and waiting for its fence both suspend the wasm stack under a managed frame.
     /// </summary>
+    [UnsupportedOSPlatform("browser")]
     public Image SubmitAndDownloadTexture(Texture texture)
     {
         ArgumentNullException.ThrowIfNull(texture);
         ThrowIfDisposed();
         texture.ThrowIfDisposed();
+#if BROWSER
+        throw new PlatformNotSupportedException("Downloading a texture is not supported in the browser.");
+#else
 
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
         long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
@@ -94,6 +100,7 @@ public class CommandBuffer: IDisposable
         }
 
         return new RawImage(pixels, texture.Size, pixelFormat);
+#endif
     }
 
     public GpuFence SubmitAndAcquireFence()

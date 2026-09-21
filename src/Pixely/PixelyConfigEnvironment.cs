@@ -29,9 +29,10 @@ internal static class PixelyConfigEnvironment
             "vulkan" => GpuBackend.Vulkan,
             "direct3d12" => GpuBackend.Direct3D12,
             "metal" => GpuBackend.Metal,
+            "webgpu" => GpuBackend.WebGpu,
             _ => throw new InvalidOperationException(
                 $"Unsupported {GpuBackendVariable} value '{environmentBackend}'. " +
-                "Expected one of: automatic, vulkan, direct3d12, metal.")
+                "Expected one of: automatic, vulkan, direct3d12, metal, webgpu.")
         };
     }
 

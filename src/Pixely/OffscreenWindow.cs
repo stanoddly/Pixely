@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Utilities;
@@ -11,6 +12,7 @@ namespace Pixely;
 /// instead of the swapchain, so nothing is presented and frames can be read back. Everything else, events, size, text input and the colour target format, still
 /// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
 /// </summary>
+[UnsupportedOSPlatform("browser")]
 public sealed class OffscreenWindow : Window
 {
     // Nobody watches these frames, so a modest constant rate is enough and keeps the frame loop off a full core.

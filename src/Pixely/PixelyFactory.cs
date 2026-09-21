@@ -86,12 +86,17 @@ public partial class PixelyFactory: IDisposable
     {
         if (_config.Headless)
         {
+#if BROWSER
+            // Headless mode reads commands from standard input and frames back from the GPU, neither of which the page has.
+            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
+#else
             if (gpuDevice == null)
             {
                 throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
             }
 
             return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
+#endif
         }
 
         Window window = CreateWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
@@ -103,19 +108,6 @@ public partial class PixelyFactory: IDisposable
         }
 
         return window;
-    }
-
-    private OffscreenWindow CreateOffscreenWindow(
-        ViewScope viewScope,
-        GpuDevice gpuDevice,
-        PixelyFrameContext frameContext,
-        PlatformInfo platformInfo,
-        WindowConfig config)
-    {
-        // Only size and title matter: the SDL window is never shown, it just backs the GPU device, events and text input.
-        (uint width, uint height) = config.Size ?? DefaultSize;
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 
     private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
@@ -164,9 +156,9 @@ public partial class PixelyFactory: IDisposable
 
         EnsureSdlInitialized();
 
-        unsafe
+        SDL_PropertiesID props = SDL3.SDL_CreateProperties();
+        try
         {
-            SDL_PropertiesID props = SDL3.SDL_CreateProperties();
             SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, _config.EnableGpuValidation);
 
             string? driverName = gpuBackend switch
@@ -175,6 +167,7 @@ public partial class PixelyFactory: IDisposable
                 GpuBackend.Vulkan => "vulkan",
                 GpuBackend.Direct3D12 => "direct3d12",
                 GpuBackend.Metal => "metal",
+                GpuBackend.WebGpu => "webgpu",
                 _ => throw new ArgumentOutOfRangeException(nameof(_config.GpuBackend), gpuBackend, "Unknown GPU backend")
             };
             if (driverName != null)
@@ -182,56 +175,24 @@ public partial class PixelyFactory: IDisposable
                 SDL3.SDL_SetStringProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, driverName);
             }
 
-            bool advertiseSpirV = gpuBackend == GpuBackend.Vulkan ||
-                                  (gpuBackend == GpuBackend.Automatic && !OperatingSystem.IsMacOS());
-            bool advertiseDxil = gpuBackend == GpuBackend.Direct3D12 ||
-                                 (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsWindows());
-            bool advertiseMsl = gpuBackend == GpuBackend.Metal ||
-                                (gpuBackend == GpuBackend.Automatic && OperatingSystem.IsMacOS());
-
-            if (advertiseSpirV)
-            {
-                SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
-            }
-
-            if (advertiseDxil)
-            {
-                SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
-            }
-
-            if (advertiseMsl)
-            {
-                SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
-            }
-
-            if (advertiseSpirV)
-            {
-                VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParamsFeatures = default;
-                shaderDrawParamsFeatures.sType = VkPhysicalDeviceShaderDrawParametersFeatures.StructureType;
-                shaderDrawParamsFeatures.shaderDrawParameters = 1;
-
-                SDL_GPUVulkanOptions vulkanOptions = default;
-                // Request Vulkan 1.3.0 ((1 << 22) | (3 << 12) | 0). SDL defaults to
-                // Vulkan 1.0, where feature_list is ignored, and Slang's stable SPIR-V
-                // target support starts at SPIR-V 1.3:
-                // https://shader-slang.org/slang/user-guide/spirv-target-specific
-                vulkanOptions.vulkan_api_version = (1 << 22) | (3 << 12) | 0;
-                vulkanOptions.feature_list = (IntPtr)(&shaderDrawParamsFeatures);
-
-                SDL_GPUVulkanOptions* vulkanOptionsPointer = &vulkanOptions;
-                SDL3.SDL_SetPointerProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, (IntPtr)vulkanOptionsPointer);
-            }
-
-            Pointer<SDL_GPUDevice> device = SDL3.SDL_CreateGPUDeviceWithProperties(props);
-            SDL3.SDL_DestroyProperties(props);
-
-            if (device.IsNull)
-            {
-                throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}");
-            }
-
-            return new GpuDevice(device);
+            // The shader formats and the backend-specific options are the host's: PixelyFactory.Desktop.cs and PixelyFactory.Browser.cs.
+            return CreateGpuDevice(props, gpuBackend);
         }
+        finally
+        {
+            SDL3.SDL_DestroyProperties(props);
+        }
+    }
+
+    private static unsafe GpuDevice CreateGpuDeviceFromProperties(SDL_PropertiesID props)
+    {
+        Pointer<SDL_GPUDevice> device = SDL3.SDL_CreateGPUDeviceWithProperties(props);
+        if (device.IsNull)
+        {
+            throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}");
+        }
+
+        return new GpuDevice(device);
     }
 
     internal KeyboardService CreateKeyboardService(AppControl appControl)
