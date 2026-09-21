@@ -25,6 +25,11 @@ static partial class Program
 #elif !HOSTED_CONSUMER_NO_HANDLER
     static int OnException(Exception exception)
     {
+        // The browser test publishes once and picks the outcome at run time: an exception leaving Main rejects runMain().
+        if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_RETHROW") == "1")
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception);
+        }
         Console.WriteLine($"OnException ran: {exception.Message}");
         return 1;
     }

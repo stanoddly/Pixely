@@ -7,8 +7,9 @@ using Pixely.DependencyInjection;
 namespace BrowserLoopConsumer;
 
 // A hand-written browser Main around a fake app, so BrowserHost and pixely-host.js run under node without SDL: the loop
-// ends after three frames, or the third frame throws when PackageIntegrationTests defines BROWSER_LOOP_THROWS. With
-// BROWSER_LOOP_NATIVE the frame limit comes from native.c, relinked into the runtime through NativeFileReference.
+// ends after three frames, or the third frame throws when the BROWSER_LOOP_THROWS environment variable is set, so one
+// bundle serves both outcomes. With BROWSER_LOOP_NATIVE the frame limit comes from native.c, relinked into the runtime
+// through NativeFileReference.
 static class Program
 {
     [SupportedOSPlatform("browser")]
@@ -55,12 +56,10 @@ sealed partial class FrameApp : IPixelyApp
     public bool RunFrame()
     {
         Frames++;
-#if BROWSER_LOOP_THROWS
-        if (Frames == 3)
+        if (Frames == 3 && Environment.GetEnvironmentVariable("BROWSER_LOOP_THROWS") == "1")
         {
             throw new InvalidOperationException("Frame 3 failed on purpose.");
         }
-#endif
         Console.WriteLine($"Frame {Frames} of {FrameLimit}.");
         return Frames < FrameLimit;
     }

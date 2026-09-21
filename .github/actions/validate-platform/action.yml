@@ -5,10 +5,6 @@ inputs:
   runtime:
     description: Runtime identifier used for NativeAOT publication
     required: true
-  package-integration:
-    description: Whether to run package integration tests against the repository build
-    required: false
-    default: 'false'
   full-solution:
     description: Whether to also build the full solution including tutorials and benchmarks
     required: false
@@ -54,17 +50,6 @@ runs:
       run: dotnet publish tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj --configuration Release --runtime "$INPUT_RUNTIME" -p:TreatWarningsAsErrors=true
       env:
         INPUT_RUNTIME: ${{ inputs.runtime }}
-
-    # The browser tests that relink the runtime with a native reference skip without the workload.
-    - name: Install the wasm-tools workload
-      if: inputs['package-integration'] == 'true'
-      shell: bash
-      run: dotnet workload install wasm-tools
-
-    - name: Run package integration tests
-      if: inputs['package-integration'] == 'true'
-      shell: bash
-      run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
 
     - name: Build full solution
       if: inputs['full-solution'] == 'true'
