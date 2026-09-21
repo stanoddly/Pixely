@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PublishAot>true</PublishAot>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <PixelyHosting>true</PixelyHosting>
+    </PropertyGroup>
+
+    <!--
+      The browser needs SDL3 linked into the runtime (docs/hosting.md): point BrowserNativeLibraryDirectory at a directory
+      of Emscripten static libraries named after their P/Invoke modules (SDL3.a at least) when publishing for browser-wasm.
+      Passed with -p it is a global property, which a project cannot reassign, so the normalized value lives in its own property.
+    -->
+    <PropertyGroup Condition="'$(BrowserNativeLibraryDirectory)' != ''">
+        <_BrowserNativeLibraryDirectory>$([MSBuild]::EnsureTrailingSlash('$(BrowserNativeLibraryDirectory)'))</_BrowserNativeLibraryDirectory>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(_BrowserNativeLibraryDirectory)' != ''">
+        <NativeFileReference Include="$(_BrowserNativeLibraryDirectory)*.a" />
+    </ItemGroup>
+
+    <!-- An empty glob would publish a bundle that fails at run time. -->
+    <Target Name="_RequireBrowserSdlLibrary" BeforeTargets="BeforeBuild" Condition="'$(_BrowserNativeLibraryDirectory)' != '' and !Exists('$(_BrowserNativeLibraryDirectory)SDL3.a')">
+        <Error Text="BrowserNativeLibraryDirectory $(_BrowserNativeLibraryDirectory) has no SDL3.a; see docs/hosting.md, SDL3 in the browser." />
+    </Target>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>

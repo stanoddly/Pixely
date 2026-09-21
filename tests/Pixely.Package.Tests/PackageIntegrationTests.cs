@@ -5,6 +5,7 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 
 namespace Pixely.Package.Tests;
@@ -41,7 +42,8 @@ public class PackageIntegrationTests
         "PackageReferenceConsumer",
         "LibraryConsumer",
         "TransitiveConsumer",
-        "ReversedSdkConsumer"
+        "ReversedSdkConsumer",
+        "BrowserLoopConsumer"
     ];
 
     private string _repositoryDirectory = null!;
@@ -145,6 +147,11 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("Sdk/Sdk.targets"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.AfterSdk.targets"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Hosting.targets"));
+            Assert.That(entries, Does.Contain("Sdk/Pixely.Browser.props"));
+            Assert.That(entries, Does.Contain("Sdk/Pixely.Browser.targets"));
+            Assert.That(entries, Does.Contain("wwwroot/index.html"));
+            Assert.That(entries, Does.Contain("wwwroot/main.js"));
+            Assert.That(entries, Does.Contain("wwwroot/pixely-host.js"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Version.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
             Assert.That(entries.Any(entry => entry.StartsWith("build/", StringComparison.Ordinal)), Is.False);
@@ -378,6 +385,127 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("CS0117").And.Contain("'Configure'"));
     }
 
+    // One browser publish covers the layout, the consumer's own asset replacing a default, a referenced library staying a library
+    // and, under node, the generated default OnException rethrowing from the async Main (the fixture is compiled without a handler).
+    [Test]
+    public async Task HostedConsumerPublishesABrowserBundle()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        string libraryDirectory = GetConsumerDirectory("LibraryConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        DeleteConsumerOutputs("LibraryConsumer");
+        // The check is per file, so main.js stands in for any of the three defaults and index.html stays the package's.
+        string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
+        Directory.CreateDirectory(consumerWwwroot);
+        File.WriteAllText(Path.Combine(consumerWwwroot, "main.js"), "// consumer bootstrap\n");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "HOSTED_CONSUMER_NO_HANDLER", properties: ["HostedConsumerReferencesLibrary=true"]);
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "browser-wasm", "PixelyProgram.g.cs");
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        // Without the guard the library's restore pulls the WebAssembly pack, whose props turn it into an exe (CS5001) in the reference build,
+        // and the WebAssembly props' SelfContained and PublishTrimmed pull the Mono browser runtime pack and ILLink into its restore.
+        string libraryAssets = File.ReadAllText(Path.Combine(libraryDirectory, "obj", "project.assets.json"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllText(generatedFile), Does.Contain("[global::System.Runtime.Versioning.SupportedOSPlatform(\"browser\")]")
+                .And.Contain("private static async global::System.Threading.Tasks.Task<int> Main()")
+                .And.Contain("return await global::Pixely.App.BrowserHost.RunAsync(app);")
+                .And.Not.Contain("app.Run()"));
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Does.Contain("<canvas id=\"canvas\""));
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "main.js")), Does.Contain("consumer bootstrap"));
+            Assert.That(File.Exists(Path.Combine(wwwroot, "pixely-host.js")), Is.True);
+            // dotnet.js is not fingerprinted on disk; the assemblies (WebCIL) are, and the endpoint manifest aliases their plain names.
+            Assert.That(File.Exists(Path.Combine(wwwroot, "_framework", "dotnet.js")), Is.True);
+            Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "HostedConsumer.*.wasm"), Has.Length.EqualTo(1));
+            Assert.That(File.ReadAllText(Path.Combine(libraryDirectory, "obj", "LibraryConsumer.csproj.nuget.g.props")), Does.Not.Contain("WebAssembly"));
+            Assert.That(libraryAssets, Does.Not.Contain("Microsoft.NETCore.App.Runtime.Mono.browser-wasm").And.Not.Contain("Microsoft.NET.ILLink.Tasks"));
+            Assert.That(File.Exists(Path.Combine(libraryDirectory, "bin", "Release", "net11.0", "LibraryConsumer.dll")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(libraryDirectory, "obj", "Release", "net11.0", "browser-wasm")), Is.False);
+        });
+
+        if (HasNode())
+        {
+            string result = await RunBrowserBundleAsync(wwwroot, environment: null);
+            Assert.That(result, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
+        }
+
+        // A desktop build afterwards keeps its own obj/ and bin/ and its synchronous Main.
+        await BuildConsumerAsync(consumerDirectory);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs")), Does.Contain("private static int Main()"));
+            Assert.That(File.ReadAllText(generatedFile), Does.Contain("BrowserHost.RunAsync"));
+        });
+    }
+
+    // The bundle runs under node as it would in a page: the generated async Main runs Configure, which fails on purpose, and the handler
+    // decides whether runMain() resolves with its return value or rejects with the exception. One publish serves both outcomes: the
+    // fixture's handler rethrows when HOSTED_CONSUMER_RETHROW is set, which the node script passes through dotnet.withEnvironmentVariable.
+    [Test]
+    public async Task HostedConsumerBundleRunsItsGeneratedEntryPointUnderNode()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        string handled = await RunBrowserBundleAsync(wwwroot, environment: null);
+        string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
+        Assert.Multiple(() =>
+        {
+            Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
+            Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
+        });
+    }
+
+    // A hand-written Main around a fake app reaches BrowserHost and pixely-host.js, which a generated Main cannot without SDL. One publish
+    // serves both outcomes: the fixture's third frame throws when BROWSER_LOOP_THROWS is set.
+    [Test]
+    public async Task BrowserHostRunsTheFrameLoopUnderNode()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        AssertBrowserLoopOutcome(await RunBrowserBundleAsync(wwwroot, environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
+        AssertBrowserLoopOutcome(await RunBrowserBundleAsync(wwwroot, environment: new() { ["BROWSER_LOOP_THROWS"] = "1" }), "Frame 2 of 3.", "Caught InvalidOperationException: Frame 3 failed on purpose.", "RESULT exit code 1");
+    }
+
+    // A native reference relinks the runtime (wasm-tools workload) and its file name is the P/Invoke module DllImport binds to.
+    [Test]
+    public async Task NativeReferenceIsRelinkedAndBoundInTheBrowserBuild()
+    {
+        RequireNode();
+        await RequireWasmToolsAsync();
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: ["BrowserLoopConsumerNative=true"]);
+        AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
+    }
+
+    private static void AssertBrowserLoopOutcome(string result, string lastFrame, string outcome, string expectedResult)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Contain(lastFrame).And.Contain(outcome).And.Contain("Disposed.").And.Contain(expectedResult));
+            Assert.That(result.IndexOf("Disposed.", StringComparison.Ordinal), Is.GreaterThan(result.IndexOf(outcome, StringComparison.Ordinal)));
+        });
+    }
+
+    [Test]
+    public async Task BrowserRuntimeIdentifierInTheProjectBodyFailsWithThePlainMessage()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false, properties: ["HostedConsumerBodyRuntimeIdentifier=true"]);
+        Assert.That(output, Does.Contain("error PIXELY0004").And.Contain("pass -r browser-wasm on the command line"));
+    }
+
     [Test]
     public async Task ShaderCompilerSelectionUsesBuildHostInsteadOfTargetRuntime()
     {
@@ -513,7 +641,22 @@ public class PackageIntegrationTests
         });
     }
 
-    private async Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
+    private Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
+    {
+        return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties);
+    }
+
+    private Task<string> PublishConsumerAsync(string consumerDirectory, string runtimeIdentifier, string? defineConstants = null, string[]? properties = null)
+    {
+        return RunConsumerBuildCommandAsync("publish", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess: true, properties);
+    }
+
+    private static string GetPublishedWwwroot(string consumerDirectory)
+    {
+        return Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "browser-wasm", "publish", "wwwroot");
+    }
+
+    private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -531,7 +674,7 @@ public class PackageIntegrationTests
         ];
         List<string> buildArguments =
         [
-            "build",
+            command,
             projectPath,
             "--configuration",
             "Release",
@@ -619,6 +762,50 @@ public class PackageIntegrationTests
         }
 
         return output;
+    }
+
+    // requestAnimationFrame does not exist under node; a timer stands in for it. The script mirrors the package's main.js without a canvas,
+    // and hands the fixture its run-time variant as environment variables of the managed app.
+    private static async Task<string> RunBrowserBundleAsync(string wwwroot, Dictionary<string, string>? environment)
+    {
+        string script = Path.Combine(wwwroot, "run-under-node.mjs");
+        string variables = string.Concat((environment ?? []).Select(pair => $".withEnvironmentVariable({JsonSerializer.Serialize(pair.Key)}, {JsonSerializer.Serialize(pair.Value)})"));
+        File.WriteAllText(script, $$"""
+            import { dotnet } from './_framework/dotnet.js';
+            globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 5);
+            try {
+                const exitCode = await dotnet{{variables}}.runMain();
+                console.log(`RESULT exit code ${exitCode}`);
+            } catch (error) {
+                console.log(`RESULT rejected ${error}`);
+            }
+            """);
+        (int exitCode, string output) = await RunProcessExpectingExitCodeAsync("node", wwwroot, null, script);
+        Assert.That(exitCode, Is.EqualTo(0), output);
+        return output;
+    }
+
+    private static async Task RequireWasmToolsAsync()
+    {
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(Path.GetTempPath(), "workload", "list");
+        if (exitCode != 0 || !output.Contains("wasm-tools", StringComparison.Ordinal))
+        {
+            Assert.Ignore("The wasm-tools workload is not installed; the runtime cannot be relinked.");
+        }
+    }
+
+    private static bool HasNode()
+    {
+        string[] directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        return directories.Any(directory => File.Exists(Path.Combine(directory, OperatingSystem.IsWindows() ? "node.exe" : "node")));
+    }
+
+    private static void RequireNode()
+    {
+        if (!HasNode())
+        {
+            Assert.Ignore("node is not installed; the browser bundle cannot run.");
+        }
     }
 
     private string[] GetPackageDependencies()
@@ -733,6 +920,8 @@ public class PackageIntegrationTests
         DeleteDirectory(Path.Combine(consumerDirectory, "bin"));
         DeleteDirectory(Path.Combine(consumerDirectory, "obj"));
         DeleteDirectory(Path.Combine(consumerDirectory, "Content", "shaders", ".generated"));
+        // written by HostedConsumerPublishesABrowserBundle; no fixture has a wwwroot of its own
+        DeleteDirectory(Path.Combine(consumerDirectory, "wwwroot"));
         File.Delete(Path.Combine(consumerDirectory, "NuGet.Config"));
         File.Delete(Path.Combine(consumerDirectory, "global.json"));
     }
@@ -765,9 +954,14 @@ public class PackageIntegrationTests
         return RunDotnetExpectingExitCodeAsync(workingDirectory, null, arguments);
     }
 
-    private static async Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, Dictionary<string, string>? environment, params string[] arguments)
+    private static Task<(int ExitCode, string Output)> RunDotnetExpectingExitCodeAsync(string workingDirectory, Dictionary<string, string>? environment, params string[] arguments)
     {
-        ProcessStartInfo startInfo = new("dotnet")
+        return RunProcessExpectingExitCodeAsync("dotnet", workingDirectory, environment, arguments);
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunProcessExpectingExitCodeAsync(string fileName, string workingDirectory, Dictionary<string, string>? environment, params string[] arguments)
+    {
+        ProcessStartInfo startInfo = new(fileName)
         {
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
@@ -785,7 +979,7 @@ public class PackageIntegrationTests
         }
 
         using Process process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start dotnet.");
+            ?? throw new InvalidOperationException($"Failed to start {fileName}.");
         Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
         Task<string> standardError = process.StandardError.ReadToEndAsync();
         using CancellationTokenSource timeout = new(TimeSpan.FromMinutes(10));
@@ -798,7 +992,7 @@ public class PackageIntegrationTests
             process.Kill(true);
             await process.WaitForExitAsync();
             throw new TimeoutException(
-                $"dotnet {string.Join(' ', arguments)} exceeded the ten-minute test timeout.");
+                $"{fileName} {string.Join(' ', arguments)} exceeded the ten-minute test timeout.");
         }
         string output = await standardOutput;
         string error = await standardError;

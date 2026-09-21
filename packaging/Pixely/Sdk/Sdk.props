@@ -15,4 +15,5 @@
 
     <!-- SlangVersion pins the toolchain for package consumers here and for source builds in the same file. -->
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.props" />
+    <Import Project="$(MSBuildThisFileDirectory)Pixely.Browser.props" />
 </Project>

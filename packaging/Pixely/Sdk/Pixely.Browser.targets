@@ -1,0 +1,97 @@
+<Project>
+    <!--
+      Imported on BeforeMicrosoftNETSdkTargets, the one slot after the project body and before the base targets, which
+      is where a body property can still be replaced before Microsoft.NET.RuntimeIdentifierInference.targets and the
+      ILCompiler import read it. PublishAot fails framework reference resolution on browser-wasm, and the WebAssembly
+      pack's props stop appending the RID to the output paths, which would make desktop and browser share obj/ and bin/.
+    -->
+    <!--
+      Only an executable is a browser app. A library evaluated with the RID (a solution-wide publish, or the restore of
+      a referenced project) has already imported the WebAssembly props, which force SelfContained and PublishTrimmed;
+      without this its restore would add the WebAssembly pack, whose props then default the RID and set OutputType to
+      exe in every later evaluation, including the RID-agnostic reference build, and the library fails with CS5001.
+      UsingMicrosoftNETSdkWebAssembly is a ProcessFrameworkReferences parameter read at execution, so clearing it here
+      keeps the pack out of the graph; the two publish properties are reset so the library's restore pulls neither
+      the Mono browser runtime pack nor ILLink and its publish is a plain library publish.
+    -->
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(OutputType)' != 'Exe' and '$(OutputType)' != 'WinExe'">
+        <_PixelyBrowser>false</_PixelyBrowser>
+        <UsingMicrosoftNETSdkWebAssembly>false</UsingMicrosoftNETSdkWebAssembly>
+        <SelfContained>false</SelfContained>
+        <PublishTrimmed>false</PublishTrimmed>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
+        <PublishAot>false</PublishAot>
+        <SelfContained>true</SelfContained>
+        <PublishTrimmed>true</PublishTrimmed>
+        <AppendRuntimeIdentifierToOutputPath>true</AppendRuntimeIdentifierToOutputPath>
+        <PixelyBrowserDefaultAssets Condition="'$(PixelyBrowserDefaultAssets)' == ''">true</PixelyBrowserDefaultAssets>
+        <PixelyBrowserIndexHtml Condition="'$(PixelyBrowserIndexHtml)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\index.html</PixelyBrowserIndexHtml>
+        <PixelyBrowserMainJs Condition="'$(PixelyBrowserMainJs)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\main.js</PixelyBrowserMainJs>
+        <_PixelyBrowserHostJs>$(MSBuildThisFileDirectory)..\wwwroot\pixely-host.js</_PixelyBrowserHostJs>
+    </PropertyGroup>
+
+    <!--
+      SDL's Emscripten backend assigns Module['requestFullscreen'] in SDL_CreateWindow. A relink with assertions (the Debug
+      -O0 link) defines every unexported runtime symbol on Module as a getter-only property, and the assignment throws
+      "Cannot set property requestFullscreen of #<Object> which has only a getter" in the SDK's strict ES6 output. Exporting
+      the symbol makes the runtime install it as a plain property that SDL then overwrites. Takes effect only when the runtime
+      is relinked (native references, or a Release publish with the wasm-tools workload installed); reported to SDL, to be
+      dropped once SDL_emscriptenvideo.c defines the property itself.
+    -->
+    <ItemGroup Condition="'$(_PixelyBrowser)' == 'true'">
+        <EmccExportedRuntimeMethod Include="requestFullscreen" />
+    </ItemGroup>
+
+    <!--
+      The wasm build keys its P/Invoke table by the native reference's file name and matches DllImport names literally, so
+      libSDL3.a registers a module libSDL3 that nothing imports and SDL fails at run time with DllNotFoundException.
+    -->
+    <Target Name="_PixelyWarnOnLibPrefixedSdlArchive" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBrowser)' == 'true'">
+        <ItemGroup>
+            <_PixelyLibPrefixedSdlArchive Include="@(NativeFileReference)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('libSDL3'))" />
+        </ItemGroup>
+        <Warning Code="PIXELY0005" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyLibPrefixedSdlArchive)' != ''"
+                 Text="The native reference @(_PixelyLibPrefixedSdlArchive->'%(Filename)%(Extension)', ', ') registers a P/Invoke module named after its file; Pixely imports SDL3, SDL3_image, SDL3_ttf and SDL3_mixer, so name the archive without the lib prefix (SDL3.a)." />
+    </Target>
+
+    <!-- The RID was set in the project body, which the SDK props evaluated before it cannot see; the WebAssembly SDK was not imported. -->
+    <Target Name="_PixelyRequireBrowserSdk" BeforeTargets="BeforeBuild" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(UsingMicrosoftNETSdkWebAssembly)' == ''">
+        <Error Code="PIXELY0004" File="$(MSBuildProjectFullPath)" Text="RuntimeIdentifier browser-wasm must be a global property so the Pixely SDK can import the WebAssembly SDK: pass -r browser-wasm on the command line, not in the project file." />
+    </Target>
+
+    <!--
+      The default page, its bootstrap and the frame loop, as static web assets of the project, each only when the
+      project has no wwwroot file at that relative path (two assets with one path fail manifest generation; a linked
+      or generated file at that path needs PixelyBrowserDefaultAssets=false). Copied into obj/ first so two projects
+      on one SDK do not share an asset identity. The recipe is the WebAssembly SDK's own hot-reload injection.
+    -->
+    <Target Name="_PixelyDefineBrowserDefaultAssets" BeforeTargets="ResolveProjectStaticWebAssets" AfterTargets="ResolveStaticWebAssetsConfiguration"
+            Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserDefaultAssets)' == 'true'">
+        <PropertyGroup>
+            <_PixelyBrowserAssetsRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-browser'))</_PixelyBrowserAssetsRoot>
+        </PropertyGroup>
+        <ItemGroup>
+            <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserIndexHtml)" RelativePath="index.html" />
+            <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserMainJs)" RelativePath="main.js" />
+            <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserHostJs)" RelativePath="pixely-host.js" />
+            <_PixelyBrowserDefaultAssetSource Remove="@(_PixelyBrowserDefaultAssetSource)" Condition="Exists('$(MSBuildProjectDirectory)/wwwroot/%(RelativePath)')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_PixelyBrowserDefaultAssetSource)" DestinationFiles="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" SkipUnchangedFiles="true" />
+        <ItemGroup>
+            <_PixelyBrowserDefaultAsset Include="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" />
+            <_PixelyBrowserDefaultAsset Update="@(_PixelyBrowserDefaultAsset)" OriginalItemSpec="%(Identity)" />
+            <FileWrites Include="@(_PixelyBrowserDefaultAsset)" />
+        </ItemGroup>
+        <DefineStaticWebAssets CandidateAssets="@(_PixelyBrowserDefaultAsset)" FingerprintCandidates="$(StaticWebAssetsFingerprintContent)" FingerprintPatterns="@(StaticWebAssetFingerprintPattern)"
+                               SourceId="$(PackageId)" SourceType="Computed" ContentRoot="$(_PixelyBrowserAssetsRoot)" BasePath="$(StaticWebAssetBasePath)" AssetKind="All"
+                               Condition="'@(_PixelyBrowserDefaultAsset)' != ''">
+            <Output TaskParameter="Assets" ItemName="StaticWebAsset" />
+            <Output TaskParameter="Assets" ItemName="_PixelyBrowserDefaultStaticWebAsset" />
+        </DefineStaticWebAssets>
+        <DefineStaticWebAssetEndpoints CandidateAssets="@(_PixelyBrowserDefaultStaticWebAsset)" ContentTypeMappings="@(StaticWebAssetContentTypeMapping)" Condition="'@(_PixelyBrowserDefaultAsset)' != ''">
+            <Output TaskParameter="Endpoints" ItemName="StaticWebAssetEndpoint" />
+        </DefineStaticWebAssetEndpoints>
+    </Target>
+</Project>

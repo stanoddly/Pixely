@@ -68,7 +68,7 @@ app spins the loop.
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
 
-A browser owns the frame loop, so the host calls `IPixelyApp.RunFrame()` once per animation frame instead of `Run()`, which loops over it until it returns false.
+A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync` calls `IPixelyApp.RunFrame()` once per animation frame instead of `Run()`, which loops over it until it returns false. The generated entry point awaits it for `browser-wasm` (see [Hosting](hosting.md)).
 
 ## Custom render contexts
 

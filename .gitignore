@@ -418,3 +418,4 @@ Pixely.Validation.slnx
 # Written by PackageIntegrationTests beside each consumer fixture
 tests/Pixely.Package.Tests/Consumers/*/NuGet.Config
 tests/Pixely.Package.Tests/Consumers/*/global.json
+tests/Pixely.Package.Tests/Consumers/*/wwwroot/

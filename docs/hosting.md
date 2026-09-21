@@ -1,19 +1,25 @@
 # Hosting
 
 Pixely can own the entry point. A project that opts in gets a generated `Main` and writes only what
-to register.
+to register. The same project runs on the desktop with `dotnet run` and in a browser with
+`dotnet publish -r browser-wasm`.
 
 ## Opting in
 
 ```xml
-<PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Pixely" Version="0.0.N" />
+
+  <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
     <PixelyHosting>true</PixelyHosting>
-</PropertyGroup>
+  </PropertyGroup>
+</Project>
 ```
 
-The property is the whole opt-in. Without it nothing is generated and the project writes its own
-`Main`; every other Pixely API works either way.
+The `<Sdk>` line brings the generator (see [SDK](sdk.md)); the property is the whole opt-in. Without it
+nothing is generated and the project writes its own `Main`; every other Pixely API works either way.
 
 ## What the project writes
 
@@ -78,7 +84,10 @@ passing it as a method group, and an invocation binds to the declared method wha
 after the framework when the build has one, shown in the IDE under `Properties/PixelyProgram.g.cs`.
 It adds `Main` to `Program`, which builds the app from `Configure`, runs it, hands a failure to
 `OnException` and disposes the app last, and `PixelyProgramDefaults` to the namespace, which holds the
-default `OnException`. Nothing else is added. The generated part of `Program` states no accessibility, so the project's part
+default `OnException`. Nothing else is added. On the desktop `Main` is `static int Main()` and calls
+`app.Run()`; for `browser-wasm` it is `static async Task<int> Main()`, marked
+`[SupportedOSPlatform("browser")]`, and awaits `BrowserHost.RunAsync(app)`. Every other line is the
+same. The generated part of `Program` states no accessibility, so the project's part
 may state any. The file is generated for `Exe` and `WinExe` C# projects, is rewritten only when its
 content changes, and is removed by `dotnet clean`.
 
@@ -93,3 +102,122 @@ content changes, and is removed by `dotnet clean`.
   Do not opt in.
 - An error naming `namespace <name>;` in the generated file: the project file name is not a valid
   identifier. Set `RootNamespace` in the project.
+- PIXELY0004: `RuntimeIdentifier` is `browser-wasm` in the project body. Pass `-r browser-wasm`
+  instead.
+
+## The browser
+
+```sh
+dotnet publish -r browser-wasm -c Release
+```
+
+The Pixely SDK sees `RuntimeIdentifier` at SDK-import time and layers `Microsoft.NET.Sdk.WebAssembly`
+on top of `Microsoft.NET.Sdk`, so the RID must be a global property, the `-r` switch. Set in the
+project body it is invisible to the SDK props and the build fails with PIXELY0004. Only an executable
+becomes a browser app: a project whose `OutputType` is not `Exe` or `WinExe` gets neither the
+WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, whether it is restored as a
+reference of the browser app or published with the RID itself, so a solution-wide
+`dotnet publish -r browser-wasm` publishes the executables for the browser and the libraries as
+libraries. Prefer `-r` on the executable project all the same; a RID in `Directory.Build.props` makes
+every desktop build of the repository a browser build. Without native references no `wasm-tools`
+workload is needed, for publishing or for `dotnet run -r browser-wasm`, which serves the app from a
+local host; with them the runtime is relinked and the workload is required (see below).
+
+The page is under `bin/<Configuration>/net11.0/browser-wasm/publish/wwwroot/`. Serve that directory
+over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the project's
+`*.json` and `*.config` files, `global.json` and `NuGet.Config` included, beside `wwwroot`, so serve
+`wwwroot` only. Desktop and browser keep separate `obj/` and `bin/` directories, but they share the
+restore state: after a browser restore the WebAssembly pack's props default the RID to `browser-wasm`,
+so an evaluation without `-r` and without a restore (`--no-restore`, `dotnet msbuild`, a design-time
+build) is a browser build until the next desktop restore. `dotnet build` and `dotnet run` restore first.
+
+For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`;
+the project's own values apply to the desktop. Trim analysis warnings stay on.
+
+### SDL3 in the browser
+
+The .NET runtime for the browser contains no SDL, and Pixely's native calls (`DllImport("SDL3")`,
+`"SDL3_image"`, `"SDL3_ttf"`, `"SDL3_mixer"`) fail with `DllNotFoundException` until SDL is linked
+into `dotnet.native.wasm`. That is a relink of the runtime, which needs the `wasm-tools` workload
+(`dotnet workload install wasm-tools`) and takes Emscripten static libraries as ordinary
+`NativeFileReference` items:
+
+```xml
+<ItemGroup>
+  <NativeFileReference Include="wasm/SDL3.a" />
+  <NativeFileReference Include="wasm/SDL3_image.a" />
+</ItemGroup>
+```
+
+The file name matters: the wasm build registers each native reference under its file name as a
+P/Invoke module and matches `DllImport` names against it literally (.NET 11, Mono runtime), so the
+archive for `DllImport("SDL3")` is `SDL3.a`, not `libSDL3.a`, and so on for `SDL3_image.a`,
+`SDL3_ttf.a` and `SDL3_mixer.a`. Any further archive those libraries need (FreeType, HarfBuzz, libpng,
+Ogg, Vorbis) is one more `NativeFileReference`; the runtime already links zlib. A reachable native
+call whose symbol no archive provides fails the link (`WasmAllowUndefinedSymbols=true` defers that to
+run time); a library that is not linked at all leaves its calls failing at run time as before. The
+Pixely SDK adds no link step of its own; a relink happens whenever native references exist. Only a publish
+trims, so `dotnet build -r browser-wasm` and `dotnet run -r browser-wasm` put every P/Invoke of the
+SDL bindings in the table, and an archive built from an older SDL than the bindings target fails
+the link on the calls it lacks; set `WasmAllowUndefinedSymbols` to `true` for those commands.
+
+Getting the archives: Emscripten has ports for SDL3 (3.4.2 in the Emscripten .NET 11 bundles, so
+`SDL_WINDOW_FILL_DOCUMENT` works) and `sdl3_ttf`, but a port is fetched and compiled into the
+Emscripten cache at link time and the workload's cache is frozen, so `--use-port=sdl3` fails in a
+normal build. Linking the port directly would not bind the calls anyway: the P/Invoke table is keyed
+by native-reference file names, and a port adds none (the SDK warns PIXELY0005 about the related
+mistake of a `libSDL3*.a` reference). So the port is a way to build the archive once:
+
+1. Copy the workload's cache (`packs/Microsoft.NET.Runtime.Emscripten.*.Cache.*/<version>/tools/emscripten/cache`) to a writable directory.
+2. Run the workload's `emcc --use-port=sdl3` on any C file with `EM_CACHE` set to that copy and `EM_FROZEN_CACHE=0` (the workload's `emcc` reads `DOTNET_EMSCRIPTEN_LLVM_ROOT`, `DOTNET_EMSCRIPTEN_BINARYEN_ROOT` and `DOTNET_EMSCRIPTEN_NODE_JS` for its toolchain, `packs/Microsoft.NET.Runtime.Emscripten.*.Sdk.*/<version>/tools/bin`, `.../tools` and the Node pack's `tools/bin/node`). Pointing a project's `WasmCachePath` at the copy and adding `--use-port=sdl3` to `EmccExtraLDFlags` builds the port the same way during a publish.
+3. Copy `sysroot/lib/wasm32-emscripten/libSDL3.a` out of the cache as `SDL3.a` and reference it.
+
+The satellite libraries and their dependencies come from their own Emscripten builds the same way.
+
+`tutorials/Pixely.Tutorials.Browser` links every `*.a` in `BrowserNativeLibraryDirectory`:
+`dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives`.
+With `SDL3.a` alone the window fills the page and `ResolutionChanged` fires; the GPU is not
+available in the browser yet.
+
+### The frame loop
+
+A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync(app)` takes the place of
+`app.Run()`: `pixely-host.js` calls `IPixelyApp.RunFrame()` once per `requestAnimationFrame` and
+`RunAsync` completes with 0 when it returns `false`. An exception thrown by a frame rejects the loop
+and is rethrown by `RunAsync` as the original managed exception, so the generated `catch`,
+`OnException` and the `finally` that disposes the app run as on the desktop. `BrowserHost` is public
+for a hand-written `Main`, which is `async Task<int>` and carries `[SupportedOSPlatform("browser")]`;
+without the attribute CA1416 fires on the browser compile.
+
+`dotnet.runMain()` in `main.js` resolves with the value `Main` returns. When `OnException` returns,
+that value is the result; when it throws, including the default that rethrows, `runMain()` rejects
+and `main.js` logs the error and rethrows it to the browser console. What `MessageBox.Show` does in
+a handler depends on the native SDL build, which is a separate piece of work.
+
+In a browser the page is the screen: the window fills it and follows the browser window's size, so
+`WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
+`AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as
+on the desktop. `UseDefaultContent()` and file logging are not supported in the browser yet.
+
+### The page
+
+The package ships three static web assets and adds each to the project only when the project's
+`wwwroot/` has no file at that relative path:
+
+- `index.html`: `<canvas id="canvas">`, the element SDL's Emscripten port draws into, a full-page
+  stylesheet and `<script type="module" src="main.js">`.
+- `main.js`: imports `./_framework/dotnet.js`, passes the canvas as `Module.canvas`, awaits
+  `dotnet.runMain()`, logs the exit code, and logs and rethrows a rejection.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, which `BrowserHost` imports as module
+  `pixely-host` from `../pixely-host.js`, relative to `dotnet.js`. A replacement keeps the export and
+  the location.
+
+A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
+setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;
+`PixelyBrowserDefaultAssets=false` adds none of the three. The check is by file: an `index.html`
+that reaches `wwwroot/` as a linked `Content` item or generated content collides with the default,
+so such a project sets `PixelyBrowserDefaultAssets=false`.
+
+`tutorials/Pixely.Tutorials.Browser` is the smallest example: `AddWindow` only, no GPU, it logs
+`ResolutionChanged`. On the desktop a window without a GPU spins its loop (see
+[Window rendering](window-rendering.md)); in the browser it needs `SDL3.a` linked as described above.

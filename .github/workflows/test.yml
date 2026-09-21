@@ -26,5 +26,25 @@ jobs:
         uses: ./.github/actions/validate-platform
         with:
           runtime: linux-arm64
-          package-integration: 'true'
           full-solution: 'true'
+
+  # Runs beside the validation instead of after it. The browser test that relinks the runtime needs the wasm-tools workload and
+  # skips here; it runs on the Ubuntu package-consumer lane after the merge, where the other platforms are covered as well.
+  package-integration:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Build package integration tests
+        run: dotnet build tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj -p:TreatWarningsAsErrors=true
+
+      - name: Run package integration tests against the repository build
+        run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true

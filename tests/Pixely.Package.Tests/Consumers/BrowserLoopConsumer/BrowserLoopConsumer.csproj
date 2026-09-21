@@ -7,16 +7,15 @@
         <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PixelyHosting>true</PixelyHosting>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!-- The fixture intentionally stays outside repository-wide central package management. -->
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-        <!-- The mistake PIXELY0004 reports: a browser RID in the project body, where the SDK props evaluated before it cannot see it. -->
-        <RuntimeIdentifier Condition="'$(HostedConsumerBodyRuntimeIdentifier)' == 'true'">browser-wasm</RuntimeIdentifier>
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- A library on the SDK that a browser publish must leave a library. -->
-        <ProjectReference Include="..\LibraryConsumer\LibraryConsumer.csproj" Condition="'$(HostedConsumerReferencesLibrary)' == 'true'" />
+        <!-- The relink variant: PackageIntegrationTests sets the property with the wasm-tools workload installed. -->
+        <NativeFileReference Include="native.c" Condition="'$(BrowserLoopConsumerNative)' == 'true'" />
     </ItemGroup>
 
 </Project>

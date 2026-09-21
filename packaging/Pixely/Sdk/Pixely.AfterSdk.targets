@@ -1,5 +1,11 @@
 <Project>
-    <!-- Both files read IntermediateOutputPath, Language and RootNamespace at evaluation time, which only the base SDK targets set. -->
+    <!--
+      The WebAssembly SDK's targets read _WebAssemblyTargetsFile from nuget.g.targets, which Microsoft.Common.targets
+      imports, so they must follow the base targets; they come before the hosting targets, whose browser branch relies
+      on them. The other two files read IntermediateOutputPath, Language and RootNamespace at evaluation time, which
+      only the base SDK targets set.
+    -->
+    <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk.WebAssembly" Condition="'$(_PixelyBrowser)' == 'true'" />
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.targets" />
     <Import Project="$(MSBuildThisFileDirectory)Pixely.Hosting.targets" />
 </Project>

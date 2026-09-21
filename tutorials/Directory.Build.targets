@@ -1,11 +1,13 @@
 <Project>
 
     <!--
-      Tutorials reference Pixely as a project, so the Pixely SDK is not imported. The generator is registered on the
-      hook Microsoft.NET.Sdk.targets imports as its last line, after IntermediateOutputPath, Language and RootNamespace are set.
+      Tutorials reference Pixely as a project, so the Pixely SDK is not imported. The hosting targets and, for the
+      browser, the WebAssembly SDK targets are registered through a wrapper on the hook Microsoft.NET.Sdk.targets imports
+      as its last line, after IntermediateOutputPath, Language and RootNamespace are set; an import from this file
+      would run inside Microsoft.Common.targets, before the base targets finish.
     -->
     <PropertyGroup>
-        <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Hosting.targets</AfterMicrosoftNETSdkTargets>
+        <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.Tutorials.AfterSdk.targets</AfterMicrosoftNETSdkTargets>
     </PropertyGroup>
 
 </Project>
