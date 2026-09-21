@@ -244,8 +244,9 @@ submission completes only after the page's event loop turns, which a synchronous
 wait for. So `RunAsync` awaits `queue.onSubmittedWorkDone()` once the frame loop has ended, on the
 exception path too, and `GpuDevice.Dispose` then destroys the SDL device as on the desktop, after
 which `pixely-host.js` releases the imported handles and destroys the WebGPU device. A `Build()`
-that fails after `PrepareAsync` releases the page's device the same way, whether SDL rejected the
-handles or a later singleton threw.
+that fails once the device exists, because SDL rejected the handles or a later singleton threw,
+releases the page's device the same way; one that fails before the device is resolved leaves it
+until the page unloads or the next `PrepareAsync`, which releases it first.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm

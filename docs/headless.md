@@ -59,7 +59,7 @@ The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`
 | Variable | Overrides | Values |
 | --- | --- | --- |
 | `PIXELY_HEADLESS` | `PixelyConfig.Headless` | `1`, `true`, `0`, `false` |
-| `PIXELY_GRAPHICS` | `PixelyConfig.GpuBackend` | `automatic`, `vulkan`, `direct3d12`, `metal` |
+| `PIXELY_GRAPHICS` | `PixelyConfig.GpuBackend` | `automatic`, `vulkan`, `direct3d12`, `metal`, `webgpu` |
 | `PIXELY_SDL_LOGGING` | `PixelyConfig.EnableSdlLogging` | `1`, `true`, `0`, `false` |
 | `PIXELY_GPU_VALIDATION` | `PixelyConfig.EnableGpuValidation` | `1`, `true`, `0`, `false` |
 
