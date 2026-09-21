@@ -1259,6 +1259,29 @@ public class SdlangCompilerTests
         Assert.That(ex.Message, Does.Contain("'colors' in the fragment shader is a Buffer<T>"));
     }
 
+    private const string ComputeShaderWithReadWriteTypedBuffer = """
+                                                                 RWBuffer<float4> colors : register(u0, space1);
+
+                                                                 [numthreads(64, 1, 1)]
+                                                                 [shader("compute")]
+                                                                 void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                                 {
+                                                                     colors[dispatchThreadID.x] = float4(1.0, 0.0, 0.0, 1.0);
+                                                                 }
+                                                                 """;
+
+    [Test]
+    public void CompileShader_ComputeShaderWithReadWriteTypedBuffer_ThrowsValidationException()
+    {
+        string shaderPath = CreateTemporaryShaderFile(ComputeShaderWithReadWriteTypedBuffer);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+
+        ShaderBindingValidationException? ex = Assert.Throws<ShaderBindingValidationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(ex.Message, Does.Contain("'colors' in the compute shader is a RWBuffer<T>"));
+        Assert.That(ex.Message, Does.Contain("RWStructuredBuffer<T>"));
+    }
+
     private const string FragmentShaderWithByteAddressBuffer = """
                                                                struct FragmentInput {
                                                                    float4 position : SV_Position;

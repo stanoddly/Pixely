@@ -1172,80 +1172,81 @@ public class SdlangCompiler
                     continue;
                 }
 
-                if (param.TryGetProperty("type", out JsonElement paramType) &&
-                    paramType.TryGetProperty("kind", out JsonElement kindElement))
+                string paramName = reflectedParameterName;
+                if (!param.TryGetProperty("type", out JsonElement paramType) || !paramType.TryGetProperty("kind", out JsonElement kindElement))
                 {
-                    string? kind = kindElement.GetString();
-                    string paramName = param.TryGetProperty("name", out JsonElement nameEl)
-                        ? nameEl.GetString() ?? "unknown"
-                        : "unknown";
-                    (int space, int index) = GetBindingInfo(param);
+                    throw new ShaderCompilationException($"Reflection of parameter '{paramName}' in the {DescribeStage(stage)} shader has no type kind.");
+                }
 
-                    switch (kind)
-                    {
-                        case "samplerState":
-                            samplers++;
-                            resourceBindings.Add(new ResourceBinding(paramName, ResourceType.Sampler, space, index));
-                            break;
-                        case "resource":
-                            if (paramType.TryGetProperty("baseShape", out JsonElement baseShapeElement))
+                string? kind = kindElement.GetString();
+                (int space, int index) = GetBindingInfo(param);
+
+                switch (kind)
+                {
+                    case "samplerState":
+                        samplers++;
+                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.Sampler, space, index));
+                        break;
+                    case "resource":
+                        if (!paramType.TryGetProperty("baseShape", out JsonElement baseShapeElement))
+                        {
+                            throw new ShaderCompilationException($"Reflection of resource '{paramName}' in the {DescribeStage(stage)} shader has no base shape.");
+                        }
+
+                        string? baseShape = baseShapeElement.GetString();
+                        bool isReadWrite = IsReadWrite(paramType);
+
+                        if (baseShape is "structuredBuffer" or "byteAddressBuffer")
+                        {
+                            // A byte address buffer has no element type, so its size stays 0 and the runtime skips the element-size check.
+                            uint elementSize = ComputeStructuredBufferElementSize(paramType);
+                            if (isReadWrite)
                             {
-                                string? baseShape = baseShapeElement.GetString();
-                                bool isReadWrite = paramType.TryGetProperty("access", out JsonElement accessElement)
-                                    && accessElement.GetString() == "readWrite";
-
-                                if (baseShape is "structuredBuffer" or "byteAddressBuffer")
-                                {
-                                    // A byte address buffer has no element type, so its size stays 0 and the runtime skips the element-size check.
-                                    uint elementSize = ComputeStructuredBufferElementSize(paramType);
-                                    if (isReadWrite)
-                                    {
-                                        readWriteStorageBufferElementSizesBySlot[index] = elementSize;
-                                        readWriteStorageBuffers++;
-                                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageBuffer, space, index));
-                                    }
-                                    else
-                                    {
-                                        storageBufferElementSizesBySlot[index] = elementSize;
-                                        storageBuffers++;
-                                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.StorageBuffer, space, index));
-                                    }
-                                }
-                                else if (baseShape != null && baseShape != "textureBuffer" && baseShape.StartsWith("texture", StringComparison.Ordinal))
-                                {
-                                    if (isReadWrite)
-                                    {
-                                        readWriteStorageTextures++;
-                                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageTexture, space, index));
-                                    }
-                                    else
-                                    {
-                                        // texture2D and other texture types are sampled textures
-                                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.SampledTexture, space, index));
-                                    }
-                                }
-                                else
-                                {
-                                    // Buffer<T> and any other shape SDL GPU has no slot for.
-                                    throw new ShaderBindingValidationException(
-                                        $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(baseShape)}, which SDL GPU cannot bind; use StructuredBuffer<T>, ByteAddressBuffer or a texture.");
-                                }
+                                readWriteStorageBufferElementSizesBySlot[index] = elementSize;
+                                readWriteStorageBuffers++;
+                                resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageBuffer, space, index));
                             }
-                            break;
-                        case "constantBuffer":
-                            AdjustUniformBuffers(param, ref shaderUniformSlots);
-                            resourceBindings.Add(new ResourceBinding(paramName, ResourceType.UniformBuffer, space, index));
-                            break;
-                        case "array":
-                            string elementDescription = paramType.TryGetProperty("elementType", out JsonElement arrayElementType)
-                                ? DescribeReflectedType(arrayElementType)
-                                : "bindings";
+                            else
+                            {
+                                storageBufferElementSizesBySlot[index] = elementSize;
+                                storageBuffers++;
+                                resourceBindings.Add(new ResourceBinding(paramName, ResourceType.StorageBuffer, space, index));
+                            }
+                        }
+                        else if (baseShape != null && baseShape != "textureBuffer" && baseShape.StartsWith("texture", StringComparison.Ordinal))
+                        {
+                            if (isReadWrite)
+                            {
+                                readWriteStorageTextures++;
+                                resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageTexture, space, index));
+                            }
+                            else
+                            {
+                                // texture2D and other texture types are sampled textures
+                                resourceBindings.Add(new ResourceBinding(paramName, ResourceType.SampledTexture, space, index));
+                            }
+                        }
+                        else
+                        {
+                            // Buffer<T> and any other shape SDL GPU has no slot for.
+                            string replacement = isReadWrite ? "RWStructuredBuffer<T>, RWByteAddressBuffer or RWTexture2D<T>" : "StructuredBuffer<T>, ByteAddressBuffer or a texture";
                             throw new ShaderBindingValidationException(
-                                $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is an array of {elementDescription}, which SDL GPU cannot bind; declare each element as its own parameter.");
-                        default:
-                            throw new ShaderBindingValidationException(
-                                $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(paramType)}, which the shader compiler does not know how to bind.");
-                    }
+                                $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(baseShape, isReadWrite)}, which SDL GPU cannot bind; use {replacement}.");
+                        }
+                        break;
+                    case "constantBuffer":
+                        AdjustUniformBuffers(param, ref shaderUniformSlots);
+                        resourceBindings.Add(new ResourceBinding(paramName, ResourceType.UniformBuffer, space, index));
+                        break;
+                    case "array":
+                        string elementDescription = paramType.TryGetProperty("elementType", out JsonElement arrayElementType)
+                            ? DescribeReflectedType(arrayElementType)
+                            : "bindings";
+                        throw new ShaderBindingValidationException(
+                            $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is an array of {elementDescription}, which SDL GPU cannot bind; declare each element as its own parameter.");
+                    default:
+                        throw new ShaderBindingValidationException(
+                            $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(paramType)}, which the shader compiler does not know how to bind.");
                 }
             }
         }
@@ -1644,13 +1645,16 @@ public class SdlangCompiler
         _ => stage.ToString().ToLowerInvariant()
     };
 
+    private static bool IsReadWrite(JsonElement resourceType) =>
+        resourceType.TryGetProperty("access", out JsonElement accessElement) && accessElement.GetString() == "readWrite";
+
     // Names a reflected parameter type by the HLSL type the shader author wrote, for error messages.
     private static string DescribeReflectedType(JsonElement type)
     {
         string? kind = type.TryGetProperty("kind", out JsonElement kindElement) ? kindElement.GetString() : null;
         return kind switch
         {
-            "resource" => DescribeReflectedType(type.TryGetProperty("baseShape", out JsonElement baseShape) ? baseShape.GetString() : null),
+            "resource" => DescribeReflectedType(type.TryGetProperty("baseShape", out JsonElement baseShape) ? baseShape.GetString() : null, IsReadWrite(type)),
             "samplerState" => "SamplerState",
             "constantBuffer" => "ConstantBuffer<T>",
             "parameterBlock" => "ParameterBlock<T>",
@@ -1660,15 +1664,15 @@ public class SdlangCompiler
         };
     }
 
-    private static string DescribeReflectedType(string? baseShape) => baseShape switch
+    private static string DescribeReflectedType(string? baseShape, bool isReadWrite) => baseShape switch
     {
-        "textureBuffer" => "Buffer<T>",
-        "structuredBuffer" => "StructuredBuffer<T>",
-        "byteAddressBuffer" => "ByteAddressBuffer",
+        "textureBuffer" => isReadWrite ? "RWBuffer<T>" : "Buffer<T>",
+        "structuredBuffer" => isReadWrite ? "RWStructuredBuffer<T>" : "StructuredBuffer<T>",
+        "byteAddressBuffer" => isReadWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer",
         "accelerationStructure" => "RaytracingAccelerationStructure",
-        "texture1D" => "Texture1D",
-        "texture2D" => "Texture2D",
-        "texture3D" => "Texture3D",
+        "texture1D" => isReadWrite ? "RWTexture1D<T>" : "Texture1D",
+        "texture2D" => isReadWrite ? "RWTexture2D<T>" : "Texture2D",
+        "texture3D" => isReadWrite ? "RWTexture3D<T>" : "Texture3D",
         "textureCube" => "TextureCube",
         null => "resource of unknown shape",
         _ => $"resource of shape '{baseShape}'"
