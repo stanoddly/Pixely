@@ -33,6 +33,18 @@
     </PropertyGroup>
 
     <!--
+      SDL's Emscripten backend assigns Module['requestFullscreen'] in SDL_CreateWindow. A relink with assertions (the Debug
+      -O0 link) defines every unexported runtime symbol on Module as a getter-only property, and the assignment throws
+      "Cannot set property requestFullscreen of #<Object> which has only a getter" in the SDK's strict ES6 output. Exporting
+      the symbol makes the runtime install it as a plain property that SDL then overwrites. Takes effect only when the runtime
+      is relinked (native references, or a Release publish with the wasm-tools workload installed); reported to SDL, to be
+      dropped once SDL_emscriptenvideo.c defines the property itself.
+    -->
+    <ItemGroup Condition="'$(_PixelyBrowser)' == 'true'">
+        <EmccExportedRuntimeMethod Include="requestFullscreen" />
+    </ItemGroup>
+
+    <!--
       The wasm build keys its P/Invoke table by the native reference's file name and matches DllImport names literally, so
       libSDL3.a registers a module libSDL3 that nothing imports and SDL fails at run time with DllNotFoundException.
     -->

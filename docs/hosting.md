@@ -156,7 +156,10 @@ archive for `DllImport("SDL3")` is `SDL3.a`, not `libSDL3.a`, and so on for `SDL
 Ogg, Vorbis) is one more `NativeFileReference`; the runtime already links zlib. A reachable native
 call whose symbol no archive provides fails the link (`WasmAllowUndefinedSymbols=true` defers that to
 run time); a library that is not linked at all leaves its calls failing at run time as before. The
-Pixely SDK adds nothing here; a relink happens whenever native references exist.
+Pixely SDK adds no link step of its own; a relink happens whenever native references exist. Only a publish
+trims, so `dotnet build -r browser-wasm` and `dotnet run -r browser-wasm` put every P/Invoke of the
+SDL bindings in the table, and an archive built from an older SDL than the bindings target fails
+the link on the calls it lacks; set `WasmAllowUndefinedSymbols` to `true` for those commands.
 
 Getting the archives: Emscripten has ports for SDL3 (3.4.2 in the Emscripten .NET 11 bundles, so
 `SDL_WINDOW_FILL_DOCUMENT` works) and `sdl3_ttf`, but a port is fetched and compiled into the

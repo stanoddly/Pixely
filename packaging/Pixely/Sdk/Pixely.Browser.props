@@ -12,5 +12,6 @@
         <BeforeMicrosoftNETSdkTargets>$(BeforeMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.Browser.targets</BeforeMicrosoftNETSdkTargets>
     </PropertyGroup>
 
-    <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk.WebAssembly" Condition="'$(_PixelyBrowser)' == 'true'" />
+    <!-- The base SDK check keeps the reversed Sdk order (Sdk="Pixely;Microsoft.NET.Sdk") on its PIXELY0003 path instead of importing the base SDK through the StaticWebAssets SDK first (MSB4011). -->
+    <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk.WebAssembly" Condition="'$(_PixelyBrowser)' == 'true' and '$(UsingMicrosoftNETSdk)' == 'true'" />
 </Project>
