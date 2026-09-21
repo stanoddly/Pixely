@@ -280,11 +280,7 @@ a handler depends on the native SDL build, which is a separate piece of work.
 In a browser the page is the screen: the window fills it and follows the browser window's size, so
 `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
 `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as
-on the desktop. The shipped `index.html` sizes the canvas to the page through CSS, so SDL takes the
-window size from the canvas box; the window is created resizable so that SDL reads the box again on
-each page resize and resizes the canvas bitmap with it. The bitmap stays in CSS pixels: the window
-is not created with `SDL_WINDOW_HIGH_PIXEL_DENSITY`, so a HiDPI page renders at the CSS size and the
-browser upscales it. `UseDefaultContent()` and file logging are not supported in the browser yet.
+on the desktop. `UseDefaultContent()` and file logging are not supported in the browser yet.
 
 ### The page
 
