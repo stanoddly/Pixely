@@ -1194,8 +1194,9 @@ public class SdlangCompiler
                                 bool isReadWrite = paramType.TryGetProperty("access", out JsonElement accessElement)
                                     && accessElement.GetString() == "readWrite";
 
-                                if (baseShape == "structuredBuffer")
+                                if (baseShape is "structuredBuffer" or "byteAddressBuffer")
                                 {
+                                    // A byte address buffer has no element type, so its size stays 0 and the runtime skips the element-size check.
                                     uint elementSize = ComputeStructuredBufferElementSize(paramType);
                                     if (isReadWrite)
                                     {
@@ -1210,7 +1211,7 @@ public class SdlangCompiler
                                         resourceBindings.Add(new ResourceBinding(paramName, ResourceType.StorageBuffer, space, index));
                                     }
                                 }
-                                else
+                                else if (baseShape != null && baseShape != "textureBuffer" && baseShape.StartsWith("texture", StringComparison.Ordinal))
                                 {
                                     if (isReadWrite)
                                     {
@@ -1223,12 +1224,26 @@ public class SdlangCompiler
                                         resourceBindings.Add(new ResourceBinding(paramName, ResourceType.SampledTexture, space, index));
                                     }
                                 }
+                                else
+                                {
+                                    // Buffer<T> (textureBuffer) and any shape SDL GPU has no slot for.
+                                    throw new ShaderBindingValidationException(
+                                        $"Parameter '{paramName}' in the {stage} shader is a {baseShape} resource, which SDL GPU cannot bind; use StructuredBuffer<T>, ByteAddressBuffer or a texture.");
+                                }
                             }
                             break;
                         case "constantBuffer":
                             AdjustUniformBuffers(param, ref shaderUniformSlots);
                             resourceBindings.Add(new ResourceBinding(paramName, ResourceType.UniformBuffer, space, index));
                             break;
+                        case "array":
+                            string elementKind = paramType.TryGetProperty("elementType", out JsonElement arrayElementType) && arrayElementType.TryGetProperty("kind", out JsonElement elementKindElement)
+                                ? elementKindElement.GetString() ?? "unknown"
+                                : "unknown";
+                            throw new ShaderBindingValidationException(
+                                $"Parameter '{paramName}' in the {stage} shader is an array of {elementKind} bindings, which SDL GPU cannot bind; declare each element as its own parameter.");
+                        default:
+                            throw new ShaderBindingValidationException($"Parameter '{paramName}' in the {stage} shader has kind '{kind}', which the shader compiler does not know how to bind.");
                     }
                 }
             }

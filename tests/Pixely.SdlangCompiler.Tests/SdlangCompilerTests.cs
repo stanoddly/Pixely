@@ -1117,6 +1117,115 @@ public class SdlangCompilerTests
         Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
     }
 
+    private const string ComputeShaderWithByteAddressBuffers = """
+                                                               ByteAddressBuffer source : register(t0, space0);
+                                                               RWByteAddressBuffer destination : register(u0, space1);
+
+                                                               [numthreads(64, 1, 1)]
+                                                               [shader("compute")]
+                                                               void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                               {
+                                                                   destination.Store(dispatchThreadID.x * 4, source.Load(dispatchThreadID.x * 4) + 1);
+                                                               }
+                                                               """;
+
+    [Test]
+    public void CompileShader_ComputeShaderWithByteAddressBuffers_ClassifiesStorageBuffersWithoutElementSize()
+    {
+        string shaderPath = Path.Combine(_testDir, "byte_address.slang");
+        File.WriteAllText(shaderPath, ComputeShaderWithByteAddressBuffers);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string json = File.ReadAllText(Path.Combine(_testDir, ".generated", "byte_address.metadata.json"));
+        ComputeShaderMetadataDto? metadata = JsonSerializer.Deserialize(json, ShaderMetadataJsonContext.Default.ComputeShaderMetadataDto);
+
+        Assert.That(metadata, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.BindingLayout.BindingCounts.NumStorageBuffers, Is.EqualTo(1));
+            Assert.That(metadata.BindingLayout.BindingCounts.NumReadWriteStorageBuffers, Is.EqualTo(1));
+            Assert.That(metadata.BindingLayout.BindingCounts.NumStorageTextures, Is.EqualTo(0));
+            Assert.That(metadata.BindingLayout.BindingCounts.NumReadWriteStorageTextures, Is.EqualTo(0));
+            Assert.That(metadata.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(0u));
+            Assert.That(metadata.BindingLayout.ReadWriteStorageBufferElementSizes.Slot0, Is.EqualTo(0u));
+        });
+        AssertGeneratedTargets(metadata.Shaders, "byte_address", "computeMain");
+    }
+
+    private const string FragmentShaderWithTextureArray = """
+                                                          struct FragmentInput {
+                                                              float4 position : SV_Position;
+                                                          };
+
+                                                          struct VertexInput {
+                                                              float3 position : POSITION;
+                                                          };
+
+                                                          Texture2D textures[2] : register(t0, space2);
+                                                          SamplerState textureSampler : register(s0, space2);
+
+                                                          [shader("vertex")]
+                                                          FragmentInput vertexMain(VertexInput input) {
+                                                              FragmentInput output;
+                                                              output.position = float4(input.position, 1.0);
+                                                              return output;
+                                                          }
+
+                                                          [shader("fragment")]
+                                                          float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                              return textures[0].Sample(textureSampler, input.position.xy) + textures[1].Sample(textureSampler, input.position.xy);
+                                                          }
+                                                          """;
+
+    [Test]
+    public void CompileShader_FragmentShaderWithTextureArray_ThrowsValidationException()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderWithTextureArray);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+
+        ShaderBindingValidationException? ex = Assert.Throws<ShaderBindingValidationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(ex.Message, Does.Contain("'textures'"));
+        Assert.That(ex.Message, Does.Contain("array of resource bindings"));
+    }
+
+    private const string FragmentShaderWithTypedBuffer = """
+                                                         struct FragmentInput {
+                                                             float4 position : SV_Position;
+                                                         };
+
+                                                         struct VertexInput {
+                                                             float3 position : POSITION;
+                                                         };
+
+                                                         Buffer<float4> colors : register(t0, space2);
+
+                                                         [shader("vertex")]
+                                                         FragmentInput vertexMain(VertexInput input) {
+                                                             FragmentInput output;
+                                                             output.position = float4(input.position, 1.0);
+                                                             return output;
+                                                         }
+
+                                                         [shader("fragment")]
+                                                         float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                             return colors[0];
+                                                         }
+                                                         """;
+
+    [Test]
+    public void CompileShader_FragmentShaderWithTypedBuffer_ThrowsValidationException()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderWithTypedBuffer);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+
+        ShaderBindingValidationException? ex = Assert.Throws<ShaderBindingValidationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(ex.Message, Does.Contain("'colors'"));
+        Assert.That(ex.Message, Does.Contain("textureBuffer"));
+    }
+
     private const string VertexShaderWithStorageAndUniformBuffers = """
                                                                     struct VoxelData {
                                                                         float positionX;
