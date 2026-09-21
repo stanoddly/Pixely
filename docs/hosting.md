@@ -104,9 +104,9 @@ content changes, and is removed by `dotnet clean`.
   identifier. Set `RootNamespace` in the project.
 - PIXELY0004: `RuntimeIdentifier` is `browser-wasm` in the project body. Pass `-r browser-wasm`
   instead.
-- PIXELY0007: a browser build whose framework is not `net11.0-browser`. The SDK switches a single
-  `net11.0`; a project with `TargetFrameworks` lists `net11.0-browser` itself and publishes with
-  `dotnet publish -f net11.0-browser -r browser-wasm` (see below).
+- PIXELY0007: a browser build whose framework is not a browser one. The SDK switches a single
+  `net11.0` without `-f`; a project with `TargetFrameworks` lists `net11.0-browser` itself and
+  publishes with `dotnet publish -f net11.0-browser -r browser-wasm` (see below).
 
 ## The browser
 
@@ -140,11 +140,12 @@ so a condition on `TargetFramework` in the project body does not see a browser p
 
 A project that multi-targets is not switched: it lists `net11.0-browser` in `TargetFrameworks` itself
 and publishes that inner build with `dotnet publish -f net11.0-browser -r browser-wasm`. Without `-f`
-every inner build gets the RID, and one whose framework is not `net11.0-browser` fails with
-PIXELY0007, as does a list without the browser framework. Every Pixely assembly has a `net11.0-browser`
-copy, so `Pixely.Ui` and the others bind to the browser `Pixely.dll` at run time; assembly identity is
-name and version, not framework, which is why the browser build's public surface is kept a superset
-of the desktop one (package validation checks it at pack).
+every inner build gets the RID, and one whose framework is not a browser one fails with PIXELY0007,
+as does a list without the browser framework. `net11.0-browser1.0`, the same framework with its
+platform version spelled out, is accepted wherever `net11.0-browser` is. Every Pixely assembly has a
+`net11.0-browser` copy, so `Pixely.Ui` and the others bind to the browser `Pixely.dll` at run time;
+assembly identity is name and version, not framework, which is why the browser build's public
+surface is kept a superset of the desktop one (package validation checks it at pack).
 
 The page is under `bin/<Configuration>/net11.0-browser/browser-wasm/publish/wwwroot/`. Serve that
 directory over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the

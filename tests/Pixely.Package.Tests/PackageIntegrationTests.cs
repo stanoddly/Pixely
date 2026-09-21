@@ -32,6 +32,7 @@ public class PackageIntegrationTests
         "Pixely.Logging",
         "Pixely.Observations",
         "Pixely.ShaderCommon",
+        "Pixely.Ui",
         "Pixely.Utils",
         "Pixely"
     ];
@@ -549,16 +550,19 @@ public class PackageIntegrationTests
     }
 
     // A project that lists net11.0-browser itself is not switched: its browser inner build is selected with -f, and its desktop
-    // build stays a desktop build.
-    [Test]
-    public async Task MultiTargetingConsumerPublishesTheBrowserFrameworkItNames()
+    // build stays a desktop build. The framework may carry its platform version; the SDK recognises both spellings as browser 1.0.
+    [TestCase("net11.0-browser")]
+    [TestCase("net11.0-browser1.0")]
+    public async Task MultiTargetingConsumerPublishesTheBrowserFrameworkItNames(string browserFramework)
     {
         string consumerDirectory = GetConsumerDirectory("MultiTargetConsumer");
         DeleteConsumerOutputs("MultiTargetConsumer");
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["TargetFramework=net11.0-browser"]);
-        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm", "PixelyProgram.g.cs");
-        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        // A semicolon in a command-line property value splits it; %3B is what MSBuild unescapes to one.
+        string frameworks = $"MultiTargetConsumerFrameworks=net11.0%3B{browserFramework}";
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: [frameworks, $"TargetFramework={browserFramework}"]);
+        string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", browserFramework, "browser-wasm", "PixelyProgram.g.cs");
+        string wwwroot = Path.Combine(consumerDirectory, "bin", "Release", browserFramework, "browser-wasm", "publish", "wwwroot");
         Assert.Multiple(() =>
         {
             Assert.That(File.ReadAllText(generatedFile), Does.Contain("BrowserHost.RunAsync"));
@@ -570,7 +574,7 @@ public class PackageIntegrationTests
             Assert.That(result, Does.Contain("Configure ran for the browser.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
         }
 
-        await BuildConsumerAsync(consumerDirectory);
+        await BuildConsumerAsync(consumerDirectory, properties: [frameworks]);
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "MultiTargetConsumer.dll"));
         Assert.Multiple(() =>
         {

@@ -4,9 +4,12 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <!-- A project that names the browser framework itself; the SDK switches only a single net11.0. PackageIntegrationTests overrides the list for the PIXELY0007 case. -->
+        <!--
+          A project that names the browser framework itself; the SDK switches only a single net11.0. PackageIntegrationTests
+          overrides the list, with %3B for the semicolon a command-line property cannot carry; unescaped here so it splits.
+        -->
         <TargetFrameworks>net11.0;net11.0-browser</TargetFrameworks>
-        <TargetFrameworks Condition="'$(MultiTargetConsumerFrameworks)' != ''">$(MultiTargetConsumerFrameworks)</TargetFrameworks>
+        <TargetFrameworks Condition="'$(MultiTargetConsumerFrameworks)' != ''">$([MSBuild]::Unescape('$(MultiTargetConsumerFrameworks)'))</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PixelyHosting>true</PixelyHosting>
