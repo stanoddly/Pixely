@@ -284,9 +284,17 @@ public class ServiceCollection
         {
             return BuildServiceProvider(provider);
         }
-        catch
+        catch (Exception buildException)
         {
-            provider.Dispose();
+            try
+            {
+                provider.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                throw new AggregateException(buildException, disposeException);
+            }
+
             throw;
         }
     }
