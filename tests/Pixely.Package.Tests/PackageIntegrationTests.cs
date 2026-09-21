@@ -372,24 +372,24 @@ public class PackageIntegrationTests
     }
 
     // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
-    [TestCase("HOSTED_CONSUMER_NO_HANDLER")]
-    [TestCase("HOSTED_CONSUMER_NARROW_HANDLER")]
-    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate(string variant)
+    // The fixture exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler
+    // variant is covered by the browser publish under node.
+    [Test]
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate()
     {
         string consumerDirectory = GetConsumerDirectory("HostedConsumer");
         DeleteConsumerOutputs("HostedConsumer");
 
-        await BuildConsumerAsync(consumerDirectory, defineConstants: variant);
+        await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NARROW_HANDLER");
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
             Path.Combine(outputDirectory, "HostedConsumer.dll"));
         Assert.Multiple(() =>
         {
-            // an unhandled exception, not the handled-and-reported exit code 1
-            Assert.That(exitCode, Is.Not.EqualTo(0).And.Not.EqualTo(1));
+            Assert.That(exitCode, Is.EqualTo(3));
             Assert.That(output, Does.Contain("Configure ran."));
-            Assert.That(output, Does.Contain("Configure failed on purpose."));
+            Assert.That(output, Does.Contain("Unhandled: Configure failed on purpose."));
             Assert.That(output, Does.Not.Contain("OnException ran"));
         });
     }

@@ -37,6 +37,36 @@ public class PartialBuildDisposalTests
         Assert.That(capturedServiceA.DisposeCount, Is.EqualTo(1));
     }
 
+    [Test]
+    public void BuildServiceProvider_WhenBuildAndCleanupThrow_SurfacesBothWithBuildExceptionFirst()
+    {
+        List<string> events = new();
+        ServiceCollection collection = new();
+        collection.AddSingleton(new ThrowingDisposable(events, "cleanup"));
+        collection.AddSingleton<ServiceB>((ServiceProvider sp) => throw new InvalidOperationException("build"));
+
+        AggregateException exception = Assert.Throws<AggregateException>(() => collection.BuildServiceProvider());
+
+        Assert.That(events, Is.EqualTo(new[] { "cleanup" }));
+        Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
+        Assert.That(exception.InnerExceptions[0], Is.InstanceOf<InvalidOperationException>().With.Message.EqualTo("build"));
+        Assert.That(exception.InnerExceptions[1], Is.InstanceOf<AggregateException>());
+        Assert.That(((AggregateException)exception.InnerExceptions[1]).InnerExceptions[0].Message, Is.EqualTo("cleanup"));
+    }
+
+    [Test]
+    public void BuildServiceProvider_WhenBuildThrowsAndCleanupSucceeds_RethrowsTheBuildExceptionUnchanged()
+    {
+        InvalidOperationException buildException = new("build");
+        ServiceCollection collection = new();
+        collection.AddSingleton(new ServiceA());
+        collection.AddSingleton<ServiceB>((ServiceProvider sp) => throw buildException);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => collection.BuildServiceProvider());
+
+        Assert.That(exception, Is.SameAs(buildException));
+    }
+
     private class ServiceA : IDisposable
     {
         public bool Disposed { get; private set; }
