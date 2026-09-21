@@ -27,7 +27,16 @@ public partial class PixelyFactory
         SDL3.SDL_SetPointerProperty(props, WebGpuAdapterProperty, handles.Adapter);
         SDL3.SDL_SetPointerProperty(props, WebGpuDeviceProperty, handles.Device);
 
-        return CreateGpuDeviceFromProperties(props);
+        try
+        {
+            return CreateGpuDeviceFromProperties(props);
+        }
+        catch
+        {
+            // SDL adopted nothing, so the page's device would otherwise stay until the page unloads.
+            BrowserHost.ReleaseGpuDevice();
+            throw;
+        }
     }
 
     // SDL 3.4's fill-document flag is not an SDL_WindowFlags member in the bindings.

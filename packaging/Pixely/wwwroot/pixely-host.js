@@ -23,6 +23,11 @@ function runtimeModule() {
 export async function createGpuDevice() {
     // A second preparation, from a Main that runs twice, must not orphan the first device.
     releaseGpuDevice();
+    const Module = runtimeModule();
+    const webgpu = Module.WebGPU;
+    if (!webgpu || !Module._wgpuCreateInstance) {
+        throw new Error('The runtime was linked without the WebGPU binding; publish with PixelyBrowserWebGpu=true (docs/hosting.md)');
+    }
     if (!navigator.gpu) {
         throw new Error('WebGPU is not available in this browser');
     }
@@ -38,16 +43,17 @@ export async function createGpuDevice() {
         requiredFeatures: [...requiredFeatures, ...optionalFeatures.filter(feature => adapter.features.has(feature))]
     });
 
-    const Module = runtimeModule();
-    const webgpu = Module.WebGPU;
-    if (!webgpu || !Module._wgpuCreateInstance) {
-        throw new Error('The runtime was linked without the WebGPU binding; publish with PixelyBrowserWebGpu=true (docs/hosting.md)');
+    const handles = { adapter, device, instance: 0, adapterPtr: 0, devicePtr: 0, destroying: false };
+    try {
+        handles.instance = Module._wgpuCreateInstance(0);
+        handles.adapterPtr = webgpu.importJsAdapter(adapter, handles.instance);
+        handles.devicePtr = webgpu.importJsDevice(device, handles.adapterPtr);
+    } catch (error) {
+        // A failed import leaves the device requested and any earlier handle created; release them as a teardown would.
+        gpu = handles;
+        releaseGpuDevice();
+        throw error;
     }
-    const instance = Module._wgpuCreateInstance(0);
-    const adapterPtr = webgpu.importJsAdapter(adapter, instance);
-    const devicePtr = webgpu.importJsDevice(device, adapterPtr);
-
-    const handles = { adapter, device, instance, adapterPtr, devicePtr, destroying: false };
     deviceLoss = null;
     device.lost.then(info => {
         // The loss destroyGpuDevice causes itself is the expected end of the device, not an error.
@@ -60,7 +66,7 @@ export async function createGpuDevice() {
     device.addEventListener('uncapturederror', event => console.error('WebGPU error', event.error?.message ?? event.error));
 
     gpu = handles;
-    return { instance, adapter: adapterPtr, device: devicePtr };
+    return { instance: handles.instance, adapter: handles.adapterPtr, device: handles.devicePtr };
 }
 
 // Awaited by BrowserHost.RunAsync once the frame loop has ended, so that SDL_DestroyGPUDevice, which spins until every
@@ -83,9 +89,16 @@ export function releaseGpuDevice() {
     current.destroying = true;
     try {
         const Module = runtimeModule();
-        Module._wgpuDeviceRelease(current.devicePtr);
-        Module._wgpuAdapterRelease(current.adapterPtr);
-        Module._wgpuInstanceRelease(current.instance);
+        // A handle a failed import never created is 0; the release calls do not check for null.
+        if (current.devicePtr) {
+            Module._wgpuDeviceRelease(current.devicePtr);
+        }
+        if (current.adapterPtr) {
+            Module._wgpuAdapterRelease(current.adapterPtr);
+        }
+        if (current.instance) {
+            Module._wgpuInstanceRelease(current.instance);
+        }
     } catch (error) {
         console.error('Pixely could not release the WebGPU handles', error);
     }

@@ -243,13 +243,15 @@ Destroying SDL's device spins, without yielding, until every submission has comp
 submission completes only after the page's event loop turns, which a synchronous `Dispose` cannot
 wait for. So `RunAsync` awaits `queue.onSubmittedWorkDone()` once the frame loop has ended, on the
 exception path too, and `GpuDevice.Dispose` then destroys the SDL device as on the desktop, after
-which `pixely-host.js` releases the imported handles and destroys the WebGPU device. A `Configure`
-or `Build()` that fails after `PrepareAsync` leaves the page's device until the page unloads or the
-next `PrepareAsync`, which releases it first.
+which `pixely-host.js` releases the imported handles and destroys the WebGPU device. A `Build()`
+that fails after `PrepareAsync` releases the page's device the same way, whether SDL rejected the
+handles or a later singleton threw.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
-stack under a managed frame; headless screenshots stay desktop-only). The swapchain is acquired
+stack under a managed frame). Headless mode (`PixelyConfig.Headless`, `PIXELY_HEADLESS`) reads
+commands from standard input and frames back through that download, so a headless app fails at
+`Build()` with `PixelyInitializationException` in the browser. The swapchain is acquired
 with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no texture ready is skipped;
 `requestAnimationFrame` paces the frames anyway.
 

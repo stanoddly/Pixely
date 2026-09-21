@@ -86,15 +86,15 @@ public partial class PixelyFactory: IDisposable
     {
         if (_config.Headless)
         {
+#if BROWSER
+            // Headless mode reads commands from standard input and frames back from the GPU, neither of which the page has.
+            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
+#else
             if (gpuDevice == null)
             {
                 throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
             }
 
-#if BROWSER
-            // Headless mode reads commands from standard input and frames back from the GPU, neither of which the page has.
-            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
-#else
             return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
 #endif
         }
