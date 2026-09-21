@@ -363,6 +363,8 @@ if (!services.IsRegistered<DebugOverlay>())
 Resolves all services, fires `OnBuilt` callbacks, freezes the provider, and returns it. A collection
 created by `ServiceProvider.CreateServiceCollection()` builds a child provider of that provider.
 
+When the build throws, the partially built provider is disposed and the build exception is rethrown. If that disposal also throws, the caller gets one `AggregateException` holding the build exception first and the disposal failure second.
+
 ```csharp
 ServiceProvider provider = services.BuildServiceProvider();
 
