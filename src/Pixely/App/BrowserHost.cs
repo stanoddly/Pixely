@@ -38,6 +38,9 @@ public static partial class BrowserHost
     [JSImport("waitForGpuIdle", HostModuleName)]
     private static partial Task WaitForGpuIdle();
 
+    [JSImport("readDeviceLoss", HostModuleName)]
+    private static partial JSObject? ReadDeviceLoss();
+
     [JSImport("releaseGpuDevice", HostModuleName)]
     private static partial void ReleaseGpuDeviceHandles();
 #endif
@@ -70,9 +73,9 @@ public static partial class BrowserHost
     /// <summary>
     /// Completes with 0 when <see cref="IPixelyApp.RunFrame"/> returns <see langword="false"/>. An exception thrown by a frame rejects the
     /// loop's promise and is rethrown here as the original managed exception, so a caller's catch and finally run as they would after
-    /// <see cref="IPixelyApp.Run"/>. Before returning either way it waits for the GPU queue to drain: destroying SDL's WebGPU device
-    /// spins until every submission has completed, and a submission completes only after the page's event loop turns, which the
-    /// caller's synchronous Dispose cannot wait for.
+    /// <see cref="IPixelyApp.Run"/>. A lost WebGPU device ends the loop the same way and surfaces as <see cref="GpuDeviceLostException"/>.
+    /// Before returning either way it waits for the GPU queue to drain: destroying SDL's WebGPU device spins until every submission has
+    /// completed, and a submission completes only after the page's event loop turns, which the caller's synchronous Dispose cannot wait for.
     /// </summary>
     public static async Task<int> RunAsync(IPixelyApp app)
     {
@@ -82,6 +85,18 @@ public static partial class BrowserHost
         try
         {
             await RunFrameLoop(app.RunFrame);
+        }
+        catch (JSException exception)
+        {
+            // The page rejects the loop with its own loss error, which the marshaller wraps as a JSException; the record it keeps names the
+            // reason. Any other JSException is not a loss and is rethrown as it came.
+            using JSObject? loss = ReadDeviceLoss();
+            if (loss is null)
+            {
+                throw;
+            }
+
+            throw new GpuDeviceLostException(loss.GetPropertyAsString("reason") ?? "unknown", loss.GetPropertyAsString("message") ?? exception.Message, exception);
         }
         finally
         {

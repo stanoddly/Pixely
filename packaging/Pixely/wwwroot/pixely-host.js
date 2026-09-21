@@ -61,12 +61,20 @@ export async function createGpuDevice() {
             return;
         }
         deviceLoss = new Error(`The WebGPU device was lost (${info.reason}): ${info.message}`);
+        deviceLoss.name = 'GpuDeviceLostError';
+        deviceLoss.reason = info.reason;
         console.error(deviceLoss.message);
     });
     device.addEventListener('uncapturederror', event => console.error('WebGPU error', event.error?.message ?? event.error));
 
     gpu = handles;
     return { instance: handles.instance, adapter: handles.adapterPtr, device: handles.devicePtr };
+}
+
+// The loss the current device reported, or null: an Error with the WebGPU reason ("unknown" or "destroyed") and the browser's
+// message. BrowserHost.RunAsync turns it into GpuDeviceLostException, and main.js reads it to word the message it shows.
+export function readDeviceLoss() {
+    return deviceLoss;
 }
 
 // Awaited by BrowserHost.RunAsync once the frame loop has ended, so that SDL_DestroyGPUDevice, which spins until every

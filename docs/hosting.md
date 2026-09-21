@@ -236,8 +236,15 @@ pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiti
 browser; `GpuBackend.WebGpu` (`PIXELY_GRAPHICS=webgpu`) names the driver explicitly.
 
 SDL cannot install callbacks on an adopted device, so `pixely-host.js` observes `device.lost` and
-`uncapturederror` itself: an error is logged, and a lost device ends the frame loop with the loss
-as the exception, since SDL would keep recording against the dead device without noticing.
+`uncapturederror` itself. An uncaptured error is logged. A lost device is terminal: every GPU
+resource went with it, SDL would keep recording against the dead device without noticing, and
+Pixely does not recreate the device or its resources. So the loss ends the frame loop, and
+`RunAsync` throws `GpuDeviceLostException`, whose `Reason` is the WebGPU `GPUDeviceLostReason`
+(`"unknown"` for a GPU reset, a driver update or an eviction by the browser, `"destroyed"` for a
+device the page destroyed). The generated `catch`, `OnException` and the `finally` that disposes
+the app run as for any other exception, and game state is still intact there, so `OnException` is
+where a game saves or shows a message of its own; the default page shows one either way (see
+[The page](#the-page)).
 
 Destroying SDL's device spins, without yielding, until every submission has completed, and a
 submission completes only after the page's event loop turns, which a synchronous `Dispose` cannot
@@ -274,8 +281,13 @@ without the attribute CA1416 fires on the browser compile. The desktop build of 
 
 `dotnet.runMain()` in `main.js` resolves with the value `Main` returns. When `OnException` returns,
 that value is the result; when it throws, including the default that rethrows, `runMain()` rejects
-and `main.js` logs the error and rethrows it to the browser console. What `MessageBox.Show` does in
-a handler depends on the native SDL build, which is a separate piece of work.
+and `main.js` logs the error and rethrows it to the browser console. The canvas keeps its last
+frame either way, so the default `main.js` also covers it with a message when `Main` rejects or
+returns a non-zero exit code: "The graphics device was lost." when `pixely-host.js` recorded a
+loss, "Pixely stopped." otherwise, the error message or exit code beneath, and a button that
+reloads the page, which is the only recovery a page can offer after startup. A project that wants
+another message replaces `main.js`. What `MessageBox.Show` does in a handler depends on the native
+SDL build, which is a separate piece of work.
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so
 `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
@@ -289,11 +301,13 @@ The package ships three static web assets and adds each to the project only when
 
 - `index.html`: `<canvas id="canvas">`, the element SDL's Emscripten port draws into, a full-page
   stylesheet and `<script type="module" src="main.js">`.
-- `main.js`: imports `./_framework/dotnet.js`, passes the canvas as `Module.canvas`, awaits
-  `dotnet.runMain()`, logs the exit code, and logs and rethrows a rejection.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `waitForGpuIdle()` and
-  `releaseGpuDevice()`, which `BrowserHost` imports as module `pixely-host` from
-  `../pixely-host.js`, relative to `dotnet.js`. A replacement keeps the exports and the location.
+- `main.js`: imports `./_framework/dotnet.js` and `./pixely-host.js`, passes the canvas as
+  `Module.canvas`, awaits `dotnet.runMain()`, logs the exit code, logs and rethrows a rejection,
+  and covers the canvas with a message on a rejection or a non-zero exit code.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `waitForGpuIdle()`,
+  `releaseGpuDevice()` and `readDeviceLoss()`, which `BrowserHost` imports as module `pixely-host`
+  from `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same module for
+  `readDeviceLoss()`. A replacement keeps the exports and the location.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
 setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;
