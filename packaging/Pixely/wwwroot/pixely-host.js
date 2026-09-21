@@ -2,7 +2,7 @@
 
 // What SDL's WebGPU backend requires of a device (SDL_gpu_webgpu.c in stanoddly/SDL_wgpu), and what it uses when present.
 const requiredFeatures = ['depth32float-stencil8', 'rg11b10ufloat-renderable', 'indirect-first-instance', 'depth-clip-control', 'bgra8unorm-storage', 'float32-filterable'];
-const optionalFeatures = ['texture-compression-bc', 'texture-compression-bc-sliced-3d', 'texture-compression-etc2', 'texture-compression-astc', 'texture-compression-astc-sliced-3d', 'clip-distances'];
+const optionalFeatures = ['float32-blendable', 'texture-compression-astc', 'texture-compression-astc-sliced-3d', 'texture-compression-bc', 'texture-compression-bc-sliced-3d', 'texture-formats-tier1', 'texture-formats-tier2', 'clip-distances'];
 
 let gpu = null;
 let deviceLoss = null;
@@ -21,6 +21,11 @@ function runtimeModule() {
 // object's parents, and SDL waits on its fences that way. SDL cannot install callbacks on an adopted device, so the loss and
 // error handlers live here.
 export async function createGpuDevice() {
+    // A second preparation, from a Main that runs twice, must not orphan the first device.
+    if (gpu) {
+        releaseGpuDevice(gpu);
+        gpu = null;
+    }
     if (!navigator.gpu) {
         throw new Error('WebGPU is not available in this browser');
     }
@@ -61,28 +66,43 @@ export async function createGpuDevice() {
     return { instance, adapter: adapterPtr, device: devicePtr };
 }
 
+// Drops the page's references to the imported objects and destroys the WebGPU device.
+function releaseGpuDevice(handles) {
+    handles.destroying = true;
+    try {
+        const Module = runtimeModule();
+        Module._wgpuDeviceRelease(handles.devicePtr);
+        Module._wgpuAdapterRelease(handles.adapterPtr);
+        Module._wgpuInstanceRelease(handles.instance);
+    } catch (error) {
+        console.error('Pixely could not release the WebGPU handles', error);
+    }
+    handles.device.destroy();
+}
+
 // Destroying SDL's device spins until its submissions have drained, and the fences that drain them complete only after this
-// event loop turns, so the queue is awaited first. destroy is the managed SDL_DestroyGPUDevice call. Never rejects: nothing
-// awaits it, the app is already disposed.
+// event loop turns, so the queue is awaited first. destroy is the managed SDL_DestroyGPUDevice call, followed by SDL_Quit,
+// which the managed disposal deferred behind it. Each step runs whatever the one before it did, and nothing awaits the
+// whole: the app is already disposed.
 export async function destroyGpuDevice(destroy) {
     const current = gpu;
     gpu = null;
     try {
         await current?.device.queue.onSubmittedWorkDone();
+    } catch (error) {
+        console.error('The WebGPU queue did not report idle', error);
+    }
+    try {
         destroy();
-        if (current) {
-            const Module = runtimeModule();
-            Module._wgpuDeviceRelease(current.devicePtr);
-            Module._wgpuAdapterRelease(current.adapterPtr);
-            Module._wgpuInstanceRelease(current.instance);
-            current.destroying = true;
-            current.device.destroy();
-        }
     } catch (error) {
         console.error('Pixely could not destroy the GPU device', error);
     } finally {
         destroy.dispose?.();
     }
+    if (current) {
+        releaseGpuDevice(current);
+    }
+    console.log('Pixely GPU device destroyed');
 }
 
 // Owns the requestAnimationFrame loop for Pixely.App.BrowserHost. The managed callback is marshalled once, here, not per frame,

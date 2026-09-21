@@ -26,6 +26,10 @@ public static partial class BrowserHost
 
     internal static WebGpuHandles? WebGpuHandles { get; private set; }
 
+    // SDL_Quit handed over by PixelyFactory while a device destruction is pending, to run after it.
+    private static Action? _deferredQuit;
+    private static bool _destroyPending;
+
     [JSImport("runFrameLoop", HostModuleName)]
     private static partial Task RunFrameLoop([JSMarshalAs<JSType.Function<JSType.Boolean>>] Func<bool> runFrame);
 
@@ -75,12 +79,32 @@ public static partial class BrowserHost
     internal static void DestroyGpuDevice(IntPtr device)
     {
         WebGpuHandles = null;
+        _destroyPending = true;
         _ = DestroyGpuDeviceAsync(() =>
         {
             unsafe
             {
                 SDL3.SDL_DestroyGPUDevice((SDL_GPUDevice*)device);
             }
+
+            _destroyPending = false;
+            Action? quit = _deferredQuit;
+            _deferredQuit = null;
+            quit?.Invoke();
         });
+    }
+
+    // SDL_Quit must follow the device destruction, and PixelyFactory is disposed before the deferred destruction runs, so it
+    // hands its quit here: run after the pending destruction, or now when none is pending.
+    internal static void QuitSdl(Action quit)
+    {
+        if (_destroyPending)
+        {
+            _deferredQuit = quit;
+        }
+        else
+        {
+            quit();
+        }
     }
 }

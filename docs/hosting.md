@@ -217,8 +217,11 @@ as the exception, since SDL would keep recording against the dead device without
 Teardown is the page's too. Destroying SDL's device spins until every submission has drained, and
 the fences that drain them complete only after the event loop turns, so `GpuDevice.Dispose` in the
 browser releases the managed resources and hands the device to `pixely-host.js`, which awaits
-`queue.onSubmittedWorkDone()`, destroys the SDL device, releases the imported handles and destroys
-the WebGPU device. Nothing awaits that: the app is already disposed, and a failure is logged.
+`queue.onSubmittedWorkDone()`, destroys the SDL device, runs the `SDL_Quit` that `PixelyFactory`
+deferred behind it, releases the imported handles and destroys the WebGPU device, then logs
+`Pixely GPU device destroyed`. Nothing awaits that: the app is already disposed, and a failure is
+logged. A `Configure` or `Build()` that fails after `PrepareAsync` leaves the page's device
+until the page unloads or the next `PrepareAsync`, which releases it first.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm

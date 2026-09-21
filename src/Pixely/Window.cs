@@ -408,7 +408,8 @@ public class Window : IDisposable
                 : SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, SdlWindow, &swapchainTexturePointer, &width, &height);
             if (acquired == false)
             {
-                throw new PixelyInitializationException($"SDL_AcquireGPUSwapchainTexture failed: {SDL3.SDL_GetError()}");
+                string call = OperatingSystem.IsBrowser() ? "SDL_AcquireGPUSwapchainTexture" : "SDL_WaitAndAcquireGPUSwapchainTexture";
+                throw new PixelyInitializationException($"{call} failed: {SDL3.SDL_GetError()}");
             }
 
             if (swapchainTexturePointer == null)

@@ -23,15 +23,15 @@ public class TriangleRenderer : IRenderer<BasicRenderContext>
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();
-        
+
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
         renderPass.BindVertexBuffer(_quadVertexBuffer);
-        
+
         renderPass.DrawPrimitive();
-        
+
         // renderPass is disposed and rendered
     }
-    
+
     public static TriangleRenderer Create(ShaderLoader shaderLoader, GraphicsPipelineBuilder graphicsPipelineBuilder, GpuMemorySystem gpuMemorySystem)
     {
         GpuVertexBuffer<PositionVertex> quadVertexBuffer = gpuMemorySystem.CreateVertexBuffer(PositionShapes.VerticalQuad);

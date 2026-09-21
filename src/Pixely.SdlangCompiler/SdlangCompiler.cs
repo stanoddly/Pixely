@@ -820,7 +820,7 @@ public class SdlangCompiler
     // the storage buffers. Slang emits the register index as the binding, so a texture collides with its
     // sampler and a storage buffer sits where a sampler belongs. No register shift expresses the interleave,
     // so the bindings are rewritten from the reflected resources. Read-write and uniform groups use the index.
-    private static void NormalizeWebGpuBindings(FileInfo outputFile, ShaderStageDto stage, List<ResourceBinding> bindings)
+    internal static void NormalizeWebGpuBindings(FileInfo outputFile, ShaderStageDto stage, List<ResourceBinding> bindings)
     {
         string wgsl = File.ReadAllText(outputFile.FullName);
         int sampledTextureCount = bindings.Count(binding => binding.Type == ResourceType.SampledTexture);
@@ -869,23 +869,10 @@ public class SdlangCompiler
         _ => binding.Index
     };
 
+    // A buffer has an address space and a handle (texture, sampler) has none, so the address space decides first: a
+    // buffer's element type is user-named and may well start with "sampler" or "texture".
     private static ResourceType ClassifyWebGpuDeclaration(string addressSpace, string type, string name, ShaderStageDto stage)
     {
-        if (type.StartsWith("sampler", StringComparison.Ordinal))
-        {
-            return ResourceType.Sampler;
-        }
-
-        if (type.StartsWith("texture_storage_", StringComparison.Ordinal))
-        {
-            return type.Contains("write", StringComparison.Ordinal) ? ResourceType.ReadWriteStorageTexture : ResourceType.StorageTexture;
-        }
-
-        if (type.StartsWith("texture_", StringComparison.Ordinal))
-        {
-            return ResourceType.SampledTexture;
-        }
-
         if (addressSpace.Contains("storage", StringComparison.Ordinal))
         {
             return addressSpace.Contains("read_write", StringComparison.Ordinal) ? ResourceType.ReadWriteStorageBuffer : ResourceType.StorageBuffer;
@@ -894,6 +881,21 @@ public class SdlangCompiler
         if (addressSpace.Contains("uniform", StringComparison.Ordinal))
         {
             return ResourceType.UniformBuffer;
+        }
+
+        if (addressSpace.Length == 0 && type.StartsWith("sampler", StringComparison.Ordinal))
+        {
+            return ResourceType.Sampler;
+        }
+
+        if (addressSpace.Length == 0 && type.StartsWith("texture_storage_", StringComparison.Ordinal))
+        {
+            return type.Contains("write", StringComparison.Ordinal) ? ResourceType.ReadWriteStorageTexture : ResourceType.StorageTexture;
+        }
+
+        if (addressSpace.Length == 0 && type.StartsWith("texture_", StringComparison.Ordinal))
+        {
+            return ResourceType.SampledTexture;
         }
 
         throw new ShaderBindingValidationException($"WGSL declares '{name}' in the {stage} shader as var{addressSpace} : {type}, which is not a resource the WebGPU binding rewrite knows.");

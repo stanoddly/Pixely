@@ -62,6 +62,8 @@ const server = http.createServer((request, response) => {
     const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
     const failures = [];
     let exitCode = null;
+    let resolveTeardown;
+    const teardown = new Promise(resolve => { resolveTeardown = resolve; });
     page.on('console', message => {
         const text = message.text();
         console.log(`[${message.type()}] ${text}`);
@@ -71,6 +73,9 @@ const server = http.createServer((request, response) => {
         const exit = /^Pixely exited with code (\d+)/.exec(text);
         if (exit) {
             exitCode = Number(exit[1]);
+        }
+        if (text === 'Pixely GPU device destroyed') {
+            resolveTeardown(true);
         }
     });
     page.on('pageerror', error => {
@@ -90,11 +95,14 @@ const server = http.createServer((request, response) => {
     }
     await page.click('#canvas');
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(1000);
+    const tornDown = await Promise.race([teardown, page.waitForTimeout(5000).then(() => false)]);
     await browser.close();
     server.close();
     if (exitCode !== 0) {
         failures.push(`the app did not exit with code 0 (${exitCode ?? 'no exit'})`);
+    }
+    if (!tornDown) {
+        failures.push('the GPU device was not destroyed within 5 s of quitting');
     }
     if (failures.length > 0) {
         console.error(`FAILED\n${failures.map(failure => `  ${failure}`).join('\n')}`);
