@@ -1226,9 +1226,9 @@ public class SdlangCompiler
                                 }
                                 else
                                 {
-                                    // Buffer<T> (textureBuffer) and any shape SDL GPU has no slot for.
+                                    // Buffer<T> and any other shape SDL GPU has no slot for.
                                     throw new ShaderBindingValidationException(
-                                        $"Parameter '{paramName}' in the {stage} shader is a {baseShape} resource, which SDL GPU cannot bind; use StructuredBuffer<T>, ByteAddressBuffer or a texture.");
+                                        $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(baseShape)}, which SDL GPU cannot bind; use StructuredBuffer<T>, ByteAddressBuffer or a texture.");
                                 }
                             }
                             break;
@@ -1237,13 +1237,14 @@ public class SdlangCompiler
                             resourceBindings.Add(new ResourceBinding(paramName, ResourceType.UniformBuffer, space, index));
                             break;
                         case "array":
-                            string elementKind = paramType.TryGetProperty("elementType", out JsonElement arrayElementType) && arrayElementType.TryGetProperty("kind", out JsonElement elementKindElement)
-                                ? elementKindElement.GetString() ?? "unknown"
-                                : "unknown";
+                            string elementDescription = paramType.TryGetProperty("elementType", out JsonElement arrayElementType)
+                                ? DescribeReflectedType(arrayElementType)
+                                : "bindings";
                             throw new ShaderBindingValidationException(
-                                $"Parameter '{paramName}' in the {stage} shader is an array of {elementKind} bindings, which SDL GPU cannot bind; declare each element as its own parameter.");
+                                $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is an array of {elementDescription}, which SDL GPU cannot bind; declare each element as its own parameter.");
                         default:
-                            throw new ShaderBindingValidationException($"Parameter '{paramName}' in the {stage} shader has kind '{kind}', which the shader compiler does not know how to bind.");
+                            throw new ShaderBindingValidationException(
+                                $"Parameter '{paramName}' in the {DescribeStage(stage)} shader is a {DescribeReflectedType(paramType)}, which the shader compiler does not know how to bind.");
                     }
                 }
             }
@@ -1634,6 +1635,44 @@ public class SdlangCompiler
         elementSizesBySlot.TryGetValue(3, out uint slot3);
         return new StorageBufferElementSizes((ushort)slot0, (ushort)slot1, (ushort)slot2, (ushort)slot3);
     }
+
+    private static string DescribeStage(ShaderStageDto stage) => stage switch
+    {
+        ShaderStageDto.Vertex => "vertex",
+        ShaderStageDto.Fragment => "fragment",
+        ShaderStageDto.Compute => "compute",
+        _ => stage.ToString().ToLowerInvariant()
+    };
+
+    // Names a reflected parameter type by the HLSL type the shader author wrote, for error messages.
+    private static string DescribeReflectedType(JsonElement type)
+    {
+        string? kind = type.TryGetProperty("kind", out JsonElement kindElement) ? kindElement.GetString() : null;
+        return kind switch
+        {
+            "resource" => DescribeReflectedType(type.TryGetProperty("baseShape", out JsonElement baseShape) ? baseShape.GetString() : null),
+            "samplerState" => "SamplerState",
+            "constantBuffer" => "ConstantBuffer<T>",
+            "parameterBlock" => "ParameterBlock<T>",
+            "array" => "array",
+            null => "parameter of unknown kind",
+            _ => $"parameter of kind '{kind}'"
+        };
+    }
+
+    private static string DescribeReflectedType(string? baseShape) => baseShape switch
+    {
+        "textureBuffer" => "Buffer<T>",
+        "structuredBuffer" => "StructuredBuffer<T>",
+        "byteAddressBuffer" => "ByteAddressBuffer",
+        "accelerationStructure" => "RaytracingAccelerationStructure",
+        "texture1D" => "Texture1D",
+        "texture2D" => "Texture2D",
+        "texture3D" => "Texture3D",
+        "textureCube" => "TextureCube",
+        null => "resource of unknown shape",
+        _ => $"resource of shape '{baseShape}'"
+    };
 
     private static uint ComputeStructuredBufferElementSize(JsonElement resourceType)
     {

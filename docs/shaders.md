@@ -131,11 +131,11 @@ renderPass.PushFragmentUniformData(0, FColors.Magenta);  // Slot 0
 
 ## Storage Buffers and Resource Types
 
-A storage buffer is a `StructuredBuffer<T>` or a `ByteAddressBuffer` on a `t` register (read-only), or the `RW` form on a `u` register (read-write, compute only). Textures are `Texture2D` and the other `Texture*` types; samplers are `SamplerState`. All four backends bind these the same way.
+A storage buffer is a `StructuredBuffer<T>` or a `ByteAddressBuffer` on a `t` register. A sampled texture is `Texture2D` or another `Texture*` type on a `t` register, with its `SamplerState` on the `s` register of the same index. Compute shaders may also bind the read-write forms, `RWStructuredBuffer<T>`, `RWByteAddressBuffer` and `RWTexture2D<T>`, on `u` registers.
 
 The reflection records the element size of a `StructuredBuffer<T>` and the runtime rejects a bound `GpuStorageBuffer<T>` whose element size differs. A `ByteAddressBuffer` has no element type, so any storage buffer may be bound to it and nothing is checked.
 
-Rejected at build time with a `ShaderBindingValidationException`, because SDL GPU has no binding slot for them: `Buffer<T>` and `RWBuffer<T>` (use a structured buffer), and arrays of bindings such as `Texture2D textures[2]`, `SamplerState samplers[2]` or `ConstantBuffer<T> cbs[2]` (declare each element as its own parameter).
+SDL GPU has no binding slot for `Buffer<T>` and `RWBuffer<T>` (use a structured buffer) or for arrays of bindings such as `Texture2D textures[2]`, `SamplerState samplers[2]` and `ConstantBuffer<T> cbs[2]` (declare each element as its own parameter). The build fails with a `ShaderBindingValidationException` naming the parameter.
 
 ## Shader Stage Attribute
 
