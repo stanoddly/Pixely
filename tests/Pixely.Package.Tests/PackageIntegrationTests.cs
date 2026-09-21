@@ -479,9 +479,9 @@ public class PackageIntegrationTests
     public async Task NativeReferenceIsRelinkedAndBoundInTheBrowserBuild()
     {
         RequireNode();
-        await RequireWasmToolsAsync();
         string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
         DeleteConsumerOutputs("BrowserLoopConsumer");
+        await RequireWasmToolsAsync(consumerDirectory);
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: ["BrowserLoopConsumerNative=true"]);
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
@@ -785,12 +785,17 @@ public class PackageIntegrationTests
         return output;
     }
 
-    private static async Task RequireWasmToolsAsync()
+    // The workload is per SDK band, so the fixture is asked whether the toolchain that would relink it is installed: the wasm-tools
+    // manifest sets WasmNativeWorkloadAvailable for the target framework. A workload listing can name wasm-tools for another SDK on
+    // the machine, and the WebAssembly pack alone then ignores the native reference instead of failing.
+    private async Task RequireWasmToolsAsync(string consumerDirectory)
     {
-        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(Path.GetTempPath(), "workload", "list");
-        if (exitCode != 0 || !output.Contains("wasm-tools", StringComparison.Ordinal))
+        WriteConsumerConfiguration(consumerDirectory);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, "msbuild", projectPath, "-p:RuntimeIdentifier=browser-wasm", "-getProperty:WasmNativeWorkloadAvailable");
+        if (exitCode != 0 || output.Trim() != "true")
         {
-            Assert.Ignore("The wasm-tools workload is not installed; the runtime cannot be relinked.");
+            Assert.Ignore("The wasm-tools workload is not installed for this SDK; the runtime cannot be relinked.");
         }
     }
 
