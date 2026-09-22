@@ -86,10 +86,11 @@ public static partial class BrowserHost
         {
             await RunFrameLoop(app.RunFrame);
         }
-        catch (JSException exception)
+        catch (Exception exception)
         {
-            // The page rejects the loop with its own loss error, which the marshaller wraps as a JSException; the record it keeps names the
-            // reason. Any other JSException is not a loss and is rethrown as it came.
+            // The page rejects the loop with its own loss error, which the marshaller wraps as a JSException, and the record it keeps names
+            // the reason. A frame may also run against the dead device before the page has heard of the loss and throw a managed exception
+            // of its own, so every exception consults the record. Without a record the exception is not a loss and is rethrown as it came.
             using JSObject? loss = ReadDeviceLoss();
             if (loss is null)
             {

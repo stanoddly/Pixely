@@ -1,5 +1,6 @@
 import { dotnet } from './_framework/dotnet.js';
-import { readDeviceLoss } from './pixely-host.js';
+// A namespace import keeps a replaced pixely-host.js that predates readDeviceLoss loading; a named import would fail to link.
+import * as host from './pixely-host.js';
 
 // The page is the screen; SDL's Emscripten port draws into Module.canvas, the element its default selector "#canvas" names.
 const canvas = document.getElementById('canvas');
@@ -25,7 +26,7 @@ function showStopped(detail) {
 
     const headline = document.createElement('p');
     headline.style.cssText = 'margin: 0; font-size: 1.5em;';
-    headline.textContent = readDeviceLoss() ? 'The graphics device was lost.' : 'Pixely stopped.';
+    headline.textContent = host.readDeviceLoss?.() ? 'The graphics device was lost.' : 'Pixely stopped.';
 
     const message = document.createElement('pre');
     message.style.cssText = 'margin: 0; max-width: 100%; white-space: pre-wrap; opacity: 0.7;';
