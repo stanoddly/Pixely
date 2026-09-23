@@ -66,7 +66,7 @@ Executable          ──> everything above
 
 - The game proper: what is true, the rules that change it and the record of what happened. It is not
   a shared library, code that carries no rule does not belong here
-- It MUST NOT know a frontend, a participant that is a player, or an output
+- It MUST NOT know a frontend or an output
 - It MUST NOT push: no events, observers or callbacks, so it holds no delegate. A reader polls State
   or drains the log
 - Every type in `Game` is a registrar in the root namespace or lives in `Vocabulary`, `State`,
