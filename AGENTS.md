@@ -29,4 +29,5 @@
 
 ## Maintenance
 
+- `DECISIONS.md` - Design decisions with their deciding constraints and known costs, newest first
 - `.github/PUBLISHING.md` - Development-feed and nuget.org publication setup, workflows, and recovery

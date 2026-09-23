@@ -71,9 +71,6 @@
     <ItemGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserWebGpu)' == 'true'">
         <EmccExportedRuntimeMethod Include="WebGPU" />
         <EmccExportedFunction Include="_wgpuCreateInstance" />
-        <EmccExportedFunction Include="_wgpuInstanceRelease" />
-        <EmccExportedFunction Include="_wgpuAdapterRelease" />
-        <EmccExportedFunction Include="_wgpuDeviceRelease" />
     </ItemGroup>
 
     <Target Name="_PixelyRequireWritableWasmCache" BeforeTargets="BeforeBuild"

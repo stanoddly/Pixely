@@ -35,14 +35,8 @@ public static partial class BrowserHost
     [JSImport("createGpuDevice", HostModuleName)]
     private static partial Task<JSObject> CreateGpuDevice();
 
-    [JSImport("waitForGpuIdle", HostModuleName)]
-    private static partial Task WaitForGpuIdle();
-
     [JSImport("readDeviceLoss", HostModuleName)]
     private static partial JSObject? ReadDeviceLoss();
-
-    [JSImport("releaseGpuDevice", HostModuleName)]
-    private static partial void ReleaseGpuDeviceHandles();
 #endif
 
     /// <summary>
@@ -74,8 +68,6 @@ public static partial class BrowserHost
     /// Completes with 0 when <see cref="IPixelyApp.RunFrame"/> returns <see langword="false"/>. An exception thrown by a frame rejects the
     /// loop's promise and is rethrown here as the original managed exception, so a caller's catch and finally run as they would after
     /// <see cref="IPixelyApp.Run"/>. A lost WebGPU device ends the loop the same way and surfaces as <see cref="GpuDeviceLostException"/>.
-    /// Before returning either way it waits for the GPU queue to drain: destroying SDL's WebGPU device spins until every submission has
-    /// completed, and a submission completes only after the page's event loop turns, which the caller's synchronous Dispose cannot wait for.
     /// </summary>
     public static async Task<int> RunAsync(IPixelyApp app)
     {
@@ -99,23 +91,10 @@ public static partial class BrowserHost
 
             throw new GpuDeviceLostException(loss.GetPropertyAsString("reason") ?? "unknown", loss.GetPropertyAsString("message") ?? exception.Message, exception);
         }
-        finally
-        {
-            await WaitForGpuIdle();
-        }
 
         return 0;
 #else
         throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
 #endif
     }
-
-#if BROWSER
-    // After SDL_DestroyGPUDevice, which dropped SDL's own references: the page drops its references and destroys the WebGPU device.
-    internal static void ReleaseGpuDevice()
-    {
-        WebGpuHandles = null;
-        ReleaseGpuDeviceHandles();
-    }
-#endif
 }

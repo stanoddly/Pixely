@@ -456,17 +456,16 @@ public class GpuDevice : IDisposable
         {
             ReleaseSampler(sampler);
         }
-        
+
+#if !BROWSER
+        // In the browser the device lives as long as the page, which frees it. A clean destroy has to wait for the last submissions,
+        // and a submission completes only after the page's event loop turns, which a synchronous Dispose cannot wait for.
         unsafe
         {
             SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
             SdlGpuDevice = null;
-#if BROWSER
-            // BrowserHost.RunAsync waited for the queue to drain, so the destroy's spin on the last submissions completed at
-            // once; the page's own references to the adopted device go afterwards.
-            App.BrowserHost.ReleaseGpuDevice();
-#endif
         }
+#endif
     }
 
 }
