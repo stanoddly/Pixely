@@ -458,8 +458,8 @@ public class GpuDevice : IDisposable
         }
 
 #if !BROWSER
-        // In the browser the device lives as long as the page, which frees it. Destroying it here would have to wait for the last
-        // submissions, and a submission completes only after the page's event loop turns, which a synchronous Dispose cannot wait for.
+        // In the browser the device lives as long as the page, which frees it. A clean destroy has to wait for the last submissions,
+        // and a submission completes only after the page's event loop turns, which a synchronous Dispose cannot wait for.
         unsafe
         {
             SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
