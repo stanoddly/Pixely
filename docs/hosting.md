@@ -246,14 +246,12 @@ the app run as for any other exception, and game state is still intact there, so
 where a game saves or shows a message of its own; the default page shows one either way (see
 [The page](#the-page)).
 
-Destroying SDL's device spins, without yielding, until every submission has completed, and a
-submission completes only after the page's event loop turns, which a synchronous `Dispose` cannot
-wait for. So `RunAsync` awaits `queue.onSubmittedWorkDone()` once the frame loop has ended, on the
-exception path too, and `GpuDevice.Dispose` then destroys the SDL device as on the desktop, after
-which `pixely-host.js` releases the imported handles and destroys the WebGPU device. A `Build()`
-that fails once the device exists, because SDL rejected the handles or a later singleton threw,
-releases the page's device the same way; one that fails before the device is resolved leaves it
-until the page unloads or the next `PrepareAsync`, which releases it first.
+The app runs in a tab and ends with it, so the browser does the final cleanup. Disposing the app
+releases Pixely's own GPU resources and windows, but it neither destroys the SDL device nor calls
+`SDL_Quit`: destroying the device would wait for the last submissions, and a submission completes
+only after the page's event loop turns, which a synchronous `Dispose` cannot wait for. The WebGPU
+device, SDL and the wasm memory stay until the page unloads, also after a failed `Build()`. Building
+a second app in the same page is not supported.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
@@ -304,10 +302,10 @@ The package ships three static web assets and adds each to the project only when
 - `main.js`: imports `./_framework/dotnet.js` and `./pixely-host.js`, passes the canvas as
   `Module.canvas`, awaits `dotnet.runMain()`, logs the exit code, logs and rethrows a rejection,
   and covers the canvas with a message on a rejection or a non-zero exit code.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `waitForGpuIdle()`,
-  `releaseGpuDevice()` and `readDeviceLoss()`, which `BrowserHost` imports as module `pixely-host`
-  from `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same module for
-  `readDeviceLoss()`. A replacement keeps the exports and the location.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()` and `readDeviceLoss()`,
+  which `BrowserHost` imports as module `pixely-host` from `../pixely-host.js`, relative to
+  `dotnet.js`; `main.js` imports the same module for `readDeviceLoss()`. A replacement keeps the
+  exports and the location.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
 setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;

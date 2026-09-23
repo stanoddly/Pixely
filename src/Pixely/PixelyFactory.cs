@@ -283,7 +283,10 @@ public partial class PixelyFactory: IDisposable
             return;
         }
 
+#if !BROWSER
+        // In the browser SDL lives as long as the page, which frees it, as it does the GPU device.
         SDL3.SDL_Quit();
+#endif
         SdlLogOutput.Uninstall();
         _initialized = false;
     }
