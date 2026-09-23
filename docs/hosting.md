@@ -247,7 +247,7 @@ where a game saves or shows a message of its own; the default page shows one eit
 [The page](#the-page)).
 
 The app runs in a tab and ends with it, so the browser does the final cleanup. Disposing the app
-releases Pixely's own GPU resources and windows, but it neither destroys the SDL device nor calls
+releases Pixely's own GPU resources and windows, but it calls neither `SDL_DestroyGPUDevice` nor
 `SDL_Quit`: a clean destroy has to wait for the last submissions, and a submission completes only
 after the page's event loop turns, which a synchronous `Dispose` cannot wait for. The WebGPU device,
 its memory, SDL and the wasm memory stay until the page unloads, also after a failed `Build()` and

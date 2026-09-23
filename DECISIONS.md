@@ -4,7 +4,7 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-09-23: The browser page's end tears down the WebGPU device and SDL
 
-In the browser, disposing the app releases Pixely's own GPU resources and windows but neither destroys the SDL GPU device nor calls `SDL_Quit`. The tab ends the app, and the browser frees the device, SDL and the wasm memory with the page.
+In the browser, disposing the app releases Pixely's own GPU resources and windows but calls neither `SDL_DestroyGPUDevice` nor `SDL_Quit`. The tab ends the app, and the browser frees the device, SDL and the wasm memory with the page.
 
 - WebGPU requests and completes work only through promises, and SDL's WebGPU backend can wait for them only by suspending the wasm stack.
 - Asyncify is ruled out: the .NET browser runtime is not built with it, and it slows the whole module.
