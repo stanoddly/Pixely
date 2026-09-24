@@ -272,6 +272,30 @@ public class SdlangCompilerTests
                                                            }
                                                            """;
 
+    private const string FragmentShaderUniformIndexGap = """
+                                                         struct FragmentInput {
+                                                             float4 position : SV_Position;
+                                                         };
+
+                                                         struct VertexInput {
+                                                             float3 position : POSITION;
+                                                         };
+
+                                                         ConstantBuffer<float4> tintColor : register(b1, space3);
+
+                                                         [shader("vertex")]
+                                                         FragmentInput vertexMain(VertexInput input) {
+                                                             FragmentInput output;
+                                                             output.position = float4(input.position, 1.0);
+                                                             return output;
+                                                         }
+
+                                                         [shader("fragment")]
+                                                         float4 fragmentMain(FragmentInput input) : SV_Target {
+                                                             return tintColor;
+                                                         }
+                                                         """;
+
     private const string VertexShaderWrongUniformSpace = """
                                                          cbuffer VertexUniforms : register(b0, space3) {
                                                              float4x4 transform;
@@ -887,6 +911,20 @@ public class SdlangCompilerTests
         Assert.That(ex.Message, Does.Contain("space 3"));
         Assert.That(ex.Message, Does.Contain("space 1"));
         Assert.That(ex.Message, Does.Contain("uniform buffers"));
+    }
+
+    [Test]
+    public void CompileShader_FragmentShaderUniformIndexGap_ThrowsValidationException()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderUniformIndexGap);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+
+        ShaderBindingValidationException? ex = Assert.Throws<ShaderBindingValidationException>(() =>
+            compiler.Compile([shaderPath], force: true));
+
+        Assert.That(ex.Message, Does.Contain("'tintColor'"));
+        Assert.That(ex.Message, Does.Contain("has index 1, but expected 0"));
     }
 
     [Test]

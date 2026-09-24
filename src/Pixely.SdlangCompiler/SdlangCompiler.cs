@@ -961,6 +961,19 @@ public class SdlangCompiler
             }
         }
 
+        // Validate uniform buffers are contiguous starting at 0
+        int uniformExpectedIndex = 0;
+        foreach (ResourceBinding uniformBuffer in bindings.Where(b => b.Type == ResourceType.UniformBuffer).OrderBy(b => b.Index))
+        {
+            if (uniformBuffer.Index != uniformExpectedIndex)
+            {
+                throw new ShaderBindingValidationException(
+                    $"Uniform buffer '{uniformBuffer.Name}' in {stageName} shader has index {uniformBuffer.Index}, but expected {uniformExpectedIndex}. " +
+                    $"SDL GPU requires uniform buffers at indices 0..N-1");
+            }
+            uniformExpectedIndex++;
+        }
+
         // Validate index ordering within the resource space
         // Read-only resources: sampled textures, then storage textures, then storage buffers
         // Read-write resources (compute only): separate index space — readwrite storage textures, then readwrite storage buffers
