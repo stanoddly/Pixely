@@ -114,7 +114,7 @@ float4 fragmentMain(VertexToFragment input) : SV_Target0
 }
 ```
 
-**Register binding:** Use `register(b{slot}, space3)` where `{slot}` is 0-3.
+**Register binding:** Use `register(b{slot}, space3)` where `{slot}` is 0-3. The slots a stage reads must start at 0 with no gaps. The compiler rejects a shader whose only constant buffer is `b1`, and it ignores constant buffers the stage never reads.
 
 **Pushing data from C#:**
 
