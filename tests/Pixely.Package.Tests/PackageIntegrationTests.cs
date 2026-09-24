@@ -509,7 +509,8 @@ public class PackageIntegrationTests
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
     }
 
-    // The URL answers with a redirect, as a GitHub release asset does. The second publish finds the file in the cache and downloads nothing.
+    // The URL answers with a redirect, as a GitHub release asset does, and is declared twice. The cache folder is set in Directory.Build.targets.
+    // The second publish finds the file in the cache and downloads nothing.
     [Test]
     public async Task NativeUrlReferenceIsDownloadedVerifiedAndRelinked()
     {
@@ -521,7 +522,7 @@ public class PackageIntegrationTests
         string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
         string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache");
         using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
-        string[] properties = [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"];
+        string[] properties = [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerNativeUrlCache={cacheDirectory}"];
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: properties);
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
@@ -544,14 +545,15 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("BrowserLoopConsumer");
         string nativeSource = Path.Combine(consumerDirectory, "native.c");
         string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
-        string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache-mismatch");
+        // The default cache, in the project's obj folder, which DeleteConsumerOutputs has deleted.
+        string cacheDirectory = Path.Combine(consumerDirectory, "obj", "native-url-cache");
         string wrongSha256 = new('0', 64);
         using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
         string otherAssetUrl = server.GetAssetUrl("other.c");
 
         string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
             properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={otherAssetUrl}",
-                $"BrowserLoopConsumerOtherNativeSha256={wrongSha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"]);
+                $"BrowserLoopConsumerOtherNativeSha256={wrongSha256}"]);
         Assert.Multiple(() =>
         {
             Assert.That(output, Does.Contain("error PIXELY0009").And.Contain(otherAssetUrl));
@@ -568,13 +570,14 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("BrowserLoopConsumer");
         string nativeSource = Path.Combine(consumerDirectory, "native.c");
         string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
-        string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache-missing");
+        // The default cache, in the project's obj folder, which DeleteConsumerOutputs has deleted.
+        string cacheDirectory = Path.Combine(consumerDirectory, "obj", "native-url-cache");
         using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
         string missingUrl = server.GetMissingUrl("other.c");
 
         string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
             properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={missingUrl}",
-                $"BrowserLoopConsumerOtherNativeSha256={sha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"]);
+                $"BrowserLoopConsumerOtherNativeSha256={sha256}"]);
         Assert.Multiple(() =>
         {
             Assert.That(output, Does.Contain(missingUrl));

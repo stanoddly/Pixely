@@ -208,7 +208,7 @@ An archive published at a URL, such as a GitHub release asset, is a `NativeUrlRe
 </ItemGroup>
 ```
 
-- The SDK downloads it before the build into `PixelyNativeUrlCacheDirectory` (default: the `Pixely/native-url-cache` folder under the user's local application data), under the hash and the URL's file name. A cached file is not downloaded again, so a build with every archive cached works offline.
+- The SDK downloads it before the build into `PixelyNativeUrlCacheDirectory` (default: `native-url-cache` in the project's `obj` folder), under the hash and the URL's file name. A cached file is not downloaded again, so a build with every archive cached works offline. `dotnet clean` keeps the cache; deleting `obj` downloads again. Projects that share an archive can set one folder, as long as they do not download it into that folder at the same time.
 - The file name is the P/Invoke module, as for a `NativeFileReference`, and the item's other metadata carries over.
 - A missing `Sha256` is PIXELY0008. A download with another hash is PIXELY0009. When a download fails or has another hash, no download of that build is cached.
 - URL references come before file references on the link line. Where two archives define one symbol the first wins, so `libXDL_wgpu.a` from a URL replaces the GPU functions of a `SDL3.a` that stays a file.

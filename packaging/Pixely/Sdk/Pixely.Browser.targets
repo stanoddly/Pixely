@@ -92,30 +92,27 @@
 
     <!--
       A NativeUrlReference is a native reference downloaded from a URL and pinned by its SHA-256 (Sha256 metadata). The cache
-      is keyed by the hash and keeps the URL's file name, which is the P/Invoke module the archive registers. The items become
-      native references in a target, so an item declared in Directory.Build.targets or a package's targets counts too. The
-      target runs before the WebAssembly targets choose to relink from the count of NativeFileReference items, also in the
-      nested publish build, which does not run BeforeBuild. URL references come first on the link line: of two archives
-      defining one symbol the first wins, so libXDL_wgpu.a as a URL reference replaces the GPU functions of an SDL3.a that
-      stays a file.
-    -->
-    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
-        <PixelyNativeUrlCacheDirectory Condition="'$(PixelyNativeUrlCacheDirectory)' == ''">$([System.Environment]::GetFolderPath(SpecialFolder.LocalApplicationData))/Pixely/native-url-cache/</PixelyNativeUrlCacheDirectory>
-        <_PixelyNativeUrlCacheDirectory>$([MSBuild]::EnsureTrailingSlash('$(PixelyNativeUrlCacheDirectory)'))</_PixelyNativeUrlCacheDirectory>
-    </PropertyGroup>
+      is in the project's obj folder by default, so no other project's build writes to it. It is keyed by the hash and keeps
+      the URL's file name, which is the P/Invoke module the archive registers. The items become native references in a
+      target, so an item declared in Directory.Build.targets or a package's targets counts too. The target runs before the
+      WebAssembly targets choose to relink from the count of NativeFileReference items, also in the nested publish build,
+      which does not run BeforeBuild. URL references come first on the link line: of two archives defining one symbol the
+      first wins, so libXDL_wgpu.a as a URL reference replaces the GPU functions of an SDL3.a that stays a file.
 
-    <!--
-      Downloads to a unique partial file beside the cached one, so concurrent builds never read a file that is still being
-      written or unverified. A verified file replaces the cached one atomically: mv renames over it on Linux and macOS, where
-      the Move task deletes the destination first while a linker may read it. On Windows the Move task skips a file another
-      build cached meanwhile, and the partial file is deleted. A failed task deletes every partial file of the build.
+      Downloads to a unique partial file beside the cached one, so a file at the cached path is always complete and verified.
+      A failed task deletes every partial file of the build. The cache folder is resolved here, so PixelyNativeUrlCacheDirectory
+      set in Directory.Build.targets counts too, and a URL declared twice is downloaded once.
     -->
     <Target Name="_PixelyResolveNativeUrlReferences" BeforeTargets="BeforeBuild;_SetWasmBuildNativeDefaults;_CoreCLRSetWasmBuildNativeDefaults"
             Condition="'$(_PixelyBrowser)' == 'true' and '@(NativeUrlReference)' != ''">
         <Error Code="PIXELY0008" File="$(MSBuildProjectFullPath)" Condition="'%(NativeUrlReference.Sha256)' == ''"
                Text="NativeUrlReference %(NativeUrlReference.Identity) has no Sha256 metadata; add Sha256=&quot;&lt;hex SHA-256 of the file&gt;&quot;." />
+        <PropertyGroup>
+            <PixelyNativeUrlCacheDirectory Condition="'$(PixelyNativeUrlCacheDirectory)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)', 'native-url-cache'))</PixelyNativeUrlCacheDirectory>
+            <_PixelyNativeUrlCacheDirectory>$([MSBuild]::EnsureTrailingSlash('$(PixelyNativeUrlCacheDirectory)'))</_PixelyNativeUrlCacheDirectory>
+        </PropertyGroup>
         <ItemGroup>
-            <_PixelyNativeUrlDownload Include="@(NativeUrlReference)" Url="%(Identity)" CacheDirectory="$(_PixelyNativeUrlCacheDirectory)%(Sha256)/"
+            <_PixelyNativeUrlDownload Include="@(NativeUrlReference->Distinct())" Url="%(Identity)" CacheDirectory="$(_PixelyNativeUrlCacheDirectory)%(Sha256)/"
                                       CachedFile="$(_PixelyNativeUrlCacheDirectory)%(Sha256)/%(Filename)%(Extension)" PartialFileName="%(Filename)%(Extension).$([System.Guid]::NewGuid().ToString('N')).partial" />
             <_PixelyNativeUrlDownload Remove="@(_PixelyNativeUrlDownload)" Condition="Exists('%(CachedFile)')" />
         </ItemGroup>
@@ -129,13 +126,11 @@
         </ItemGroup>
         <Error Code="PIXELY0009" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyNativeUrlMismatch)' != ''"
                Text="@(_PixelyNativeUrlMismatch->'NativeUrlReference %(Url) has SHA-256 %(FileHash), not the %(Sha256) its Sha256 metadata names', '; '); every download of this build was discarded." />
-        <Exec Command="mv -f &quot;%(_PixelyNativeUrlDownloaded.Identity)&quot; &quot;%(_PixelyNativeUrlDownloaded.CachedFile)&quot;" Condition="'$(OS)' != 'Windows_NT' and '@(_PixelyNativeUrlDownloaded)' != ''" />
-        <Move SourceFiles="@(_PixelyNativeUrlDownloaded)" DestinationFiles="@(_PixelyNativeUrlDownloaded->'%(CachedFile)')" Condition="'$(OS)' == 'Windows_NT' and !Exists('%(CachedFile)')" />
-        <Delete Files="@(_PixelyNativeUrlDownloaded)" />
+        <Move SourceFiles="@(_PixelyNativeUrlDownloaded)" DestinationFiles="@(_PixelyNativeUrlDownloaded->'%(CachedFile)')" />
         <ItemGroup>
             <_PixelyNativeFileReference Include="@(NativeFileReference)" />
             <NativeFileReference Remove="@(NativeFileReference)" />
-            <NativeFileReference Include="@(NativeUrlReference->'$(_PixelyNativeUrlCacheDirectory)%(Sha256)/%(Filename)%(Extension)')" />
+            <NativeFileReference Include="@(NativeUrlReference->Distinct()->'$(_PixelyNativeUrlCacheDirectory)%(Sha256)/%(Filename)%(Extension)')" />
             <NativeFileReference Include="@(_PixelyNativeFileReference)" />
             <_PixelyNativeFileReference Remove="@(_PixelyNativeFileReference)" />
         </ItemGroup>
