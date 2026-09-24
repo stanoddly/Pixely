@@ -199,6 +199,21 @@ mistake of a `libSDL3*.a` reference). So the port is a way to build the archive 
 
 The satellite libraries and their dependencies come from their own Emscripten builds the same way.
 
+An archive published at a URL, such as a GitHub release asset, is a `NativeUrlReference` pinned by its SHA-256:
+
+```xml
+<ItemGroup>
+  <NativeUrlReference Include="https://github.com/stanoddly/XDL_wgpu/releases/download/v0.2.0/libXDL_wgpu.a" Sha256="…" ScanForPInvokes="false" />
+  <NativeFileReference Include="wasm/SDL3.a" />
+</ItemGroup>
+```
+
+- The SDK downloads it before the build into `PixelyNativeUrlCacheDirectory` (default: the `Pixely/native-url-cache` folder under the user's local application data), under the hash and the URL's file name. A cached file is not downloaded again, so a build with every archive cached works offline.
+- The file name is the P/Invoke module, as for a `NativeFileReference`, and the item's other metadata carries over.
+- A missing `Sha256` is PIXELY0008. A download with another hash is PIXELY0009 and is not cached.
+- URL references come before file references on the link line. Where two archives define one symbol the first wins, so `libXDL_wgpu.a` from a URL replaces the GPU functions of a `SDL3.a` that stays a file.
+- The URL must be downloadable without credentials: a release asset of a private repository is not. A `?` in the URL is a wildcard to MSBuild, so a URL with a query string does not work.
+
 `tutorials/Pixely.Tutorials.Browser` links every `*.a` in `BrowserNativeLibraryDirectory`:
 `dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives`.
 With the port's `SDL3.a` alone the window fills the page and `ResolutionChanged` fires; the GPU

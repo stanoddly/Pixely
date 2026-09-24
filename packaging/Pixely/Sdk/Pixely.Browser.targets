@@ -90,6 +90,46 @@
                  Text="The native reference @(_PixelyLibPrefixedSdlArchive->'%(Filename)%(Extension)', ', ') registers a P/Invoke module named after its file; Pixely imports SDL3, SDL3_image, SDL3_ttf and SDL3_mixer, so name the archive without the lib prefix (SDL3.a)." />
     </Target>
 
+    <!--
+      A NativeUrlReference is a native reference downloaded from a URL and pinned by its SHA-256 (Sha256 metadata). The cache
+      is keyed by the hash and keeps the URL's file name, which is the P/Invoke module the archive registers. The items become
+      native references here, while the project evaluates, because the WebAssembly targets choose to relink from the count of
+      NativeFileReference items. They come first on the link line: of two archives defining one symbol the first wins, so
+      libXDL_wgpu.a as a URL reference replaces the GPU functions of an SDL3.a that stays a file.
+    -->
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
+        <PixelyNativeUrlCacheDirectory Condition="'$(PixelyNativeUrlCacheDirectory)' == ''">$([System.Environment]::GetFolderPath(SpecialFolder.LocalApplicationData))/Pixely/native-url-cache/</PixelyNativeUrlCacheDirectory>
+        <_PixelyNativeUrlCacheDirectory>$([MSBuild]::EnsureTrailingSlash('$(PixelyNativeUrlCacheDirectory)'))</_PixelyNativeUrlCacheDirectory>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(_PixelyBrowser)' == 'true' and '@(NativeUrlReference)' != ''">
+        <_PixelyNativeFileReference Include="@(NativeFileReference)" />
+        <NativeFileReference Remove="@(NativeFileReference)" />
+        <NativeFileReference Include="@(NativeUrlReference->'$(_PixelyNativeUrlCacheDirectory)%(Sha256)/%(Filename)%(Extension)')" />
+        <NativeFileReference Include="@(_PixelyNativeFileReference)" />
+        <_PixelyNativeFileReference Remove="@(_PixelyNativeFileReference)" />
+    </ItemGroup>
+
+    <!-- Downloads to a unique partial file beside the cached one, so concurrent builds never read a file that is still being written or unverified. -->
+    <Target Name="_PixelyDownloadNativeUrlReferences" BeforeTargets="PrepareForBuild" Condition="'$(_PixelyBrowser)' == 'true' and '@(NativeUrlReference)' != ''">
+        <Error Code="PIXELY0008" File="$(MSBuildProjectFullPath)" Condition="'%(NativeUrlReference.Sha256)' == ''"
+               Text="NativeUrlReference %(NativeUrlReference.Identity) has no Sha256 metadata; add Sha256=&quot;&lt;hex SHA-256 of the file&gt;&quot;." />
+        <ItemGroup>
+            <_PixelyNativeUrlDownload Include="@(NativeUrlReference)" Url="%(Identity)" CacheDirectory="$(_PixelyNativeUrlCacheDirectory)%(Sha256)/"
+                                      CachedFile="$(_PixelyNativeUrlCacheDirectory)%(Sha256)/%(Filename)%(Extension)" PartialFileName="%(Filename)%(Extension).$([System.Guid]::NewGuid().ToString('N')).partial" />
+            <_PixelyNativeUrlDownload Remove="@(_PixelyNativeUrlDownload)" Condition="Exists('%(CachedFile)')" />
+        </ItemGroup>
+        <DownloadFile SourceUrl="%(_PixelyNativeUrlDownload.Url)" DestinationFolder="%(_PixelyNativeUrlDownload.CacheDirectory)" DestinationFileName="%(_PixelyNativeUrlDownload.PartialFileName)" Retries="2"
+                      Condition="'@(_PixelyNativeUrlDownload)' != ''" />
+        <GetFileHash Files="@(_PixelyNativeUrlDownload->'%(CacheDirectory)%(PartialFileName)')" Algorithm="SHA256" Condition="'@(_PixelyNativeUrlDownload)' != ''">
+            <Output TaskParameter="Items" ItemName="_PixelyNativeUrlDownloaded" />
+        </GetFileHash>
+        <Delete Files="@(_PixelyNativeUrlDownloaded)" Condition="'%(FileHash)' != '%(Sha256)'" />
+        <Error Code="PIXELY0009" File="$(MSBuildProjectFullPath)" Condition="'%(_PixelyNativeUrlDownloaded.FileHash)' != '%(_PixelyNativeUrlDownloaded.Sha256)'"
+               Text="NativeUrlReference %(_PixelyNativeUrlDownloaded.Url) has SHA-256 %(_PixelyNativeUrlDownloaded.FileHash), not the %(_PixelyNativeUrlDownloaded.Sha256) its Sha256 metadata names; the download was discarded." />
+        <Move SourceFiles="@(_PixelyNativeUrlDownloaded)" DestinationFiles="@(_PixelyNativeUrlDownloaded->'%(CachedFile)')" />
+    </Target>
+
     <Target Name="_PixelyRequireBrowserTargetFramework" BeforeTargets="BeforeBuild" Condition="'$(_PixelyBrowser)' == 'true' and '$(TargetPlatformIdentifier)' != 'browser'">
         <Error Code="PIXELY0007" File="$(MSBuildProjectFullPath)" Text="A browser app targets net11.0-browser; this build targets $(TargetFramework). The Pixely SDK selects net11.0-browser for a project with the single TargetFramework net11.0 and no -f. A project with TargetFrameworks lists net11.0-browser and publishes with dotnet publish -f net11.0-browser -r browser-wasm." />
     </Target>
