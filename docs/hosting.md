@@ -203,7 +203,7 @@ An archive published at a URL, such as a GitHub release asset, is a `NativeUrlRe
 
 ```xml
 <ItemGroup>
-  <NativeUrlReference Include="https://github.com/stanoddly/XDL_wgpu/releases/download/v0.2.0/libXDL_wgpu.a" Sha256="…" ScanForPInvokes="false" />
+  <NativeUrlReference Include="https://github.com/stanoddly/XDL_wgpu/releases/download/v0.2.0/libXDL_wgpu.a" Sha256="…" />
   <NativeFileReference Include="wasm/SDL3.a" />
 </ItemGroup>
 ```
