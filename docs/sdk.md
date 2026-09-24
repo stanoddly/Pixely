@@ -62,7 +62,7 @@ Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator
 Sdk/Pixely.Browser.props                       imports the WebAssembly SDK props on browser-wasm
-Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, PIXELY0004, PIXELY0007, the default web assets
+Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, native URL references, PIXELY0004 to PIXELY0009, the default web assets
 Sdk/Pixely.Version.props                       the package version, generated at pack time
 buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK
 tools/net11.0/any/                             the shader compilation task and its props and targets

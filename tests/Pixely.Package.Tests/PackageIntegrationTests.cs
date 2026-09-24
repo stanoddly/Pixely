@@ -1,9 +1,12 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -504,6 +507,168 @@ public class PackageIntegrationTests
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: ["BrowserLoopConsumerNative=true"]);
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
+    }
+
+    // The URL answers with a redirect, as a GitHub release asset does, and is declared twice. The cache folder is set in Directory.Build.targets.
+    // The second publish finds the file in the cache and downloads nothing.
+    [Test]
+    public async Task NativeUrlReferenceIsDownloadedVerifiedAndRelinked()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+        await RequireWasmToolsAsync(consumerDirectory);
+        string nativeSource = Path.Combine(consumerDirectory, "native.c");
+        string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
+        string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache");
+        using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
+        string[] properties = [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerNativeUrlCache={cacheDirectory}"];
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: properties);
+        AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
+        Assert.Multiple(() =>
+        {
+            Assert.That(Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories), Is.EqualTo(new[] { Path.Combine(cacheDirectory, sha256, "native.c") }));
+            Assert.That(server.AssetDownloads, Is.EqualTo(1));
+        });
+
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "BROWSER_LOOP_NATIVE", properties: properties);
+        Assert.That(server.AssetDownloads, Is.EqualTo(1));
+    }
+
+    // The first reference matches its hash and the second does not; neither is cached nor left behind as a partial download.
+    [Test]
+    public async Task NativeUrlReferenceWithAnotherHashFailsAndCachesNothing()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+        string nativeSource = Path.Combine(consumerDirectory, "native.c");
+        string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
+        // The default cache, in the project's obj folder, which DeleteConsumerOutputs has deleted.
+        string cacheDirectory = Path.Combine(consumerDirectory, "obj", "native-url-cache");
+        string wrongSha256 = new('0', 64);
+        using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
+        string otherAssetUrl = server.GetAssetUrl("other.c");
+
+        string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
+            properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={otherAssetUrl}",
+                $"BrowserLoopConsumerOtherNativeSha256={wrongSha256}"]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("error PIXELY0009").And.Contain(otherAssetUrl));
+            Assert.That(server.AssetDownloads, Is.EqualTo(2));
+            Assert.That(Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories), Is.Empty);
+        });
+    }
+
+    // The first reference downloads and the second answers 404; the first is not cached nor left behind as a partial download.
+    [Test]
+    public async Task NativeUrlReferenceThatFailsToDownloadCachesNothing()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+        string nativeSource = Path.Combine(consumerDirectory, "native.c");
+        string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
+        // The default cache, in the project's obj folder, which DeleteConsumerOutputs has deleted.
+        string cacheDirectory = Path.Combine(consumerDirectory, "obj", "native-url-cache");
+        using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
+        string missingUrl = server.GetMissingUrl("other.c");
+
+        string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
+            properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={missingUrl}",
+                $"BrowserLoopConsumerOtherNativeSha256={sha256}"]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain(missingUrl));
+            Assert.That(server.AssetDownloads, Is.EqualTo(1));
+            Assert.That(Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories), Is.Empty);
+        });
+    }
+
+    private sealed class ReleaseAssetServer : IDisposable
+    {
+        private readonly HttpListener _listener;
+        private readonly byte[] _content;
+        private readonly Task _serving;
+        private readonly string _contentFileName;
+        private readonly int _port;
+        private int _assetDownloads;
+
+        private ReleaseAssetServer(HttpListener listener, string contentPath, int port)
+        {
+            _listener = listener;
+            _content = File.ReadAllBytes(contentPath);
+            _contentFileName = Path.GetFileName(contentPath);
+            _port = port;
+            _serving = Task.Run(ServeAsync);
+        }
+
+        public string AssetUrl => GetAssetUrl(_contentFileName);
+
+        public int AssetDownloads => Volatile.Read(ref _assetDownloads);
+
+        // Every release asset path redirects to the same content.
+        public string GetAssetUrl(string fileName)
+        {
+            return $"http://127.0.0.1:{_port}/releases/download/v1/{fileName}";
+        }
+
+        public string GetMissingUrl(string fileName)
+        {
+            return $"http://127.0.0.1:{_port}/missing/{fileName}";
+        }
+
+        public static ReleaseAssetServer Start(string contentPath)
+        {
+            TcpListener portProbe = new(IPAddress.Loopback, 0);
+            portProbe.Start();
+            int port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+            portProbe.Stop();
+            HttpListener listener = new();
+            listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            listener.Start();
+            return new ReleaseAssetServer(listener, contentPath, port);
+        }
+
+        private async Task ServeAsync()
+        {
+            while (_listener.IsListening)
+            {
+                HttpListenerContext context;
+                try
+                {
+                    context = await _listener.GetContextAsync();
+                }
+                catch (Exception exception) when (exception is HttpListenerException or ObjectDisposedException)
+                {
+                    return;
+                }
+
+                string path = context.Request.Url?.AbsolutePath ?? "";
+                if (path.StartsWith("/releases/download/", StringComparison.Ordinal))
+                {
+                    context.Response.Redirect("/objects/asset?response-content-disposition=attachment");
+                }
+                else if (path == "/objects/asset")
+                {
+                    Interlocked.Increment(ref _assetDownloads);
+                    context.Response.ContentType = "application/octet-stream";
+                    await context.Response.OutputStream.WriteAsync(_content);
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                }
+                context.Response.Close();
+            }
+        }
+
+        public void Dispose()
+        {
+            _listener.Close();
+            _serving.Wait();
+        }
     }
 
     private static void AssertBrowserLoopOutcome(string result, string lastFrame, string outcome, string expectedResult)
