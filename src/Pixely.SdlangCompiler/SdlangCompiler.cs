@@ -1167,8 +1167,8 @@ public class SdlangCompiler
         byte readWriteStorageTextures = 0;
         byte readWriteStorageBuffers = 0;
 
-        Dictionary<int, uint> storageBufferElementSizesBySlot = new();
-        Dictionary<int, uint> readWriteStorageBufferElementSizesBySlot = new();
+        Dictionary<int, uint> storageBufferElementSizesByRegisterIndex = new();
+        Dictionary<int, uint> readWriteStorageBufferElementSizesByRegisterIndex = new();
 
         List<ResourceBinding> resourceBindings = new();
 
@@ -1215,13 +1215,13 @@ public class SdlangCompiler
                             uint elementSize = ComputeStructuredBufferElementSize(paramType);
                             if (isReadWrite)
                             {
-                                readWriteStorageBufferElementSizesBySlot[index] = elementSize;
+                                readWriteStorageBufferElementSizesByRegisterIndex[index] = elementSize;
                                 readWriteStorageBuffers++;
                                 resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageBuffer, space, index));
                             }
                             else
                             {
-                                storageBufferElementSizesBySlot[index] = elementSize;
+                                storageBufferElementSizesByRegisterIndex[index] = elementSize;
                                 storageBuffers++;
                                 resourceBindings.Add(new ResourceBinding(paramName, ResourceType.StorageBuffer, space, index));
                             }
@@ -1267,11 +1267,13 @@ public class SdlangCompiler
         // Validate bindings conform to SDL GPU requirements
         ValidateBindings(stage, resourceBindings);
 
+        // The textures that precede the storage buffers in their register space do not take an SDL storage buffer slot.
+        int readOnlyTextureCount = resourceBindings.Count(b => b.Type is ResourceType.SampledTexture or ResourceType.StorageTexture);
         ShaderBindingLayout shaderBindingLayout = new ShaderBindingLayout(
             new ShaderBindingCounts(samplers, storageTextures, storageBuffers, readWriteStorageTextures, readWriteStorageBuffers),
             shaderUniformSlots,
-            BuildStorageBufferElementSizes(storageBufferElementSizesBySlot),
-            BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesBySlot));
+            BuildStorageBufferElementSizes(storageBufferElementSizesByRegisterIndex, readOnlyTextureCount),
+            BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesByRegisterIndex, readWriteStorageTextures));
         return new ShaderReflection(stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ, resourceBindings);
     }
 
@@ -1641,12 +1643,12 @@ public class SdlangCompiler
         }
     }
 
-    private static StorageBufferElementSizes BuildStorageBufferElementSizes(Dictionary<int, uint> elementSizesBySlot)
+    private static StorageBufferElementSizes BuildStorageBufferElementSizes(Dictionary<int, uint> elementSizesByRegisterIndex, int firstStorageBufferRegisterIndex)
     {
-        elementSizesBySlot.TryGetValue(0, out uint slot0);
-        elementSizesBySlot.TryGetValue(1, out uint slot1);
-        elementSizesBySlot.TryGetValue(2, out uint slot2);
-        elementSizesBySlot.TryGetValue(3, out uint slot3);
+        elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex, out uint slot0);
+        elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex + 1, out uint slot1);
+        elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex + 2, out uint slot2);
+        elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex + 3, out uint slot3);
         return new StorageBufferElementSizes((ushort)slot0, (ushort)slot1, (ushort)slot2, (ushort)slot3);
     }
 
