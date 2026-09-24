@@ -536,20 +536,49 @@ public class PackageIntegrationTests
         Assert.That(server.AssetDownloads, Is.EqualTo(1));
     }
 
+    // The first reference matches its hash and the second does not; neither is cached nor left behind as a partial download.
     [Test]
     public async Task NativeUrlReferenceWithAnotherHashFailsAndCachesNothing()
     {
         string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
         DeleteConsumerOutputs("BrowserLoopConsumer");
+        string nativeSource = Path.Combine(consumerDirectory, "native.c");
+        string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
         string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache-mismatch");
         string wrongSha256 = new('0', 64);
-        using ReleaseAssetServer server = ReleaseAssetServer.Start(Path.Combine(consumerDirectory, "native.c"));
+        using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
+        string otherAssetUrl = server.GetAssetUrl("other.c");
 
         string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
-            properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={wrongSha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"]);
+            properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={otherAssetUrl}",
+                $"BrowserLoopConsumerOtherNativeSha256={wrongSha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"]);
         Assert.Multiple(() =>
         {
-            Assert.That(output, Does.Contain("error PIXELY0009").And.Contain(server.AssetUrl));
+            Assert.That(output, Does.Contain("error PIXELY0009").And.Contain(otherAssetUrl));
+            Assert.That(server.AssetDownloads, Is.EqualTo(2));
+            Assert.That(Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories), Is.Empty);
+        });
+    }
+
+    // The first reference downloads and the second answers 404; the first is not cached nor left behind as a partial download.
+    [Test]
+    public async Task NativeUrlReferenceThatFailsToDownloadCachesNothing()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
+        DeleteConsumerOutputs("BrowserLoopConsumer");
+        string nativeSource = Path.Combine(consumerDirectory, "native.c");
+        string sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(nativeSource)));
+        string cacheDirectory = Path.Combine(_testArtifactsDirectory, "native-url-cache-missing");
+        using ReleaseAssetServer server = ReleaseAssetServer.Start(nativeSource);
+        string missingUrl = server.GetMissingUrl("other.c");
+
+        string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false,
+            properties: [$"BrowserLoopConsumerNativeUrl={server.AssetUrl}", $"BrowserLoopConsumerNativeSha256={sha256}", $"BrowserLoopConsumerOtherNativeUrl={missingUrl}",
+                $"BrowserLoopConsumerOtherNativeSha256={sha256}", $"PixelyNativeUrlCacheDirectory={cacheDirectory}"]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain(missingUrl));
+            Assert.That(server.AssetDownloads, Is.EqualTo(1));
             Assert.That(Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories), Is.Empty);
         });
     }
@@ -559,19 +588,33 @@ public class PackageIntegrationTests
         private readonly HttpListener _listener;
         private readonly byte[] _content;
         private readonly Task _serving;
+        private readonly string _contentFileName;
+        private readonly int _port;
         private int _assetDownloads;
 
         private ReleaseAssetServer(HttpListener listener, string contentPath, int port)
         {
             _listener = listener;
             _content = File.ReadAllBytes(contentPath);
-            AssetUrl = $"http://127.0.0.1:{port}/releases/download/v1/{Path.GetFileName(contentPath)}";
+            _contentFileName = Path.GetFileName(contentPath);
+            _port = port;
             _serving = Task.Run(ServeAsync);
         }
 
-        public string AssetUrl { get; }
+        public string AssetUrl => GetAssetUrl(_contentFileName);
 
         public int AssetDownloads => Volatile.Read(ref _assetDownloads);
+
+        // Every release asset path redirects to the same content.
+        public string GetAssetUrl(string fileName)
+        {
+            return $"http://127.0.0.1:{_port}/releases/download/v1/{fileName}";
+        }
+
+        public string GetMissingUrl(string fileName)
+        {
+            return $"http://127.0.0.1:{_port}/missing/{fileName}";
+        }
 
         public static ReleaseAssetServer Start(string contentPath)
         {

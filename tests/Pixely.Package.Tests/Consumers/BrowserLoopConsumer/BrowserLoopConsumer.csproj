@@ -16,8 +16,7 @@
     <ItemGroup>
         <!-- The relink variant: PackageIntegrationTests sets the property with the wasm-tools workload installed. -->
         <NativeFileReference Include="native.c" Condition="'$(BrowserLoopConsumerNative)' == 'true'" />
-        <!-- The download variant: PackageIntegrationTests serves native.c over HTTP and passes its URL and hash. -->
-        <NativeUrlReference Include="$(BrowserLoopConsumerNativeUrl)" Sha256="$(BrowserLoopConsumerNativeSha256)" Condition="'$(BrowserLoopConsumerNativeUrl)' != ''" />
+        <!-- The download variant is declared in Directory.Build.targets. -->
     </ItemGroup>
 
 </Project>

@@ -1,0 +1,10 @@
+<Project>
+    <!--
+      The download variant: PackageIntegrationTests serves native.c over HTTP and passes the URLs and hashes. The items are
+      declared here, after the Pixely SDK's browser targets are imported, as a package's targets would declare them.
+    -->
+    <ItemGroup>
+        <NativeUrlReference Include="$(BrowserLoopConsumerNativeUrl)" Sha256="$(BrowserLoopConsumerNativeSha256)" Condition="'$(BrowserLoopConsumerNativeUrl)' != ''" />
+        <NativeUrlReference Include="$(BrowserLoopConsumerOtherNativeUrl)" Sha256="$(BrowserLoopConsumerOtherNativeSha256)" Condition="'$(BrowserLoopConsumerOtherNativeUrl)' != ''" />
+    </ItemGroup>
+</Project>

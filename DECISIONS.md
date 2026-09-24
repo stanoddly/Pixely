@@ -8,7 +8,7 @@ A browser app links a prebuilt Emscripten archive, such as `libXDL_wgpu.a` from 
 
 - The archives are published as release assets. A NuGet package that wraps them would be one more package to build, version and publish for every archive release.
 - The hash pins the file as a package version would, and a cached file needs no network.
-- The WebAssembly targets choose to relink from the count of `NativeFileReference` items when the project evaluates, so the items are added then and only the download waits for the build.
+- The WebAssembly targets choose to relink from the count of `NativeFileReference` items in a target. A Pixely target that runs before it downloads the files and adds the items, so a `NativeUrlReference` from `Directory.Build.targets` or a package's targets counts too.
 - URL references go first on the link line, so an archive such as `libXDL_wgpu.a` replaces the functions it defines in a `SDL3.a` that stays a file.
 
 Cost: the first build needs the network. An asset of a private repository needs credentials, which the download does not send. A URL with a query string does not work, because `?` is an MSBuild wildcard. The cache path and the file name come from the URL, which is untested on Windows.
