@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
+
+A browser app links a prebuilt Emscripten archive, such as `libXDL_wgpu.a` from a GitHub release, with a `NativeUrlReference` that names the URL and the file's SHA-256. The SDK downloads it into a cache outside the project and makes it a `NativeFileReference`.
+
+- The archives are published as release assets. A NuGet package that wraps them would be one more package to build, version and publish for every archive release.
+- The hash pins the file as a package version would, and a cached file needs no network.
+- The WebAssembly targets choose to relink from the count of `NativeFileReference` items when the project evaluates, so the items are added then and only the download waits for the build.
+- URL references go first on the link line, so an archive such as `libXDL_wgpu.a` replaces the functions it defines in a `SDL3.a` that stays a file.
+
+Cost: the first build needs the network. An asset of a private repository needs credentials, which the download does not send. A URL with a query string does not work, because `?` is an MSBuild wildcard. The cache path and the file name come from the URL, which is untested on Windows.
+
 ## 2026-09-23: The browser page's end tears down the WebGPU device and SDL
 
 In the browser, disposing the app releases Pixely's own GPU resources and windows but calls neither `SDL_DestroyGPUDevice` nor `SDL_Quit`. The tab ends the app, and the browser frees the device, SDL and the wasm memory with the page.
