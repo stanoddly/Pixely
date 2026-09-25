@@ -12,7 +12,28 @@ Active rendering context. Created from CommandBuffer. Used for:
 - Binding pipelines
 - Binding vertex buffers
 - Drawing primitives
-- **Disposed to execute** - rendering happens on dispose
+- **Disposed to end** - disposing ends recording; the GPU runs the work once the command buffer is submitted
+
+## Reused objects
+
+Once the first frames have created them, a frame allocates no command buffer, pass, pass builder, basic render context or swapchain texture.
+
+- `AcquireCommandBuffer` takes a command buffer from a pool on the device, and `Submit`, `SubmitAndAcquireFence` and `Cancel`
+  return it.
+- A command buffer hands out the same `RenderPass` for every render pass it begins, and the same `ComputePass` for every
+  compute pass. It allows one open pass at a time, so beginning another before disposing the first throws.
+- `RenderPassBuilder` is a `ref struct`: it lives on the stack, and its methods return it by `ref`, so the usual chain
+  allocates nothing. It cannot be stored in a field, captured by a lambda or used across an `await`. A helper that adds
+  targets must take it as `ref RenderPassBuilder`, since passing it by value fills a copy. `Build` empties it.
+- Submitting a command buffer with a pass still open ends that pass, submits, and then throws `InvalidOperationException`.
+  Disposing a `BasicRenderContext` ends such a pass without throwing, so it does not hide the exception that left it open.
+- `BasicRenderContextProvider<T>`, and the default `BasicRenderContextProvider` built on it, reuse their context, and a
+  window reuses its `SwapchainTexture`, pointed at the current frame's texture. See window-rendering.md.
+
+This is the contract of an array from `ArrayPool`: an object must not be used after it went back. Do not keep a command
+buffer, pass or context past the frame, and do not dispose a command buffer after submitting it. A command buffer used after
+`Submit` throws `ObjectDisposedException` until it is acquired again, and a pass used after `Dispose` throws until its command
+buffer begins the next pass. A reference kept longer acts on whoever holds the object next.
 
 ## Execution Model
 
@@ -25,7 +46,7 @@ public void Render(BasicRenderContext renderContext)
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);
 
     // 2. CREATE RenderPass
-    using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+    using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
         .AddColorTarget(renderContext.SwapchainTexture)
         .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
         .Build();
@@ -44,7 +65,7 @@ public void Render(BasicRenderContext renderContext)
 Used by subrenderers that contribute to a larger multi-phase rendering pipeline (like deferred rendering). The parent system creates the RenderPass and calls multiple subrenderers that all draw into the same render targets.
 
 ```csharp
-public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+public void Render(CommandBuffer commandBuffer, RenderPass renderPass)
 {
     // RenderPass already exists, don't create a new one
 

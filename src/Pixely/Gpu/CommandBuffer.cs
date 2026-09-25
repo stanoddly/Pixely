@@ -14,6 +14,16 @@ public class CommandBuffer: IDisposable
     private ShaderUniformSlotSizes _fragmentShaderUniformSlotSizes;
     private ShaderUniformSlotSizes _vertexShaderUniformSlotSizes;
 
+    // Handed out again for every pass begun on this command buffer.
+    private RenderPass? _renderPass;
+    private ComputePass? _computePass;
+
+    // SDL allows one open pass per command buffer.
+    private IDisposable? _openPass;
+
+    // SDL forbids cancelling once a swapchain texture is acquired, so a failure after the acquire has to submit instead.
+    private bool _hasSwapchainTexture;
+
     internal Pointer<SDL_GPUCommandBuffer> SdlGpuCommandBuffer
     {
         get => _sdlGpuCommandBuffer;
@@ -23,21 +33,49 @@ public class CommandBuffer: IDisposable
     public ShaderUniformSlotSizes FragmentShaderUniformSlotSizes => _fragmentShaderUniformSlotSizes;
     public ShaderUniformSlotSizes VertexShaderUniformSlotSizes => _vertexShaderUniformSlotSizes;
 
-    internal CommandBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer)
+    internal CommandBuffer(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
+    }
+
+    internal void Begin(Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer)
+    {
         SdlGpuCommandBuffer = sdlCommandBuffer;
+        _fragmentShaderUniformSlotSizes = default;
+        _vertexShaderUniformSlotSizes = default;
+        _openPass = null;
+        _hasSwapchainTexture = false;
+    }
+
+    internal void OnSwapchainTextureAcquired()
+    {
+        _hasSwapchainTexture = true;
     }
 
     public void Submit()
     {
+        if (SubmitEndingOpenPass())
+        {
+            throw new InvalidOperationException(OpenPassAtSubmitMessage);
+        }
+    }
+
+    /// <summary>
+    /// Submits without complaining about a pass left open: it is ended first. For disposal paths, where throwing would hide the
+    /// exception that left the pass open. Returns whether a pass was open.
+    /// </summary>
+    internal bool SubmitEndingOpenPass()
+    {
         ThrowIfDisposed();
+        bool passWasOpen = EndOpenPass();
         unsafe
         {
             // TODO: error handling
             SDL3.SDL_SubmitGPUCommandBuffer(SdlGpuCommandBuffer);
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
+        _gpuDevice.ReturnCommandBuffer(this);
+        return passWasOpen;
     }
 
     /// <summary>
@@ -49,11 +87,29 @@ public class CommandBuffer: IDisposable
     {
         ArgumentNullException.ThrowIfNull(texture);
         ThrowIfDisposed();
+        ThrowIfPassOpen();
         texture.ThrowIfDisposed();
 #if BROWSER
         throw new PlatformNotSupportedException("Downloading a texture is not supported in the browser.");
 #else
 
+        // Until the submit below, a failure cancels the command buffer, so that it is not left unsubmitted and out of the pool.
+        bool submitted = false;
+        try
+        {
+            return DownloadTexture(texture, ref submitted);
+        }
+        catch when (!submitted)
+        {
+            Cancel();
+            throw;
+        }
+#endif
+    }
+
+#if !BROWSER
+    private Image DownloadTexture(Texture texture, ref bool submitted)
+    {
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
         long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
         if (layerSizeInBytes > int.MaxValue)
@@ -83,6 +139,7 @@ public class CommandBuffer: IDisposable
                 SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
                 SDL3.SDL_EndGPUCopyPass(copyPass);
 
+                submitted = true;
                 using (GpuFence fence = SubmitAndAcquireFence())
                 {
                     _gpuDevice.WaitForFences([fence]);
@@ -100,20 +157,28 @@ public class CommandBuffer: IDisposable
         }
 
         return new RawImage(pixels, texture.Size, pixelFormat);
-#endif
     }
+#endif
 
     public GpuFence SubmitAndAcquireFence()
     {
         ThrowIfDisposed();
+        bool passWasOpen = EndOpenPass();
         unsafe
         {
             SDL_GPUFence* fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(SdlGpuCommandBuffer);
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _gpuDevice.ReturnCommandBuffer(this);
 
             if (fence == null)
             {
                 throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SDL3.SDL_GetError()}");
+            }
+
+            if (passWasOpen)
+            {
+                SDL3.SDL_ReleaseGPUFence(_gpuDevice.SdlGpuDevice, fence);
+                throw new InvalidOperationException(OpenPassAtSubmitMessage);
             }
 
             return new GpuFence(_gpuDevice, fence);
@@ -148,13 +213,22 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IRenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    /// <summary>
+    /// Begins a render pass. The command buffer hands out the same <see cref="RenderPass"/> object for every pass it begins,
+    /// so dispose one before beginning the next; beginning a second while one is open throws.
+    /// </summary>
+    public RenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
-        
-        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Count];
-            
-        for (int i = 0; i < colorTargets.Count; i++)
+
+        if (colorTargetSettings.Length != colorTargets.Length)
+        {
+            throw new ArgumentException($"{colorTargets.Length} color targets need {colorTargets.Length} settings, but {colorTargetSettings.Length} were given.", nameof(colorTargetSettings));
+        }
+
+        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
+
+        for (int i = 0; i < colorTargets.Length; i++)
         {
             Texture colorTarget = colorTargets[i];
             ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
@@ -189,7 +263,7 @@ public class CommandBuffer: IDisposable
 
     // A pass can only safely address the area every attachment shares, so the scissor bounds
     // are the smallest attachment, depth included.
-    private static ShortSize CalculateTargetSize(List<Texture> colorTargets, Texture? depthBuffer)
+    private static ShortSize CalculateTargetSize(ReadOnlySpan<Texture> colorTargets, Texture? depthBuffer)
     {
         ushort width = ushort.MaxValue;
         ushort height = ushort.MaxValue;
@@ -209,7 +283,7 @@ public class CommandBuffer: IDisposable
         return new ShortSize(width, height);
     }
 
-    private IRenderPass CreateMultipleRenderTargetsPassInternal(
+    private RenderPass CreateMultipleRenderTargetsPassInternal(
         ReadOnlySpan<SDL_GPUColorTargetInfo> colorTargetInfos,
         Pointer<SDL_GPUTexture> depthBufferPointer,
         DepthBufferSettings depthBufferSettings,
@@ -217,7 +291,8 @@ public class CommandBuffer: IDisposable
         ShortSize targetSize)
     {
         ThrowIfDisposed();
-        
+        ThrowIfPassOpen();
+
         unsafe
         {
             SDL_GPURenderPass* gpuRenderPass;
@@ -252,8 +327,11 @@ public class CommandBuffer: IDisposable
                 }
             }
             
-            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, targetSize);
+            SdlError.ThrowOnNull(gpuRenderPass);
 
+            RenderPass renderPass = _renderPass ??= new RenderPass(this);
+            renderPass.Begin(gpuRenderPass, depthBufferFormat, targetSize);
+            _openPass = renderPass;
             return renderPass;
         }
     }
@@ -269,11 +347,12 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IComputePass CreateComputePass(
+    public ComputePass CreateComputePass(
         ReadOnlySpan<StorageTextureReadWriteBinding> readWriteStorageTextures,
         ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
     {
         ThrowIfDisposed();
+        ThrowIfPassOpen();
         unsafe
         {
             SDL_GPUStorageTextureReadWriteBinding* textureBindings = stackalloc SDL_GPUStorageTextureReadWriteBinding[readWriteStorageTextures.Length];
@@ -305,12 +384,17 @@ public class CommandBuffer: IDisposable
                 bufferBindings,
                 (uint)readWriteStorageBuffers.Length);
 
+            SdlError.ThrowOnNull(computePass);
+
             StorageBufferElementSizes rwElementSizes = BuildStorageBufferElementSizes(readWriteStorageBuffers);
-            return new ComputePass(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
+            ComputePass pass = _computePass ??= new ComputePass(this);
+            pass.Begin(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
+            _openPass = pass;
+            return pass;
         }
     }
 
-    public IComputePass CreateComputePass()
+    public ComputePass CreateComputePass()
     {
         return CreateComputePass(
             ReadOnlySpan<StorageTextureReadWriteBinding>.Empty,
@@ -406,11 +490,63 @@ public class CommandBuffer: IDisposable
     {
         if (!SdlGpuCommandBuffer.IsNull)
         {
+            EndOpenPass();
             unsafe
             {
-                SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer);
+                // SDL refuses to cancel once a swapchain texture is acquired, and the command buffer then stays pending, so it is
+                // not handed out again.
+                SdlError.ThrowOnFalse(SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer), "SDL_CancelGPUCommandBuffer");
             }
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _gpuDevice.ReturnCommandBuffer(this);
+        }
+    }
+
+    /// <summary>
+    /// Gives up a command buffer whose recording failed: cancels it, or submits it when it holds a swapchain texture, which SDL
+    /// does not let it cancel. Used in failure paths, so it throws nothing about a pass left open.
+    /// </summary>
+    internal void CancelOrSubmit()
+    {
+        if (_hasSwapchainTexture)
+        {
+            SubmitEndingOpenPass();
+        }
+        else
+        {
+            Cancel();
+        }
+    }
+
+    private const string OpenPassAtSubmitMessage =
+        "A pass was still open when the command buffer was submitted. It was ended first; dispose passes before submitting.";
+
+    // A pass still open when its command buffer goes back to the pool would later end whatever pass the next holder begins,
+    // so it is ended here, while it still belongs to this submission.
+    private bool EndOpenPass()
+    {
+        if (_openPass == null)
+        {
+            return false;
+        }
+
+        _openPass.Dispose();
+        return true;
+    }
+
+    internal void OnPassEnded(IDisposable pass)
+    {
+        if (ReferenceEquals(_openPass, pass))
+        {
+            _openPass = null;
+        }
+    }
+
+    private void ThrowIfPassOpen()
+    {
+        if (_openPass != null)
+        {
+            throw new InvalidOperationException("A pass is still open on this command buffer. Dispose it before beginning another.");
         }
     }
 
@@ -424,15 +560,6 @@ public class CommandBuffer: IDisposable
         if (SdlGpuCommandBuffer.IsNull)
         {
             throw new ObjectDisposedException(nameof(CommandBuffer));
-        }
-    }
-
-    public ICopyPass CreateCopyPass()
-    {
-        unsafe
-        {
-            SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
-            return new CopyPass(_gpuDevice, copyPass);
         }
     }
 }

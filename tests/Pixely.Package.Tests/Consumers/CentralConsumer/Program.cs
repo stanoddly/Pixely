@@ -67,9 +67,29 @@ public sealed class PackageBasicRenderContext : BasicRenderContext
     {
     }
 
+    public PackageBasicRenderContext()
+    {
+    }
+
     public override void Dispose()
     {
         base.Dispose();
+    }
+}
+
+public sealed class PackageReusingRenderContextProvider : BasicRenderContextProvider<PackageBasicRenderContext>
+{
+    public PackageReusingRenderContextProvider(GpuDevice gpuDevice) : base(gpuDevice)
+    {
+    }
+
+    protected override PackageBasicRenderContext CreateRenderContext()
+    {
+        return new PackageBasicRenderContext();
+    }
+
+    protected override void PrepareRenderContext(PackageBasicRenderContext renderContext, Window window)
+    {
     }
 }
 

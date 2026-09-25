@@ -8,9 +8,9 @@ public abstract class Texture: IDisposable, IGpuMemorySized
 {
     internal Pointer<SDL_GPUTexture> SdlGpuTexture { get; set; }
     internal bool IsDisposed => SdlGpuTexture.IsNull;
-    public TextureFormat Format { get; }
-    public ShortSize Size { get; }
-    public long SizeInBytes { get; }
+    public TextureFormat Format { get; private protected set; }
+    public ShortSize Size { get; private protected set; }
+    public long SizeInBytes { get; private protected set; }
 
     internal Texture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format, long sizeInBytes)
     {
@@ -87,11 +87,23 @@ internal sealed class BorrowedTexture : Texture
     internal void Invalidate() => SdlGpuTexture = Pointer<SDL_GPUTexture>.Null;
 }
 
+/// <summary>
+/// The texture a window renders into this frame. The window hands out the same object every frame, pointed at that frame's
+/// texture, so one kept from an earlier frame refers to the current one.
+/// </summary>
 public class SwapchainTexture : Texture
 {
     internal SwapchainTexture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format)
         : base(sdlGpuTexture, size, format, format.CalculateSizeInBytes(size.Width, size.Height))
     {
+    }
+
+    internal void Update(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format)
+    {
+        SdlGpuTexture = sdlGpuTexture;
+        Size = size;
+        Format = format;
+        SizeInBytes = format.CalculateSizeInBytes(size.Width, size.Height);
     }
 
     public override void Dispose()

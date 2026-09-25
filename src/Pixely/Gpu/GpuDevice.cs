@@ -18,6 +18,8 @@ public class GpuDevice : IDisposable
     private LockedSet<ComputePipeline> _computePipelines = new();
     private LockedSet<GraphicsShaderProgram> _graphicsShaderPrograms = new();
 
+    private readonly Stack<CommandBuffer> _commandBufferPool = new();
+
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; private set; }
 
     public string Driver { get; }
@@ -75,18 +77,45 @@ public class GpuDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// A command buffer to record one submission. Submitting or cancelling it returns it to the device, which hands the same
+    /// object out again: like an array from <c>ArrayPool</c>, it must not be used after that.
+    /// </summary>
     public CommandBuffer AcquireCommandBuffer()
+    {
+        Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = AcquireSdlCommandBuffer();
+
+        CommandBuffer? commandBuffer;
+        lock (_commandBufferPool)
+        {
+            _commandBufferPool.TryPop(out commandBuffer);
+        }
+
+        commandBuffer ??= new CommandBuffer(this);
+        commandBuffer.Begin(sdlGpuCommandBuffer);
+        return commandBuffer;
+    }
+
+    internal void ReturnCommandBuffer(CommandBuffer commandBuffer)
+    {
+        lock (_commandBufferPool)
+        {
+            _commandBufferPool.Push(commandBuffer);
+        }
+    }
+
+    internal Pointer<SDL_GPUCommandBuffer> AcquireSdlCommandBuffer()
     {
         unsafe
         {
             Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL3.SDL_AcquireGPUCommandBuffer(SdlGpuDevice);
-            
+
             if (sdlGpuCommandBuffer.IsNull)
             {
                 throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SDL3.SDL_GetError()}");
             }
 
-            return new CommandBuffer(this, sdlGpuCommandBuffer);
+            return sdlGpuCommandBuffer;
         }
     }
 
