@@ -1155,6 +1155,118 @@ public class SdlangCompilerTests
         Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
     }
 
+    [Test]
+    public void CompileShader_FragmentStorageBufferAfterTextures_StoresElementSizeAtSdlSlot()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderWithTwoTextureSamplerPairsAndStorageBuffer);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        GraphicsShaderProgramMetadataDto metadata = ReadGraphicsMetadata(Path.ChangeExtension(Path.Combine(_testDir, ".generated", Path.GetFileName(shaderPath)), ".metadata.json"));
+
+        // 'palette' is register t2 behind two sampled textures, so SDL binds it at storage buffer slot 0.
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
+            Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot2, Is.EqualTo(0u));
+        });
+    }
+
+    private const string VertexShaderWithTwoStorageBuffersAfterTexture = """
+                                                                         Texture2D<float4> heightMap : register(t0, space0);
+                                                                         SamplerState heightMapSampler : register(s0, space0);
+                                                                         StructuredBuffer<float4> offsets : register(t1, space0);
+                                                                         StructuredBuffer<float2> scales : register(t2, space0);
+
+                                                                         struct VertexInput {
+                                                                             float3 position : POSITION;
+                                                                             uint instanceId : SV_InstanceID;
+                                                                         };
+
+                                                                         struct VertexToFragment {
+                                                                             float4 position : SV_Position;
+                                                                         };
+
+                                                                         [shader("vertex")]
+                                                                         VertexToFragment vertexMain(VertexInput input) {
+                                                                             float height = heightMap.SampleLevel(heightMapSampler, float2(0.0, 0.0), 0.0).x;
+                                                                             float2 scale = scales[input.instanceId];
+                                                                             VertexToFragment output;
+                                                                             output.position = float4(input.position * float3(scale, height), 1.0) + offsets[input.instanceId];
+                                                                             return output;
+                                                                         }
+
+                                                                         [shader("fragment")]
+                                                                         float4 fragmentMain(VertexToFragment input) : SV_Target {
+                                                                             return float4(1.0, 1.0, 1.0, 1.0);
+                                                                         }
+                                                                         """;
+
+    [Test]
+    public void CompileShader_VertexStorageBuffersAfterTexture_StoresEachElementSizeAtItsSdlSlot()
+    {
+        string shaderPath = CreateTemporaryShaderFile(VertexShaderWithTwoStorageBuffersAfterTexture);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        GraphicsShaderProgramMetadataDto metadata = ReadGraphicsMetadata(Path.ChangeExtension(Path.Combine(_testDir, ".generated", Path.GetFileName(shaderPath)), ".metadata.json"));
+
+        // 'offsets' (float4) is t1 and 'scales' (float2) is t2 behind one sampled texture, so SDL binds them at slots 0 and 1.
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.Vertex.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
+            Assert.That(metadata.Vertex.BindingLayout.StorageBufferElementSizes.Slot1, Is.EqualTo(8u));
+            Assert.That(metadata.Vertex.BindingLayout.StorageBufferElementSizes.Slot2, Is.EqualTo(0u));
+        });
+    }
+
+    // The read-only and read-write spaces have a different number of textures in front of their buffers, and every
+    // buffer has its own element size, so a buffer recorded under the wrong slot or with the other space's offset fails.
+    private const string ComputeShaderWithStorageBuffersAfterTextures = """
+                                                                        Texture2D<float4> source : register(t0, space0);
+                                                                        SamplerState sourceSampler : register(s0, space0);
+                                                                        Texture2D<float4> mask : register(t1, space0);
+                                                                        SamplerState maskSampler : register(s1, space0);
+                                                                        StructuredBuffer<float4> weights : register(t2, space0);
+                                                                        StructuredBuffer<float> biases : register(t3, space0);
+                                                                        RWTexture2D<float4> outputTexture : register(u0, space1);
+                                                                        RWStructuredBuffer<float2> totals : register(u1, space1);
+                                                                        RWStructuredBuffer<uint> counts : register(u2, space1);
+
+                                                                        [numthreads(8, 8, 1)]
+                                                                        [shader("compute")]
+                                                                        void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                                        {
+                                                                            float2 uv = float2(dispatchThreadID.xy) / 8.0;
+                                                                            float4 sample = source.SampleLevel(sourceSampler, uv, 0.0) * mask.SampleLevel(maskSampler, uv, 0.0);
+                                                                            outputTexture[dispatchThreadID.xy] = sample * weights[0] + biases[0];
+                                                                            totals[0] += sample.xy;
+                                                                            counts[0] += 1;
+                                                                        }
+                                                                        """;
+
+    [Test]
+    public void CompileShader_ComputeStorageBuffersAfterTextures_StoresEachElementSizeAtItsSdlSlot()
+    {
+        string shaderPath = CreateTemporaryShaderFile(ComputeShaderWithStorageBuffersAfterTextures);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string json = File.ReadAllText(Path.ChangeExtension(Path.Combine(_testDir, ".generated", Path.GetFileName(shaderPath)), ".metadata.json"));
+        ComputeShaderMetadataDto? metadata = JsonSerializer.Deserialize(json, ShaderMetadataJsonContext.Default.ComputeShaderMetadataDto);
+
+        Assert.That(metadata, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
+            Assert.That(metadata.BindingLayout.StorageBufferElementSizes.Slot1, Is.EqualTo(4u));
+            Assert.That(metadata.BindingLayout.StorageBufferElementSizes.Slot2, Is.EqualTo(0u));
+            Assert.That(metadata.BindingLayout.ReadWriteStorageBufferElementSizes.Slot0, Is.EqualTo(8u));
+            Assert.That(metadata.BindingLayout.ReadWriteStorageBufferElementSizes.Slot1, Is.EqualTo(4u));
+            Assert.That(metadata.BindingLayout.ReadWriteStorageBufferElementSizes.Slot2, Is.EqualTo(0u));
+        });
+    }
+
     private const string ComputeShaderWithByteAddressBuffers = """
                                                                ByteAddressBuffer source : register(t0, space0);
                                                                RWByteAddressBuffer destination : register(u0, space1);
