@@ -18,11 +18,21 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
     public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+        SwapchainTexture swapchainTexture;
+        try
         {
-            commandBuffer.Dispose();
-            renderContext = null;
-            return false;
+            if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture))
+            {
+                commandBuffer.Dispose();
+                renderContext = null;
+                return false;
+            }
+        }
+        catch
+        {
+            // Nothing was acquired, so cancelling is valid, and it returns the command buffer to the pool.
+            commandBuffer.Cancel();
+            throw;
         }
 
         if (_reusableContext is { IsInUse: false })

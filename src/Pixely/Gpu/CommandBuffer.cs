@@ -46,6 +46,7 @@ public class CommandBuffer: IDisposable
     public void Submit()
     {
         ThrowIfDisposed();
+        bool passWasOpen = EndOpenPass();
         unsafe
         {
             // TODO: error handling
@@ -53,6 +54,11 @@ public class CommandBuffer: IDisposable
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
         _gpuDevice.ReturnCommandBuffer(this);
+
+        if (passWasOpen)
+        {
+            throw new InvalidOperationException(OpenPassAtSubmitMessage);
+        }
     }
 
     /// <summary>
@@ -64,11 +70,29 @@ public class CommandBuffer: IDisposable
     {
         ArgumentNullException.ThrowIfNull(texture);
         ThrowIfDisposed();
+        ThrowIfPassOpen();
         texture.ThrowIfDisposed();
 #if BROWSER
         throw new PlatformNotSupportedException("Downloading a texture is not supported in the browser.");
 #else
 
+        // Until the submit below, a failure cancels the command buffer, so that it is not left unsubmitted and out of the pool.
+        bool submitted = false;
+        try
+        {
+            return DownloadTexture(texture, ref submitted);
+        }
+        catch when (!submitted)
+        {
+            Cancel();
+            throw;
+        }
+#endif
+    }
+
+#if !BROWSER
+    private Image DownloadTexture(Texture texture, ref bool submitted)
+    {
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
         long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
         if (layerSizeInBytes > int.MaxValue)
@@ -98,6 +122,7 @@ public class CommandBuffer: IDisposable
                 SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
                 SDL3.SDL_EndGPUCopyPass(copyPass);
 
+                submitted = true;
                 using (GpuFence fence = SubmitAndAcquireFence())
                 {
                     _gpuDevice.WaitForFences([fence]);
@@ -115,12 +140,13 @@ public class CommandBuffer: IDisposable
         }
 
         return new RawImage(pixels, texture.Size, pixelFormat);
-#endif
     }
+#endif
 
     public GpuFence SubmitAndAcquireFence()
     {
         ThrowIfDisposed();
+        bool passWasOpen = EndOpenPass();
         unsafe
         {
             SDL_GPUFence* fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(SdlGpuCommandBuffer);
@@ -130,6 +156,12 @@ public class CommandBuffer: IDisposable
             if (fence == null)
             {
                 throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SDL3.SDL_GetError()}");
+            }
+
+            if (passWasOpen)
+            {
+                SDL3.SDL_ReleaseGPUFence(_gpuDevice.SdlGpuDevice, fence);
+                throw new InvalidOperationException(OpenPassAtSubmitMessage);
             }
 
             return new GpuFence(_gpuDevice, fence);
@@ -441,6 +473,7 @@ public class CommandBuffer: IDisposable
     {
         if (!SdlGpuCommandBuffer.IsNull)
         {
+            EndOpenPass();
             unsafe
             {
                 SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer);
@@ -448,6 +481,22 @@ public class CommandBuffer: IDisposable
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
             _gpuDevice.ReturnCommandBuffer(this);
         }
+    }
+
+    private const string OpenPassAtSubmitMessage =
+        "A pass was still open when the command buffer was submitted. It was ended first; dispose passes before submitting.";
+
+    // A pass still open when its command buffer goes back to the pool would later end whatever pass the next holder begins,
+    // so it is ended here, while it still belongs to this submission.
+    private bool EndOpenPass()
+    {
+        if (_openPass == null)
+        {
+            return false;
+        }
+
+        _openPass.Dispose();
+        return true;
     }
 
     internal void OnPassEnded(IDisposable pass)

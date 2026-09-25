@@ -23,7 +23,9 @@ A frame allocates no command buffer, pass, pass builder, basic render context or
 - A command buffer hands out the same `RenderPass` for every render pass it begins, and the same `ComputePass` for every
   compute pass. It allows one open pass at a time, so beginning another before disposing the first throws.
 - `RenderPassBuilder` is a `ref struct`: it lives on the stack, and its methods return it by `ref`, so the usual chain
-  allocates nothing. It cannot be stored in a field, captured by a lambda or used across an `await`.
+  allocates nothing. It cannot be stored in a field, captured by a lambda or used across an `await`. A helper that adds
+  targets must take it as `ref RenderPassBuilder`, since passing it by value fills a copy. `Build` empties it.
+- Submitting a command buffer with a pass still open ends that pass, submits, and then throws `InvalidOperationException`.
 - `BasicRenderContextProvider` reuses its context, and a window reuses its `SwapchainTexture`, pointed at the current frame's
   texture.
 

@@ -6,7 +6,8 @@ namespace Pixely.Gpu;
 /// <summary>
 /// Collects the attachments of a render pass and begins it on a <see cref="CommandBuffer"/>. It lives on the stack, and its
 /// methods return it by <c>ref</c>, so a chain such as <c>new RenderPassBuilder(commandBuffer).AddColorTarget(texture).Build()</c>
-/// fills one instance without allocating or copying it.
+/// fills one instance without allocating or copying it. A method that fills a builder it is given must take it by <c>ref</c>:
+/// passed by value, the method fills a copy. <see cref="Build"/> empties the builder, so a local can be built again.
 /// </summary>
 public ref struct RenderPassBuilder
 {
@@ -111,7 +112,18 @@ public ref struct RenderPassBuilder
 
         ReadOnlySpan<Texture> colorTargets = ((ReadOnlySpan<Texture>)_colorTargets)[.._colorTargetCount];
         ReadOnlySpan<ColorTargetSettings> colorTargetSettings = ((ReadOnlySpan<ColorTargetSettings>)_colorTargetSettings)[.._colorTargetCount];
-        return _commandBuffer.CreateRenderPass(colorTargets, colorTargetSettings, _depthBuffer, _depthBufferSettings);
+        RenderPass renderPass = _commandBuffer.CreateRenderPass(colorTargets, colorTargetSettings, _depthBuffer, _depthBufferSettings);
+
+        // A builder kept in a local and built again starts empty.
+        _colorTargets = default;
+        _colorTargetCount = 0;
+        _colorTargetSettings = default;
+        _colorTargetSettingsCount = 0;
+        _sharedColorTargetSettings = null;
+        _depthBuffer = null;
+        _depthBufferSettings = DepthBufferSettings.Default;
+
+        return renderPass;
     }
 
     private readonly void ThrowIfColorTargetsFull()

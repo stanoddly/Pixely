@@ -10,8 +10,9 @@ public class GpuMemorySystem: ICopyPass
     private readonly UploadRing _uploadRing;
     private readonly CopyPass _copyPass;
 
-    // Uploads are recorded from the update phase until the render phase submits them, so the command buffer outlives any
-    // CommandBuffer value: a ref struct cannot be held in a field.
+    // Uploads are recorded from the update phase until the render phase submits them. The native command buffer is held
+    // directly because the copy pass, the upload ring's fence and the cancel on dispose are all this class's own, and none of
+    // CommandBuffer's render-side state applies.
     private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
 
     public GpuMemorySystem(GpuDevice gpuDevice)
