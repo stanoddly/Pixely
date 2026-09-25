@@ -45,6 +45,18 @@ public class CommandBuffer: IDisposable
 
     public void Submit()
     {
+        if (SubmitEndingOpenPass())
+        {
+            throw new InvalidOperationException(OpenPassAtSubmitMessage);
+        }
+    }
+
+    /// <summary>
+    /// Submits without complaining about a pass left open: it is ended first. For disposal paths, where throwing would hide the
+    /// exception that left the pass open. Returns whether a pass was open.
+    /// </summary>
+    internal bool SubmitEndingOpenPass()
+    {
         ThrowIfDisposed();
         bool passWasOpen = EndOpenPass();
         unsafe
@@ -54,11 +66,7 @@ public class CommandBuffer: IDisposable
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
         _gpuDevice.ReturnCommandBuffer(this);
-
-        if (passWasOpen)
-        {
-            throw new InvalidOperationException(OpenPassAtSubmitMessage);
-        }
+        return passWasOpen;
     }
 
     /// <summary>

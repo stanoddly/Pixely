@@ -3,19 +3,24 @@ using Pixely.Gpu;
 
 namespace Pixely.RenderOrchestration;
 
-public class BasicRenderContextProvider : RenderContextProvider<BasicRenderContext>
+/// <summary>
+/// Provides a <see cref="BasicRenderContext"/>, or a context derived from it, for every frame without allocating one: it acquires
+/// the command buffer and the swapchain texture, cancels the command buffer when the acquire fails or throws, and hands the
+/// same context out again once the previous frame disposed it. A derived provider says how the context is created and what
+/// it needs each frame.
+/// </summary>
+public abstract class BasicRenderContextProvider<TRenderContext> : RenderContextProvider<TRenderContext>
+    where TRenderContext : BasicRenderContext
 {
     private readonly GpuDevice _gpuDevice;
+    private TRenderContext? _reusableContext;
 
-    // Handed out again once the previous frame disposed it, the way the command buffer inside it is.
-    private BasicRenderContext? _reusableContext;
-
-    internal BasicRenderContextProvider(GpuDevice gpuDevice)
+    protected BasicRenderContextProvider(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
     }
 
-    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+    public sealed override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TRenderContext? renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         SwapchainTexture swapchainTexture;
@@ -23,7 +28,7 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
         {
             if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture))
             {
-                commandBuffer.Dispose();
+                commandBuffer.Cancel();
                 renderContext = null;
                 return false;
             }
@@ -35,15 +40,43 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
             throw;
         }
 
-        if (_reusableContext is { IsInUse: false })
+        TRenderContext context = _reusableContext is { IsInUse: false } ? _reusableContext : CreateRenderContext();
+        _reusableContext ??= context;
+        context.Begin(swapchainTexture, commandBuffer);
+
+        try
         {
-            _reusableContext.Reuse(swapchainTexture, commandBuffer);
-            renderContext = _reusableContext;
-            return true;
+            PrepareRenderContext(context, window);
+        }
+        catch
+        {
+            // The swapchain texture is acquired, so the command buffer can only be submitted, not cancelled.
+            context.Dispose();
+            throw;
         }
 
-        renderContext = new BasicRenderContext(swapchainTexture, commandBuffer);
-        _reusableContext ??= renderContext;
+        renderContext = context;
         return true;
+    }
+
+    /// <summary>Creates the context. Called once, and again only when a context is asked for while the previous one is not disposed yet.</summary>
+    protected abstract TRenderContext CreateRenderContext();
+
+    /// <summary>Sets what the context needs for this frame, such as the render size or a camera. Runs after the command buffer and swapchain texture are set.</summary>
+    protected virtual void PrepareRenderContext(TRenderContext renderContext, Window window)
+    {
+    }
+}
+
+public sealed class BasicRenderContextProvider : BasicRenderContextProvider<BasicRenderContext>
+{
+    internal BasicRenderContextProvider(GpuDevice gpuDevice)
+        : base(gpuDevice)
+    {
+    }
+
+    protected override BasicRenderContext CreateRenderContext()
+    {
+        return new BasicRenderContext();
     }
 }

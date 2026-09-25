@@ -26,8 +26,9 @@ A frame allocates no command buffer, pass, pass builder, basic render context or
   allocates nothing. It cannot be stored in a field, captured by a lambda or used across an `await`. A helper that adds
   targets must take it as `ref RenderPassBuilder`, since passing it by value fills a copy. `Build` empties it.
 - Submitting a command buffer with a pass still open ends that pass, submits, and then throws `InvalidOperationException`.
-- `BasicRenderContextProvider` reuses its context, and a window reuses its `SwapchainTexture`, pointed at the current frame's
-  texture.
+  Disposing a `BasicRenderContext` ends such a pass without throwing, so it does not hide the exception that left it open.
+- `BasicRenderContextProvider<T>`, and the default `BasicRenderContextProvider` built on it, reuse their context, and a
+  window reuses its `SwapchainTexture`, pointed at the current frame's texture. See window-rendering.md.
 
 This is the contract of an array from `ArrayPool`: an object must not be used after it went back. Do not keep a command
 buffer, pass or context past the frame, and do not dispose a command buffer after submitting it. A command buffer used after

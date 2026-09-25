@@ -90,18 +90,20 @@ builder.AddAlias<RenderContextProvider<GameRenderContext>, GameRenderContextProv
 ```
 
 The provider uses ordinary dependency injection, including static factory registration. It does not
-receive or resolve a window during construction:
+receive or resolve a window during construction. Deriving it from `BasicRenderContextProvider<T>` leaves the frame sequence
+to Pixely: acquiring the command buffer and the swapchain texture, cancelling the command buffer when that fails, and handing
+the same context out again every frame instead of allocating one. The provider only says how the context is created, once,
+and what it needs each frame:
 
 ```csharp
-public sealed class GameRenderContextProvider : RenderContextProvider<GameRenderContext>
+public sealed class GameRenderContextProvider : BasicRenderContextProvider<GameRenderContext>
 {
-    private readonly GpuDevice _gpuDevice;
     private readonly DepthTarget _depthTarget;
     private readonly Camera _camera;
 
     private GameRenderContextProvider(GpuDevice gpuDevice, DepthTarget depthTarget, Camera camera)
+        : base(gpuDevice)
     {
-        _gpuDevice = gpuDevice;
         _depthTarget = depthTarget;
         _camera = camera;
     }
@@ -111,21 +113,21 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
         return new GameRenderContextProvider(gpuDevice, depthTarget, camera);
     }
 
-    public override bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
+    protected override GameRenderContext CreateRenderContext()
     {
-        CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
-        {
-            commandBuffer.Dispose();
-            renderContext = null;
-            return false;
-        }
+        return new GameRenderContext(_depthTarget, _camera);
+    }
 
-        renderContext = new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera, window.RenderSizeInPixels);
-        return true;
+    protected override void PrepareRenderContext(GameRenderContext renderContext, Window window)
+    {
+        renderContext.RenderSizeInPixels = window.RenderSizeInPixels;
     }
 }
 ```
+
+A provider for a context that is not a `BasicRenderContext` derives from `RenderContextProvider<T>` and implements
+`TryCreateRenderContext` itself. When the swapchain acquire fails or throws, it cancels the command buffer, which returns it to
+the device's pool.
 
 `RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See headless.md.
 
@@ -144,21 +146,19 @@ public override ShortSize GetColorTargetSize(Window window)
 
 Systems that run in the update phase read this. They lay out against the target before any render context exists, so they cannot inspect one. `Pixely.Ui` builds its element tree this way. A provider that draws into a differently sized target and does not override this leaves the UI laid out for the window, and the UI renderer then refuses to draw it into a target of another size.
 
-Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state:
+Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state. The provider creates it once through the parameterless base constructor and sets the frame's swapchain texture and command buffer itself:
 
 ```csharp
 public sealed class GameRenderContext : BasicRenderContext
 {
     public DepthTarget DepthTarget { get; }
     public Camera Camera { get; }
-    public Size<uint> RenderSizeInPixels { get; }
+    public ShortSize RenderSizeInPixels { get; set; }
 
-    public GameRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer, DepthTarget depthTarget, Camera camera, Size<uint> renderSizeInPixels)
-        : base(swapchainTexture, commandBuffer)
+    public GameRenderContext(DepthTarget depthTarget, Camera camera)
     {
         DepthTarget = depthTarget;
         Camera = camera;
-        RenderSizeInPixels = renderSizeInPixels;
     }
 }
 ```
@@ -167,7 +167,8 @@ The framework coordinator passes its managed window to the provider for each fra
 whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
 registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
-and call the base implementation to submit its command buffer. Window registration, event routing
+and call the base implementation, which submits the command buffer and marks the context free for the next frame. A context
+whose override skips the base implementation is never reused, so its provider creates a new one every frame. Window registration, event routing
 and disposal remain managed by Pixely.
 
 ## Multiple windows

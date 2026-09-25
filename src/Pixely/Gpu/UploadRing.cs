@@ -77,8 +77,8 @@ internal sealed class UploadRing : IDisposable
 
     /// <summary>
     /// Reserves <paramref name="size"/> bytes in the submission's slot, growing or replacing its transfer buffer when the
-    /// bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>, or one made while no slot is free, gets a
-    /// transfer buffer of its own that <see cref="Complete"/> releases.
+    /// bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>, one that does not fit a slot already at that
+    /// capacity, or one made while no slot is free, gets a transfer buffer of its own that <see cref="Complete"/> releases.
     /// </summary>
     internal UploadAllocation Reserve(uint size)
     {
@@ -91,6 +91,13 @@ internal sealed class UploadRing : IDisposable
 
         if (_current.TransferBuffer.IsNull || offset + (ulong)size > _current.Capacity)
         {
+            // A full slot at its largest keeps its buffer: replacing it would create one per submission for as long as the
+            // uploads outgrow it, while a temporary buffer costs the same once and leaves the slot for the next submission.
+            if (_current.Capacity == MaxSlotCapacity && !_current.TransferBuffer.IsNull)
+            {
+                return ReserveTemporary(size);
+            }
+
             // Uploads already recorded from the old buffer still read it, which SDL allows: a released buffer is freed
             // only once the GPU is done with it.
             // The new buffer is created first, so a failed create leaves the slot with a buffer it still owns.
