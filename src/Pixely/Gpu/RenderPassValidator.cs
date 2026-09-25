@@ -2,82 +2,16 @@ using Pixely.ShaderCommon;
 
 namespace Pixely.Gpu;
 
-public interface IRenderPassValidator<TSelfValidator> where TSelfValidator: IRenderPassValidator<TSelfValidator>
-{
-    static abstract TSelfValidator Create(CommandBuffer commandBuffer);
-
-    /// <summary>
-    /// Called when a graphics pipeline is bound to the render pass.
-    /// </summary>
-    void OnBindGraphicsPipeline(RenderPass<TSelfValidator> renderPass, GraphicsPipeline graphicsPipeline);
-
-    /// <summary>
-    /// Called when a vertex buffer is bound to the render pass.
-    /// </summary>
-    void OnBindVertexBuffer<TVertexType>(RenderPass<TSelfValidator> renderPass, uint slot, GpuVertexBuffer<TVertexType> buffer)
-        where TVertexType : unmanaged, IVertexType;
-
-    /// <summary>
-    /// Called when an index buffer is bound to the render pass.
-    /// </summary>
-    void OnBindIndexBuffer(RenderPass<TSelfValidator> renderPass, GpuIndexBuffer buffer);
-
-    /// <summary>
-    /// Called when vertex samplers are bound to the render pass.
-    /// </summary>
-    void OnBindVertexSamplers(RenderPass<TSelfValidator> renderPass, uint slot, int samplerCount);
-
-    /// <summary>
-    /// Called when fragment samplers are bound to the render pass.
-    /// </summary>
-    void OnBindFragmentSamplers(RenderPass<TSelfValidator> renderPass, uint slot, int samplerCount);
-
-    /// <summary>
-    /// Called when vertex storage buffers are bound to the render pass.
-    /// </summary>
-    void OnBindVertexStorageBuffers(RenderPass<TSelfValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
-
-    /// <summary>
-    /// Called when fragment storage buffers are bound to the render pass.
-    /// </summary>
-    void OnBindFragmentStorageBuffers(RenderPass<TSelfValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
-
-    /// <summary>
-    /// Called when a scissor rectangle is set on the render pass.
-    /// </summary>
-    void OnSetScissor(RenderPass<TSelfValidator> renderPass, Rectangle scissor);
-
-    /// <summary>
-    /// Called when a primitive draw is requested.
-    /// Validates that the current render pass state is valid for drawing.
-    /// Throws an exception if validation fails.
-    /// </summary>
-    void OnDrawPrimitive(RenderPass<TSelfValidator> renderPass, uint firstInstance);
-
-    /// <summary>
-    /// Called when an indexed primitive draw is requested.
-    /// Validates that the current render pass state is valid for drawing.
-    /// Throws an exception if validation fails.
-    /// </summary>
-    void OnDrawIndexedPrimitive(
-        RenderPass<TSelfValidator> renderPass,
-        uint indexCount,
-        uint firstIndex,
-        int vertexOffset,
-        uint firstInstance);
-}
-
 /// <summary>
 /// Validates render pass state with full validation checks.
 /// </summary>
-public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
+internal struct RenderPassValidator
 {
     private const int MaxVertexBufferSlots = 8;
 
     private uint _verticesCount;
     private GpuIndexBuffer? _indexBuffer;
     private GraphicsPipeline? _graphicsPipeline;
-    private readonly CommandBuffer _commandBuffer;
 
     // Track bound vertex types per slot (up to 8 slots should be plenty)
     private VertexTypeId _slot0Type;
@@ -92,21 +26,10 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
     private ShaderCommon.StorageBufferElementSizes _vertexStorageBufferElementSizes;
     private ShaderCommon.StorageBufferElementSizes _fragmentStorageBufferElementSizes;
 
-    private RenderPassValidator(CommandBuffer commandBuffer)
-    {
-        _commandBuffer = commandBuffer;
-    }
-
-    public static RenderPassValidator Create(CommandBuffer commandBuffer)
-    {
-        return new RenderPassValidator(commandBuffer);
-    }
-
-    public void OnBindGraphicsPipeline(RenderPass<RenderPassValidator> renderPass, GraphicsPipeline graphicsPipeline)
+    public void OnBindGraphicsPipeline(DepthBufferFormat renderPassFormat, GraphicsPipeline graphicsPipeline)
     {
         _graphicsPipeline = graphicsPipeline;
 
-        DepthBufferFormat renderPassFormat = renderPass.DepthBufferFormat;
         DepthBufferFormat pipelineFormat = graphicsPipeline.DepthBufferFormat;
 
         if (renderPassFormat != pipelineFormat)
@@ -129,7 +52,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         _fragmentStorageBufferElementSizes = default;
     }
 
-    public void OnBindVertexBuffer<TVertexType>(RenderPass<RenderPassValidator> renderPass, uint slot, GpuVertexBuffer<TVertexType> buffer)
+    public void OnBindVertexBuffer<TVertexType>(uint slot, GpuVertexBuffer<TVertexType> buffer)
         where TVertexType : unmanaged, IVertexType
     {
         if (slot >= MaxVertexBufferSlots)
@@ -146,7 +69,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         SetSlotType(slot, typeId);
     }
 
-    public void OnBindIndexBuffer(RenderPass<RenderPassValidator> renderPass, GpuIndexBuffer buffer)
+    public void OnBindIndexBuffer(GpuIndexBuffer buffer)
     {
         _indexBuffer = buffer;
     }
@@ -182,15 +105,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         };
     }
 
-    public void OnBindVertexSamplers(RenderPass<RenderPassValidator> renderPass, uint slot, int samplerCount)
-    {
-    }
-
-    public void OnBindFragmentSamplers(RenderPass<RenderPassValidator> renderPass, uint slot, int samplerCount)
-    {
-    }
-
-    public void OnBindVertexStorageBuffers(RenderPass<RenderPassValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
+    public void OnBindVertexStorageBuffers(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
     {
         for (int i = 0; i < buffers.Length; i++)
         {
@@ -198,17 +113,12 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         }
     }
 
-    public void OnBindFragmentStorageBuffers(RenderPass<RenderPassValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
+    public void OnBindFragmentStorageBuffers(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
     {
         for (int i = 0; i < buffers.Length; i++)
         {
             _fragmentStorageBufferElementSizes = SetStorageBufferSlotSize(_fragmentStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
-    }
-
-    public void OnSetScissor(RenderPass<RenderPassValidator> renderPass, Rectangle scissor)
-    {
-        ValidateScissorSize(scissor);
     }
 
     // A rectangle outside the target is clipped to it by SetScissor, but a negative size cannot be
@@ -223,22 +133,22 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         }
     }
 
-    public void OnDrawPrimitive(RenderPass<RenderPassValidator> renderPass, uint firstInstance)
+    public readonly void OnDrawPrimitive(in CommandBufferState commandBuffer, uint firstInstance)
     {
-        ValidateDrawState(renderPass);
+        ValidateDrawState(commandBuffer);
         // SDL's first_vertex restriction is safe here because DrawPrimitive currently
         // hardcodes first_vertex to 0 in RenderPass.DrawPrimitiveInstanced.
         ValidateSystemValueInputs(firstInstance);
     }
 
-    public void OnDrawIndexedPrimitive(
-        RenderPass<RenderPassValidator> renderPass,
+    public readonly void OnDrawIndexedPrimitive(
+        in CommandBufferState commandBuffer,
         uint indexCount,
         uint firstIndex,
         int vertexOffset,
         uint firstInstance)
     {
-        ValidateDrawState(renderPass);
+        ValidateDrawState(commandBuffer);
         ValidateSystemValueInputs(firstInstance);
         ValidateVertexOffset(vertexOffset);
 
@@ -267,7 +177,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         }
     }
 
-    private void ValidateDrawState(RenderPass<RenderPassValidator> renderPass)
+    private readonly void ValidateDrawState(in CommandBufferState commandBuffer)
     {
         if (_graphicsPipeline == null)
         {
@@ -301,15 +211,15 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
 
         ShaderBindingLayoutValidator.ValidateBindingCounts(
             _graphicsPipeline.ShaderProgram.FragmentShader.BindingLayout.BindingCounts,
-            renderPass.FragmentShaderBindingCounts);
+            commandBuffer.RenderPass.FragmentShaderBindingCounts);
 
         ShaderBindingLayoutValidator.ValidateUniformSlotSizes(
             _graphicsPipeline.ShaderProgram.FragmentShader.BindingLayout.UniformSlotSizes,
-            _commandBuffer.FragmentShaderUniformSlotSizes);
+            commandBuffer.FragmentShaderUniformSlotSizes);
 
         ShaderBindingLayoutValidator.ValidateUniformSlotSizes(
             _graphicsPipeline.ShaderProgram.VertexShader.BindingLayout.UniformSlotSizes,
-            _commandBuffer.VertexShaderUniformSlotSizes);
+            commandBuffer.VertexShaderUniformSlotSizes);
 
         ShaderBindingLayoutValidator.ValidateStorageBufferElementSizes("Vertex",
             _graphicsPipeline.ShaderProgram.VertexShader.BindingLayout.StorageBufferElementSizes,
@@ -332,7 +242,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         };
     }
 
-    private void ValidateSystemValueInputs(uint firstInstance)
+    private readonly void ValidateSystemValueInputs(uint firstInstance)
     {
         if (_graphicsPipeline == null)
         {
@@ -350,7 +260,7 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
         }
     }
 
-    private void ValidateVertexOffset(int vertexOffset)
+    private readonly void ValidateVertexOffset(int vertexOffset)
     {
         if (_graphicsPipeline == null)
         {
@@ -366,62 +276,5 @@ public struct RenderPassValidator : IRenderPassValidator<RenderPassValidator>
                 "vertexOffset must be 0 when the bound vertex shader uses SV_VertexID. " +
                 "SDL GPU does not define built-in vertex IDs consistently for non-zero vertex offset values.");
         }
-    }
-}
-
-/// <summary>
-/// No-op validator that performs no validation. Useful for release builds or performance-critical code.
-/// </summary>
-public struct NullRenderPassValidator : IRenderPassValidator<NullRenderPassValidator>
-{
-    public static NullRenderPassValidator Create(CommandBuffer commandBuffer)
-    {
-        return new NullRenderPassValidator();
-    }
-
-    public void OnBindGraphicsPipeline(RenderPass<NullRenderPassValidator> renderPass, GraphicsPipeline graphicsPipeline)
-    {
-    }
-
-    public void OnBindVertexBuffer<TVertexType>(RenderPass<NullRenderPassValidator> renderPass, uint slot, GpuVertexBuffer<TVertexType> buffer)
-        where TVertexType : unmanaged, IVertexType
-    {
-    }
-
-    public void OnBindIndexBuffer(RenderPass<NullRenderPassValidator> renderPass, GpuIndexBuffer buffer)
-    {
-    }
-
-    public void OnBindVertexSamplers(RenderPass<NullRenderPassValidator> renderPass, uint slot, int samplerCount)
-    {
-    }
-
-    public void OnBindFragmentSamplers(RenderPass<NullRenderPassValidator> renderPass, uint slot, int samplerCount)
-    {
-    }
-
-    public void OnBindVertexStorageBuffers(RenderPass<NullRenderPassValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
-    {
-    }
-
-    public void OnBindFragmentStorageBuffers(RenderPass<NullRenderPassValidator> renderPass, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
-    {
-    }
-
-    public void OnSetScissor(RenderPass<NullRenderPassValidator> renderPass, Rectangle scissor)
-    {
-    }
-
-    public void OnDrawPrimitive(RenderPass<NullRenderPassValidator> renderPass, uint firstInstance)
-    {
-    }
-
-    public void OnDrawIndexedPrimitive(
-        RenderPass<NullRenderPassValidator> renderPass,
-        uint indexCount,
-        uint firstIndex,
-        int vertexOffset,
-        uint firstInstance)
-    {
     }
 }

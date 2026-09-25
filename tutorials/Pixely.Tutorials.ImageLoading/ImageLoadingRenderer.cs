@@ -23,9 +23,9 @@ public class ImageLoadingRenderer : IRenderer<BasicRenderContext>
         _sampler = sampler;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

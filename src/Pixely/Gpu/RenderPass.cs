@@ -1,72 +1,158 @@
-using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.Gpu;
 
-public class RenderPass<TValidator> : IRenderPass
-    where TValidator : IRenderPassValidator<TValidator>
+/// <summary>
+/// A render pass open on a <see cref="CommandBuffer"/>. It holds no state of its own: the pass state lives on the command buffer,
+/// which allows one open pass at a time, so copies of this handle all act on the same pass. Using a handle after its pass was
+/// disposed throws <see cref="ObjectDisposedException"/>, and disposing it again does nothing.
+/// </summary>
+public readonly ref struct RenderPass : IDisposable
 {
-    private Pointer<SDL_GPURenderPass> _nativePointer;
-    private uint _verticesCount = 0;
-    private GpuIndexBuffer? _indexBuffer;
-    private TValidator _validator;
+    private readonly ref CommandBufferState _commandBuffer;
+    private readonly uint _passNumber;
 
-    private ShaderBindingCounts _fragmentShaderBindingCounts;
-    private ShaderBindingCounts _vertexShaderBindingCounts;
+    private RenderPass(ref CommandBufferState commandBuffer, uint passNumber)
+    {
+        _commandBuffer = ref commandBuffer;
+        _passNumber = passNumber;
+    }
 
-    public ShaderBindingCounts FragmentShaderBindingCounts => _fragmentShaderBindingCounts;
-    public ShaderBindingCounts VertexShaderBindingCounts => _vertexShaderBindingCounts;
-    public DepthBufferFormat DepthBufferFormat { get; }
+    public ShaderBindingCounts FragmentShaderBindingCounts => OpenState().FragmentShaderBindingCounts;
+    public ShaderBindingCounts VertexShaderBindingCounts => OpenState().VertexShaderBindingCounts;
+    public DepthBufferFormat DepthBufferFormat => OpenState().DepthBufferFormat;
 
     /// <summary>
     /// The area every attachment of this pass covers, which is the smallest of them.
     /// It is what <see cref="SetScissor"/> clips to and what <see cref="ClearScissor"/> restores.
     /// </summary>
-    public ShortSize TargetSize { get; }
+    public ShortSize TargetSize => OpenState().TargetSize;
 
-    internal RenderPass(
-        CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
-        DepthBufferFormat depthBufferFormat,
-        ShortSize targetSize)
+    internal static RenderPass Begin(
+        ref CommandBufferState commandBuffer,
+        scoped ReadOnlySpan<Texture> colorTargets,
+        scoped ReadOnlySpan<ColorTargetSettings> colorTargetSettings,
+        Texture? depthBuffer,
+        DepthBufferSettings depthBufferSettings)
     {
-        _nativePointer = nativePointer;
-        DepthBufferFormat = depthBufferFormat;
-        TargetSize = targetSize;
-        _validator = TValidator.Create(commandBuffer);
+        commandBuffer.ThrowIfDisposed();
+        commandBuffer.ThrowIfPassOpen();
+
+        if (colorTargetSettings.Length != colorTargets.Length)
+        {
+            throw new ArgumentException($"{colorTargets.Length} color targets need {colorTargets.Length} settings, but {colorTargetSettings.Length} were given.", nameof(colorTargetSettings));
+        }
+
+        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
+
+        for (int i = 0; i < colorTargets.Length; i++)
+        {
+            ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
+
+            colorTargetInfos[i] = new SDL_GPUColorTargetInfo
+            {
+                texture = colorTargets[i].SdlGpuTexture,
+                clear_color = colorTargetSetting.ClearColorValue,
+                load_op = (SDL_GPULoadOp)colorTargetSetting.LoadOperation,
+                store_op = (SDL_GPUStoreOp)colorTargetSetting.StoreOperation
+            };
+        }
+
+        Pointer<SDL_GPURenderPass> nativePointer;
+
+        unsafe
+        {
+            fixed (SDL_GPUColorTargetInfo* colorTargetInfosPtr = colorTargetInfos)
+            {
+                if (depthBuffer == null)
+                {
+                    nativePointer = SDL3.SDL_BeginGPURenderPass(commandBuffer.SdlGpuCommandBuffer, colorTargetInfosPtr, (uint)colorTargetInfos.Length, null);
+                }
+                else
+                {
+                    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo = new SDL_GPUDepthStencilTargetInfo
+                    {
+                        texture = depthBuffer.SdlGpuTexture,
+                        clear_depth = depthBufferSettings.ClearDepthValue,
+                        load_op = (SDL_GPULoadOp)depthBufferSettings.DepthBufferLoadOperation,
+                        store_op = (SDL_GPUStoreOp)depthBufferSettings.DepthBufferStoreOperation,
+                        stencil_load_op = (SDL_GPULoadOp)depthBufferSettings.StencilLoadOperation,
+                        stencil_store_op = (SDL_GPUStoreOp)depthBufferSettings.StencilStoreOperation,
+                        clear_stencil = depthBufferSettings.ClearStencilValue
+                    };
+
+                    nativePointer = SDL3.SDL_BeginGPURenderPass(commandBuffer.SdlGpuCommandBuffer, colorTargetInfosPtr, (uint)colorTargetInfos.Length, &depthStencilTargetInfo);
+                }
+            }
+        }
+
+        SdlError.ThrowOnNull(nativePointer);
+
+        uint passNumber = commandBuffer.OpenNextPass(OpenPassKind.Render);
+        commandBuffer.RenderPass = new RenderPassState
+        {
+            NativePointer = nativePointer,
+            DepthBufferFormat = depthBuffer != null ? (DepthBufferFormat)depthBuffer.Format : DepthBufferFormat.None,
+            TargetSize = CalculateTargetSize(colorTargets, depthBuffer)
+        };
+
+        return new RenderPass(ref commandBuffer, passNumber);
+    }
+
+    // A pass can only safely address the area every attachment shares, so the scissor bounds
+    // are the smallest attachment, depth included.
+    private static ShortSize CalculateTargetSize(ReadOnlySpan<Texture> colorTargets, Texture? depthBuffer)
+    {
+        ushort width = ushort.MaxValue;
+        ushort height = ushort.MaxValue;
+
+        foreach (Texture colorTarget in colorTargets)
+        {
+            width = Math.Min(width, colorTarget.Size.Width);
+            height = Math.Min(height, colorTarget.Size.Height);
+        }
+
+        if (depthBuffer != null)
+        {
+            width = Math.Min(width, depthBuffer.Size.Width);
+            height = Math.Min(height, depthBuffer.Size.Height);
+        }
+
+        return new ShortSize(width, height);
     }
 
     public void BindGraphicsPipeline(GraphicsPipeline graphicsPipeline)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnBindGraphicsPipeline(this, graphicsPipeline);
+        state.Validator.OnBindGraphicsPipeline(state.DepthBufferFormat, graphicsPipeline);
 
         unsafe
         {
-            SDL3.SDL_BindGPUGraphicsPipeline(_nativePointer, graphicsPipeline.Pointer);
+            SDL3.SDL_BindGPUGraphicsPipeline(state.NativePointer, graphicsPipeline.Pointer);
         }
     }
     
     public void BindVertexBuffer<TVertexType>(uint slot, GpuVertexBuffer<TVertexType> buffer)
         where TVertexType : unmanaged, IVertexType
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnBindVertexBuffer(this, slot, buffer);
+        state.Validator.OnBindVertexBuffer(slot, buffer);
 
         // Only update vertex count from slot 0 (the per-vertex buffer)
         if (slot == 0)
         {
-            _verticesCount = (uint)buffer.BufferSize;
+            state.VerticesCount = (uint)buffer.BufferSize;
         }
 
         unsafe
         {
             SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlVertexBuffer, offset = 0 };
-            SDL3.SDL_BindGPUVertexBuffers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
+            SDL3.SDL_BindGPUVertexBuffers(state.NativePointer, slot, &sdlGpuBufferBinding, 1);
         }
     }
 
@@ -78,31 +164,29 @@ public class RenderPass<TValidator> : IRenderPass
 
     public void BindIndexBuffer(GpuIndexBuffer buffer)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnBindIndexBuffer(this, buffer);
-        _indexBuffer = buffer;
+        state.Validator.OnBindIndexBuffer(buffer);
+        state.IndexBuffer = buffer;
 
         unsafe
         {
             SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlBuffer, offset = 0 };
-            SDL3.SDL_BindGPUIndexBuffer(_nativePointer, &sdlGpuBufferBinding, GetSdlIndexElementSize(buffer.ElementSize));
+            SDL3.SDL_BindGPUIndexBuffer(state.NativePointer, &sdlGpuBufferBinding, GetSdlIndexElementSize(buffer.ElementSize));
         }
     }
 
     public void BindVertexSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
         foreach (Texture texture in textures)
         {
             texture.ThrowIfDisposed();
         }
         
-        byte numSamplers = (byte)Math.Max(_vertexShaderBindingCounts.NumSamplers, slot + textures.Length);
-        _vertexShaderBindingCounts = _vertexShaderBindingCounts with { NumSamplers = numSamplers };
-
-        _validator.OnBindVertexSamplers(this, slot, textures.Length);
+        byte numSamplers = (byte)Math.Max(state.VertexShaderBindingCounts.NumSamplers, slot + textures.Length);
+        state.VertexShaderBindingCounts = state.VertexShaderBindingCounts with { NumSamplers = numSamplers };
 
         unsafe {
             SDL_GPUTextureSamplerBinding* sdlGpuBufferBindings =
@@ -114,23 +198,21 @@ public class RenderPass<TValidator> : IRenderPass
                     { texture = textures[i].SdlGpuTexture, sampler = sampler.Pointer };
             }
 
-            SDL3.SDL_BindGPUVertexSamplers(_nativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
+            SDL3.SDL_BindGPUVertexSamplers(state.NativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
         }
     }
 
     public void BindFragmentSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
         foreach (Texture texture in textures)
         {
             texture.ThrowIfDisposed();
         }
         
-        byte numSamplers = (byte)Math.Max(_fragmentShaderBindingCounts.NumSamplers, slot + textures.Length);
-        _fragmentShaderBindingCounts = _fragmentShaderBindingCounts with { NumSamplers = numSamplers };
-
-        _validator.OnBindFragmentSamplers(this, slot, textures.Length);
+        byte numSamplers = (byte)Math.Max(state.FragmentShaderBindingCounts.NumSamplers, slot + textures.Length);
+        state.FragmentShaderBindingCounts = state.FragmentShaderBindingCounts with { NumSamplers = numSamplers };
 
         unsafe {
             SDL_GPUTextureSamplerBinding* sdlGpuBufferBindings =
@@ -142,27 +224,23 @@ public class RenderPass<TValidator> : IRenderPass
                     { texture = textures[i].SdlGpuTexture, sampler = sampler.Pointer };
             }
 
-            SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
+            SDL3.SDL_BindGPUFragmentSamplers(state.NativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
         }
     }
 
     public void BindFragmentSampler(Texture texture, Sampler sampler)
     {
-        ThrowIfDisposed();
-
         ReadOnlySpan<Texture> textures = [texture];
         BindFragmentSamplers(textures, sampler, 0);
     }
 
     public void BindFragmentSamplerArray(TextureArray textureArray, Sampler sampler, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
         textureArray.ThrowIfDisposed();
 
-        byte numSamplers = (byte)Math.Max(_fragmentShaderBindingCounts.NumSamplers, slot + 1);
-        _fragmentShaderBindingCounts = _fragmentShaderBindingCounts with { NumSamplers = numSamplers };
-
-        _validator.OnBindFragmentSamplers(this, slot, 1);
+        byte numSamplers = (byte)Math.Max(state.FragmentShaderBindingCounts.NumSamplers, slot + 1);
+        state.FragmentShaderBindingCounts = state.FragmentShaderBindingCounts with { NumSamplers = numSamplers };
 
         unsafe
         {
@@ -172,18 +250,18 @@ public class RenderPass<TValidator> : IRenderPass
                 sampler = sampler.Pointer
             };
 
-            SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
+            SDL3.SDL_BindGPUFragmentSamplers(state.NativePointer, slot, &sdlGpuBufferBinding, 1);
         }
     }
 
     public void BindVertexStorageBuffers(ReadOnlySpan<GpuStorageBuffer> buffers, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        byte numStorageBuffers = (byte)Math.Max(_vertexShaderBindingCounts.NumStorageBuffers, slot + buffers.Length);
-        _vertexShaderBindingCounts = _vertexShaderBindingCounts with { NumStorageBuffers = numStorageBuffers };
+        byte numStorageBuffers = (byte)Math.Max(state.VertexShaderBindingCounts.NumStorageBuffers, slot + buffers.Length);
+        state.VertexShaderBindingCounts = state.VertexShaderBindingCounts with { NumStorageBuffers = numStorageBuffers };
 
-        _validator.OnBindVertexStorageBuffers(this, slot, buffers);
+        state.Validator.OnBindVertexStorageBuffers(slot, buffers);
 
         unsafe
         {
@@ -194,26 +272,24 @@ public class RenderPass<TValidator> : IRenderPass
                 sdlBuffers[i] = buffers[i].SdlBuffer;
             }
 
-            SDL3.SDL_BindGPUVertexStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL3.SDL_BindGPUVertexStorageBuffers(state.NativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }
 
     public void BindVertexStorageBuffer(GpuStorageBuffer buffer, uint slot = 0)
     {
-        ThrowIfDisposed();
-
         ReadOnlySpan<GpuStorageBuffer> buffers = [buffer];
         BindVertexStorageBuffers(buffers, slot);
     }
 
     public void BindFragmentStorageBuffers(ReadOnlySpan<GpuStorageBuffer> buffers, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        byte numStorageBuffers = (byte)Math.Max(_fragmentShaderBindingCounts.NumStorageBuffers, slot + buffers.Length);
-        _fragmentShaderBindingCounts = _fragmentShaderBindingCounts with { NumStorageBuffers = numStorageBuffers };
+        byte numStorageBuffers = (byte)Math.Max(state.FragmentShaderBindingCounts.NumStorageBuffers, slot + buffers.Length);
+        state.FragmentShaderBindingCounts = state.FragmentShaderBindingCounts with { NumStorageBuffers = numStorageBuffers };
 
-        _validator.OnBindFragmentStorageBuffers(this, slot, buffers);
+        state.Validator.OnBindFragmentStorageBuffers(slot, buffers);
 
         unsafe
         {
@@ -224,34 +300,32 @@ public class RenderPass<TValidator> : IRenderPass
                 sdlBuffers[i] = buffers[i].SdlBuffer;
             }
 
-            SDL3.SDL_BindGPUFragmentStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL3.SDL_BindGPUFragmentStorageBuffers(state.NativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }
 
     public void BindFragmentStorageBuffer(GpuStorageBuffer buffer, uint slot = 0)
     {
-        ThrowIfDisposed();
-
         ReadOnlySpan<GpuStorageBuffer> buffers = [buffer];
         BindFragmentStorageBuffers(buffers, slot);
     }
 
     public void SetStencilReference(byte reference)
     {
-        ThrowIfDisposed();
-        unsafe { SDL3.SDL_SetGPUStencilReference(_nativePointer, reference); }
+        ref RenderPassState state = ref OpenState();
+        unsafe { SDL3.SDL_SetGPUStencilReference(state.NativePointer, reference); }
     }
 
     public void SetScissor(Rectangle scissor)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnSetScissor(this, scissor);
+        RenderPassValidator.ValidateScissorSize(scissor);
 
         // A scissor restricts drawing to an area, so anything outside the pass is simply not part
         // of it. Intersecting rather than rejecting also keeps the rectangle within what the
         // backends accept, which an arbitrary caller rectangle is not.
-        Rectangle clipped = scissor.Intersect(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
+        Rectangle clipped = scissor.Intersect(new Rectangle(0, 0, state.TargetSize.Width, state.TargetSize.Height));
 
         unsafe
         {
@@ -263,13 +337,14 @@ public class RenderPass<TValidator> : IRenderPass
                 h = clipped.Height
             };
 
-            SDL3.SDL_SetGPUScissor(_nativePointer, &sdlScissor);
+            SDL3.SDL_SetGPUScissor(state.NativePointer, &sdlScissor);
         }
     }
 
     public void ClearScissor()
     {
-        SetScissor(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
+        ShortSize targetSize = TargetSize;
+        SetScissor(new Rectangle(0, 0, targetSize.Width, targetSize.Height));
     }
 
     public void DrawPrimitive()
@@ -284,19 +359,19 @@ public class RenderPass<TValidator> : IRenderPass
 
     public void DrawPrimitiveInstanced(uint instanceCount, uint firstInstance)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnDrawPrimitive(this, firstInstance);
+        state.Validator.OnDrawPrimitive(_commandBuffer, firstInstance);
 
         unsafe
         {
-            SDL3.SDL_DrawGPUPrimitives(_nativePointer, _verticesCount, instanceCount, 0, firstInstance);
+            SDL3.SDL_DrawGPUPrimitives(state.NativePointer, state.VerticesCount, instanceCount, 0, firstInstance);
         }
     }
 
     public void DrawIndexedPrimitive()
     {
-        uint indexCount = (uint)(_indexBuffer?.Size ?? 0);
+        uint indexCount = (uint)(OpenState().IndexBuffer?.Size ?? 0);
         DrawIndexedPrimitive(indexCount);
     }
 
@@ -312,7 +387,7 @@ public class RenderPass<TValidator> : IRenderPass
 
     public void DrawIndexedPrimitiveInstanced(uint instanceCount, uint firstInstance)
     {
-        uint indexCount = (uint)(_indexBuffer?.Size ?? 0);
+        uint indexCount = (uint)(OpenState().IndexBuffer?.Size ?? 0);
         DrawIndexedPrimitiveInstanced(indexCount, instanceCount, 0, 0, firstInstance);
     }
 
@@ -323,14 +398,14 @@ public class RenderPass<TValidator> : IRenderPass
         int vertexOffset,
         uint firstInstance)
     {
-        ThrowIfDisposed();
+        ref RenderPassState state = ref OpenState();
 
-        _validator.OnDrawIndexedPrimitive(this, indexCount, firstIndex, vertexOffset, firstInstance);
+        state.Validator.OnDrawIndexedPrimitive(_commandBuffer, indexCount, firstIndex, vertexOffset, firstInstance);
 
         unsafe
         {
             SDL3.SDL_DrawGPUIndexedPrimitives(
-                _nativePointer,
+                state.NativePointer,
                 indexCount,
                 instanceCount,
                 firstIndex,
@@ -341,27 +416,32 @@ public class RenderPass<TValidator> : IRenderPass
 
     public bool IsDefault()
     {
-        return _nativePointer.IsNull;
+        return Unsafe.IsNullRef(ref _commandBuffer);
     }
-    
+
     public void Dispose()
     {
-        if (!_nativePointer.IsNull)
+        if (Unsafe.IsNullRef(ref _commandBuffer) || !_commandBuffer.IsPassOpen(OpenPassKind.Render, _passNumber))
         {
-            unsafe
-            {
-                SDL3.SDL_EndGPURenderPass(_nativePointer);
-            }
-            _nativePointer = Pointer<SDL_GPURenderPass>.Null;
+            return;
         }
+
+        unsafe
+        {
+            SDL3.SDL_EndGPURenderPass(_commandBuffer.RenderPass.NativePointer);
+        }
+
+        _commandBuffer.ClosePass();
     }
-    
-    private void ThrowIfDisposed()
+
+    private ref RenderPassState OpenState()
     {
-        if (_nativePointer.IsNull)
+        if (Unsafe.IsNullRef(ref _commandBuffer) || !_commandBuffer.IsPassOpen(OpenPassKind.Render, _passNumber))
         {
             throw new ObjectDisposedException(nameof(RenderPass));
         }
+
+        return ref _commandBuffer.RenderPass;
     }
 
     private static SDL_GPUIndexElementSize GetSdlIndexElementSize(IndexElementSize elementSize)
@@ -372,20 +452,5 @@ public class RenderPass<TValidator> : IRenderPass
             IndexElementSize.UInt32 => SDL_GPUIndexElementSize.SDL_GPU_INDEXELEMENTSIZE_32BIT,
             _ => throw new ArgumentOutOfRangeException(nameof(elementSize), elementSize, null)
         };
-    }
-}
-
-/// <summary>
-/// Non-generic render pass using the default RenderPassValidator with full validation checks.
-/// </summary>
-public class RenderPass : RenderPass<RenderPassValidator>
-{
-    internal RenderPass(
-        CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
-        DepthBufferFormat depthBufferFormat,
-        ShortSize targetSize)
-        : base(commandBuffer, nativePointer, depthBufferFormat, targetSize)
-    {
     }
 }

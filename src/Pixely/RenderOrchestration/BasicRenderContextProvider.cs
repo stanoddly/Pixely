@@ -12,13 +12,13 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
         _gpuDevice = gpuDevice;
     }
 
-    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out BasicRenderContext renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+        if (!window.TryWaitAndAcquireSwapchainTexture(ref commandBuffer, out SwapchainTexture swapchainTexture))
         {
             commandBuffer.Dispose();
-            renderContext = null;
+            renderContext = default;
             return false;
         }
 

@@ -18,9 +18,9 @@ public class TransparentWindowRenderer : IRenderer<BasicRenderContext>
         _bottomRightQuad = bottomRightQuad;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(new ColorTargetSettings
             {

@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-25: The render path records through ref structs and reuses its upload transfer buffers
+
+`CommandBuffer`, the render contexts, `RenderPassBuilder`, `RenderPass` and `ComputePass` are `ref struct`s. `GpuMemorySystem` writes uploads into transfer buffers it keeps across submissions.
+
+- A render path that allocates every frame is a defect on the Raspberry Pi 5 target (#468).
+- Reusing pooled objects instead keeps a stale reference working: code that kept last frame's object would act on the current frame instead of throwing. A `ref struct` cannot outlive the method that holds it.
+- A `ref` field cannot point to a `ref struct` (CS9050), so the passes cannot refer to `CommandBuffer`. The pass state lives in a plain struct inside the command buffer, and a pass is a handle to it. SDL allows one open pass per command buffer, so one slot is enough, and a pass number detects a handle kept after its pass ended.
+- A `using` local cannot be passed by `ref` (CS1657), and `using (variable)` disposes a copy taken at its start. Passes are therefore handles passed by value, which keeps `using RenderPass` working, and the coordinator disposes the context in `finally`.
+- SDL's `cycle = true` would reuse one transfer buffer too, but it adds hidden copies without a cap and never frees them before the buffer. Pixely's slots are reused once their fence signals. The fence is only queried, because waiting suspends the wasm stack in the browser, and the swapchain acquire already limits the submissions in flight.
+
+Cost: a `CommandBuffer` or context copied by value keeps its own state, so submitting both submits the native buffer twice; nothing but documentation prevents the copy. None of these types can be stored in a field, captured by a lambda, used across an `await` or mocked. A render context cannot derive from `BasicRenderContext` and holds one instead. A method taking the command buffer by `ref` and a pass must mark the pass `scoped`. `IRenderPass`, `IComputePass`, `IRenderPassBuilder` and `CommandBuffer.CreateCopyPass` are gone. A window hands out the same `SwapchainTexture` every frame, so one kept from an earlier frame refers to the current frame's texture. The slots can hold up to 8 MiB, and an upload over 1 MiB, one that does not fit a slot already at 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
+
 ## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
 
 A browser app links a prebuilt Emscripten archive, such as `libXDL_wgpu.a` from a GitHub release, with a `NativeUrlReference` that names the URL and the file's SHA-256. The SDK downloads it into a cache in the project's `obj` folder and makes it a `NativeFileReference`.

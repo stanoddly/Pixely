@@ -6,7 +6,7 @@ namespace Pixely.RenderOrchestration;
 public static class RenderingExtensions
 {
     public static ServiceCollection UseWindowRendering<TRenderContext>(this ServiceCollection services, ViewScope viewScope = default)
-        where TRenderContext : IRenderContext
+        where TRenderContext : IRenderContext, allows ref struct
     {
         ArgumentNullException.ThrowIfNull(services);
         services.UseGpu();
@@ -39,7 +39,7 @@ public static class RenderingExtensions
     }
 
     private static void ConfigureWindowRendering<TRenderContext>(ServiceCollection services, ViewScope viewScope)
-        where TRenderContext : IRenderContext
+        where TRenderContext : IRenderContext, allows ref struct
     {
         services.AddRegistry<IRenderer<TRenderContext>>(static renderer => renderer.RenderOrder);
         services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(

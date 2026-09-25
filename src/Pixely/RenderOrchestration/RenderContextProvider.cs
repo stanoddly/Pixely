@@ -3,9 +3,9 @@ using System.Diagnostics.CodeAnalysis;
 namespace Pixely.RenderOrchestration;
 
 public abstract class RenderContextProvider<TRenderContext>
-    where TRenderContext : IRenderContext
+    where TRenderContext : IRenderContext, allows ref struct
 {
-    public abstract bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TRenderContext? renderContext);
+    public abstract bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out TRenderContext renderContext);
 
     /// <summary>
     /// The size of the colour target <see cref="TryCreateRenderContext"/> will produce, answered

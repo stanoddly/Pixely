@@ -9,7 +9,7 @@ public interface IRenderCoordinator
 }
 
 public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
-    where TRenderContext : IRenderContext
+    where TRenderContext : IRenderContext, allows ref struct
 {
     private readonly Window _window;
     private readonly GpuMemorySystem _gpuMemorySystem;
@@ -35,17 +35,22 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             return;
         }
 
-        using (renderContext)
+        // Not a using statement: it would dispose a copy of the context taken before the renderers ran.
+        try
         {
             foreach (IRenderer<TRenderContext> renderer in _renderers)
             {
                 if (renderer.ViewScope == _window.ViewScope)
                 {
-                    renderer.Render(renderContext);
+                    renderer.Render(ref renderContext);
                 }
             }
 
             _gpuMemorySystem.Submit();
+        }
+        finally
+        {
+            renderContext.Dispose();
         }
     }
 }

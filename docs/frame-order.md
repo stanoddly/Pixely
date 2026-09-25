@@ -58,7 +58,7 @@ public class DebugOverlayRenderer : IRenderer<BasicRenderContext>
 {
     public int RenderOrder => RenderOrders.Ui + 1;
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
     }
 }

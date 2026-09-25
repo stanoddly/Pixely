@@ -26,7 +26,7 @@ public class TextureArrayRenderer : IRenderer<BasicRenderContext>
         _sampler = sampler;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
         _time += 0.16f; // Approximate 60fps timestep
 
@@ -35,7 +35,7 @@ public class TextureArrayRenderer : IRenderer<BasicRenderContext>
 
         renderContext.CommandBuffer.PushFragmentUniformData(0, layerIndex);
 
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

@@ -14,18 +14,35 @@ Active rendering context. Created from CommandBuffer. Used for:
 - Drawing primitives
 - **Disposed to execute** - rendering happens on dispose
 
+## Stack-only types
+
+`CommandBuffer`, the render contexts, `RenderPassBuilder`, `RenderPass` and `ComputePass` are `ref struct`s, so rendering a
+frame allocates none of them. They cannot be stored in a field, captured by a lambda or used across an `await`.
+
+- **Pass `CommandBuffer` and render contexts by `ref`.** They hold their own state. A copy such as
+  `CommandBuffer copy = renderContext.CommandBuffer;` records on the same native command buffer but keeps its own state, and
+  submitting both submits the native buffer twice. Take a reference instead:
+  `ref CommandBuffer commandBuffer = ref renderContext.CommandBuffer;`.
+- **Pass `RenderPass` and `ComputePass` by value.** They are handles whose state lives on the command buffer, which allows one
+  open pass at a time. Every copy acts on the same pass. A handle used after its pass was disposed throws
+  `ObjectDisposedException`, and disposing it again does nothing.
+- **Mark a pass parameter `scoped`** when the method also takes the command buffer by `ref`:
+  `void Render(ref CommandBuffer commandBuffer, scoped RenderPass renderPass)`. Without it, the compiler assumes the pass could
+  be stored in the command buffer and rejects the call (CS8350).
+- **Use `using` declarations, not `using (existingVariable)`.** The statement form disposes a copy taken when it starts.
+
 ## Execution Model
 
 ### Pattern 1: Create Own RenderPass
 
 ```csharp
-public void Render(BasicRenderContext renderContext)
+public void Render(ref BasicRenderContext renderContext)
 {
     // 1. BEFORE RenderPass: Push uniforms that need to be outside the pass
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);
 
     // 2. CREATE RenderPass
-    using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+    using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
         .AddColorTarget(renderContext.SwapchainTexture)
         .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
         .Build();
@@ -44,7 +61,7 @@ public void Render(BasicRenderContext renderContext)
 Used by subrenderers that contribute to a larger multi-phase rendering pipeline (like deferred rendering). The parent system creates the RenderPass and calls multiple subrenderers that all draw into the same render targets.
 
 ```csharp
-public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+public void Render(ref CommandBuffer commandBuffer, scoped RenderPass renderPass)
 {
     // RenderPass already exists, don't create a new one
 
@@ -97,7 +114,7 @@ For multiple objects, rebind vertex buffers and push new uniforms between draws.
 ## RenderPassBuilder
 
 ```csharp
-new RenderPassBuilder(commandBuffer)
+new RenderPassBuilder(ref commandBuffer)
     .AddColorTarget(texture)                              // Output texture
     .SetSharedColorTargetSettings(ColorTargetSettings.Clear)  // Clear on start
     .Build()
@@ -108,7 +125,8 @@ new RenderPassBuilder(commandBuffer)
 - `Load` - Keep existing contents
 - Others may exist for different load/store operations
 
-Add multiple color targets for deferred rendering (G-buffer).
+Add multiple color targets for deferred rendering (G-buffer), up to SDL's limit of 8. The builder's methods return it by `ref`,
+so the chain fills one instance without copying it.
 
 ## Common Patterns
 

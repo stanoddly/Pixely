@@ -64,7 +64,7 @@ public static class UiExtensions
         bool clearTarget = false,
         float scale = 1f,
         Func<TRenderContext, Texture>? selectColorTarget = null)
-        where TRenderContext : IRenderContext
+        where TRenderContext : IRenderContext, allows ref struct
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
 
@@ -131,7 +131,7 @@ public static class UiExtensions
     internal static (UiRoot Root, Window Window, RenderContextProvider<TRenderContext> ContextProvider) ResolveUpdateTargets<TRenderContext>(
         ServiceProvider provider,
         ViewScope viewScope)
-        where TRenderContext : IRenderContext
+        where TRenderContext : IRenderContext, allows ref struct
     {
         // The scope has to be threaded through: GetWindow's viewScope parameter is defaulted, so
         // dropping it compiles and silently binds every window's UI to the first one.

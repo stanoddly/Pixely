@@ -1,6 +1,7 @@
 namespace Pixely.RenderOrchestration;
 
-public interface IRenderer<in TRenderContext>
+public interface IRenderer<TRenderContext>
+    where TRenderContext : allows ref struct
 {
     /// <summary>
     /// The order the renderer draws in relative to the other renderers. Lower numbers draw first.
@@ -8,12 +9,13 @@ public interface IRenderer<in TRenderContext>
     int RenderOrder => 0;
 
     ViewScope ViewScope => default;
-    void Render(TRenderContext renderContext);
+    void Render(ref TRenderContext renderContext);
 }
 
 public class NullRenderer<TRenderContext> : IRenderer<TRenderContext>
+    where TRenderContext : allows ref struct
 {
-    public void Render(TRenderContext renderContext)
+    public void Render(ref TRenderContext renderContext)
     {
     }
 }
