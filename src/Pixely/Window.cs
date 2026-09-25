@@ -413,6 +413,8 @@ public partial class Window : IDisposable
                 return false;
             }
 
+            commandBuffer.OnSwapchainTextureAcquired();
+
             TextureFormat textureFormat = (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
 
             swapchainTexture = UpdateSwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), textureFormat);

@@ -105,6 +105,9 @@ public class GpuMemorySystem: ICopyPass
             _copyPass.End();
             unsafe
             {
+                // The result is not checked: SDL refuses to cancel only after a swapchain acquire, which an upload command buffer
+                // never makes, or on another thread than the one that acquired it, and Pixely disposes this on the frame thread
+                // right before destroying the device.
                 SDL3.SDL_CancelGPUCommandBuffer(_sdlCommandBuffer);
             }
             _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;

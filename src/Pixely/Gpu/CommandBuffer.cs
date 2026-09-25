@@ -21,6 +21,9 @@ public class CommandBuffer: IDisposable
     // SDL allows one open pass per command buffer.
     private IDisposable? _openPass;
 
+    // SDL forbids cancelling once a swapchain texture is acquired, so a failure after the acquire has to submit instead.
+    private bool _hasSwapchainTexture;
+
     internal Pointer<SDL_GPUCommandBuffer> SdlGpuCommandBuffer
     {
         get => _sdlGpuCommandBuffer;
@@ -41,6 +44,12 @@ public class CommandBuffer: IDisposable
         _fragmentShaderUniformSlotSizes = default;
         _vertexShaderUniformSlotSizes = default;
         _openPass = null;
+        _hasSwapchainTexture = false;
+    }
+
+    internal void OnSwapchainTextureAcquired()
+    {
+        _hasSwapchainTexture = true;
     }
 
     public void Submit()
@@ -490,6 +499,22 @@ public class CommandBuffer: IDisposable
             }
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
             _gpuDevice.ReturnCommandBuffer(this);
+        }
+    }
+
+    /// <summary>
+    /// Gives up a command buffer whose recording failed: cancels it, or submits it when it holds a swapchain texture, which SDL
+    /// does not let it cancel. Used in failure paths, so it throws nothing about a pass left open.
+    /// </summary>
+    internal void CancelOrSubmit()
+    {
+        if (_hasSwapchainTexture)
+        {
+            SubmitEndingOpenPass();
+        }
+        else
+        {
+            Cancel();
         }
     }
 

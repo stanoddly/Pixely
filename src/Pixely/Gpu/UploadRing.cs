@@ -27,6 +27,9 @@ internal sealed class UploadRing : IDisposable
     private readonly List<Slot> _slots = new(MaxSlots);
     private Slot? _current;
 
+    // Whether the open submission already looked for a free slot, so that with all slots busy it queries their fences once.
+    private bool _slotSearched;
+
     internal UploadRing(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
@@ -43,6 +46,7 @@ internal sealed class UploadRing : IDisposable
     /// </summary>
     internal void EndSubmission(Pointer<SDL_GPUFence> fence)
     {
+        _slotSearched = false;
         if (_current != null)
         {
             _current.Fence = fence;
@@ -58,6 +62,7 @@ internal sealed class UploadRing : IDisposable
     /// <summary>The submission was cancelled, so nothing it wrote will be read.</summary>
     internal void CancelSubmission()
     {
+        _slotSearched = false;
         if (_current != null)
         {
             _current.IsWriting = false;
@@ -80,7 +85,12 @@ internal sealed class UploadRing : IDisposable
         }
 
         // A submission that only uploads textures or oversized data takes no slot, so it needs no fence.
-        _current ??= TakeFreeSlot();
+        if (_current == null && !_slotSearched)
+        {
+            _current = TakeFreeSlot();
+            _slotSearched = true;
+        }
+
         if (_current == null)
         {
             return ReserveTemporary(size);
@@ -137,6 +147,7 @@ internal sealed class UploadRing : IDisposable
 
         _slots.Clear();
         _current = null;
+        _slotSearched = false;
     }
 
     private Slot? TakeFreeSlot()

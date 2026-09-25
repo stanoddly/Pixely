@@ -5,7 +5,7 @@ namespace Pixely.RenderOrchestration;
 
 /// <summary>
 /// Provides a <see cref="BasicRenderContext"/>, or a context derived from it, for every frame without allocating one: it acquires
-/// the command buffer and the swapchain texture, cancels the command buffer when the acquire fails or throws, and hands the
+/// the command buffer and the swapchain texture, gives the command buffer up when the acquire fails or throws, and hands the
 /// same context out again once the previous frame disposed it. A derived provider says how the context is created and what
 /// it needs each frame.
 /// </summary>
@@ -23,6 +23,8 @@ public abstract class BasicRenderContextProvider<TRenderContext> : RenderContext
     public sealed override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TRenderContext? renderContext)
     {
         // The context comes first: once the swapchain texture is acquired, a failure can no longer cancel the command buffer.
+        // The coordinator disposes each context before asking for the next, so the reusable one is free. Were it not, the spare
+        // created here is dropped when the acquire fails, which loses nothing: a context's Dispose only submits its command buffer.
         TRenderContext context = _reusableContext is { IsInUse: false } ? _reusableContext : CreateRenderContext();
         _reusableContext ??= context;
 
@@ -32,15 +34,15 @@ public abstract class BasicRenderContextProvider<TRenderContext> : RenderContext
         {
             if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture))
             {
-                commandBuffer.Cancel();
+                commandBuffer.CancelOrSubmit();
                 renderContext = null;
                 return false;
             }
         }
         catch
         {
-            // Nothing was acquired, so cancelling is valid, and it returns the command buffer to the pool.
-            commandBuffer.Cancel();
+            // A window override can throw after its base implementation acquired the texture, and then only a submit is valid.
+            commandBuffer.CancelOrSubmit();
             throw;
         }
 

@@ -129,7 +129,7 @@ A provider for a context that is not a `BasicRenderContext` derives from `Render
 `TryCreateRenderContext` itself. When the swapchain acquire fails or throws, it cancels the command buffer, which returns it to
 the device's pool.
 
-`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. An override must not throw after its base implementation acquired the texture: the provider cancels the command buffer when the acquire throws, and SDL refuses to cancel once a swapchain texture is acquired. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See headless.md.
+`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `TryWaitAndAcquireSwapchainTexture` and `IsRenderable` are virtual. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, overrides them to hand out a texture instead of a swapchain image while the SDL window stays hidden, so a custom provider written against the window works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
