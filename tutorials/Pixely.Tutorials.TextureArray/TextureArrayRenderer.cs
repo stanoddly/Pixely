@@ -35,7 +35,7 @@ public class TextureArrayRenderer : IRenderer<BasicRenderContext>
 
         renderContext.CommandBuffer.PushFragmentUniformData(0, layerIndex);
 
-        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
+        using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

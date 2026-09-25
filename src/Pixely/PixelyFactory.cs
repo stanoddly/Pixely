@@ -184,7 +184,7 @@ public partial class PixelyFactory: IDisposable
         }
     }
 
-    private unsafe GpuDevice CreateGpuDeviceFromProperties(SDL_PropertiesID props)
+    private static unsafe GpuDevice CreateGpuDeviceFromProperties(SDL_PropertiesID props)
     {
         Pointer<SDL_GPUDevice> device = SDL3.SDL_CreateGPUDeviceWithProperties(props);
         if (device.IsNull)
@@ -192,7 +192,7 @@ public partial class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}");
         }
 
-        return new GpuDevice(device, reusesFrameObjects: !_config.EnableGpuValidation);
+        return new GpuDevice(device);
     }
 
     internal KeyboardService CreateKeyboardService(AppControl appControl)

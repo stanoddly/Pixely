@@ -16,23 +16,21 @@ Active rendering context. Created from CommandBuffer. Used for:
 
 ## Reused objects
 
-A frame allocates no command buffer, pass, pass builder, basic render context or swapchain texture: Pixely hands out the same
-objects again. `AcquireCommandBuffer` takes a command buffer from a pool on the device, and `Submit`, `SubmitAndAcquireFence`
-and `Cancel` return it. A command buffer reuses one render pass, one compute pass and one builder from
-`CreateRenderPassBuilder()`.
+A frame allocates no command buffer, pass, pass builder, basic render context or swapchain texture.
 
-This is the contract of an array from `ArrayPool`: an object must not be used after it went back.
+- `AcquireCommandBuffer` takes a command buffer from a pool on the device, and `Submit`, `SubmitAndAcquireFence` and `Cancel`
+  return it.
+- A command buffer hands out the same `RenderPass` for every render pass it begins, and the same `ComputePass` for every
+  compute pass. It allows one open pass at a time, so beginning another before disposing the first throws.
+- `RenderPassBuilder` is a `ref struct`: it lives on the stack, and its methods return it by `ref`, so the usual chain
+  allocates nothing. It cannot be stored in a field, captured by a lambda or used across an `await`.
+- `BasicRenderContextProvider` reuses its context, and a window reuses its `SwapchainTexture`, pointed at the current frame's
+  texture.
 
-- Do not keep a command buffer, pass or context past the frame, and do not dispose a command buffer after submitting it.
-  The next frame may already hold the same object, and a stale reference records into that frame's work instead of throwing.
-- Build a builder from `CreateRenderPassBuilder()` before asking for another one on the same command buffer.
-- A command buffer allows one open pass at a time. Beginning another before disposing the first throws.
-- `new RenderPassBuilder(commandBuffer)` still works, but allocates a builder every time.
-
-With GPU validation on (`PixelyConfig.EnableGpuValidation`, `PIXELY_GPU_VALIDATION=1`), nothing is reused: every call
-returns a new object, and one used after its command buffer was submitted, or after its pass was disposed, throws
-`ObjectDisposedException`. Turn validation on to find misuse. A swapchain texture is reused either way, since one kept from
-an earlier frame simply refers to the current frame's texture.
+This is the contract of an array from `ArrayPool`: an object must not be used after it went back. Do not keep a command
+buffer, pass or context past the frame, and do not dispose a command buffer after submitting it. A command buffer used after
+`Submit` throws `ObjectDisposedException` until it is acquired again, and a pass used after `Dispose` throws until its command
+buffer begins the next pass. A reference kept longer acts on whoever holds the object next.
 
 ## Execution Model
 
@@ -45,7 +43,7 @@ public void Render(BasicRenderContext renderContext)
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);
 
     // 2. CREATE RenderPass
-    using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
+    using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
         .AddColorTarget(renderContext.SwapchainTexture)
         .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
         .Build();
@@ -64,7 +62,7 @@ public void Render(BasicRenderContext renderContext)
 Used by subrenderers that contribute to a larger multi-phase rendering pipeline (like deferred rendering). The parent system creates the RenderPass and calls multiple subrenderers that all draw into the same render targets.
 
 ```csharp
-public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+public void Render(CommandBuffer commandBuffer, RenderPass renderPass)
 {
     // RenderPass already exists, don't create a new one
 
@@ -117,7 +115,7 @@ For multiple objects, rebind vertex buffers and push new uniforms between draws.
 ## RenderPassBuilder
 
 ```csharp
-commandBuffer.CreateRenderPassBuilder()
+new RenderPassBuilder(commandBuffer)
     .AddColorTarget(texture)                              // Output texture
     .SetSharedColorTargetSettings(ColorTargetSettings.Clear)  // Clear on start
     .Build()

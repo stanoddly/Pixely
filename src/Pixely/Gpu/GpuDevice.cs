@@ -22,12 +22,6 @@ public class GpuDevice : IDisposable
 
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; private set; }
 
-    /// <summary>
-    /// Whether command buffers, passes, pass builders, render contexts and swapchain textures are reused from frame to frame
-    /// instead of allocated. Off while GPU validation is on, so that an object used after it was returned throws.
-    /// </summary>
-    internal bool ReusesFrameObjects { get; }
-
     public string Driver { get; }
 
     public GpuMemoryStats MemoryStats
@@ -47,10 +41,9 @@ public class GpuDevice : IDisposable
         }
     }
 
-    internal GpuDevice(Pointer<SDL_GPUDevice> sdlGpuDevice, bool reusesFrameObjects)
+    internal GpuDevice(Pointer<SDL_GPUDevice> sdlGpuDevice)
     {
         SdlGpuDevice = sdlGpuDevice;
-        ReusesFrameObjects = reusesFrameObjects;
 
         unsafe
         {
@@ -86,20 +79,16 @@ public class GpuDevice : IDisposable
 
     /// <summary>
     /// A command buffer to record one submission. Submitting or cancelling it returns it to the device, which hands the same
-    /// object out again unless GPU validation is on: like an array from <c>ArrayPool</c>, it must not be used after that.
-    /// With validation on, every call returns a new object, and one used after its submission throws.
+    /// object out again: like an array from <c>ArrayPool</c>, it must not be used after that.
     /// </summary>
     public CommandBuffer AcquireCommandBuffer()
     {
         Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = AcquireSdlCommandBuffer();
 
-        CommandBuffer? commandBuffer = null;
-        if (ReusesFrameObjects)
+        CommandBuffer? commandBuffer;
+        lock (_commandBufferPool)
         {
-            lock (_commandBufferPool)
-            {
-                _commandBufferPool.TryPop(out commandBuffer);
-            }
+            _commandBufferPool.TryPop(out commandBuffer);
         }
 
         commandBuffer ??= new CommandBuffer(this);
@@ -109,11 +98,6 @@ public class GpuDevice : IDisposable
 
     internal void ReturnCommandBuffer(CommandBuffer commandBuffer)
     {
-        if (!ReusesFrameObjects)
-        {
-            return;
-        }
-
         lock (_commandBufferPool)
         {
             _commandBufferPool.Push(commandBuffer);

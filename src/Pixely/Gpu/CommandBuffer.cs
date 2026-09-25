@@ -14,10 +14,9 @@ public class CommandBuffer: IDisposable
     private ShaderUniformSlotSizes _fragmentShaderUniformSlotSizes;
     private ShaderUniformSlotSizes _vertexShaderUniformSlotSizes;
 
-    // Reused by every pass and builder this command buffer hands out while the device reuses frame objects.
+    // Handed out again for every pass begun on this command buffer.
     private RenderPass? _renderPass;
     private ComputePass? _computePass;
-    private RenderPassBuilder? _renderPassBuilder;
 
     // SDL allows one open pass per command buffer.
     private IDisposable? _openPass;
@@ -54,19 +53,6 @@ public class CommandBuffer: IDisposable
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
         _gpuDevice.ReturnCommandBuffer(this);
-    }
-
-    /// <summary>
-    /// A builder for the next render pass. It is reused from pass to pass unless GPU validation is on, so build it before
-    /// asking for another one.
-    /// </summary>
-    public IRenderPassBuilder CreateRenderPassBuilder()
-    {
-        ThrowIfDisposed();
-
-        RenderPassBuilder builder = _gpuDevice.ReusesFrameObjects ? _renderPassBuilder ??= new RenderPassBuilder(this) : new RenderPassBuilder(this);
-        builder.Reset();
-        return builder;
     }
 
     /// <summary>
@@ -178,13 +164,22 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IRenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    /// <summary>
+    /// Begins a render pass. The command buffer hands out the same <see cref="RenderPass"/> object for every pass it begins,
+    /// so dispose one before beginning the next; beginning a second while one is open throws.
+    /// </summary>
+    public RenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
-        
-        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Count];
-            
-        for (int i = 0; i < colorTargets.Count; i++)
+
+        if (colorTargetSettings.Length != colorTargets.Length)
+        {
+            throw new ArgumentException($"{colorTargets.Length} color targets need {colorTargets.Length} settings, but {colorTargetSettings.Length} were given.", nameof(colorTargetSettings));
+        }
+
+        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
+
+        for (int i = 0; i < colorTargets.Length; i++)
         {
             Texture colorTarget = colorTargets[i];
             ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
@@ -219,7 +214,7 @@ public class CommandBuffer: IDisposable
 
     // A pass can only safely address the area every attachment shares, so the scissor bounds
     // are the smallest attachment, depth included.
-    private static ShortSize CalculateTargetSize(List<Texture> colorTargets, Texture? depthBuffer)
+    private static ShortSize CalculateTargetSize(ReadOnlySpan<Texture> colorTargets, Texture? depthBuffer)
     {
         ushort width = ushort.MaxValue;
         ushort height = ushort.MaxValue;
@@ -239,7 +234,7 @@ public class CommandBuffer: IDisposable
         return new ShortSize(width, height);
     }
 
-    private IRenderPass CreateMultipleRenderTargetsPassInternal(
+    private RenderPass CreateMultipleRenderTargetsPassInternal(
         ReadOnlySpan<SDL_GPUColorTargetInfo> colorTargetInfos,
         Pointer<SDL_GPUTexture> depthBufferPointer,
         DepthBufferSettings depthBufferSettings,
@@ -285,7 +280,7 @@ public class CommandBuffer: IDisposable
             
             SdlError.ThrowOnNull(gpuRenderPass);
 
-            RenderPass renderPass = _gpuDevice.ReusesFrameObjects ? _renderPass ??= new RenderPass(this) : new RenderPass(this);
+            RenderPass renderPass = _renderPass ??= new RenderPass(this);
             renderPass.Begin(gpuRenderPass, depthBufferFormat, targetSize);
             _openPass = renderPass;
             return renderPass;
@@ -303,7 +298,7 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IComputePass CreateComputePass(
+    public ComputePass CreateComputePass(
         ReadOnlySpan<StorageTextureReadWriteBinding> readWriteStorageTextures,
         ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
     {
@@ -343,14 +338,14 @@ public class CommandBuffer: IDisposable
             SdlError.ThrowOnNull(computePass);
 
             StorageBufferElementSizes rwElementSizes = BuildStorageBufferElementSizes(readWriteStorageBuffers);
-            ComputePass pass = _gpuDevice.ReusesFrameObjects ? _computePass ??= new ComputePass(this) : new ComputePass(this);
+            ComputePass pass = _computePass ??= new ComputePass(this);
             pass.Begin(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
             _openPass = pass;
             return pass;
         }
     }
 
-    public IComputePass CreateComputePass()
+    public ComputePass CreateComputePass()
     {
         return CreateComputePass(
             ReadOnlySpan<StorageTextureReadWriteBinding>.Empty,

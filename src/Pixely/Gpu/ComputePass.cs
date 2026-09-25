@@ -4,7 +4,11 @@ using SDL;
 
 namespace Pixely.Gpu;
 
-public class ComputePass : IComputePass
+/// <summary>
+/// A compute pass open on a <see cref="CommandBuffer"/>. Like <see cref="RenderPass"/>, the command buffer hands out this same
+/// object for every compute pass it begins, so it must not be used after it was disposed.
+/// </summary>
+public class ComputePass : IDisposable
 {
     private readonly CommandBuffer _commandBuffer;
     private Pointer<SDL_GPUComputePass> _nativePointer;

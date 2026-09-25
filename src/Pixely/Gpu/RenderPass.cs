@@ -5,14 +5,17 @@ using SDL;
 
 namespace Pixely.Gpu;
 
-public class RenderPass<TValidator> : IRenderPass
-    where TValidator : IRenderPassValidator<TValidator>
+/// <summary>
+/// A render pass open on a <see cref="CommandBuffer"/>. The command buffer hands out this same object for every pass it
+/// begins, so it must not be used after it was disposed; until the next pass begins, it throws <see cref="ObjectDisposedException"/>.
+/// </summary>
+public class RenderPass : IDisposable
 {
     private readonly CommandBuffer _commandBuffer;
     private Pointer<SDL_GPURenderPass> _nativePointer;
     private uint _verticesCount = 0;
     private GpuIndexBuffer? _indexBuffer;
-    private TValidator _validator;
+    private RenderPassValidator _validator;
 
     private ShaderBindingCounts _fragmentShaderBindingCounts;
     private ShaderBindingCounts _vertexShaderBindingCounts;
@@ -30,7 +33,7 @@ public class RenderPass<TValidator> : IRenderPass
     internal RenderPass(CommandBuffer commandBuffer)
     {
         _commandBuffer = commandBuffer;
-        _validator = TValidator.Create(commandBuffer);
+        _validator = RenderPassValidator.Create(commandBuffer);
     }
 
     // A reused pass starts over: nothing bound, no counts, a fresh validator.
@@ -43,7 +46,7 @@ public class RenderPass<TValidator> : IRenderPass
         _vertexShaderBindingCounts = default;
         DepthBufferFormat = depthBufferFormat;
         TargetSize = targetSize;
-        _validator = TValidator.Create(_commandBuffer);
+        _validator = RenderPassValidator.Create(_commandBuffer);
     }
 
     public void BindGraphicsPipeline(GraphicsPipeline graphicsPipeline)
@@ -381,16 +384,5 @@ public class RenderPass<TValidator> : IRenderPass
             IndexElementSize.UInt32 => SDL_GPUIndexElementSize.SDL_GPU_INDEXELEMENTSIZE_32BIT,
             _ => throw new ArgumentOutOfRangeException(nameof(elementSize), elementSize, null)
         };
-    }
-}
-
-/// <summary>
-/// Non-generic render pass using the default RenderPassValidator with full validation checks.
-/// </summary>
-public class RenderPass : RenderPass<RenderPassValidator>
-{
-    internal RenderPass(CommandBuffer commandBuffer)
-        : base(commandBuffer)
-    {
     }
 }

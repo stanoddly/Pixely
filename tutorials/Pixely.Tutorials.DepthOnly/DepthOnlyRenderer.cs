@@ -22,7 +22,7 @@ public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
     public void Render(BasicRenderContext renderContext)
     {
         // First pass: Render to depth-only (no color target)
-        using (IRenderPass depthPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
+        using (RenderPass depthPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .SetDepthBuffer(_depthTexture, DepthBufferSettings.Default)
             .Build())
         {
@@ -32,7 +32,7 @@ public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
         }
 
         // Second pass: Clear swapchain to green to show the app is running
-        using (IRenderPass colorPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
+        using (RenderPass colorPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
             {
                 ClearColorValue = new FColor(0.2f, 0.6f, 0.2f, 1.0f)
