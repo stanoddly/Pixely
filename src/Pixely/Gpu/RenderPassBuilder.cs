@@ -36,7 +36,7 @@ public ref struct RenderPassBuilder
     }
 
     [UnscopedRef]
-    public ref RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+    public ref RenderPassBuilder AddColorTargets(scoped ReadOnlySpan<Texture> textures)
     {
         foreach (Texture texture in textures)
         {

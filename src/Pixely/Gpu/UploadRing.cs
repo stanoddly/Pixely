@@ -93,9 +93,12 @@ internal sealed class UploadRing : IDisposable
         {
             // Uploads already recorded from the old buffer still read it, which SDL allows: a released buffer is freed
             // only once the GPU is done with it.
+            // The new buffer is created first, so a failed create leaves the slot with a buffer it still owns.
+            uint capacity = Math.Min(MaxSlotCapacity, Math.Max(Math.Max(MinSlotCapacity, _current.Capacity * 2), System.Numerics.BitOperations.RoundUpToPowerOf2(size)));
+            Pointer<SDL_GPUTransferBuffer> transferBuffer = CreateTransferBuffer(capacity);
             ReleaseTransferBuffer(_current.TransferBuffer);
-            _current.Capacity = Math.Min(MaxSlotCapacity, Math.Max(Math.Max(MinSlotCapacity, _current.Capacity * 2), System.Numerics.BitOperations.RoundUpToPowerOf2(size)));
-            _current.TransferBuffer = CreateTransferBuffer(_current.Capacity);
+            _current.TransferBuffer = transferBuffer;
+            _current.Capacity = capacity;
             offset = 0;
         }
 

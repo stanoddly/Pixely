@@ -106,6 +106,22 @@ public class RenderPathRefStructTests
     }
 
     [Test]
+    public void RenderPassBuilder_AddColorTargetsFromStackSpan_ReachesTheCommandBuffer()
+    {
+        Texture texture = CreateTexture();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+        {
+            CommandBuffer commandBuffer = default;
+            ReadOnlySpan<Texture> textures = [texture, texture];
+            new RenderPassBuilder(ref commandBuffer)
+                .AddColorTargets(textures)
+                .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
+                .Build();
+        });
+    }
+
+    [Test]
     public void RenderPassBuilder_WithPerTargetSettingsMissingForOneTarget_ThrowsOnBuild()
     {
         Texture texture = CreateTexture();
