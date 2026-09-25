@@ -35,8 +35,6 @@ public class GpuMemorySystem: ICopyPass
                 SdlError.ThrowOnNull(sdlCopyPass);
                 _copyPass.Begin(sdlCopyPass);
             }
-
-            _uploadRing.BeginSubmission();
         }
 
         return _copyPass;
@@ -130,8 +128,9 @@ public class GpuMemorySystem: ICopyPass
         {
             if (!_uploadRing.NeedsFence)
             {
-                SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer);
+                bool submitted = SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer);
                 _uploadRing.EndSubmission(Pointer<SDL_GPUFence>.Null);
+                SdlError.ThrowOnFalse(submitted, "SDL_SubmitGPUCommandBuffer");
                 return;
             }
 

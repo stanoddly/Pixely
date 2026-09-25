@@ -27,6 +27,9 @@ internal sealed class UploadRing : IDisposable
     private readonly List<Slot> _slots = new(MaxSlots);
     private Slot? _current;
 
+    // Whether the open submission already looked for a free slot, so that with all slots busy it queries their fences once.
+    private bool _slotSearched;
+
     internal UploadRing(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
@@ -38,20 +41,12 @@ internal sealed class UploadRing : IDisposable
     internal int SlotCount => _slots.Count;
 
     /// <summary>
-    /// Takes a free slot for the submission that is starting. At <see cref="MaxSlots"/> busy slots there is none, and every
-    /// upload of the submission gets a transfer buffer of its own.
-    /// </summary>
-    internal void BeginSubmission()
-    {
-        _current = TakeFreeSlot();
-    }
-
-    /// <summary>
     /// Records the fence of the submission, or releases it when the submission wrote into no slot. A null fence means the
     /// submission failed and the slot is free again.
     /// </summary>
     internal void EndSubmission(Pointer<SDL_GPUFence> fence)
     {
+        _slotSearched = false;
         if (_current != null)
         {
             _current.Fence = fence;
@@ -67,6 +62,7 @@ internal sealed class UploadRing : IDisposable
     /// <summary>The submission was cancelled, so nothing it wrote will be read.</summary>
     internal void CancelSubmission()
     {
+        _slotSearched = false;
         if (_current != null)
         {
             _current.IsWriting = false;
@@ -76,13 +72,26 @@ internal sealed class UploadRing : IDisposable
     }
 
     /// <summary>
-    /// Reserves <paramref name="size"/> bytes in the submission's slot, growing or replacing its transfer buffer when the
-    /// bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>, or one made while no slot is free, gets a
-    /// transfer buffer of its own that <see cref="Complete"/> releases.
+    /// Reserves <paramref name="size"/> bytes in the submission's slot, taking a free slot on the submission's first reserve and
+    /// growing or replacing its transfer buffer when the bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>,
+    /// one that does not fit a slot already at that capacity, or one made while all <see cref="MaxSlots"/> slots are busy, gets
+    /// a transfer buffer of its own that <see cref="Complete"/> releases.
     /// </summary>
     internal UploadAllocation Reserve(uint size)
     {
-        if (_current == null || size > MaxSlotCapacity)
+        if (size > MaxSlotCapacity)
+        {
+            return ReserveTemporary(size);
+        }
+
+        // A submission that only uploads textures or oversized data takes no slot, so it needs no fence.
+        if (_current == null && !_slotSearched)
+        {
+            _current = TakeFreeSlot();
+            _slotSearched = true;
+        }
+
+        if (_current == null)
         {
             return ReserveTemporary(size);
         }
@@ -91,6 +100,13 @@ internal sealed class UploadRing : IDisposable
 
         if (_current.TransferBuffer.IsNull || offset + (ulong)size > _current.Capacity)
         {
+            // A full slot at its largest keeps its buffer: replacing it would create one per submission for as long as the
+            // uploads outgrow it, while a temporary buffer costs the same once and leaves the slot for the next submission.
+            if (_current.Capacity == MaxSlotCapacity && !_current.TransferBuffer.IsNull)
+            {
+                return ReserveTemporary(size);
+            }
+
             // Uploads already recorded from the old buffer still read it, which SDL allows: a released buffer is freed
             // only once the GPU is done with it.
             // The new buffer is created first, so a failed create leaves the slot with a buffer it still owns.
@@ -131,6 +147,7 @@ internal sealed class UploadRing : IDisposable
 
         _slots.Clear();
         _current = null;
+        _slotSearched = false;
     }
 
     private Slot? TakeFreeSlot()
