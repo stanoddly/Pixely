@@ -115,7 +115,7 @@ public class GeometryPhase : IRenderer<GameRenderContext>
 
     public void Render(GameRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
             .AddColorTarget(_buffers.AlbedoBuffer.Texture)
             .AddColorTarget(_buffers.NormalBuffer.Texture)
             .AddColorTarget(_buffers.PositionBuffer.Texture)

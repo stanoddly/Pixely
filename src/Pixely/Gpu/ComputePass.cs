@@ -6,18 +6,27 @@ namespace Pixely.Gpu;
 
 public class ComputePass : IComputePass
 {
+    private readonly CommandBuffer _commandBuffer;
     private Pointer<SDL_GPUComputePass> _nativePointer;
-    private readonly uint _readWriteStorageTextureCount;
-    private readonly uint _readWriteStorageBufferCount;
+    private uint _readWriteStorageTextureCount;
+    private uint _readWriteStorageBufferCount;
     private ComputePipeline? _boundPipeline;
     private StorageBufferElementSizes _readOnlyStorageBufferElementSizes;
     private StorageBufferElementSizes _readWriteStorageBufferElementSizes;
 
-    internal ComputePass(Pointer<SDL_GPUComputePass> nativePointer, uint readWriteStorageTextureCount, uint readWriteStorageBufferCount, StorageBufferElementSizes readWriteStorageBufferElementSizes)
+    internal ComputePass(CommandBuffer commandBuffer)
+    {
+        _commandBuffer = commandBuffer;
+    }
+
+    // A reused pass starts over: no pipeline and no read-only bindings.
+    internal void Begin(Pointer<SDL_GPUComputePass> nativePointer, uint readWriteStorageTextureCount, uint readWriteStorageBufferCount, StorageBufferElementSizes readWriteStorageBufferElementSizes)
     {
         _nativePointer = nativePointer;
         _readWriteStorageTextureCount = readWriteStorageTextureCount;
         _readWriteStorageBufferCount = readWriteStorageBufferCount;
+        _boundPipeline = null;
+        _readOnlyStorageBufferElementSizes = default;
         _readWriteStorageBufferElementSizes = readWriteStorageBufferElementSizes;
     }
 
@@ -123,6 +132,7 @@ public class ComputePass : IComputePass
                 SDL3.SDL_EndGPUComputePass(_nativePointer);
             }
             _nativePointer = Pointer<SDL_GPUComputePass>.Null;
+            _commandBuffer.OnPassEnded(this);
         }
     }
 

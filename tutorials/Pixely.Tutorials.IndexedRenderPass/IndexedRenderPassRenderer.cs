@@ -32,7 +32,7 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

@@ -43,6 +43,12 @@ public class RenderPassBuilder : IRenderPassBuilder
     {
         _commandBuffer = commandBuffer;
     }
+
+    // A builder abandoned before Build, by an exception say, must not leak its targets into the next pass.
+    internal void Reset()
+    {
+        _state.ResetState();
+    }
     
     public IRenderPassBuilder AddColorTarget(Texture texture)
     {

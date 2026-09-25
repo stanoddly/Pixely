@@ -29,7 +29,7 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using IRenderPass renderPass = renderContext.CommandBuffer.CreateRenderPassBuilder()
             .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
             {
                 ClearColorValue = FColors.Black

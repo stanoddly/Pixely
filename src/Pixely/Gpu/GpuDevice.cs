@@ -18,7 +18,15 @@ public class GpuDevice : IDisposable
     private LockedSet<ComputePipeline> _computePipelines = new();
     private LockedSet<GraphicsShaderProgram> _graphicsShaderPrograms = new();
 
+    private readonly Stack<CommandBuffer> _commandBufferPool = new();
+
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; private set; }
+
+    /// <summary>
+    /// Whether command buffers, passes, pass builders, render contexts and swapchain textures are reused from frame to frame
+    /// instead of allocated. Off while GPU validation is on, so that an object used after it was returned throws.
+    /// </summary>
+    internal bool ReusesFrameObjects { get; }
 
     public string Driver { get; }
 
@@ -39,9 +47,10 @@ public class GpuDevice : IDisposable
         }
     }
 
-    internal GpuDevice(Pointer<SDL_GPUDevice> sdlGpuDevice)
+    internal GpuDevice(Pointer<SDL_GPUDevice> sdlGpuDevice, bool reusesFrameObjects)
     {
         SdlGpuDevice = sdlGpuDevice;
+        ReusesFrameObjects = reusesFrameObjects;
 
         unsafe
         {
@@ -75,18 +84,54 @@ public class GpuDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// A command buffer to record one submission. Submitting or cancelling it returns it to the device, which hands the same
+    /// object out again unless GPU validation is on: like an array from <c>ArrayPool</c>, it must not be used after that.
+    /// With validation on, every call returns a new object, and one used after its submission throws.
+    /// </summary>
     public CommandBuffer AcquireCommandBuffer()
+    {
+        Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = AcquireSdlCommandBuffer();
+
+        CommandBuffer? commandBuffer = null;
+        if (ReusesFrameObjects)
+        {
+            lock (_commandBufferPool)
+            {
+                _commandBufferPool.TryPop(out commandBuffer);
+            }
+        }
+
+        commandBuffer ??= new CommandBuffer(this);
+        commandBuffer.Begin(sdlGpuCommandBuffer);
+        return commandBuffer;
+    }
+
+    internal void ReturnCommandBuffer(CommandBuffer commandBuffer)
+    {
+        if (!ReusesFrameObjects)
+        {
+            return;
+        }
+
+        lock (_commandBufferPool)
+        {
+            _commandBufferPool.Push(commandBuffer);
+        }
+    }
+
+    internal Pointer<SDL_GPUCommandBuffer> AcquireSdlCommandBuffer()
     {
         unsafe
         {
             Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL3.SDL_AcquireGPUCommandBuffer(SdlGpuDevice);
-            
+
             if (sdlGpuCommandBuffer.IsNull)
             {
                 throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SDL3.SDL_GetError()}");
             }
 
-            return new CommandBuffer(this, sdlGpuCommandBuffer);
+            return sdlGpuCommandBuffer;
         }
     }
 

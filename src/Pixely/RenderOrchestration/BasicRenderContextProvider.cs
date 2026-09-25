@@ -7,6 +7,9 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
 {
     private readonly GpuDevice _gpuDevice;
 
+    // Handed out again while the device reuses frame objects, the way the command buffer inside it is.
+    private BasicRenderContext? _reusableContext;
+
     internal BasicRenderContextProvider(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
@@ -22,7 +25,21 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
             return false;
         }
 
+        if (!_gpuDevice.ReusesFrameObjects)
+        {
+            renderContext = new BasicRenderContext(swapchainTexture, commandBuffer);
+            return true;
+        }
+
+        if (_reusableContext is { IsInUse: false })
+        {
+            _reusableContext.Reuse(swapchainTexture, commandBuffer);
+            renderContext = _reusableContext;
+            return true;
+        }
+
         renderContext = new BasicRenderContext(swapchainTexture, commandBuffer);
+        _reusableContext ??= renderContext;
         return true;
     }
 }

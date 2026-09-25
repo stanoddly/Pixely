@@ -8,6 +8,7 @@ namespace Pixely.Gpu;
 public class RenderPass<TValidator> : IRenderPass
     where TValidator : IRenderPassValidator<TValidator>
 {
+    private readonly CommandBuffer _commandBuffer;
     private Pointer<SDL_GPURenderPass> _nativePointer;
     private uint _verticesCount = 0;
     private GpuIndexBuffer? _indexBuffer;
@@ -18,24 +19,31 @@ public class RenderPass<TValidator> : IRenderPass
 
     public ShaderBindingCounts FragmentShaderBindingCounts => _fragmentShaderBindingCounts;
     public ShaderBindingCounts VertexShaderBindingCounts => _vertexShaderBindingCounts;
-    public DepthBufferFormat DepthBufferFormat { get; }
+    public DepthBufferFormat DepthBufferFormat { get; private set; }
 
     /// <summary>
     /// The area every attachment of this pass covers, which is the smallest of them.
     /// It is what <see cref="SetScissor"/> clips to and what <see cref="ClearScissor"/> restores.
     /// </summary>
-    public ShortSize TargetSize { get; }
+    public ShortSize TargetSize { get; private set; }
 
-    internal RenderPass(
-        CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
-        DepthBufferFormat depthBufferFormat,
-        ShortSize targetSize)
+    internal RenderPass(CommandBuffer commandBuffer)
+    {
+        _commandBuffer = commandBuffer;
+        _validator = TValidator.Create(commandBuffer);
+    }
+
+    // A reused pass starts over: nothing bound, no counts, a fresh validator.
+    internal void Begin(Pointer<SDL_GPURenderPass> nativePointer, DepthBufferFormat depthBufferFormat, ShortSize targetSize)
     {
         _nativePointer = nativePointer;
+        _verticesCount = 0;
+        _indexBuffer = null;
+        _fragmentShaderBindingCounts = default;
+        _vertexShaderBindingCounts = default;
         DepthBufferFormat = depthBufferFormat;
         TargetSize = targetSize;
-        _validator = TValidator.Create(commandBuffer);
+        _validator = TValidator.Create(_commandBuffer);
     }
 
     public void BindGraphicsPipeline(GraphicsPipeline graphicsPipeline)
@@ -353,6 +361,7 @@ public class RenderPass<TValidator> : IRenderPass
                 SDL3.SDL_EndGPURenderPass(_nativePointer);
             }
             _nativePointer = Pointer<SDL_GPURenderPass>.Null;
+            _commandBuffer.OnPassEnded(this);
         }
     }
     
@@ -380,12 +389,8 @@ public class RenderPass<TValidator> : IRenderPass
 /// </summary>
 public class RenderPass : RenderPass<RenderPassValidator>
 {
-    internal RenderPass(
-        CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
-        DepthBufferFormat depthBufferFormat,
-        ShortSize targetSize)
-        : base(commandBuffer, nativePointer, depthBufferFormat, targetSize)
+    internal RenderPass(CommandBuffer commandBuffer)
+        : base(commandBuffer)
     {
     }
 }

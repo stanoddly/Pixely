@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-25: Frame objects are reused like pooled arrays, except under GPU validation
+
+Command buffers come from a pool on `GpuDevice` and go back on submit or cancel. Each keeps one render pass, one compute pass and one pass builder for reuse. `BasicRenderContextProvider` reuses its context and each window its `SwapchainTexture`. `GpuMemorySystem` writes uploads into transfer buffers it keeps across submissions.
+
+- A render path that allocates every frame is a defect on the Raspberry Pi 5 target (#468).
+- `ref struct`s instead (#585) removed the allocations too, but a copy of a command buffer or context silently kept its own state, and consumers had to pass them by `ref`, mark passes `scoped` and stop deriving from `BasicRenderContext`. Reusing classes keeps today's API and calling code.
+- Using a reused object after it went back is a programming error, as it is for an array from `ArrayPool`. A version number cannot detect it, because the stale holder and the new one share the object.
+- GPU validation already marks a debugging session, so with it on nothing is reused and a stale object throws `ObjectDisposedException` as before.
+- Upload slots are reused once their fence signals. The fence is only queried, because waiting suspends the wasm stack in the browser. SDL's `cycle = true` would add hidden copies without a cap instead.
+
+Cost: without validation, a command buffer, pass or context kept past its frame records into a later frame's work instead of throwing, and disposing a command buffer after submitting it cancels whoever holds it next. A context derived from `BasicRenderContext`, like any custom context, is still allocated every frame unless its provider reuses it. The upload slots can hold up to 8 MiB, and an upload over 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
+
 ## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
 
 A browser app links a prebuilt Emscripten archive, such as `libXDL_wgpu.a` from a GitHub release, with a `NativeUrlReference` that names the URL and the file's SHA-256. The SDK downloads it into a cache in the project's `obj` folder and makes it a `NativeFileReference`.

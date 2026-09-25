@@ -14,6 +14,14 @@ public class CommandBuffer: IDisposable
     private ShaderUniformSlotSizes _fragmentShaderUniformSlotSizes;
     private ShaderUniformSlotSizes _vertexShaderUniformSlotSizes;
 
+    // Reused by every pass and builder this command buffer hands out while the device reuses frame objects.
+    private RenderPass? _renderPass;
+    private ComputePass? _computePass;
+    private RenderPassBuilder? _renderPassBuilder;
+
+    // SDL allows one open pass per command buffer.
+    private IDisposable? _openPass;
+
     internal Pointer<SDL_GPUCommandBuffer> SdlGpuCommandBuffer
     {
         get => _sdlGpuCommandBuffer;
@@ -23,10 +31,17 @@ public class CommandBuffer: IDisposable
     public ShaderUniformSlotSizes FragmentShaderUniformSlotSizes => _fragmentShaderUniformSlotSizes;
     public ShaderUniformSlotSizes VertexShaderUniformSlotSizes => _vertexShaderUniformSlotSizes;
 
-    internal CommandBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer)
+    internal CommandBuffer(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
+    }
+
+    internal void Begin(Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer)
+    {
         SdlGpuCommandBuffer = sdlCommandBuffer;
+        _fragmentShaderUniformSlotSizes = default;
+        _vertexShaderUniformSlotSizes = default;
+        _openPass = null;
     }
 
     public void Submit()
@@ -38,6 +53,20 @@ public class CommandBuffer: IDisposable
             SDL3.SDL_SubmitGPUCommandBuffer(SdlGpuCommandBuffer);
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
+        _gpuDevice.ReturnCommandBuffer(this);
+    }
+
+    /// <summary>
+    /// A builder for the next render pass. It is reused from pass to pass unless GPU validation is on, so build it before
+    /// asking for another one.
+    /// </summary>
+    public IRenderPassBuilder CreateRenderPassBuilder()
+    {
+        ThrowIfDisposed();
+
+        RenderPassBuilder builder = _gpuDevice.ReusesFrameObjects ? _renderPassBuilder ??= new RenderPassBuilder(this) : new RenderPassBuilder(this);
+        builder.Reset();
+        return builder;
     }
 
     /// <summary>
@@ -110,6 +139,7 @@ public class CommandBuffer: IDisposable
         {
             SDL_GPUFence* fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(SdlGpuCommandBuffer);
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _gpuDevice.ReturnCommandBuffer(this);
 
             if (fence == null)
             {
@@ -217,7 +247,8 @@ public class CommandBuffer: IDisposable
         ShortSize targetSize)
     {
         ThrowIfDisposed();
-        
+        ThrowIfPassOpen();
+
         unsafe
         {
             SDL_GPURenderPass* gpuRenderPass;
@@ -252,8 +283,11 @@ public class CommandBuffer: IDisposable
                 }
             }
             
-            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, targetSize);
+            SdlError.ThrowOnNull(gpuRenderPass);
 
+            RenderPass renderPass = _gpuDevice.ReusesFrameObjects ? _renderPass ??= new RenderPass(this) : new RenderPass(this);
+            renderPass.Begin(gpuRenderPass, depthBufferFormat, targetSize);
+            _openPass = renderPass;
             return renderPass;
         }
     }
@@ -274,6 +308,7 @@ public class CommandBuffer: IDisposable
         ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
     {
         ThrowIfDisposed();
+        ThrowIfPassOpen();
         unsafe
         {
             SDL_GPUStorageTextureReadWriteBinding* textureBindings = stackalloc SDL_GPUStorageTextureReadWriteBinding[readWriteStorageTextures.Length];
@@ -305,8 +340,13 @@ public class CommandBuffer: IDisposable
                 bufferBindings,
                 (uint)readWriteStorageBuffers.Length);
 
+            SdlError.ThrowOnNull(computePass);
+
             StorageBufferElementSizes rwElementSizes = BuildStorageBufferElementSizes(readWriteStorageBuffers);
-            return new ComputePass(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
+            ComputePass pass = _gpuDevice.ReusesFrameObjects ? _computePass ??= new ComputePass(this) : new ComputePass(this);
+            pass.Begin(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
+            _openPass = pass;
+            return pass;
         }
     }
 
@@ -411,6 +451,23 @@ public class CommandBuffer: IDisposable
                 SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer);
             }
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _gpuDevice.ReturnCommandBuffer(this);
+        }
+    }
+
+    internal void OnPassEnded(IDisposable pass)
+    {
+        if (ReferenceEquals(_openPass, pass))
+        {
+            _openPass = null;
+        }
+    }
+
+    private void ThrowIfPassOpen()
+    {
+        if (_openPass != null)
+        {
+            throw new InvalidOperationException("A pass is still open on this command buffer. Dispose it before beginning another.");
         }
     }
 
@@ -424,15 +481,6 @@ public class CommandBuffer: IDisposable
         if (SdlGpuCommandBuffer.IsNull)
         {
             throw new ObjectDisposedException(nameof(CommandBuffer));
-        }
-    }
-
-    public ICopyPass CreateCopyPass()
-    {
-        unsafe
-        {
-            SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
-            return new CopyPass(_gpuDevice, copyPass);
         }
     }
 }
