@@ -27,9 +27,9 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
         _depthStencilTexture = depthStencilTexture;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
             {
                 ClearColorValue = FColors.Black

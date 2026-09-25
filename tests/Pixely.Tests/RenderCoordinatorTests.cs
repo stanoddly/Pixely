@@ -80,7 +80,7 @@ public class RenderCoordinatorTests
         Assert.Multiple(() =>
         {
             Assert.That(calls, Is.Empty);
-            Assert.That(renderContextSource.LastRenderContext, Is.Null);
+            Assert.That(renderContextSource.CreatedCount, Is.Zero);
         });
     }
 
@@ -94,7 +94,7 @@ public class RenderCoordinatorTests
 
         renderCoordinator.Execute();
 
-        Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
+        Assert.That(renderContextSource.DisposedCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -277,35 +277,43 @@ public class RenderCoordinatorTests
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>
     {
         public bool CanCreate { get; init; } = true;
-        public TestRenderContext? LastRenderContext { get; private set; }
+        public int CreatedCount { get; private set; }
+        public int DisposedCount { get; set; }
         public Window? LastWindow { get; private set; }
 
-        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
+        public override bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out TestRenderContext renderContext)
         {
             LastWindow = window;
             if (!CanCreate)
             {
-                renderContext = null;
+                renderContext = default;
                 return false;
             }
 
-            renderContext = new TestRenderContext();
-            LastRenderContext = renderContext;
+            renderContext = new TestRenderContext(this);
+            CreatedCount++;
             return true;
         }
     }
 
-    private sealed class TestRenderContext : IRenderContext
+    private ref struct TestRenderContext : IRenderContext
     {
-        public CommandBuffer CommandBuffer => null!;
+        private readonly TestRenderContextSource _source;
+        private CommandBuffer _commandBuffer;
 
-        public Texture ColorTarget => null!;
-
-        public bool IsDisposed { get; private set; }
-
-        public void Dispose()
+        public TestRenderContext(TestRenderContextSource source)
         {
-            IsDisposed = true;
+            _source = source;
+        }
+
+        [UnscopedRef]
+        public ref CommandBuffer CommandBuffer => ref _commandBuffer;
+
+        public readonly Texture ColorTarget => null!;
+
+        public readonly void Dispose()
+        {
+            _source.DisposedCount++;
         }
     }
 
@@ -328,7 +336,7 @@ public class RenderCoordinatorTests
 
         public ViewScope ViewScope { get; }
 
-        public virtual void Render(TestRenderContext renderContext)
+        public virtual void Render(ref TestRenderContext renderContext)
         {
             _calls.Add(_name);
         }
@@ -348,9 +356,9 @@ public class RenderCoordinatorTests
             _provider = provider;
         }
 
-        public override void Render(TestRenderContext renderContext)
+        public override void Render(ref TestRenderContext renderContext)
         {
-            base.Render(renderContext);
+            base.Render(ref renderContext);
             _provider().Dispose();
         }
     }
@@ -370,9 +378,9 @@ public class RenderCoordinatorTests
             _parentProvider = parentProvider;
         }
 
-        public override void Render(TestRenderContext renderContext)
+        public override void Render(ref TestRenderContext renderContext)
         {
-            base.Render(renderContext);
+            base.Render(ref renderContext);
 
             if (_child != null)
             {

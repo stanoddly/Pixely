@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Pixely.Gpu;
 
 namespace Pixely.Tests;
 
@@ -41,7 +42,11 @@ public class WindowTests
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
 
-        Assert.Throws<InvalidOperationException>(() => window.TryWaitAndAcquireSwapchainTexture(null!, out _));
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            CommandBuffer commandBuffer = default;
+            window.TryWaitAndAcquireSwapchainTexture(ref commandBuffer, out _);
+        });
     }
 
     private static Window CreateDisposedWindow()

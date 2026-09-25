@@ -15,12 +15,14 @@ namespace Pixely.Ui;
 /// blit lands is the selector's answer for the frame's context, by default its colour target.
 /// </summary>
 internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, IDisposable
-    where TRenderContext : IRenderContext
+    where TRenderContext : IRenderContext, allows ref struct
 {
     private static readonly ColorTargetSettings _uiColorTargetSettings = new()
     {
         ClearColorValue = FColors.Transparent
     };
+
+    private static readonly ColorTargetSettings _loadColorTargetSettings = new() { LoadOperation = LoadOperation.Load };
 
     private static readonly Matrix4x4 _presentViewProjection =
         Matrix4x4.CreateOrthographicOffCenterLeftHanded(0, 1, 1, 0, 0, 1);
@@ -143,9 +145,10 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         Texture WhiteTexture,
         TextureFormat ColorTargetFormat);
 
-    public void Render(TRenderContext renderContext)
+    public void Render(ref TRenderContext renderContext)
     {
         Texture colorTarget = _selectColorTarget(renderContext);
+        ref CommandBuffer commandBuffer = ref renderContext.CommandBuffer;
         ShortSize targetSize = colorTarget.Size;
         Vector2Int target = new(targetSize.Width, targetSize.Height);
         Vector2Int viewport = _source.PaintedViewportSize;
@@ -158,7 +161,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
             if (_clearTarget)
             {
-                ClearTarget(renderContext.CommandBuffer, colorTarget);
+                ClearTarget(ref commandBuffer, colorTarget);
             }
 
             return;
@@ -168,12 +171,12 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
         if (NeedsRepaint(_source.PaintVersion, _paintedVersion, _retainedTextureDirty))
         {
-            Paint(renderContext.CommandBuffer, retainedTexture);
+            Paint(ref commandBuffer, retainedTexture);
             _paintedVersion = _source.PaintVersion;
             _retainedTextureDirty = false;
         }
 
-        Present(renderContext.CommandBuffer, colorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
+        Present(ref commandBuffer, colorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
     }
 
     /// <summary>
@@ -221,18 +224,18 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         return _retainedTexture;
     }
 
-    private void Paint(CommandBuffer commandBuffer, Texture retainedTexture)
+    private void Paint(ref CommandBuffer commandBuffer, Texture retainedTexture)
     {
         IReadOnlyList<PaintInstruction> instructions = _source.Instructions;
         IReadOnlyList<PaintBatch> batches = _source.Batches;
 
         if (instructions.Count == 0)
         {
-            Clear(commandBuffer, retainedTexture);
+            Clear(ref commandBuffer, retainedTexture);
             return;
         }
 
-        using IRenderPass renderPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref commandBuffer)
             .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
 
@@ -242,8 +245,9 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         renderPass.BindGraphicsPipeline(_quadPipeline);
         renderPass.BindVertexBuffer(_vertexBuffer);
 
-        foreach (PaintBatch batch in batches)
+        for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
         {
+            PaintBatch batch = batches[batchIndex];
             renderPass.SetScissor(batch.Clip);
             renderPass.BindFragmentSampler(batch.Texture ?? _whiteTexture, _sampler);
 
@@ -264,9 +268,9 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         }
     }
 
-    private static void Clear(CommandBuffer commandBuffer, Texture retainedTexture)
+    private static void Clear(ref CommandBuffer commandBuffer, Texture retainedTexture)
     {
-        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass clearPass = new RenderPassBuilder(ref commandBuffer)
             .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
     }
@@ -275,20 +279,18 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     /// What a frame with nothing to present still owes the target when this renderer is the one
     /// that clears it: whatever is drawn after it expects a cleared target, stale build or not.
     /// </summary>
-    private static void ClearTarget(CommandBuffer commandBuffer, Texture target)
+    private static void ClearTarget(ref CommandBuffer commandBuffer, Texture target)
     {
-        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass clearPass = new RenderPassBuilder(ref commandBuffer)
             .AddColorTarget(target, ColorTargetSettings.Clear)
             .Build();
     }
 
-    private void Present(CommandBuffer commandBuffer, Texture target, Texture retainedTexture, Matrix4x4 world)
+    private void Present(ref CommandBuffer commandBuffer, Texture target, Texture retainedTexture, Matrix4x4 world)
     {
-        ColorTargetSettings settings = _clearTarget
-            ? ColorTargetSettings.Clear
-            : new ColorTargetSettings { LoadOperation = LoadOperation.Load };
+        ColorTargetSettings settings = _clearTarget ? ColorTargetSettings.Clear : _loadColorTargetSettings;
 
-        using IRenderPass presentPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass presentPass = new RenderPassBuilder(ref commandBuffer)
             .AddColorTarget(target, settings)
             .Build();
 

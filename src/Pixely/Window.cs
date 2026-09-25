@@ -391,7 +391,7 @@ public partial class Window : IDisposable
         }
     }
 
-    public virtual bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
+    public virtual bool TryWaitAndAcquireSwapchainTexture(ref CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
         ThrowIfNoGpuDevice();
         swapchainTexture = default!;

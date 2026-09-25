@@ -41,9 +41,8 @@ public sealed class OffscreenWindow : Window
     // The whole point is that nothing reaches the desktop, so showing is refused rather than passed to SDL.
     public override bool Show() => false;
 
-    public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
+    public override bool TryWaitAndAcquireSwapchainTexture(ref CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
-        ArgumentNullException.ThrowIfNull(commandBuffer);
         WaitForNextFrame();
 
         // The swapchain format keeps every pipeline built against ColorTargetFormat valid.

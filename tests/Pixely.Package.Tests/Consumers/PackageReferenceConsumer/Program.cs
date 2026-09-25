@@ -43,33 +43,44 @@ public sealed class PackageRenderContextProvider : RenderContextProvider<Package
         return new PackageRenderContextProvider(gpuDevice);
     }
 
-    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out PackageRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out PackageRenderContext renderContext)
     {
-        renderContext = null;
+        renderContext = default;
         return false;
     }
 }
 
-public sealed class PackageRenderContext : IRenderContext
+public ref struct PackageRenderContext : IRenderContext
 {
-    public CommandBuffer CommandBuffer => null!;
+    private CommandBuffer _commandBuffer;
 
-    public Texture ColorTarget => null!;
+    [UnscopedRef]
+    public ref CommandBuffer CommandBuffer => ref _commandBuffer;
+
+    public readonly Texture ColorTarget => null!;
 
     public void Dispose()
     {
     }
 }
 
-public sealed class PackageBasicRenderContext : BasicRenderContext
+public ref struct PackageBasicRenderContext : IRenderContext
 {
-    public PackageBasicRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer) : base(swapchainTexture, commandBuffer)
+    private BasicRenderContext _basic;
+
+    public PackageBasicRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer)
     {
+        _basic = new BasicRenderContext(swapchainTexture, commandBuffer);
     }
 
-    public override void Dispose()
+    [UnscopedRef]
+    public ref CommandBuffer CommandBuffer => ref _basic.CommandBuffer;
+
+    public readonly Texture ColorTarget => _basic.ColorTarget;
+
+    public void Dispose()
     {
-        base.Dispose();
+        _basic.Dispose();
     }
 }
 

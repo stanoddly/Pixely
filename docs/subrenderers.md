@@ -12,7 +12,7 @@ The parent renderer creates the RenderPass and multiple subrenderers contribute 
 
 ## Basic Pattern
 
-A subrenderer receives both a `CommandBuffer` and an `IRenderPass`:
+A subrenderer receives the `CommandBuffer` by `ref` and the `RenderPass` by value, marked `scoped` (see [Stack-only types](render-pass-flow.md#stack-only-types)):
 
 ```csharp
 public class MeshSubrenderer
@@ -28,7 +28,7 @@ public class MeshSubrenderer
         _camera = camera;
     }
 
-    public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+    public void Render(ref CommandBuffer commandBuffer, scoped RenderPass renderPass)
     {
         // Don't create a new RenderPass - use the one provided
 
@@ -62,7 +62,7 @@ Create an interface for the subrenderers composed by a specific renderer:
 public interface IGeometrySubrenderer
 {
     int Order => 0;
-    void Render(CommandBuffer commandBuffer, IRenderPass renderPass);
+    void Render(ref CommandBuffer commandBuffer, scoped RenderPass renderPass);
 }
 ```
 
@@ -88,7 +88,7 @@ public class MeshSubrenderer : IGeometrySubrenderer
         _camera = camera;
     }
 
-    public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+    public void Render(ref CommandBuffer commandBuffer, scoped RenderPass renderPass)
     {
         // Implementation
     }
@@ -113,9 +113,9 @@ public class GeometryPhase : IRenderer<GameRenderContext>
         _buffers = buffers;
     }
 
-    public void Render(GameRenderContext renderContext)
+    public void Render(ref GameRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(_buffers.AlbedoBuffer.Texture)
             .AddColorTarget(_buffers.NormalBuffer.Texture)
             .AddColorTarget(_buffers.PositionBuffer.Texture)
@@ -124,7 +124,7 @@ public class GeometryPhase : IRenderer<GameRenderContext>
 
         foreach (IGeometrySubrenderer subrenderer in _subrenderers)
         {
-            subrenderer.Render(renderContext.CommandBuffer, renderPass);
+            subrenderer.Render(ref renderContext.CommandBuffer, renderPass);
         }
 
         // RenderPass disposed here - all subrenderers have contributed

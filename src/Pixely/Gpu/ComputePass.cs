@@ -1,40 +1,95 @@
+using System.Runtime.CompilerServices;
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.Gpu;
 
-public class ComputePass : IComputePass
+/// <summary>
+/// A compute pass open on a <see cref="CommandBuffer"/>. Like <see cref="RenderPass"/>, it holds no state of its own, so copies
+/// act on the same pass, a handle used after its pass was disposed throws, and disposing it again does nothing.
+/// </summary>
+public readonly ref struct ComputePass : IDisposable
 {
-    private Pointer<SDL_GPUComputePass> _nativePointer;
-    private readonly uint _readWriteStorageTextureCount;
-    private readonly uint _readWriteStorageBufferCount;
-    private ComputePipeline? _boundPipeline;
-    private StorageBufferElementSizes _readOnlyStorageBufferElementSizes;
-    private StorageBufferElementSizes _readWriteStorageBufferElementSizes;
+    private readonly ref CommandBufferState _commandBuffer;
+    private readonly uint _passNumber;
 
-    internal ComputePass(Pointer<SDL_GPUComputePass> nativePointer, uint readWriteStorageTextureCount, uint readWriteStorageBufferCount, StorageBufferElementSizes readWriteStorageBufferElementSizes)
+    private ComputePass(ref CommandBufferState commandBuffer, uint passNumber)
     {
-        _nativePointer = nativePointer;
-        _readWriteStorageTextureCount = readWriteStorageTextureCount;
-        _readWriteStorageBufferCount = readWriteStorageBufferCount;
-        _readWriteStorageBufferElementSizes = readWriteStorageBufferElementSizes;
+        _commandBuffer = ref commandBuffer;
+        _passNumber = passNumber;
+    }
+
+    internal static ComputePass Begin(
+        ref CommandBufferState commandBuffer,
+        scoped ReadOnlySpan<StorageTextureReadWriteBinding> readWriteStorageTextures,
+        scoped ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
+    {
+        commandBuffer.ThrowIfDisposed();
+        commandBuffer.ThrowIfPassOpen();
+
+        Pointer<SDL_GPUComputePass> nativePointer;
+
+        unsafe
+        {
+            SDL_GPUStorageTextureReadWriteBinding* textureBindings = stackalloc SDL_GPUStorageTextureReadWriteBinding[readWriteStorageTextures.Length];
+            for (int i = 0; i < readWriteStorageTextures.Length; i++)
+            {
+                textureBindings[i] = new SDL_GPUStorageTextureReadWriteBinding
+                {
+                    texture = readWriteStorageTextures[i].Texture.SdlGpuTexture,
+                    mip_level = readWriteStorageTextures[i].MipLevel,
+                    layer = readWriteStorageTextures[i].Layer,
+                    cycle = readWriteStorageTextures[i].Cycle
+                };
+            }
+
+            SDL_GPUStorageBufferReadWriteBinding* bufferBindings = stackalloc SDL_GPUStorageBufferReadWriteBinding[readWriteStorageBuffers.Length];
+            for (int i = 0; i < readWriteStorageBuffers.Length; i++)
+            {
+                bufferBindings[i] = new SDL_GPUStorageBufferReadWriteBinding
+                {
+                    buffer = readWriteStorageBuffers[i].Buffer.SdlBuffer,
+                    cycle = readWriteStorageBuffers[i].Cycle
+                };
+            }
+
+            nativePointer = SDL3.SDL_BeginGPUComputePass(
+                commandBuffer.SdlGpuCommandBuffer,
+                textureBindings,
+                (uint)readWriteStorageTextures.Length,
+                bufferBindings,
+                (uint)readWriteStorageBuffers.Length);
+        }
+
+        SdlError.ThrowOnNull(nativePointer);
+
+        uint passNumber = commandBuffer.OpenNextPass(OpenPassKind.Compute);
+        commandBuffer.ComputePass = new ComputePassState
+        {
+            NativePointer = nativePointer,
+            ReadWriteStorageTextureCount = (uint)readWriteStorageTextures.Length,
+            ReadWriteStorageBufferCount = (uint)readWriteStorageBuffers.Length,
+            ReadWriteStorageBufferElementSizes = BuildStorageBufferElementSizes(readWriteStorageBuffers)
+        };
+
+        return new ComputePass(ref commandBuffer, passNumber);
     }
 
     public void BindComputePipeline(ComputePipeline pipeline)
     {
-        ThrowIfDisposed();
-        _boundPipeline = pipeline;
-        _readOnlyStorageBufferElementSizes = default;
+        ref ComputePassState state = ref OpenState();
+        state.BoundPipeline = pipeline;
+        state.ReadOnlyStorageBufferElementSizes = default;
         unsafe
         {
-            SDL3.SDL_BindGPUComputePipeline(_nativePointer, pipeline.Pointer);
+            SDL3.SDL_BindGPUComputePipeline(state.NativePointer, pipeline.Pointer);
         }
     }
 
     public void BindSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref ComputePassState state = ref OpenState();
         unsafe
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
@@ -46,13 +101,13 @@ public class ComputePass : IComputePass
                     sampler = sampler.Pointer
                 };
             }
-            SDL3.SDL_BindGPUComputeSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
+            SDL3.SDL_BindGPUComputeSamplers(state.NativePointer, slot, bindings, (uint)textures.Length);
         }
     }
 
     public void BindReadOnlyStorageTextures(ReadOnlySpan<Texture> textures, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref ComputePassState state = ref OpenState();
         unsafe
         {
             SDL_GPUTexture** sdlTextures = stackalloc SDL_GPUTexture*[textures.Length];
@@ -60,7 +115,7 @@ public class ComputePass : IComputePass
             {
                 sdlTextures[i] = textures[i].SdlGpuTexture;
             }
-            SDL3.SDL_BindGPUComputeStorageTextures(_nativePointer, slot, sdlTextures, (uint)textures.Length);
+            SDL3.SDL_BindGPUComputeStorageTextures(state.NativePointer, slot, sdlTextures, (uint)textures.Length);
         }
     }
 
@@ -72,10 +127,10 @@ public class ComputePass : IComputePass
 
     public void BindReadOnlyStorageBuffers(ReadOnlySpan<GpuStorageBuffer> buffers, uint slot = 0)
     {
-        ThrowIfDisposed();
+        ref ComputePassState state = ref OpenState();
         for (int i = 0; i < buffers.Length; i++)
         {
-            _readOnlyStorageBufferElementSizes = SetStorageBufferSlotSize(_readOnlyStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
+            state.ReadOnlyStorageBufferElementSizes = SetStorageBufferSlotSize(state.ReadOnlyStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
         unsafe
         {
@@ -84,7 +139,7 @@ public class ComputePass : IComputePass
             {
                 sdlBuffers[i] = buffers[i].SdlBuffer;
             }
-            SDL3.SDL_BindGPUComputeStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL3.SDL_BindGPUComputeStorageBuffers(state.NativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }
 
@@ -96,72 +151,92 @@ public class ComputePass : IComputePass
 
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
-        ThrowIfDisposed();
-        ThrowIfInvalidDispatch();
+        ref ComputePassState state = ref OpenState();
+        ThrowIfInvalidDispatch(state);
         unsafe
         {
-            SDL3.SDL_DispatchGPUCompute(_nativePointer, groupCountX, groupCountY, groupCountZ);
+            SDL3.SDL_DispatchGPUCompute(state.NativePointer, groupCountX, groupCountY, groupCountZ);
         }
     }
 
     public void DispatchIndirect(GpuStorageBuffer buffer, uint offset = 0)
     {
-        ThrowIfDisposed();
-        ThrowIfInvalidDispatch();
+        ref ComputePassState state = ref OpenState();
+        ThrowIfInvalidDispatch(state);
         unsafe
         {
-            SDL3.SDL_DispatchGPUComputeIndirect(_nativePointer, buffer.SdlBuffer, offset);
+            SDL3.SDL_DispatchGPUComputeIndirect(state.NativePointer, buffer.SdlBuffer, offset);
         }
+    }
+
+    public bool IsDefault()
+    {
+        return Unsafe.IsNullRef(ref _commandBuffer);
     }
 
     public void Dispose()
     {
-        if (!_nativePointer.IsNull)
+        if (Unsafe.IsNullRef(ref _commandBuffer) || !_commandBuffer.IsPassOpen(OpenPassKind.Compute, _passNumber))
         {
-            unsafe
-            {
-                SDL3.SDL_EndGPUComputePass(_nativePointer);
-            }
-            _nativePointer = Pointer<SDL_GPUComputePass>.Null;
+            return;
         }
+
+        unsafe
+        {
+            SDL3.SDL_EndGPUComputePass(_commandBuffer.ComputePass.NativePointer);
+        }
+
+        _commandBuffer.ClosePass();
     }
 
-    private void ThrowIfDisposed()
+    private ref ComputePassState OpenState()
     {
-        if (_nativePointer.IsNull)
+        if (Unsafe.IsNullRef(ref _commandBuffer) || !_commandBuffer.IsPassOpen(OpenPassKind.Compute, _passNumber))
         {
             throw new ObjectDisposedException(nameof(ComputePass));
         }
+
+        return ref _commandBuffer.ComputePass;
     }
 
-    private void ThrowIfInvalidDispatch()
+    private static void ThrowIfInvalidDispatch(in ComputePassState state)
     {
-        if (_boundPipeline == null)
+        if (state.BoundPipeline == null)
         {
             throw new InvalidOperationException("ComputePipeline must be bound before dispatching.");
         }
 
-        uint declaredTextures = _boundPipeline.BindingLayout.BindingCounts.NumReadWriteStorageTextures;
-        if (_readWriteStorageTextureCount != declaredTextures)
+        uint declaredTextures = state.BoundPipeline.BindingLayout.BindingCounts.NumReadWriteStorageTextures;
+        if (state.ReadWriteStorageTextureCount != declaredTextures)
         {
             throw new InvalidOperationException(
-                $"Read-write storage texture count mismatch: compute pass was created with {_readWriteStorageTextureCount} but pipeline declares {declaredTextures}.");
+                $"Read-write storage texture count mismatch: compute pass was created with {state.ReadWriteStorageTextureCount} but pipeline declares {declaredTextures}.");
         }
 
-        uint declaredBuffers = _boundPipeline.BindingLayout.BindingCounts.NumReadWriteStorageBuffers;
-        if (_readWriteStorageBufferCount != declaredBuffers)
+        uint declaredBuffers = state.BoundPipeline.BindingLayout.BindingCounts.NumReadWriteStorageBuffers;
+        if (state.ReadWriteStorageBufferCount != declaredBuffers)
         {
             throw new InvalidOperationException(
-                $"Read-write storage buffer count mismatch: compute pass was created with {_readWriteStorageBufferCount} but pipeline declares {declaredBuffers}.");
+                $"Read-write storage buffer count mismatch: compute pass was created with {state.ReadWriteStorageBufferCount} but pipeline declares {declaredBuffers}.");
         }
 
         ShaderBindingLayoutValidator.ValidateStorageBufferElementSizes("Read-only",
-            _boundPipeline.BindingLayout.StorageBufferElementSizes,
-            _readOnlyStorageBufferElementSizes);
+            state.BoundPipeline.BindingLayout.StorageBufferElementSizes,
+            state.ReadOnlyStorageBufferElementSizes);
 
         ShaderBindingLayoutValidator.ValidateStorageBufferElementSizes("Read-write",
-            _boundPipeline.BindingLayout.ReadWriteStorageBufferElementSizes,
-            _readWriteStorageBufferElementSizes);
+            state.BoundPipeline.BindingLayout.ReadWriteStorageBufferElementSizes,
+            state.ReadWriteStorageBufferElementSizes);
+    }
+
+    private static StorageBufferElementSizes BuildStorageBufferElementSizes(ReadOnlySpan<StorageBufferReadWriteBinding> buffers)
+    {
+        StorageBufferElementSizes sizes = default;
+        for (int i = 0; i < buffers.Length && i < 4; i++)
+        {
+            sizes = SetStorageBufferSlotSize(sizes, (uint)i, (ushort)buffers[i].Buffer.ElementSize);
+        }
+        return sizes;
     }
 
     private static StorageBufferElementSizes SetStorageBufferSlotSize(StorageBufferElementSizes sizes, uint slot, ushort elementSize)

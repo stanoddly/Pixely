@@ -16,7 +16,7 @@ public class ComputeRenderer : IRenderer<BasicRenderContext>
         _outputTexture = outputTexture;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
         _time += 0.016f;
 
@@ -29,7 +29,7 @@ public class ComputeRenderer : IRenderer<BasicRenderContext>
 
         ReadOnlySpan<StorageTextureReadWriteBinding> textureBindings = [textureBinding];
 
-        using (IComputePass computePass = renderContext.CommandBuffer.CreateComputePass(
+        using (ComputePass computePass = renderContext.CommandBuffer.CreateComputePass(
             textureBindings,
             ReadOnlySpan<StorageBufferReadWriteBinding>.Empty))
         {

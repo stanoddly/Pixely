@@ -26,7 +26,7 @@ public class StorageBufferRenderer : IRenderer<BasicRenderContext>
         _colorCount = colorCount;
     }
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
         _time += 0.016f; // Approximate 60fps timestep
 
@@ -36,7 +36,7 @@ public class StorageBufferRenderer : IRenderer<BasicRenderContext>
         // Pass the index to the shader via uniform
         renderContext.CommandBuffer.PushFragmentUniformData(0, colorIndex);
 
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(ref renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

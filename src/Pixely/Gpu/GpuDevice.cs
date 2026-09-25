@@ -77,16 +77,21 @@ public class GpuDevice : IDisposable
 
     public CommandBuffer AcquireCommandBuffer()
     {
+        return new CommandBuffer(this, AcquireSdlCommandBuffer());
+    }
+
+    internal Pointer<SDL_GPUCommandBuffer> AcquireSdlCommandBuffer()
+    {
         unsafe
         {
             Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL3.SDL_AcquireGPUCommandBuffer(SdlGpuDevice);
-            
+
             if (sdlGpuCommandBuffer.IsNull)
             {
                 throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SDL3.SDL_GetError()}");
             }
 
-            return new CommandBuffer(this, sdlGpuCommandBuffer);
+            return sdlGpuCommandBuffer;
         }
     }
 

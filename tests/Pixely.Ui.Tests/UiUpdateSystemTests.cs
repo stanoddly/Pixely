@@ -214,9 +214,9 @@ public class UiUpdateSystemTests
             return _size;
         }
 
-        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+        public override bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out BasicRenderContext renderContext)
         {
-            renderContext = null;
+            renderContext = default;
             return false;
         }
     }

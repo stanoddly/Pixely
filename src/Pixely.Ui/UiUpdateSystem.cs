@@ -9,7 +9,7 @@ namespace Pixely.Ui;
 /// frame are entitled to domain data that does not change underneath them.
 /// </summary>
 internal sealed class UiUpdateSystem<TRenderContext> : IUpdatable
-    where TRenderContext : IRenderContext
+    where TRenderContext : IRenderContext, allows ref struct
 {
     private readonly UiRoot _root;
     private readonly Window _window;

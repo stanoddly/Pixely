@@ -23,7 +23,7 @@ Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
 ```csharp
 public sealed class GameRenderer : IRenderer<BasicRenderContext>
 {
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
         // Record rendering commands.
     }
@@ -111,13 +111,13 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
         return new GameRenderContextProvider(gpuDevice, depthTarget, camera);
     }
 
-    public override bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
+    public override bool TryCreateRenderContext(Window window, [MaybeNullWhen(false)] out GameRenderContext renderContext)
     {
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
+        if (!window.TryWaitAndAcquireSwapchainTexture(ref commandBuffer, out SwapchainTexture swapchainTexture))
         {
             commandBuffer.Dispose();
-            renderContext = null;
+            renderContext = default;
             return false;
         }
 
@@ -144,21 +144,33 @@ public override ShortSize GetColorTargetSize(Window window)
 
 Systems that run in the update phase read this. They lay out against the target before any render context exists, so they cannot inspect one. `Pixely.Ui` builds its element tree this way. A provider that draws into a differently sized target and does not override this leaves the UI laid out for the window, and the UI renderer then refuses to draw it into a target of another size.
 
-Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state:
+A render context is a `ref struct`, so it cannot derive from `BasicRenderContext`. Hold one instead to keep its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state. Return the command buffer by `ref` with `[UnscopedRef]`, which `IRenderContext` requires, so that renderers record on the instance the context submits:
 
 ```csharp
-public sealed class GameRenderContext : BasicRenderContext
+public ref struct GameRenderContext : IRenderContext
 {
+    private BasicRenderContext _basic;
+
+    public GameRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer, DepthTarget depthTarget, Camera camera, Size<uint> renderSizeInPixels)
+    {
+        _basic = new BasicRenderContext(swapchainTexture, commandBuffer);
+        DepthTarget = depthTarget;
+        Camera = camera;
+        RenderSizeInPixels = renderSizeInPixels;
+    }
+
     public DepthTarget DepthTarget { get; }
     public Camera Camera { get; }
     public Size<uint> RenderSizeInPixels { get; }
 
-    public GameRenderContext(SwapchainTexture swapchainTexture, CommandBuffer commandBuffer, DepthTarget depthTarget, Camera camera, Size<uint> renderSizeInPixels)
-        : base(swapchainTexture, commandBuffer)
+    [UnscopedRef]
+    public ref CommandBuffer CommandBuffer => ref _basic.CommandBuffer;
+
+    public readonly Texture ColorTarget => _basic.ColorTarget;
+
+    public void Dispose()
     {
-        DepthTarget = depthTarget;
-        Camera = camera;
-        RenderSizeInPixels = renderSizeInPixels;
+        _basic.Dispose();
     }
 }
 ```
@@ -166,9 +178,8 @@ public sealed class GameRenderContext : BasicRenderContext
 The framework coordinator passes its managed window to the provider for each frame, skips windows
 whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
-registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
-and call the base implementation to submit its command buffer. Window registration, event routing
-and disposal remain managed by Pixely.
+registration. A context's `Dispose` can add per-frame cleanup before it calls `BasicRenderContext.Dispose`,
+which submits the command buffer. Window registration, event routing and disposal remain managed by Pixely.
 
 ## Multiple windows
 
@@ -204,7 +215,7 @@ public sealed class InventoryRenderer : IRenderer<BasicRenderContext>
 {
     ViewScope IRenderer<BasicRenderContext>.ViewScope => ViewScopes.Inventory;
 
-    public void Render(BasicRenderContext renderContext)
+    public void Render(ref BasicRenderContext renderContext)
     {
         // Render the inventory window.
     }

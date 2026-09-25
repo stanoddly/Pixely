@@ -13,7 +13,7 @@
 - `docs/pipeline-configuration.md` - GraphicsPipelineBuilder API (vertex types, shaders, depth testing)
 - `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages)
 - `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies
-- `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
+- `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, the stack-only (`ref struct`) render types and how to pass them, push constants, binding order
 - `docs/subrenderers.md` - Composing multiple renderers within IRenderer<T> (ordering members, IEnumerable injection)
 - `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, scrolling, views and view models, pointer, wheel and focus routing, text fields, styling
 - `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic
