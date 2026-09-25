@@ -38,15 +38,6 @@ internal sealed class UploadRing : IDisposable
     internal int SlotCount => _slots.Count;
 
     /// <summary>
-    /// Takes a free slot for the submission that is starting. At <see cref="MaxSlots"/> busy slots there is none, and every
-    /// upload of the submission gets a transfer buffer of its own.
-    /// </summary>
-    internal void BeginSubmission()
-    {
-        _current = TakeFreeSlot();
-    }
-
-    /// <summary>
     /// Records the fence of the submission, or releases it when the submission wrote into no slot. A null fence means the
     /// submission failed and the slot is free again.
     /// </summary>
@@ -76,13 +67,21 @@ internal sealed class UploadRing : IDisposable
     }
 
     /// <summary>
-    /// Reserves <paramref name="size"/> bytes in the submission's slot, growing or replacing its transfer buffer when the
-    /// bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>, one that does not fit a slot already at that
-    /// capacity, or one made while no slot is free, gets a transfer buffer of its own that <see cref="Complete"/> releases.
+    /// Reserves <paramref name="size"/> bytes in the submission's slot, taking a free slot on the submission's first reserve and
+    /// growing or replacing its transfer buffer when the bytes do not fit. An upload larger than <see cref="MaxSlotCapacity"/>,
+    /// one that does not fit a slot already at that capacity, or one made while all <see cref="MaxSlots"/> slots are busy, gets
+    /// a transfer buffer of its own that <see cref="Complete"/> releases.
     /// </summary>
     internal UploadAllocation Reserve(uint size)
     {
-        if (_current == null || size > MaxSlotCapacity)
+        if (size > MaxSlotCapacity)
+        {
+            return ReserveTemporary(size);
+        }
+
+        // A submission that only uploads textures or oversized data takes no slot, so it needs no fence.
+        _current ??= TakeFreeSlot();
+        if (_current == null)
         {
             return ReserveTemporary(size);
         }

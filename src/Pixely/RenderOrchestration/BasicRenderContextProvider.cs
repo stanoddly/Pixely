@@ -22,6 +22,10 @@ public abstract class BasicRenderContextProvider<TRenderContext> : RenderContext
 
     public sealed override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TRenderContext? renderContext)
     {
+        // The context comes first: once the swapchain texture is acquired, a failure can no longer cancel the command buffer.
+        TRenderContext context = _reusableContext is { IsInUse: false } ? _reusableContext : CreateRenderContext();
+        _reusableContext ??= context;
+
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         SwapchainTexture swapchainTexture;
         try
@@ -40,8 +44,6 @@ public abstract class BasicRenderContextProvider<TRenderContext> : RenderContext
             throw;
         }
 
-        TRenderContext context = _reusableContext is { IsInUse: false } ? _reusableContext : CreateRenderContext();
-        _reusableContext ??= context;
         context.Begin(swapchainTexture, commandBuffer);
 
         try

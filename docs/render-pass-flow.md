@@ -12,11 +12,11 @@ Active rendering context. Created from CommandBuffer. Used for:
 - Binding pipelines
 - Binding vertex buffers
 - Drawing primitives
-- **Disposed to execute** - rendering happens on dispose
+- **Disposed to end** - disposing ends recording; the GPU runs the work once the command buffer is submitted
 
 ## Reused objects
 
-A frame allocates no command buffer, pass, pass builder, basic render context or swapchain texture.
+Once the first frames have created them, a frame allocates no command buffer, pass, pass builder, basic render context or swapchain texture.
 
 - `AcquireCommandBuffer` takes a command buffer from a pool on the device, and `Submit`, `SubmitAndAcquireFence` and `Cancel`
   return it.

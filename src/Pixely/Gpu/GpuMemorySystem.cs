@@ -36,8 +36,6 @@ public class GpuMemorySystem: ICopyPass
                 SdlError.ThrowOnNull(sdlCopyPass);
                 _copyPass.Begin(sdlCopyPass);
             }
-
-            _uploadRing.BeginSubmission();
         }
 
         return _copyPass;

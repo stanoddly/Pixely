@@ -49,7 +49,13 @@ internal sealed class CopyPass
         unsafe
         {
             byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, allocation.TransferBuffer, false);
-            SdlError.ThrowOnNull(mapped);
+            if (mapped == null)
+            {
+                PixelyException exception = new PixelyException($"SDL_MapGPUTransferBuffer failed: {SDL3.SDL_GetError()}");
+                // The caller never reaches Complete, which would release a temporary buffer.
+                _uploadRing.Complete(allocation);
+                throw exception;
+            }
             data.CopyTo(new Span<T>(mapped + allocation.Offset, data.Length));
             SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, allocation.TransferBuffer);
         }

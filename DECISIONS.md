@@ -13,9 +13,9 @@ Command buffers come from a pool on `GpuDevice` and go back on submit or cancel.
 - `IRenderPass`, `IComputePass` and the `RenderPass<TValidator>` generic had one implementation each and no substitutes, so the command buffer returns `RenderPass` and `ComputePass`.
 - Upload slots are reused once their fence signals. The fence is only queried, because waiting suspends the wasm stack in the browser. SDL's `cycle = true` would add hidden copies without a cap instead.
 
-- The frame sequence of a provider (acquire, cancel on failure, reuse) lives in `BasicRenderContextProvider<T>`, so a custom provider cannot get it wrong. A context holding a command buffer is in use; `Dispose` gives it up, so no separate flag can drift from it.
+- The frame sequence of a provider (acquire, cancel on failure, reuse) lives in `BasicRenderContextProvider<T>`, so a custom provider does not repeat it. A context holding a command buffer is in use; `Dispose` gives it up, so no separate flag can drift from it.
 
-Cost: a command buffer, pass or context kept past its frame acts on a later frame's work instead of throwing, and disposing a command buffer after submitting it cancels whoever holds it next. A provider that derives from `RenderContextProvider<T>` directly still allocates its context every frame, and so does one whose context skips `base.Dispose()`. Consumers rename `IRenderPass` and `IComputePass`, and cannot store a `RenderPassBuilder`. The upload slots can hold up to 8 MiB, and an upload over 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
+Cost: a command buffer, pass or context kept past its frame acts on a later frame's work instead of throwing, and disposing a command buffer after submitting it cancels whoever holds it next. A provider that derives from `RenderContextProvider<T>` directly still allocates its context every frame. A context whose `Dispose` override skips `base.Dispose()` never submits, so rendering stalls. Consumers rename `IRenderPass` and `IComputePass`, and cannot store a `RenderPassBuilder`. The upload slots can hold up to 8 MiB, and an upload over 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
 
 ## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
 

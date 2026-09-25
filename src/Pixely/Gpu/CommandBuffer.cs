@@ -484,7 +484,9 @@ public class CommandBuffer: IDisposable
             EndOpenPass();
             unsafe
             {
-                SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer);
+                // SDL refuses to cancel once a swapchain texture is acquired, and the command buffer then stays pending, so it is
+                // not handed out again.
+                SdlError.ThrowOnFalse(SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer), "SDL_CancelGPUCommandBuffer");
             }
             SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
             _gpuDevice.ReturnCommandBuffer(this);
