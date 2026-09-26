@@ -23,18 +23,7 @@ internal struct RenderPassBuilderState
     }
 }
 
-public interface IRenderPassBuilder
-{
-    IRenderPassBuilder AddColorTarget(Texture texture);
-    IRenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings);
-    IRenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures);
-    IRenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings);
-    IRenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings);
-
-    IRenderPass Build();
-}
-
-public class RenderPassBuilder : IRenderPassBuilder
+public class RenderPassBuilder
 {
     private RenderPassBuilderState _state = new();
     private readonly CommandBuffer _commandBuffer;
@@ -44,13 +33,13 @@ public class RenderPassBuilder : IRenderPassBuilder
         _commandBuffer = commandBuffer;
     }
     
-    public IRenderPassBuilder AddColorTarget(Texture texture)
+    public RenderPassBuilder AddColorTarget(Texture texture)
     {
         _state.ColorTargets.Add(texture);
         return this;
     }
     
-    public IRenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
+    public RenderPassBuilder AddColorTargets(ReadOnlySpan<Texture> textures)
     {
         foreach (var texture in textures)
         {
@@ -59,27 +48,27 @@ public class RenderPassBuilder : IRenderPassBuilder
         return this;
     }
 
-    public IRenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
+    public RenderPassBuilder AddColorTarget(Texture texture, ColorTargetSettings settings)
     {
         _state.ColorTargets.Add(texture);
         _state.ColorTargetSettings.Add(settings);
         return this;
     }
 
-    public IRenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
+    public RenderPassBuilder SetSharedColorTargetSettings(ColorTargetSettings settings)
     {
         _state.SharedColorTargetSettings = settings;
         return this;
     }
 
-    public IRenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
+    public RenderPassBuilder SetDepthBuffer(Texture depthBuffer, DepthBufferSettings settings)
     {
         _state.DepthBuffer = depthBuffer;
         _state.DepthBufferSettings = settings;
         return this;
     }
 
-    public IRenderPass Build()
+    public RenderPass Build()
     {
         bool hasShared = _state.SharedColorTargetSettings != null;
         bool hasPerTarget = _state.ColorTargetSettings.Count > 0;
@@ -109,7 +98,7 @@ public class RenderPassBuilder : IRenderPassBuilder
             }
         }
 
-        IRenderPass renderPass = _commandBuffer.CreateRenderPass(_state.ColorTargets, _state.ColorTargetSettings, _state.DepthBuffer,
+        RenderPass renderPass = _commandBuffer.CreateRenderPass(_state.ColorTargets, _state.ColorTargetSettings, _state.DepthBuffer,
             _state.DepthBufferSettings);
 
         _state.ResetState();

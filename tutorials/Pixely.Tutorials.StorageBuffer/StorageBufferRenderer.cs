@@ -36,7 +36,7 @@ public class StorageBufferRenderer : IRenderer<BasicRenderContext>
         // Pass the index to the shader via uniform
         renderContext.CommandBuffer.PushFragmentUniformData(0, colorIndex);
 
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

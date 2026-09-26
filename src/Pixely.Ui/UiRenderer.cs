@@ -232,7 +232,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             return;
         }
 
-        using IRenderPass renderPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(commandBuffer)
             .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
 
@@ -266,7 +266,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     private static void Clear(CommandBuffer commandBuffer, Texture retainedTexture)
     {
-        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass clearPass = new RenderPassBuilder(commandBuffer)
             .AddColorTarget(retainedTexture, _uiColorTargetSettings)
             .Build();
     }
@@ -277,7 +277,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     /// </summary>
     private static void ClearTarget(CommandBuffer commandBuffer, Texture target)
     {
-        using IRenderPass clearPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass clearPass = new RenderPassBuilder(commandBuffer)
             .AddColorTarget(target, ColorTargetSettings.Clear)
             .Build();
     }
@@ -288,7 +288,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             ? ColorTargetSettings.Clear
             : new ColorTargetSettings { LoadOperation = LoadOperation.Load };
 
-        using IRenderPass presentPass = new RenderPassBuilder(commandBuffer)
+        using RenderPass presentPass = new RenderPassBuilder(commandBuffer)
             .AddColorTarget(target, settings)
             .Build();
 

@@ -22,7 +22,7 @@ public sealed class SecondaryWindowRenderer : IRenderer<BasicRenderContext>
     public void Render(BasicRenderContext renderContext)
     {
         renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Coral);
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
             .Build();

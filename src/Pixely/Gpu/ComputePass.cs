@@ -4,7 +4,7 @@ using SDL;
 
 namespace Pixely.Gpu;
 
-public class ComputePass : IComputePass
+public class ComputePass : IDisposable
 {
     private Pointer<SDL_GPUComputePass> _nativePointer;
     private readonly uint _readWriteStorageTextureCount;
