@@ -96,7 +96,7 @@ public partial class PixelyFactory
 
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
 
-        return new Window(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, config.CloseBehavior);
+        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, config.CloseBehavior);
     }
 
     private OffscreenWindow CreateOffscreenWindow(
@@ -106,9 +106,11 @@ public partial class PixelyFactory
         PlatformInfo platformInfo,
         WindowConfig config)
     {
-        // Only size and title matter: the SDL window is never shown, it just backs the GPU device, events and text input.
+        // Only size and title matter: the SDL window is never shown, it just backs events and text input.
+        // It is not claimed for the GPU device: with a claimed window, SDL's Vulkan backend frees finished work only on a
+        // submit that acquired a swapchain texture, which an offscreen window never does.
         (uint width, uint height) = config.Size ?? DefaultSize;
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
         return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 }

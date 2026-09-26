@@ -31,7 +31,7 @@ public class WindowTests
     [Test]
     public void ColorTargetFormat_WindowWithoutGpuDevice_Throws()
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
 
         Assert.Throws<InvalidOperationException>(() => _ = window.ColorTargetFormat);
     }
@@ -39,14 +39,14 @@ public class WindowTests
     [Test]
     public void TryWaitAndAcquireSwapchainTexture_WindowWithoutGpuDevice_Throws()
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
 
         Assert.Throws<InvalidOperationException>(() => window.TryWaitAndAcquireSwapchainTexture(null!, out _));
     }
 
     private static Window CreateDisposedWindow()
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
         window.Dispose();
         return window;
     }

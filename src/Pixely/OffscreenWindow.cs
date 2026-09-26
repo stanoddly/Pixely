@@ -9,8 +9,8 @@ namespace Pixely;
 
 /// <summary>
 /// The window of a headless app (<see cref="PixelyConfig.Headless"/>): a hidden SDL window whose frames go to a texture
-/// instead of the swapchain, so nothing is presented and frames can be read back. Everything else, events, size, text input and the colour target format, still
-/// comes from the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
+/// instead of the swapchain, so nothing is presented and frames can be read back. Events, size and text input still come from
+/// the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 public sealed class OffscreenWindow : Window
@@ -30,10 +30,14 @@ public sealed class OffscreenWindow : Window
         PixelyFrameContext frameContext,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, gpuDevice.SdlGpuDevice, sdlId, frameContext, platformInfo, closeBehavior)
+        : base(viewScope, sdlWindow, sdlId, frameContext, platformInfo, closeBehavior)
     {
         _gpuDevice = gpuDevice;
     }
+
+    // The format SDL gives an SDR swapchain on Vulkan and D3D12. A Vulkan driver without it gives the desktop R8G8B8A8Unorm,
+    // so a headless run can then render in a different format than a desktop one.
+    public override TextureFormat ColorTargetFormat => TextureFormat.B8G8R8A8Unorm;
 
     // There is always a frame to draw, whether or not the SDL window is shown.
     public override bool IsRenderable => true;
@@ -46,7 +50,6 @@ public sealed class OffscreenWindow : Window
         ArgumentNullException.ThrowIfNull(commandBuffer);
         WaitForNextFrame();
 
-        // The swapchain format keeps every pipeline built against ColorTargetFormat valid.
         Texture colorTarget = GetColorTarget(RenderSizeInPixels, ColorTargetFormat);
 
         // Renderers address the frame's target as SwapchainTexture, so the texture is aliased under that type without owning it.

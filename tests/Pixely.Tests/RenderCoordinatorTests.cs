@@ -262,7 +262,7 @@ public class RenderCoordinatorTests
 
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(Window));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
         SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
