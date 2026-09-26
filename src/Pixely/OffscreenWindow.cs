@@ -35,7 +35,8 @@ public sealed class OffscreenWindow : Window
         _gpuDevice = gpuDevice;
     }
 
-    // The format SDL gives an SDR swapchain on Vulkan and D3D12, so pipelines match what the app renders into on the desktop.
+    // The format SDL gives an SDR swapchain on Vulkan and D3D12. A Vulkan driver without it gives the desktop R8G8B8A8Unorm,
+    // so a headless run can then render in a different format than a desktop one.
     public override TextureFormat ColorTargetFormat => TextureFormat.B8G8R8A8Unorm;
 
     // There is always a frame to draw, whether or not the SDL window is shown.
