@@ -25,7 +25,7 @@ public void Render(BasicRenderContext renderContext)
     renderContext.CommandBuffer.PushFragmentUniformData(0, color);
 
     // 2. CREATE RenderPass
-    using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+    using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
         .AddColorTarget(renderContext.SwapchainTexture)
         .SetSharedColorTargetSettings(ColorTargetSettings.Clear)
         .Build();
@@ -44,7 +44,7 @@ public void Render(BasicRenderContext renderContext)
 Used by subrenderers that contribute to a larger multi-phase rendering pipeline (like deferred rendering). The parent system creates the RenderPass and calls multiple subrenderers that all draw into the same render targets.
 
 ```csharp
-public void Render(CommandBuffer commandBuffer, IRenderPass renderPass)
+public void Render(CommandBuffer commandBuffer, RenderPass renderPass)
 {
     // RenderPass already exists, don't create a new one
 
