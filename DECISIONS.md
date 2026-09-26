@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-26: Uploads reuse Pixely-owned transfer buffers instead of creating one per update
+
+`GpuMemorySystem` writes buffer uploads into up to 8 transfer buffer slots that it keeps across submissions, each growing to 1 MiB.
+
+- A render path that allocates every frame is a defect on the Raspberry Pi 5 target (#468), and a buffer updated every frame created a native transfer buffer every frame.
+- SDL's `cycle = true` would reuse one transfer buffer too, but it adds hidden copies without a cap and never frees them before the buffer. Pixely's slots are reused once their fence signals.
+- The fence is only queried, never waited on, because waiting suspends the wasm stack in the browser. The swapchain acquire already limits the submissions in flight.
+- A submission takes a slot at its first upload that fits one, so a submission that only uploads textures needs no slot and no fence.
+
+Cost: the slots can hold up to 8 MiB. An upload over 1 MiB, one that does not fit a slot already at 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
+
 ## 2026-09-26: Headless windows are not claimed for the GPU device
 
 `Window` is abstract. `SwapchainWindow` is claimed for the GPU device and presents through its swapchain. `OffscreenWindow`, the window of a headless run, is never claimed and renders into a texture.

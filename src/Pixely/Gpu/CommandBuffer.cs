@@ -426,13 +426,4 @@ public class CommandBuffer: IDisposable
             throw new ObjectDisposedException(nameof(CommandBuffer));
         }
     }
-
-    public ICopyPass CreateCopyPass()
-    {
-        unsafe
-        {
-            SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
-            return new CopyPass(_gpuDevice, copyPass);
-        }
-    }
 }
