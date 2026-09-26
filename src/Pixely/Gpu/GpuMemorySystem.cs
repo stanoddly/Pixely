@@ -7,18 +7,16 @@ namespace Pixely.Gpu;
 public class GpuMemorySystem: ICopyPass
 {
     private readonly GpuDevice _gpuDevice;
-    private readonly UploadRing _uploadRing;
     private readonly CopyPass _copyPass;
 
     // Uploads are recorded from the update phase until the render phase submits them. The native command buffer is held
-    // directly because the copy pass, the upload ring's fence and the cancel on dispose are all this class's own.
+    // directly because the copy pass and the cancel on dispose are all this class's own.
     private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
 
     public GpuMemorySystem(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
-        _uploadRing = new UploadRing(gpuDevice);
-        _copyPass = new CopyPass(gpuDevice, _uploadRing);
+        _copyPass = new CopyPass(gpuDevice);
     }
 
     public bool IsEmpty => _sdlCommandBuffer.IsNull || _copyPass.IsEmpty;
@@ -109,10 +107,9 @@ public class GpuMemorySystem: ICopyPass
                 SDL3.SDL_CancelGPUCommandBuffer(_sdlCommandBuffer);
             }
             _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
-            _uploadRing.CancelSubmission();
         }
 
-        _uploadRing.Dispose();
+        _copyPass.Dispose();
     }
 
     public void Submit()
@@ -128,21 +125,7 @@ public class GpuMemorySystem: ICopyPass
 
         unsafe
         {
-            if (!_uploadRing.NeedsFence)
-            {
-                bool submitted = SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer);
-                _uploadRing.EndSubmission(Pointer<SDL_GPUFence>.Null);
-                SdlError.ThrowOnFalse(submitted, "SDL_SubmitGPUCommandBuffer");
-                return;
-            }
-
-            Pointer<SDL_GPUFence> fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(sdlCommandBuffer);
-            _uploadRing.EndSubmission(fence);
-
-            if (fence.IsNull)
-            {
-                throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SDL3.SDL_GetError()}");
-            }
+            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
         }
     }
 }

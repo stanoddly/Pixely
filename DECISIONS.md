@@ -2,16 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-09-26: Uploads reuse Pixely-owned transfer buffers instead of creating one per update
+## 2026-09-26: Buffer uploads share one transfer buffer that SDL cycles
 
-`GpuMemorySystem` writes buffer uploads into up to 8 transfer buffer slots that it keeps across submissions, each growing to 1 MiB.
+`CopyPass` writes a submission's buffer uploads at increasing offsets into one transfer buffer, growing up to 1 MiB. The first map of each submission passes `cycle = true`, and later maps pass `false`.
 
 - A render path that allocates every frame is a defect on the Raspberry Pi 5 target (#468), and a buffer updated every frame created a native transfer buffer every frame.
-- SDL's `cycle = true` would reuse one transfer buffer too, but it adds hidden copies without a cap and never frees them before the buffer. Pixely's slots are reused once their fence signals.
-- The fence is only queried, never waited on, because waiting suspends the wasm stack in the browser. The swapchain acquire already limits the submissions in flight.
-- A submission takes a slot at its first upload that fits one, so a submission that only uploads textures needs no slot and no fence.
+- With `cycle = true`, SDL hands out a copy of the transfer buffer that no submission in flight still reads, and creates one only when all copies are in use. It tracks that itself: Pixely needs no fences and never waits.
+- In the browser, the WebGPU fork checks fences without blocking on every submit, so cycling needs no ASYNCIFY or JSPI. Uploads from the main thread copy from CPU memory when they are recorded, so the browser does not depend on cycling at all.
+- Only the first map of a submission may cycle. The submission's own uploads mark the buffer as in use, so cycling on every map would create a copy per upload.
+- A Pixely ring of fenced slots did the same with more code: slots, fence queries, and state per submission.
 
-Cost: the slots can hold up to 8 MiB. An upload over 1 MiB, one that does not fit a slot already at 1 MiB, a texture, or one made while all 8 slots are busy still creates its own transfer buffer.
+Cost: SDL keeps a copy per submission in flight at the buffer's current size until the buffer is released, so after growing to 1 MiB each copy is 1 MiB. In the browser, every cycling map clears the whole CPU-side buffer, and each copy is a WebGPU buffer the GPU never reads. An upload over 1 MiB, one that does not fit the buffer at 1 MiB, and every texture upload still create their own transfer buffer.
 
 ## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
 
