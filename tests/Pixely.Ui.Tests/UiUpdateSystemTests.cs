@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.DependencyInjection;
+using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 
 namespace Pixely.Ui.Tests;
@@ -231,13 +232,17 @@ public class UiUpdateSystemTests
         // reading RenderSizeInPixels from SDL. This exists only because a derived class must name a
         // base constructor to compile.
         private TestWindow()
-            : base(default, default, default, 0, null!, null!, default)
+            : base(default, default, 0, null!, null!, default)
         {
         }
 
         internal bool Visible { get; set; }
 
         public override bool IsRenderable => Visible;
+
+        public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
+
+        public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
     }
 
     private static Window FakeWindow(ViewScope viewScope, uint sdlId, bool visible = true)

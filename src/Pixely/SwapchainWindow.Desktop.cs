@@ -3,7 +3,7 @@ using SDL;
 
 namespace Pixely;
 
-public partial class Window
+public sealed partial class SwapchainWindow
 {
     private const string AcquireSwapchainTextureCall = "SDL_WaitAndAcquireGPUSwapchainTexture";
 

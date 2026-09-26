@@ -11,9 +11,12 @@ public readonly record struct ResolutionChangedEventArgs(ShortSize OldSize, Shor
 
 public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventArgs);
 
-public partial class Window : IDisposable
+/// <summary>
+/// An SDL window: its events, size, input and dialogs. How its frames reach the screen is up to the derived window:
+/// <see cref="SwapchainWindow"/> presents them through a swapchain, <see cref="OffscreenWindow"/> renders them into a texture.
+/// </summary>
+public abstract class Window : IDisposable
 {
-    internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
     internal Pointer<SDL_Window> SdlWindow { get; private set; }
     internal uint SdlId { get; }
     internal WindowCloseBehavior CloseBehavior { get; }
@@ -29,14 +32,12 @@ public partial class Window : IDisposable
     internal Window(
         ViewScope viewScope,
         Pointer<SDL_Window> sdlWindow,
-        Pointer<SDL_GPUDevice> sdlSdlGpuDevice,
         uint sdlId,
         PixelyFrameContext frameContext,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
     {
         ViewScope = viewScope;
-        SdlGpuDevice = sdlSdlGpuDevice;
         SdlWindow = sdlWindow;
         SdlId = sdlId;
         _frameContext = frameContext;
@@ -90,17 +91,7 @@ public partial class Window : IDisposable
         }
     }
 
-    public TextureFormat ColorTargetFormat
-    {
-        get
-        {
-            ThrowIfNoGpuDevice();
-            unsafe
-            {
-                return (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
-            }
-        }
-    }
+    public abstract TextureFormat ColorTargetFormat { get; }
 
     public bool MouseGrab
     {
@@ -391,32 +382,7 @@ public partial class Window : IDisposable
         }
     }
 
-    public virtual bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
-    {
-        ThrowIfNoGpuDevice();
-        swapchainTexture = default!;
-        uint width, height;
-
-        unsafe
-        {
-            SDL_GPUTexture* swapchainTexturePointer;
-            if (!AcquireSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, &swapchainTexturePointer, &width, &height))
-            {
-                throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SDL3.SDL_GetError()}");
-            }
-
-            if (swapchainTexturePointer == null)
-            {
-                return false;
-            }
-
-            TextureFormat textureFormat = (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
-
-            swapchainTexture = new SwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), textureFormat);
-        }
-
-        return true;
-    }
+    public abstract bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture);
 
     public void SetFullscreenBorderless(bool fullscreen)
     {
@@ -614,21 +580,8 @@ public partial class Window : IDisposable
         ClearHitTestCallback();
         unsafe
         {
-            if (!SdlGpuDevice.IsNull)
-            {
-                SDL3.SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
-            }
-
             SDL3.SDL_DestroyWindow(SdlWindow);
             SdlWindow = null;
-        }
-    }
-
-    private void ThrowIfNoGpuDevice()
-    {
-        if (SdlGpuDevice.IsNull)
-        {
-            throw new InvalidOperationException("The window has no GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
         }
     }
 

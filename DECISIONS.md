@@ -2,6 +2,15 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-26: Headless windows are not claimed for the GPU device
+
+`Window` is abstract. `SwapchainWindow` is claimed for the GPU device and presents through its swapchain. `OffscreenWindow`, the window of a headless run, is never claimed and renders into a texture.
+
+- SDL's Vulkan backend frees finished work, released buffers included, only on a submit that acquired a swapchain texture or when no window is claimed. A claimed offscreen window never acquires one, so a headless run kept every released buffer until a screenshot waited on a fence.
+- Each kind of window owns what differs: the swapchain window releases its claim on dispose, and the offscreen window has no claim to release.
+
+Cost: an unclaimed window has no swapchain to report a format, so `OffscreenWindow.ColorTargetFormat` is the fixed `B8G8R8A8Unorm`, the SDR swapchain format of Vulkan and D3D12. A Vulkan driver without it gives a desktop run `R8G8B8A8Unorm` instead, so the two runs then render in different formats. Metal was not checked.
+
 ## 2026-09-24: Browser native archives come from a URL pinned by SHA-256, not from a NuGet package
 
 A browser app links a prebuilt Emscripten archive, such as `libXDL_wgpu.a` from a GitHub release, with a `NativeUrlReference` that names the URL and the file's SHA-256. The SDK downloads it into a cache in the project's `obj` folder and makes it a `NativeFileReference`.
