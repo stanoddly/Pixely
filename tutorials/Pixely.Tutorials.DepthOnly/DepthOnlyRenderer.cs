@@ -5,6 +5,11 @@ namespace Pixely.Tutorials.DepthOnly;
 
 public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
 {
+    private static readonly ColorTargetSettings _greenClearSettings = new()
+    {
+        ClearColorValue = new FColor(0.2f, 0.6f, 0.2f, 1.0f)
+    };
+
     private readonly GraphicsPipeline _depthOnlyPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _vertexBuffer;
     private readonly Texture _depthTexture;
@@ -33,10 +38,7 @@ public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
 
         // Second pass: Clear swapchain to green to show the app is running
         using (RenderPass colorPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
-            {
-                ClearColorValue = new FColor(0.2f, 0.6f, 0.2f, 1.0f)
-            })
+            .AddColorTarget(renderContext.SwapchainTexture, _greenClearSettings)
             .Build())
         {
             // Nothing to draw - just clearing to show success

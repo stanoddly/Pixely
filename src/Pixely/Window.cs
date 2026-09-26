@@ -27,6 +27,9 @@ public abstract class Window : IDisposable
 
     private ShortSize _lastSize;
 
+    // Handed out every frame, pointed at that frame's texture.
+    private SwapchainTexture? _swapchainTexture;
+
     public event ResolutionChangedHandler? ResolutionChanged;
 
     internal Window(
@@ -583,6 +586,20 @@ public abstract class Window : IDisposable
             SDL3.SDL_DestroyWindow(SdlWindow);
             SdlWindow = null;
         }
+    }
+
+    private protected SwapchainTexture UpdateSwapchainTexture(Pointer<SDL_GPUTexture> texture, ShortSize size, TextureFormat format)
+    {
+        if (_swapchainTexture == null)
+        {
+            _swapchainTexture = new SwapchainTexture(texture, size, format);
+        }
+        else
+        {
+            _swapchainTexture.Update(texture, size, format);
+        }
+
+        return _swapchainTexture;
     }
 
     private sealed class ModalFileDialogState

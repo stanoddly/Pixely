@@ -7,6 +7,20 @@ namespace Pixely.Tutorials.StencilBuffer;
 
 public class StencilBufferRenderer : IRenderer<BasicRenderContext>
 {
+    private static readonly ColorTargetSettings _blackClearSettings = new()
+    {
+        ClearColorValue = FColors.Black
+    };
+
+    private static readonly DepthBufferSettings _stencilClearSettings = new()
+    {
+        StencilLoadOperation = LoadOperation.Clear,
+        StencilStoreOperation = StoreOperation.Store,
+        ClearStencilValue = 0,
+        DepthBufferLoadOperation = LoadOperation.Clear,
+        DepthBufferStoreOperation = StoreOperation.DontCare
+    };
+
     private readonly GraphicsPipeline _maskPipeline;
     private readonly GraphicsPipeline _drawPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _smallQuadBuffer;
@@ -30,18 +44,8 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
     public void Render(BasicRenderContext renderContext)
     {
         using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
-            .AddColorTarget(renderContext.SwapchainTexture, new ColorTargetSettings
-            {
-                ClearColorValue = FColors.Black
-            })
-            .SetDepthBuffer(_depthStencilTexture, new DepthBufferSettings
-            {
-                StencilLoadOperation = LoadOperation.Clear,
-                StencilStoreOperation = StoreOperation.Store,
-                ClearStencilValue = 0,
-                DepthBufferLoadOperation = LoadOperation.Clear,
-                DepthBufferStoreOperation = StoreOperation.DontCare
-            })
+            .AddColorTarget(renderContext.SwapchainTexture, _blackClearSettings)
+            .SetDepthBuffer(_depthStencilTexture, _stencilClearSettings)
             .Build();
 
         // Draw 1: Write stencil mask with the small quad (magenta, but color write could be off — we keep it to show the mask area)

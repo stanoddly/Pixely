@@ -22,6 +22,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         ClearColorValue = FColors.Transparent
     };
 
+    private static readonly ColorTargetSettings _loadColorTargetSettings = new() { LoadOperation = LoadOperation.Load };
+
     private static readonly Matrix4x4 _presentViewProjection =
         Matrix4x4.CreateOrthographicOffCenterLeftHanded(0, 1, 1, 0, 0, 1);
 
@@ -242,8 +244,9 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         renderPass.BindGraphicsPipeline(_quadPipeline);
         renderPass.BindVertexBuffer(_vertexBuffer);
 
-        foreach (PaintBatch batch in batches)
+        for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
         {
+            PaintBatch batch = batches[batchIndex];
             renderPass.SetScissor(batch.Clip);
             renderPass.BindFragmentSampler(batch.Texture ?? _whiteTexture, _sampler);
 
@@ -284,9 +287,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
     private void Present(CommandBuffer commandBuffer, Texture target, Texture retainedTexture, Matrix4x4 world)
     {
-        ColorTargetSettings settings = _clearTarget
-            ? ColorTargetSettings.Clear
-            : new ColorTargetSettings { LoadOperation = LoadOperation.Load };
+        ColorTargetSettings settings = _clearTarget ? ColorTargetSettings.Clear : _loadColorTargetSettings;
 
         using RenderPass presentPass = new RenderPassBuilder(commandBuffer)
             .AddColorTarget(target, settings)
