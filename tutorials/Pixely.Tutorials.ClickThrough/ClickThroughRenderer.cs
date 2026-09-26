@@ -7,6 +7,12 @@ namespace Pixely.Tutorials.ClickThrough;
 
 public class ClickThroughRenderer : IRenderer<BasicRenderContext>
 {
+    private static readonly ColorTargetSettings _transparentClearSettings = new()
+    {
+        ClearColorValue = FColors.Transparent,
+        LoadOperation = LoadOperation.Clear
+    };
+
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quad;
 
@@ -20,11 +26,7 @@ public class ClickThroughRenderer : IRenderer<BasicRenderContext>
     {
         using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(new ColorTargetSettings
-            {
-                ClearColorValue = FColors.Transparent,
-                LoadOperation = LoadOperation.Clear
-            })
+            .SetSharedColorTargetSettings(_transparentClearSettings)
             .Build();
 
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
