@@ -50,7 +50,7 @@ public sealed class OffscreenWindow : Window
         Texture colorTarget = GetColorTarget(RenderSizeInPixels, ColorTargetFormat);
 
         // Renderers address the frame's target as SwapchainTexture, so the texture is aliased under that type without owning it.
-        swapchainTexture = new SwapchainTexture(colorTarget.SdlGpuTexture, colorTarget.Size, colorTarget.Format);
+        swapchainTexture = UpdateSwapchainTexture(colorTarget.SdlGpuTexture, colorTarget.Size, colorTarget.Format);
         return true;
     }
 

@@ -5,13 +5,12 @@ using SDL;
 
 namespace Pixely.Gpu;
 
-public class RenderPass<TValidator> : IRenderPass
-    where TValidator : IRenderPassValidator<TValidator>
+public class RenderPass : IDisposable
 {
     private Pointer<SDL_GPURenderPass> _nativePointer;
     private uint _verticesCount = 0;
     private GpuIndexBuffer? _indexBuffer;
-    private TValidator _validator;
+    private RenderPassValidator _validator;
 
     private ShaderBindingCounts _fragmentShaderBindingCounts;
     private ShaderBindingCounts _vertexShaderBindingCounts;
@@ -35,7 +34,7 @@ public class RenderPass<TValidator> : IRenderPass
         _nativePointer = nativePointer;
         DepthBufferFormat = depthBufferFormat;
         TargetSize = targetSize;
-        _validator = TValidator.Create(commandBuffer);
+        _validator = RenderPassValidator.Create(commandBuffer);
     }
 
     public void BindGraphicsPipeline(GraphicsPipeline graphicsPipeline)
@@ -242,6 +241,10 @@ public class RenderPass<TValidator> : IRenderPass
         unsafe { SDL3.SDL_SetGPUStencilReference(_nativePointer, reference); }
     }
 
+    /// <summary>
+    /// Restricts subsequent draws to <paramref name="scissor"/>, in render target pixels.
+    /// The rectangle is clipped to the render target, so a larger one simply restricts nothing.
+    /// </summary>
     public void SetScissor(Rectangle scissor)
     {
         ThrowIfDisposed();
@@ -267,6 +270,9 @@ public class RenderPass<TValidator> : IRenderPass
         }
     }
 
+    /// <summary>
+    /// Restores the scissor to cover the whole render target.
+    /// </summary>
     public void ClearScissor()
     {
         SetScissor(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
@@ -372,20 +378,5 @@ public class RenderPass<TValidator> : IRenderPass
             IndexElementSize.UInt32 => SDL_GPUIndexElementSize.SDL_GPU_INDEXELEMENTSIZE_32BIT,
             _ => throw new ArgumentOutOfRangeException(nameof(elementSize), elementSize, null)
         };
-    }
-}
-
-/// <summary>
-/// Non-generic render pass using the default RenderPassValidator with full validation checks.
-/// </summary>
-public class RenderPass : RenderPass<RenderPassValidator>
-{
-    internal RenderPass(
-        CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
-        DepthBufferFormat depthBufferFormat,
-        ShortSize targetSize)
-        : base(commandBuffer, nativePointer, depthBufferFormat, targetSize)
-    {
     }
 }

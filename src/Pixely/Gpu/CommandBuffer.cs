@@ -148,7 +148,7 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IRenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    public RenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
         
@@ -209,7 +209,7 @@ public class CommandBuffer: IDisposable
         return new ShortSize(width, height);
     }
 
-    private IRenderPass CreateMultipleRenderTargetsPassInternal(
+    private RenderPass CreateMultipleRenderTargetsPassInternal(
         ReadOnlySpan<SDL_GPUColorTargetInfo> colorTargetInfos,
         Pointer<SDL_GPUTexture> depthBufferPointer,
         DepthBufferSettings depthBufferSettings,
@@ -269,7 +269,7 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IComputePass CreateComputePass(
+    public ComputePass CreateComputePass(
         ReadOnlySpan<StorageTextureReadWriteBinding> readWriteStorageTextures,
         ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
     {
@@ -310,7 +310,7 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public IComputePass CreateComputePass()
+    public ComputePass CreateComputePass()
     {
         return CreateComputePass(
             ReadOnlySpan<StorageTextureReadWriteBinding>.Empty,
@@ -424,15 +424,6 @@ public class CommandBuffer: IDisposable
         if (SdlGpuCommandBuffer.IsNull)
         {
             throw new ObjectDisposedException(nameof(CommandBuffer));
-        }
-    }
-
-    public ICopyPass CreateCopyPass()
-    {
-        unsafe
-        {
-            SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
-            return new CopyPass(_gpuDevice, copyPass);
         }
     }
 }

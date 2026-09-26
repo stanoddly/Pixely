@@ -103,23 +103,18 @@ static partial class Program
 
 internal sealed class ClearRenderer : IRenderer<BasicRenderContext>
 {
-    private readonly FColor _color;
-
+    private readonly ColorTargetSettings _clearSettings;
 
     public ClearRenderer(FColor color)
     {
-        _color = color;
+        _clearSettings = new ColorTargetSettings { ClearColorValue = color, LoadOperation = LoadOperation.Clear };
     }
 
     public void Render(BasicRenderContext renderContext)
     {
-        using IRenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
+        using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
-            .SetSharedColorTargetSettings(new ColorTargetSettings
-            {
-                ClearColorValue = _color,
-                LoadOperation = LoadOperation.Clear
-            })
+            .SetSharedColorTargetSettings(_clearSettings)
             .Build();
     }
 }

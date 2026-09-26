@@ -24,6 +24,9 @@ public partial class Window : IDisposable
 
     private ShortSize _lastSize;
 
+    // Handed out every frame, pointed at that frame's texture.
+    private SwapchainTexture? _swapchainTexture;
+
     public event ResolutionChangedHandler? ResolutionChanged;
 
     internal Window(
@@ -412,7 +415,7 @@ public partial class Window : IDisposable
 
             TextureFormat textureFormat = (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
 
-            swapchainTexture = new SwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), textureFormat);
+            swapchainTexture = UpdateSwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), textureFormat);
         }
 
         return true;
@@ -622,6 +625,20 @@ public partial class Window : IDisposable
             SDL3.SDL_DestroyWindow(SdlWindow);
             SdlWindow = null;
         }
+    }
+
+    private protected SwapchainTexture UpdateSwapchainTexture(Pointer<SDL_GPUTexture> texture, ShortSize size, TextureFormat format)
+    {
+        if (_swapchainTexture == null)
+        {
+            _swapchainTexture = new SwapchainTexture(texture, size, format);
+        }
+        else
+        {
+            _swapchainTexture.Update(texture, size, format);
+        }
+
+        return _swapchainTexture;
     }
 
     private void ThrowIfNoGpuDevice()
