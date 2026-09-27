@@ -110,7 +110,7 @@ new RenderPassBuilder(commandBuffer)
 
 Add multiple color targets for deferred rendering (G-buffer). A pass takes at most 8 color targets, SDL's limit.
 
-`RenderPassBuilder` is a `ref struct`, so building a pass every frame allocates nothing. Its methods return the builder by `ref`, so a chain fills one instance. It cannot be stored in a field, captured by a lambda or kept across an `await`: create it where the pass begins.
+`RenderPassBuilder` is a `ref struct`, so the builder itself allocates nothing. Its methods return the builder by `ref`, so a chain fills one instance. It cannot be stored in a field, captured by a lambda or kept across an `await`: create it where the pass begins.
 
 ## Common Patterns
 

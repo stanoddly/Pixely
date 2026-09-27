@@ -4,8 +4,8 @@ using System.Runtime.CompilerServices;
 namespace Pixely.Gpu;
 
 /// <summary>
-/// Collects the attachments of a render pass and begins it on a <see cref="CommandBuffer"/>. It lives on the stack, so building
-/// a pass every frame allocates nothing. Its methods return the builder by <c>ref</c>, so a chain such as
+/// Collects the attachments of a render pass and begins it on a <see cref="CommandBuffer"/>. It lives on the stack, so the builder
+/// itself allocates nothing. Its methods return the builder by <c>ref</c>, so a chain such as
 /// <c>new RenderPassBuilder(commandBuffer).AddColorTarget(texture).Build()</c> fills one instance without copying it.
 /// </summary>
 public ref struct RenderPassBuilder
