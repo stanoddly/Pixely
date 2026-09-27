@@ -1,4 +1,3 @@
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.Utilities;
@@ -7,66 +6,40 @@ using SDL;
 namespace Pixely.Gpu;
 
 /// <summary>
-/// Records uploads into the copy pass that <see cref="GpuMemorySystem"/> keeps open until it submits. One instance lives as
-/// long as its <see cref="GpuMemorySystem"/> and is pointed at each new native copy pass. Buffer uploads share one transfer
-/// buffer, which SDL cycles once per submission, so a steady stream of buffer updates does not create a transfer buffer per
-/// update.
+/// Records uploads into one submission's native copy pass, which <see cref="GpuMemorySystem"/> keeps open until it submits.
+/// Buffer uploads share the <see cref="UploadTransferBuffer"/> that outlives the pass, which SDL cycles once per submission, so
+/// a steady stream of buffer updates does not create a transfer buffer per update.
 /// </summary>
-internal sealed class CopyPass : IDisposable
+internal sealed class CopyPass
 {
-    // The most the shared transfer buffer grows to. A larger upload gets a transfer buffer of its own.
-    private const uint MaxTransferBufferCapacity = 1 << 20;
-
-    private const uint MinTransferBufferCapacity = 64 << 10;
-
     // WebGPU needs offsets that are multiples of 4; 16 also keeps every vertex and storage element aligned.
     private const uint Alignment = 16;
 
     private readonly GpuDevice _gpuDevice;
-    private Pointer<SDL_GPUCopyPass> _sdlCopyPass;
+    private readonly Pointer<SDL_GPUCopyPass> _sdlCopyPass;
+    private readonly UploadTransferBuffer _transferBuffer;
 
-    private Pointer<SDL_GPUTransferBuffer> _transferBuffer;
-    private uint _transferBufferCapacity;
     private uint _transferBufferOffset;
 
     // The first map of a submission cycles, so that SDL hands out a copy no submission in flight still reads. Later maps must
     // not: the submission's own uploads already mark the buffer as in use, so cycling would create a copy per upload.
-    private bool _cycleOnNextMap;
+    private bool _cycleOnNextMap = true;
 
-    internal CopyPass(GpuDevice gpuDevice)
+    internal CopyPass(GpuDevice gpuDevice, Pointer<SDL_GPUCopyPass> sdlCopyPass, UploadTransferBuffer transferBuffer)
     {
         _gpuDevice = gpuDevice;
+        _sdlCopyPass = sdlCopyPass;
+        _transferBuffer = transferBuffer;
     }
 
     public bool IsEmpty { get; private set; } = true;
 
-    internal void Begin(Pointer<SDL_GPUCopyPass> sdlCopyPass)
-    {
-        _sdlCopyPass = sdlCopyPass;
-        IsEmpty = true;
-        _transferBufferOffset = 0;
-        _cycleOnNextMap = true;
-    }
-
     internal void End()
     {
-        if (_sdlCopyPass.IsNull)
-        {
-            return;
-        }
-
         unsafe
         {
             SDL3.SDL_EndGPUCopyPass(_sdlCopyPass);
         }
-        _sdlCopyPass = Pointer<SDL_GPUCopyPass>.Null;
-    }
-
-    public void Dispose()
-    {
-        ReleaseTransferBuffer(_transferBuffer);
-        _transferBuffer = Pointer<SDL_GPUTransferBuffer>.Null;
-        _transferBufferCapacity = 0;
     }
 
     private unsafe void UploadToBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer) where T : unmanaged
@@ -74,29 +47,29 @@ internal sealed class CopyPass : IDisposable
         uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);
         SDL_GPUBufferRegion destination = new SDL_GPUBufferRegion { buffer = buffer, offset = 0, size = sizeBytes };
         uint offset = AlignUp(_transferBufferOffset);
-        bool fits = offset + (ulong)sizeBytes <= _transferBufferCapacity;
+        bool fits = offset + (ulong)sizeBytes <= _transferBuffer.Capacity;
 
         // A full buffer at its largest keeps its size: growing it no further, the upload gets a transfer buffer of its own.
-        if (sizeBytes > MaxTransferBufferCapacity || (!fits && _transferBufferCapacity == MaxTransferBufferCapacity))
+        if (sizeBytes > UploadTransferBuffer.MaxCapacity || (!fits && _transferBuffer.Capacity == UploadTransferBuffer.MaxCapacity))
         {
             Pointer<SDL_GPUTransferBuffer> temporary = CreateFilledTransferBuffer(data);
             SDL_GPUTransferBufferLocation temporarySource = new SDL_GPUTransferBufferLocation { transfer_buffer = temporary, offset = 0 };
             SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, false);
-            ReleaseTransferBuffer(temporary);
+            _gpuDevice.ReleaseTransferBuffer(temporary);
         }
         else
         {
             if (!fits)
             {
-                GrowTransferBuffer(sizeBytes);
+                _transferBuffer.Grow(sizeBytes);
                 offset = 0;
             }
 
-            Write(data, _transferBuffer, offset, _cycleOnNextMap);
+            Write(data, _transferBuffer.SdlTransferBuffer, offset, _cycleOnNextMap);
             _cycleOnNextMap = false;
             _transferBufferOffset = offset + sizeBytes;
 
-            SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer, offset = offset };
+            SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer.SdlTransferBuffer, offset = offset };
             SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, false);
         }
 
@@ -113,25 +86,13 @@ internal sealed class CopyPass : IDisposable
         SDL_GPUTextureRegion destination = new SDL_GPUTextureRegion { texture = texture, layer = layer, w = width, h = height, d = 1 };
         SdlBoolInterop.SDL_UploadToGPUTexture(_sdlCopyPass, &source, &destination, false);
 
-        ReleaseTransferBuffer(temporary);
+        _gpuDevice.ReleaseTransferBuffer(temporary);
         IsEmpty = false;
-    }
-
-    private void GrowTransferBuffer(uint size)
-    {
-        uint capacity = Math.Min(MaxTransferBufferCapacity, Math.Max(Math.Max(MinTransferBufferCapacity, _transferBufferCapacity * 2), BitOperations.RoundUpToPowerOf2(size)));
-
-        // Uploads already recorded from the old buffer still read it, which SDL allows: a released buffer is freed only once
-        // the GPU is done with it. The new buffer is created first, so a failed create leaves the old one in place.
-        Pointer<SDL_GPUTransferBuffer> transferBuffer = CreateTransferBuffer(capacity);
-        ReleaseTransferBuffer(_transferBuffer);
-        _transferBuffer = transferBuffer;
-        _transferBufferCapacity = capacity;
     }
 
     private Pointer<SDL_GPUTransferBuffer> CreateFilledTransferBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
-        Pointer<SDL_GPUTransferBuffer> transferBuffer = CreateTransferBuffer((uint)(Unsafe.SizeOf<T>() * data.Length));
+        Pointer<SDL_GPUTransferBuffer> transferBuffer = _gpuDevice.CreateUploadTransferBuffer((uint)(Unsafe.SizeOf<T>() * data.Length));
         // Not handled: a failed map leaks this transfer buffer.
         Write(data, transferBuffer, 0, false);
         return transferBuffer;
@@ -145,34 +106,6 @@ internal sealed class CopyPass : IDisposable
             SdlError.ThrowOnNull(mapped);
             data.CopyTo(new Span<T>(mapped + offset, data.Length));
             SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
-        }
-    }
-
-    private Pointer<SDL_GPUTransferBuffer> CreateTransferBuffer(uint size)
-    {
-        unsafe
-        {
-            SDL_GPUTransferBufferCreateInfo createInfo = new SDL_GPUTransferBufferCreateInfo
-            {
-                usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                size = size
-            };
-            Pointer<SDL_GPUTransferBuffer> transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(_gpuDevice.SdlGpuDevice, &createInfo);
-            SdlError.ThrowOnNull(transferBuffer);
-            return transferBuffer;
-        }
-    }
-
-    private void ReleaseTransferBuffer(Pointer<SDL_GPUTransferBuffer> transferBuffer)
-    {
-        if (transferBuffer.IsNull)
-        {
-            return;
-        }
-
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
         }
     }
 

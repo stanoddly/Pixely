@@ -95,6 +95,34 @@ public class GpuDevice : IDisposable
         }
     }
 
+    internal Pointer<SDL_GPUTransferBuffer> CreateUploadTransferBuffer(uint size)
+    {
+        unsafe
+        {
+            SDL_GPUTransferBufferCreateInfo createInfo = new SDL_GPUTransferBufferCreateInfo
+            {
+                usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                size = size
+            };
+            Pointer<SDL_GPUTransferBuffer> transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(SdlGpuDevice, &createInfo);
+            SdlError.ThrowOnNull(transferBuffer);
+            return transferBuffer;
+        }
+    }
+
+    internal void ReleaseTransferBuffer(Pointer<SDL_GPUTransferBuffer> transferBuffer)
+    {
+        if (transferBuffer.IsNull)
+        {
+            return;
+        }
+
+        unsafe
+        {
+            SDL3.SDL_ReleaseGPUTransferBuffer(SdlGpuDevice, transferBuffer);
+        }
+    }
+
     public Sampler CreateSampler(SamplerConfig config)
     {
         SDL_GPUSamplerCreateInfo sdlGpuSamplerCreateInfo = new SDL_GPUSamplerCreateInfo()

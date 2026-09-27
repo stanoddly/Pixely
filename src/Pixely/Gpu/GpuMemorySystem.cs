@@ -7,33 +7,36 @@ namespace Pixely.Gpu;
 public class GpuMemorySystem: ICopyPass
 {
     private readonly GpuDevice _gpuDevice;
-    private readonly CopyPass _copyPass;
+    private readonly UploadTransferBuffer _uploadTransferBuffer;
 
     // Uploads are recorded from the update phase until the render phase submits them. The native command buffer is held
     // directly because the copy pass and the cancel on dispose are all this class's own.
     private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
+    private CopyPass? _copyPass;
 
     public GpuMemorySystem(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
-        _copyPass = new CopyPass(gpuDevice);
+        _uploadTransferBuffer = new UploadTransferBuffer(gpuDevice);
     }
 
-    public bool IsEmpty => _sdlCommandBuffer.IsNull || _copyPass.IsEmpty;
+    public bool IsEmpty => _copyPass == null || _copyPass.IsEmpty;
 
     private CopyPass GetOrCreateCopyPass()
     {
-        if (_sdlCommandBuffer.IsNull)
+        if (_copyPass == null)
         {
-            _sdlCommandBuffer = _gpuDevice.AcquireSdlCommandBuffer();
+            if (_sdlCommandBuffer.IsNull)
+            {
+                _sdlCommandBuffer = _gpuDevice.AcquireSdlCommandBuffer();
+            }
 
             unsafe
             {
                 Pointer<SDL_GPUCopyPass> sdlCopyPass = SDL3.SDL_BeginGPUCopyPass(_sdlCommandBuffer);
-                // Not handled: a failure keeps the command buffer without a copy pass, so uploads after a caught exception record
-                // into a pass that never began.
+                // A failure keeps the command buffer, so the next upload begins the copy pass on it again.
                 SdlError.ThrowOnNull(sdlCopyPass);
-                _copyPass.Begin(sdlCopyPass);
+                _copyPass = new CopyPass(_gpuDevice, sdlCopyPass, _uploadTransferBuffer);
             }
         }
 
@@ -101,7 +104,8 @@ public class GpuMemorySystem: ICopyPass
     {
         if (!_sdlCommandBuffer.IsNull)
         {
-            _copyPass.End();
+            _copyPass?.End();
+            _copyPass = null;
             unsafe
             {
                 SDL3.SDL_CancelGPUCommandBuffer(_sdlCommandBuffer);
@@ -109,7 +113,7 @@ public class GpuMemorySystem: ICopyPass
             _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         }
 
-        _copyPass.Dispose();
+        _uploadTransferBuffer.Dispose();
     }
 
     public void Submit()
@@ -119,7 +123,8 @@ public class GpuMemorySystem: ICopyPass
             return;
         }
 
-        _copyPass.End();
+        _copyPass?.End();
+        _copyPass = null;
         Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = _sdlCommandBuffer;
         _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
 
