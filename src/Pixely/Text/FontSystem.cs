@@ -17,6 +17,9 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode), Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
+    // Cleared after every Update, so the per-frame sweep allocates nothing.
+    private readonly List<(string text, Font font)> _keysToRemove = new();
+
     private FontSystem(GpuMemorySystem gpuMemorySystem, ContentSource contentSource)
     {
         _gpuMemorySystem = gpuMemorySystem;
@@ -259,22 +262,23 @@ internal class FontSystem: IFontSystem, IUpdatable
 
     public void Update()
     {
-        List<(string text, Font font)> keysToRemove = new();
         foreach (KeyValuePair<(string text, Font font), CachedTextSprite> cacheEntry in _textSpriteCache)
         {
             if (!cacheEntry.Value.BorrowedTexture.TryGetTarget(out BorrowedTexture? borrowedTexture) || borrowedTexture.IsDisposed)
             {
-                keysToRemove.Add(cacheEntry.Key);
+                _keysToRemove.Add(cacheEntry.Key);
             }
         }
 
-        foreach ((string text, Font font) key in keysToRemove)
+        foreach ((string text, Font font) key in _keysToRemove)
         {
             if (_textSpriteCache.TryGetValue(key, out CachedTextSprite cached))
             {
                 ReleaseCachedTextSprite(key, cached);
             }
         }
+
+        _keysToRemove.Clear();
     }
 
     private void ReleaseCachedTextSprite((string text, Font font) key, CachedTextSprite cached)

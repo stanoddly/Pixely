@@ -29,7 +29,7 @@ public class ComputeRenderer : IRenderer<BasicRenderContext>
 
         ReadOnlySpan<StorageTextureReadWriteBinding> textureBindings = [textureBinding];
 
-        using (IComputePass computePass = renderContext.CommandBuffer.CreateComputePass(
+        using (ComputePass computePass = renderContext.CommandBuffer.CreateComputePass(
             textureBindings,
             ReadOnlySpan<StorageBufferReadWriteBinding>.Empty))
         {

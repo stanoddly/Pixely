@@ -1,29 +1,46 @@
 using Pixely.Content;
+using Pixely.Utilities;
+using SDL;
 
 namespace Pixely.Gpu;
 
 public class GpuMemorySystem: ICopyPass
 {
     private readonly GpuDevice _gpuDevice;
-    private CommandBuffer? _commandBuffer;
-    private ICopyPass? _copyPassImplementation;
+    private readonly UploadTransferBuffer _uploadTransferBuffer;
+
+    // Uploads are recorded from the update phase until the render phase submits them. The native command buffer is held
+    // directly because the copy pass and the cancel on dispose are all this class's own.
+    private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
+    private CopyPass? _copyPass;
 
     public GpuMemorySystem(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
+        _uploadTransferBuffer = new UploadTransferBuffer(gpuDevice);
     }
 
-    public bool IsEmpty => _copyPassImplementation == null || _copyPassImplementation.IsEmpty;
+    public bool IsEmpty => _copyPass == null || _copyPass.IsEmpty;
 
-    private ICopyPass GetOrCreateCopyPass()
+    private CopyPass GetOrCreateCopyPass()
     {
-        if (_copyPassImplementation == null)
+        if (_copyPass == null)
         {
-            _commandBuffer = _gpuDevice.AcquireCommandBuffer();
-            _copyPassImplementation = _commandBuffer.CreateCopyPass();
+            if (_sdlCommandBuffer.IsNull)
+            {
+                _sdlCommandBuffer = _gpuDevice.AcquireSdlCommandBuffer();
+            }
+
+            unsafe
+            {
+                Pointer<SDL_GPUCopyPass> sdlCopyPass = SDL3.SDL_BeginGPUCopyPass(_sdlCommandBuffer);
+                // A failure keeps the command buffer, so the next upload begins the copy pass on it again.
+                SdlError.ThrowOnNull(sdlCopyPass);
+                _copyPass = new CopyPass(_gpuDevice, sdlCopyPass, _uploadTransferBuffer);
+            }
         }
 
-        return _copyPassImplementation;
+        return _copyPass;
     }
 
     public GpuVertexBuffer<TVertexType> CreateVertexBuffer<TVertexType>(ReadOnlySpan<TVertexType> vertices) where TVertexType : unmanaged, IVertexType
@@ -85,17 +102,35 @@ public class GpuMemorySystem: ICopyPass
     // rather than submitted; submitting would make the device destruction wait for work nobody reads.
     public void Dispose()
     {
-        _copyPassImplementation?.Dispose();
-        _copyPassImplementation = null;
-        _commandBuffer?.Cancel();
-        _commandBuffer = null;
+        if (!_sdlCommandBuffer.IsNull)
+        {
+            _copyPass?.End();
+            _copyPass = null;
+            unsafe
+            {
+                SDL3.SDL_CancelGPUCommandBuffer(_sdlCommandBuffer);
+            }
+            _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+        }
+
+        _uploadTransferBuffer.Dispose();
     }
 
     public void Submit()
     {
-        _copyPassImplementation?.Dispose();
-        _copyPassImplementation = null;
-        _commandBuffer?.Submit();
-        _commandBuffer = null;
+        if (_sdlCommandBuffer.IsNull)
+        {
+            return;
+        }
+
+        _copyPass?.End();
+        _copyPass = null;
+        Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = _sdlCommandBuffer;
+        _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+
+        unsafe
+        {
+            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
+        }
     }
 }

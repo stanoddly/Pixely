@@ -2,6 +2,33 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-27: Small objects that die within a frame are allocated, not pooled
+
+`CommandBuffer`, `RenderPass`, `CopyPass` and `BasicRenderContext` are classes allocated every frame. Small managed objects that nothing references after the frame are allocated rather than pooled.
+
+- A collection of the youngest generation costs time per surviving object, not per dead one. This holds for the .NET GC on desktop and for Mono's SGen in the browser.
+- A collection frees dead objects instead of promoting them, so these objects reach an older generation only if a collection happens during their frame.
+- A pooled object that a caller stores by mistake comes back in a later frame and acts on that frame's work, a bug far from its cause. A stored `RenderPass` or `CommandBuffer` throws `ObjectDisposedException` instead.
+- Pooling render contexts would change the public `RenderContextProvider<TRenderContext>` API, which every custom render context goes through.
+- A `ref struct` would make storing them a compile error, but it changes the API more than pooling does.
+- Native allocations per frame, such as transfer buffers, stay a defect (#468).
+
+Cost: each allocation still clears memory and brings the next collection closer, and every collection in the browser stops the app. Large objects are not covered: the browser puts objects over about 8 KB in a separate large object space.
+
+Sources: [.NET GC fundamentals](https://learn.microsoft.com/dotnet/standard/garbage-collection/fundamentals), [Mono SGen](https://www.mono-project.com/docs/advanced/garbage-collector/sgen/), [Blazor WebAssembly GC pauses](https://github.com/dotnet/aspnetcore/issues/21085), [wasm large object space fragmentation](https://github.com/dotnet/runtime/issues/118044).
+
+## 2026-09-26: Buffer uploads share one transfer buffer that SDL cycles
+
+`CopyPass` writes a submission's buffer uploads at increasing offsets into one transfer buffer, growing up to 1 MiB. A map at offset 0, the first of each submission or the first into a grown buffer, passes `cycle = true`, and later maps pass `false`.
+
+- A render path that allocates every frame is a defect on the Raspberry Pi 5 target (#468), and a buffer updated every frame created a native transfer buffer every frame.
+- With `cycle = true`, SDL hands out a copy of the transfer buffer that no submission in flight still reads, and creates one only when all copies are in use. It tracks that itself: Pixely needs no fences and never waits.
+- In the browser, the WebGPU fork checks fences without blocking on every submit, so cycling needs no ASYNCIFY or JSPI. Uploads from the main thread copy from CPU memory when they are recorded, so the browser does not depend on cycling at all.
+- Only a map at offset 0 may cycle. The submission's own uploads mark the buffer as in use, so cycling on every map would create a copy per upload. A grown buffer is not in use yet, so SDL does not copy it.
+- A Pixely ring of fenced slots did the same with more code: slots, fence queries, and state per submission.
+
+Cost: SDL keeps a copy per submission in flight at the buffer's current size until the buffer is released, so after growing to 1 MiB each copy is 1 MiB. In the browser, every cycling map clears the whole CPU-side buffer, and each copy is a WebGPU buffer the GPU never reads. An upload over 1 MiB, one that does not fit the buffer at 1 MiB, and every texture upload still create their own transfer buffer.
+
 ## 2026-09-26: Headless windows are not claimed for the GPU device
 
 `Window` is abstract. `SwapchainWindow` is claimed for the GPU device and presents through its swapchain. `OffscreenWindow`, the window of a headless run, is never claimed and renders into a texture.
