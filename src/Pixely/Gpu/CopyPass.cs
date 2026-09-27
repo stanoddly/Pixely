@@ -76,6 +76,20 @@ internal sealed class CopyPass
         IsEmpty = false;
     }
 
+    // Uploads into a buffer created for it, releasing the buffer if the upload fails, since nothing else holds it yet.
+    private unsafe void UploadToNewBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer) where T : unmanaged
+    {
+        try
+        {
+            UploadToBuffer(data, buffer);
+        }
+        catch
+        {
+            SDL3.SDL_ReleaseGPUBuffer(_gpuDevice.SdlGpuDevice, buffer);
+            throw;
+        }
+    }
+
     // Textures are uploaded at load time and can be large, so each gets a transfer buffer of its own rather than growing the
     // shared one for good. It also leaves D3D12's 512-byte offset alignment for texture copies to the offset 0 of a new buffer.
     private unsafe void UploadToTexture(ReadOnlySpan<byte> data, SDL_GPUTexture* texture, uint layer, uint width, uint height)
@@ -93,8 +107,16 @@ internal sealed class CopyPass
     private Pointer<SDL_GPUTransferBuffer> CreateFilledTransferBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
         Pointer<SDL_GPUTransferBuffer> transferBuffer = _gpuDevice.CreateUploadTransferBuffer((uint)(Unsafe.SizeOf<T>() * data.Length));
-        // Not handled: a failed map leaks this transfer buffer.
-        Write(data, transferBuffer, 0, false);
+        try
+        {
+            Write(data, transferBuffer, 0, false);
+        }
+        catch
+        {
+            _gpuDevice.ReleaseTransferBuffer(transferBuffer);
+            throw;
+        }
+
         return transferBuffer;
     }
 
@@ -131,7 +153,7 @@ internal sealed class CopyPass
             };
 
             SDL_GPUBuffer* rawVertexBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToBuffer(vertices, rawVertexBuffer);
+            UploadToNewBuffer(vertices, rawVertexBuffer);
 
             GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(_gpuDevice, rawVertexBuffer, vertices.Length);
             _gpuDevice.RegisterVertexBuffer(vertexBuffer);
@@ -197,7 +219,7 @@ internal sealed class CopyPass
             };
 
             SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToBuffer(indices, rawBuffer);
+            UploadToNewBuffer(indices, rawBuffer);
 
             GpuIndexBuffer indexBuffer = new GpuIndexBuffer(_gpuDevice, rawBuffer, indices.Length, elementSize);
             _gpuDevice.RegisterIndexBuffer(indexBuffer);
@@ -262,7 +284,7 @@ internal sealed class CopyPass
             };
 
             SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToBuffer(data, rawBuffer);
+            UploadToNewBuffer(data, rawBuffer);
 
             GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length);
             _gpuDevice.RegisterStorageBuffer(storageBuffer);
@@ -317,7 +339,15 @@ internal sealed class CopyPass
             Pointer<SDL_GPUTexture> sdlGpuTexture = SDL3.SDL_CreateGPUTexture(_gpuDevice.SdlGpuDevice, &sdlGpuTextureCreateInfo);
             SdlError.ThrowOnNull(sdlGpuTexture);
 
-            UploadToTexture(imageData, sdlGpuTexture, 0, width, height);
+            try
+            {
+                UploadToTexture(imageData, sdlGpuTexture, 0, width, height);
+            }
+            catch
+            {
+                SDL3.SDL_ReleaseGPUTexture(_gpuDevice.SdlGpuDevice, sdlGpuTexture);
+                throw;
+            }
 
             Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), TextureFormat.R8G8B8A8Unorm);
             _gpuDevice.RegisterTexture(texture);
@@ -363,9 +393,17 @@ internal sealed class CopyPass
             Pointer<SDL_GPUTexture> sdlGpuTexture = SDL3.SDL_CreateGPUTexture(_gpuDevice.SdlGpuDevice, &sdlGpuTextureCreateInfo);
             SdlError.ThrowOnNull(sdlGpuTexture);
 
-            for (int layer = 0; layer < images.Length; layer++)
+            try
             {
-                UploadToTexture(images[layer].Data, sdlGpuTexture, (uint)layer, width, height);
+                for (int layer = 0; layer < images.Length; layer++)
+                {
+                    UploadToTexture(images[layer].Data, sdlGpuTexture, (uint)layer, width, height);
+                }
+            }
+            catch
+            {
+                SDL3.SDL_ReleaseGPUTexture(_gpuDevice.SdlGpuDevice, sdlGpuTexture);
+                throw;
             }
 
             TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, TextureFormat.R8G8B8A8Unorm);
