@@ -21,10 +21,6 @@ internal sealed class CopyPass
 
     private uint _transferBufferOffset;
 
-    // The first map of a submission cycles, so that SDL hands out a copy no submission in flight still reads. Later maps must
-    // not: the submission's own uploads already mark the buffer as in use, so cycling would create a copy per upload.
-    private bool _cycleOnNextMap = true;
-
     internal CopyPass(GpuDevice gpuDevice, Pointer<SDL_GPUCopyPass> sdlCopyPass, UploadTransferBuffer transferBuffer)
     {
         _gpuDevice = gpuDevice;
@@ -65,8 +61,10 @@ internal sealed class CopyPass
                 offset = 0;
             }
 
-            Write(data, _transferBuffer.SdlTransferBuffer, offset, _cycleOnNextMap);
-            _cycleOnNextMap = false;
+            // Only a write at offset 0 cycles: the first of a submission, so that SDL hands out a copy no submission in flight
+            // still reads, or the first into a grown buffer, which nothing uses yet, so SDL does not copy it. Later writes must
+            // not cycle: the submission's own uploads already mark the buffer as in use, so cycling would create a copy per upload.
+            Write(data, _transferBuffer.SdlTransferBuffer, offset, offset == 0);
             _transferBufferOffset = offset + sizeBytes;
 
             SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer.SdlTransferBuffer, offset = offset };
