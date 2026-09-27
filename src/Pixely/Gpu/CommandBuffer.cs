@@ -148,13 +148,13 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public RenderPass CreateRenderPass(List<Texture> colorTargets, List<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    public RenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
     {
         ThrowIfDisposed();
         
-        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Count];
+        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
             
-        for (int i = 0; i < colorTargets.Count; i++)
+        for (int i = 0; i < colorTargets.Length; i++)
         {
             Texture colorTarget = colorTargets[i];
             ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
@@ -189,7 +189,7 @@ public class CommandBuffer: IDisposable
 
     // A pass can only safely address the area every attachment shares, so the scissor bounds
     // are the smallest attachment, depth included.
-    private static ShortSize CalculateTargetSize(List<Texture> colorTargets, Texture? depthBuffer)
+    private static ShortSize CalculateTargetSize(ReadOnlySpan<Texture> colorTargets, Texture? depthBuffer)
     {
         ushort width = ushort.MaxValue;
         ushort height = ushort.MaxValue;
