@@ -12,7 +12,7 @@ The parent renderer creates the RenderPass and multiple subrenderers contribute 
 
 ## Basic Pattern
 
-A subrenderer receives both a `CommandBuffer` and an `RenderPass`:
+A subrenderer receives both a `CommandBuffer` and a `RenderPass`:
 
 ```csharp
 public class MeshSubrenderer
