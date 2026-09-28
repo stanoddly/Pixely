@@ -52,8 +52,13 @@ public partial class PixelyFactory: IDisposable
 
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
         SdlLogOutput.Install(_sdlLogger);
-        SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO |
-                                  SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
+        SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO;
+        // A headless run sees only the synthetic gamepad, so a scenario behaves the same whether or not a pad is plugged in.
+        if (!_config.Headless)
+        {
+            initFlags |= SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
+        }
+
         if (SDL3.SDL_Init(initFlags) == false)
         {
             SdlLogOutput.Uninstall();
@@ -207,8 +212,12 @@ public partial class PixelyFactory: IDisposable
         EnsureSdlInitialized();
         
         GamepadService gamepadService = new();
-        gamepadService.SetupGamepads();
-        
+        // Without the gamepad subsystem, which a headless run does not start, SDL cannot list gamepads.
+        if (!_config.Headless)
+        {
+            gamepadService.SetupGamepads();
+        }
+
         return gamepadService;
     }
 
