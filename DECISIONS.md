@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-28: Headless game time advances by a fixed step, and automation commands end with `;`
+
+In headless mode, `PixelyFrameContext` ignores the real clock. Game time starts at 0 and advances by 1/30 second per frame. The `speed` command changes only how many frames run per real second. `wait` counts frames. Every automation command ends with `;`, and a newline is ordinary whitespace.
+
+- A time scale on the real clock stops working above about 3x: `TimeDelta` is capped at 0.1 second, and deltas that large break physics. A fixed step gives the game the same frame times at every speed.
+- Starting at 0 gives every run of a scenario the same `ElapsedTime`, so its screenshots can be repeated.
+- With a fixed step, a second is always 30 frames. A wait in seconds would add only a conversion and its rounding.
+- Pacing moved from each `OffscreenWindow` to the frame context. Each window kept its own schedule, so a speed change would have needed every schedule reset.
+- `;` lets a whole scenario fit on one shell line. `text` and `screenshot` cannot contain `;`, because an escape rule was not worth its cost.
+
+Cost: the `;` grammar breaks every newline-only script, and `#` comments are gone. The public `OffscreenWindow.FrameInterval` was removed. Synthetic input takes its timestamps from game time, but events from SDL keep SDL's clock, so the two cannot be compared. `PerformanceTracker` reports the fixed step in headless mode. Scenarios count frames, so they would change meaning if the step ever became configurable.
+
 ## 2026-09-27: Small objects that die within a frame are allocated, not pooled
 
 `CommandBuffer`, `RenderPass`, `CopyPass` and `BasicRenderContext` are classes allocated every frame. Small managed objects that nothing references after the frame are allocated rather than pooled.

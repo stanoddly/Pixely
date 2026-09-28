@@ -171,6 +171,116 @@ public sealed class InputAutomationTests
         Assert.That(exception!.Message, Does.Contain("ViewScope 99"));
     }
 
+    [Test]
+    public void Input_IsTimestampedWithGameTime()
+    {
+        TestFrameContext frameContext = new();
+        WindowRegistry windowRegistry = new();
+        windowRegistry.Register(CreateWindow(_viewScope, 42));
+        (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry, frameContext: frameContext);
+        ulong? timestamp = null;
+        keyboardService.SubscribeKeyDown(_viewScope, 0, eventArgs => timestamp = eventArgs.Timestamp);
+        frameContext.StartTestFrame(1500);
+
+        automation.KeyDown(Scancode.A, _viewScope);
+
+        Assert.That(timestamp, Is.EqualTo(1_500_000_000UL));
+    }
+
+    [Test]
+    public void GamepadConnect_AddsGamepadAndRaisesConnected()
+    {
+        GamepadService gamepadService = new();
+        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        Gamepad? connected = null;
+        gamepadService.GamepadConnected += gamepad => connected = gamepad;
+
+        automation.GamepadConnect();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(automation.IsGamepadConnected, Is.True);
+            Assert.That(gamepadService.Gamepads, Is.EqualTo(new[] { connected }));
+            Assert.That(() => automation.GamepadConnect(), Throws.InvalidOperationException);
+        });
+    }
+
+    [Test]
+    public void GamepadInput_WithoutConnect_Throws()
+    {
+        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => automation.GamepadButtonPress(GamepadButton.South), Throws.InvalidOperationException);
+            Assert.That(() => automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 1), Throws.InvalidOperationException);
+            Assert.That(() => automation.GamepadDisconnect(), Throws.InvalidOperationException);
+        });
+    }
+
+    [Test]
+    public void GamepadButtonPress_DispatchesPressAndReleaseWithCorrespondingState()
+    {
+        GamepadService gamepadService = new();
+        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        List<(string Event, GamepadButton Button, int ButtonFlags)> events = new();
+        gamepadService.SubscribeButtonPress(0, eventArgs => events.Add(("press", eventArgs.Button, eventArgs.Gamepad.ButtonFlags)));
+        gamepadService.SubscribeButtonRelease(0, eventArgs => events.Add(("release", eventArgs.Button, eventArgs.Gamepad.ButtonFlags)));
+        automation.GamepadConnect();
+
+        automation.GamepadButtonPress(GamepadButton.South);
+
+        Assert.That(events, Is.EqualTo(new[] { ("press", GamepadButton.South, 1 << (int)GamepadButton.South), ("release", GamepadButton.South, 0) }));
+    }
+
+    [Test]
+    public void GamepadAxisMotion_AppliesStickDeadZoneButNotToTriggers()
+    {
+        GamepadService gamepadService = new();
+        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        List<Vector2> sticks = new();
+        List<float> triggers = new();
+        gamepadService.SubscribeLeftStickMotion(0, eventArgs => sticks.Add(eventArgs.Value));
+        gamepadService.SubscribeLeftTriggerMotion(0, eventArgs => triggers.Add(eventArgs.Value));
+        automation.GamepadConnect();
+
+        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.1f);
+        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.5f);
+        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.1f);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(sticks, Is.EqualTo(new[] { new Vector2(0.5f, 0) }));
+            Assert.That(triggers, Is.EqualTo(new[] { 0.1f }));
+        });
+    }
+
+    [Test]
+    public void GamepadDisconnect_RecentersAxesAndReleasesButtonsBeforeDisconnecting()
+    {
+        GamepadService gamepadService = new();
+        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        automation.GamepadConnect();
+        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, -1);
+        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0.5f);
+        automation.GamepadButtonDown(GamepadButton.North);
+        List<string> events = new();
+        gamepadService.SubscribeLeftStickMotion(0, eventArgs => events.Add($"left stick {eventArgs.Value}"));
+        gamepadService.SubscribeRightStickMotion(0, eventArgs => events.Add($"right stick {eventArgs.Value}"));
+        gamepadService.SubscribeRightTriggerMotion(0, eventArgs => events.Add($"right trigger {eventArgs.Value}"));
+        gamepadService.SubscribeButtonRelease(0, eventArgs => events.Add($"release {eventArgs.Button}"));
+        gamepadService.GamepadDisconnected += _ => events.Add("disconnected");
+
+        automation.GamepadDisconnect();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(events, Is.EqualTo(new[] { $"right stick {Vector2.Zero}", "right trigger 0", "release North", "disconnected" }));
+            Assert.That(gamepadService.Gamepads, Is.Empty);
+            Assert.That(automation.IsGamepadConnected, Is.False);
+        });
+    }
+
     private static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation()
     {
         WindowRegistry windowRegistry = new();
@@ -178,12 +288,13 @@ public sealed class InputAutomationTests
         return CreateAutomation(windowRegistry);
     }
 
-    internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(WindowRegistry windowRegistry)
+    internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(
+        WindowRegistry windowRegistry, GamepadService? gamepadService = null, FrameContext? frameContext = null)
     {
         MouseService mouseService = new(windowRegistry);
         KeyboardService keyboardService = new(new AppControl());
         TextInputService textInputService = new(windowRegistry);
-        InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService);
+        InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameContext ?? new TestFrameContext());
         return (automation, mouseService, keyboardService, textInputService);
     }
 

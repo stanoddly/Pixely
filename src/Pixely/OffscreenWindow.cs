@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using Pixely.Content;
 using Pixely.Gpu;
@@ -10,17 +9,13 @@ namespace Pixely;
 /// <summary>
 /// The window of a headless app (<see cref="PixelyConfig.Headless"/>): a hidden SDL window whose frames go to a texture
 /// instead of the swapchain, so nothing is presented and frames can be read back. Events, size and text input still come from
-/// the SDL window. Without a swapchain there is no vsync, so acquiring paces frames at <see cref="FrameInterval"/>.
+/// the SDL window. Without a swapchain there is no vsync, so the frame context paces the frames instead.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 public sealed class OffscreenWindow : Window
 {
-    // Nobody watches these frames, so a modest constant rate is enough and keeps the frame loop off a full core.
-    public static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 30);
-
     private readonly GpuDevice _gpuDevice;
     private Texture? _colorTarget;
-    private long _nextFrameTimestamp;
 
     internal OffscreenWindow(
         ViewScope viewScope,
@@ -48,7 +43,6 @@ public sealed class OffscreenWindow : Window
     public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
         ArgumentNullException.ThrowIfNull(commandBuffer);
-        WaitForNextFrame();
 
         Texture colorTarget = GetColorTarget(RenderSizeInPixels, ColorTargetFormat);
 
@@ -88,24 +82,5 @@ public sealed class OffscreenWindow : Window
         _colorTarget?.Dispose();
         _colorTarget = _gpuDevice.CreateColorTargetTexture(size, format);
         return _colorTarget;
-    }
-
-    private void WaitForNextFrame()
-    {
-        long now = Stopwatch.GetTimestamp();
-        if (_nextFrameTimestamp == 0)
-        {
-            _nextFrameTimestamp = now;
-        }
-
-        TimeSpan remaining = Stopwatch.GetElapsedTime(now, _nextFrameTimestamp);
-        if (remaining > TimeSpan.Zero)
-        {
-            Thread.Sleep(remaining);
-            now = _nextFrameTimestamp;
-        }
-
-        // Never schedule into the past, otherwise a long frame would be followed by a burst of unpaced ones.
-        _nextFrameTimestamp = Math.Max(_nextFrameTimestamp, now) + (long)(FrameInterval.TotalSeconds * Stopwatch.Frequency);
     }
 }

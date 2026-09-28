@@ -227,9 +227,20 @@ public partial class PixelyFactory: IDisposable
     }
 
     // Automation exists in headless mode only; a null result registers nothing.
-    internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService)
+    internal InputAutomation? CreateInputAutomation(
+        WindowRegistry windowRegistry,
+        MouseService mouseService,
+        KeyboardService keyboardService,
+        TextInputService textInputService,
+        GamepadService gamepadService,
+        FrameContext frameContext)
     {
-        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService) : null;
+        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameContext) : null;
+    }
+
+    internal HeadlessClock? CreateHeadlessClock()
+    {
+        return _config.Headless ? new HeadlessClock() : null;
     }
 
     internal IImageWriter? CreateImageWriter()
@@ -238,15 +249,21 @@ public partial class PixelyFactory: IDisposable
     }
 
     [UnsupportedOSPlatform("browser")]
-    internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter)
+    internal InputAutomationConsole? CreateInputAutomationConsole(
+        InputAutomation? inputAutomation,
+        WindowRegistry windowRegistry,
+        IImageWriter? imageWriter,
+        HeadlessClock? headlessClock,
+        AppControl appControl)
     {
-        if (inputAutomation is null || imageWriter is null)
+        if (inputAutomation is null || imageWriter is null || headlessClock is null)
         {
             return null;
         }
 
+        InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, headlessClock, appControl);
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()));
+        return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()));
     }
 
     internal EventService CreateEventService(
@@ -266,11 +283,6 @@ public partial class PixelyFactory: IDisposable
             textInputService,
             windowRegistry,
             appControl);
-    }
-
-    public PixelyFrameContext CreateFrameContext()
-    {
-        return new PixelyFrameContext();
     }
 
     public void Dispose()

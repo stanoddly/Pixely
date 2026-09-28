@@ -9,15 +9,23 @@ public class PixelyFrameContext: FrameContext
     private ulong _pausedNanoseconds;
     private ulong _pauseStartNanoseconds;
     private bool _paused;
-    
-    internal PixelyFrameContext()
+    private readonly HeadlessClock? _headlessClock;
+
+    internal PixelyFrameContext(HeadlessClock? headlessClock)
     {
+        _headlessClock = headlessClock;
     }
 
     public void StartFrame()
     {
         if (_paused)
         {
+            return;
+        }
+
+        if (_headlessClock != null)
+        {
+            StartHeadlessFrame(_headlessClock);
             return;
         }
 
@@ -40,6 +48,23 @@ public class PixelyFrameContext: FrameContext
             TimeDelta = (float)TimeDelta64;
         }
 
+        FrameNumber += 1;
+    }
+
+    // Game time starts at 0 and advances by a fixed step, so every run of a script sees the same times whatever its speed.
+    private void StartHeadlessFrame(HeadlessClock headlessClock)
+    {
+        headlessClock.WaitForNextFrame();
+
+        // The first frame has no previous one to measure from, the same as with the real clock.
+        if (FrameNumber != 0)
+        {
+            ElapsedNanoseconds += HeadlessClock.StepNanoseconds;
+            TimeDelta64 = HeadlessClock.StepNanoseconds / 1_000_000_000.0;
+            TimeDelta = (float)TimeDelta64;
+        }
+
+        ElapsedTime = new TimeSpan((long)(ElapsedNanoseconds / 100));
         FrameNumber += 1;
     }
 
