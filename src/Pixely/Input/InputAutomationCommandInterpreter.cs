@@ -23,11 +23,7 @@ internal sealed class InputAutomationCommandInterpreter
     private readonly HeadlessClock _headlessClock;
     private readonly AppControl _appControl;
 
-    public InputAutomationCommandInterpreter(
-        InputAutomation automation,
-        WindowRegistry windowRegistry,
-        IImageWriter imageWriter,
-        HeadlessClock headlessClock,
+    public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, HeadlessClock headlessClock,
         AppControl appControl)
     {
         _automation = automation;

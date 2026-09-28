@@ -214,11 +214,7 @@ public sealed class InputAutomationCommandInterpreterTests
         return new Fixture(interpreter, events, keyboardService, headlessClock, appControl);
     }
 
-    private sealed record Fixture(
-        InputAutomationCommandInterpreter Interpreter,
-        List<string> Events,
-        KeyboardService KeyboardService,
-        HeadlessClock HeadlessClock,
+    private sealed record Fixture(InputAutomationCommandInterpreter Interpreter, List<string> Events, KeyboardService KeyboardService, HeadlessClock HeadlessClock,
         AppControl AppControl);
 
     private sealed class NoImageWriter : IImageWriter

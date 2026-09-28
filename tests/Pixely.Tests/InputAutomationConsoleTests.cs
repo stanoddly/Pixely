@@ -37,6 +37,17 @@ public sealed class InputAutomationConsoleTests
     }
 
     [Test]
+    public void Update_Quit_StopsTheCommandsAfterIt()
+    {
+        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A; quit; key press B; bogus;", out GatedReader reader);
+        StartAndReadAll(console, reader);
+
+        console.Update();
+
+        Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A }));
+    }
+
+    [Test]
     public void Update_MalformedCommand_ThrowsOutOfTheFrame()
     {
         (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("bogus;", out GatedReader reader);
@@ -119,9 +130,10 @@ public sealed class InputAutomationConsoleTests
         List<(Scancode Scancode, int ThreadId)> presses = new();
         keyboardService.SubscribeKeyDown(0, eventArgs => presses.Add((eventArgs.Scancode, Environment.CurrentManagedThreadId)));
 
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new HeadlessClock(), new AppControl());
+        AppControl appControl = new();
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new HeadlessClock(), appControl);
         reader = new GatedReader(input);
-        return (new InputAutomationConsole(interpreter, reader), presses);
+        return (new InputAutomationConsole(interpreter, reader, appControl), presses);
     }
 
     private sealed class GatedReader(string input) : TextReader
@@ -134,16 +146,17 @@ public sealed class InputAutomationConsoleTests
 
         public bool WaitUntilFinished(TimeSpan timeout) => _finished.Wait(timeout);
 
-        public override int Read()
+        // The whole input in one read, like a single write; the next read reports the end after the console queued that batch.
+        public override int Read(char[] buffer, int index, int count)
         {
             _opened.Wait();
-            int character = _inner.Read();
-            if (character < 0)
+            int readCount = _inner.Read(buffer, index, count);
+            if (readCount == 0)
             {
                 _finished.Set();
             }
 
-            return character;
+            return readCount;
         }
     }
 

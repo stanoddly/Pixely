@@ -29,13 +29,8 @@ internal sealed class InputAutomation
     private readonly FrameContext _frameContext;
     private Gamepad? _gamepad;
 
-    internal InputAutomation(
-        WindowRegistry windowRegistry,
-        MouseService mouseService,
-        KeyboardService keyboardService,
-        TextInputService textInputService,
-        GamepadService gamepadService,
-        FrameContext frameContext)
+    internal InputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService,
+        GamepadService gamepadService, FrameContext frameContext)
     {
         _windowRegistry = windowRegistry;
         _mouseService = mouseService;

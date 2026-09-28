@@ -10,7 +10,7 @@ Automated input affects Pixely's event-derived synthetic device state; every vie
 
 ## Driving the app from standard input
 
-A headless app reads commands from the process's standard input (on the desktop only; headless mode is not available in the browser, see below) and runs them on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command ends with `;`. A newline is whitespace like a space or a tab, so a whole scenario fits on one line and a long one can span several. Empty commands are ignored. Each frame runs, in order, the commands read by the time the console runs, up to a `wait`. A chain written in one go usually lands in one frame but may split across two, when a frame starts while only part of it has been read; `wait 1` is the way to put a frame between two commands. A malformed command throws `FormatException` out of the frame loop, so a bad script ends the app; so does input that ends with a command without its `;`, once the commands before it have run. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
+A headless app reads commands from the process's standard input (on the desktop only; headless mode is not available in the browser, see below) and runs them on the frame loop at `UpdateOrders.Input`, after the frame's real events and before the game's updatables. Every command ends with `;`. A newline is whitespace like a space or a tab, so a whole scenario fits on one line and a long one can span several. Empty commands are ignored. Each frame runs, in order, the commands read by the time the console runs, up to a `wait`. The commands completed by one read reach the frame loop together, so a chain sent in one write of up to 4096 characters, such as a single `printf` or a short scenario file, is never split across frames. A longer input, or a pipe that delivers a write in pieces, can split between any two commands; `wait 1` is the way to put a frame between two commands. A malformed command throws `FormatException` out of the frame loop, so a bad script ends the app; so does input that ends with a command without its `;`, once the commands before it have run. An exception thrown by an input handler propagates out of the frame loop, the same as for real input.
 
 | Command | Dispatches |
 | --- | --- |
@@ -35,7 +35,7 @@ A headless app reads commands from the process's standard input (on the desktop 
 | `gamepad trigger left\|right <value>` | Trigger motion to the value, 0 to 1 |
 | `wait <frames>` | Holds the commands after it for that many frames, see [Game time](#game-time) |
 | `speed <factor>` | Sets how fast frames run in real time, see [Game time](#game-time) |
-| `quit` | Ends the app after the frame's updatables, the same as `AppControl.Quit()` |
+| `quit` | Ends the app after the frame's updatables, the same as `AppControl.Quit()`; the commands after it do not run |
 
 A mouse `<button>` is a `MouseButton` name, a gamepad `<button>` a `GamepadButton` name, and `<scancode>` a `Scancode` name, all case-insensitive. Numbers use invariant culture; `NaN` and infinities are malformed. `text` and `screenshot` cannot contain `;`. A mouse, key, text or screenshot command targets the default `ViewScope` unless it starts with `@<n>`, the value of the scope whose window it is for: `@7 mouse click Left 10 10;`, `@7 screenshot shot.png;`. A scope without a registered window is malformed. The other commands belong to no window and are malformed with `@<n>`.
 
@@ -59,7 +59,7 @@ Without `quit` the app keeps running after the input ends. A tool that cannot ho
 
 ```sh
 : > commands.txt
-tail -f commands.txt | dotnet run --project MyGame &
+tail -f commands.txt | PIXELY_HEADLESS=1 dotnet run --project MyGame &
 printf 'key down LeftCtrl; key press E; key up LeftCtrl;' >> commands.txt
 ```
 
@@ -67,7 +67,7 @@ At `speed 0`, game time races ahead while the app waits for the next write, so s
 
 ### Game time
 
-In headless mode game time does not follow the real clock. The first frame has an `ElapsedTime` and a `TimeDelta` of 0, and every later frame adds exactly one step of 1/30 second, rounded up to 33,333,334 nanoseconds. Every run of a scenario therefore sees the same frame times, and animations driven by `ElapsedTime` or `TimeDelta` give the same screenshots.
+In headless mode game time does not follow the real clock. The first frame has an `ElapsedTime` and a `TimeDelta` of 0, and every later frame adds exactly one step of 1/30 second, rounded up to 33,333,334 nanoseconds. Every run of a scenario therefore sees the same frame times, and animations driven by `ElapsedTime` or `TimeDelta` give the same screenshots, as long as its commands reach the same frames (see above).
 
 `speed <factor>` sets only how many frames run per real second: 1, the default, runs 30, 4 runs 120, and 0 runs frames as fast as the machine can. A negative factor, or one between 0 and 0.01, is malformed. The frame times stay the same at every speed, so physics and timers behave the same, only sooner. `wait <frames>` counts frames, so `wait 30` is one second of game time at any speed. `wait 0` does nothing.
 

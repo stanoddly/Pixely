@@ -11,18 +11,23 @@ namespace Pixely.Input;
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable
 {
+    private const int ReadBufferSize = 4096;
+
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
-    private readonly ConcurrentQueue<ReadCommand> _readCommands = new();
+    private readonly AppControl _appControl;
+    // The commands completed by one read stay together, so a chain sent in one write is not split across frames.
+    private readonly ConcurrentQueue<ReadCommand[]> _readBatches = new();
     // Commands taken from the reader that a wait still holds.
     private readonly Queue<ReadCommand> _pendingCommands = new();
     private int _heldFrames;
     private Thread? _readerThread;
 
-    internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input)
+    internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl)
     {
         _interpreter = interpreter;
         _input = input;
+        _appControl = appControl;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
@@ -32,10 +37,13 @@ internal sealed class InputAutomationConsole : IUpdatable
         _readerThread ??= StartReader();
 
         // Only what was read when the console runs, so a fast writer cannot hold the frame.
-        int readCount = _readCommands.Count;
-        for (int i = 0; i < readCount && _readCommands.TryDequeue(out ReadCommand command); i++)
+        int batchCount = _readBatches.Count;
+        for (int i = 0; i < batchCount && _readBatches.TryDequeue(out ReadCommand[]? batch); i++)
         {
-            _pendingCommands.Enqueue(command);
+            foreach (ReadCommand command in batch)
+            {
+                _pendingCommands.Enqueue(command);
+            }
         }
 
         if (_heldFrames > 0 && --_heldFrames > 0)
@@ -43,7 +51,8 @@ internal sealed class InputAutomationConsole : IUpdatable
             return;
         }
 
-        while (_heldFrames == 0 && _pendingCommands.TryDequeue(out ReadCommand command))
+        // After a quit the frame is the last one, so the commands after it do not run.
+        while (_heldFrames == 0 && !_appControl.QuitRequested && _pendingCommands.TryDequeue(out ReadCommand command))
         {
             if (!command.IsTerminated)
             {
@@ -64,25 +73,36 @@ internal sealed class InputAutomationConsole : IUpdatable
     // An error thrown here would end the process, so an unterminated command at the end is queued for the frame loop to throw.
     private void ReadCommands()
     {
+        char[] buffer = new char[ReadBufferSize];
         StringBuilder command = new();
-        int character;
-        while ((character = _input.Read()) >= 0)
+        List<ReadCommand> batch = new();
+        int readCount;
+        while ((readCount = _input.Read(buffer, 0, buffer.Length)) > 0)
         {
-            if (character == ';')
+            foreach (char character in buffer.AsSpan(0, readCount))
             {
-                _readCommands.Enqueue(new ReadCommand(command.ToString(), IsTerminated: true));
-                command.Clear();
+                if (character == ';')
+                {
+                    batch.Add(new ReadCommand(command.ToString(), IsTerminated: true));
+                    command.Clear();
+                }
+                else
+                {
+                    command.Append(character);
+                }
             }
-            else
+
+            if (batch.Count > 0)
             {
-                command.Append((char)character);
+                _readBatches.Enqueue(batch.ToArray());
+                batch.Clear();
             }
         }
 
         string rest = command.ToString();
         if (!string.IsNullOrWhiteSpace(rest))
         {
-            _readCommands.Enqueue(new ReadCommand(rest, IsTerminated: false));
+            _readBatches.Enqueue([new ReadCommand(rest, IsTerminated: false)]);
         }
     }
 
