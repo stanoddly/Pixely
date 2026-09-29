@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-29: Buffer updates cycle the GPU buffer
+
+`CopyPass.UpdateVertexBuffer`, `UpdateIndexBuffer` and `UpdateStorageBuffer` pass `cycle = true` to `SDL_UploadToGPUBuffer`. Buffer creation passes `false`.
+
+- Without cycling, an update overwrites a buffer that an earlier submission may still read: the previous frame, or another window in the same frame. The draw then reads old data, new data or a mix.
+- With `cycle = true`, SDL writes into a copy of the buffer when a submission in flight or still recording uses it, and overwrites in place otherwise. It tracks that itself: Pixely needs no fences and never waits.
+- A render pass keeps the copy that was active when it bound the buffer. So `RenderPass` takes the vertex and index counts at bind time, and an update after a bind shows only after the next bind.
+- Uploads left unsubmitted keep their buffers in use, so `RenderCoordinator` submits them even when its window cannot render. Otherwise every update of a buffer while a window is minimized would create a new copy.
+
+Cost: a cycle leaves the rest of the buffer undefined, so an update replaces the whole contents, not a prefix. Each copy is the buffer's full size, one per submission in flight and one per extra update of the buffer in the same submission, and SDL keeps the copies until the buffer is released. The GPU memory tracking does not count them. In the browser, uploads are already ordered against earlier submissions, so the copies prevent no race there.
+
 ## 2026-09-28: Headless apps run in lockstep with their input, on a fixed step
 
 In headless mode game time starts at 0 and advances by 1/30 second per frame. Frames run only through `wait N`, as fast as they can, and when no command is left the app blocks on standard input. The end of input quits the app.

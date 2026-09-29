@@ -9,7 +9,8 @@ public class RenderPass : IDisposable
 {
     private Pointer<SDL_GPURenderPass> _nativePointer;
     private uint _verticesCount = 0;
-    private GpuIndexBuffer? _indexBuffer;
+    // Taken at bind time: an update after the bind cycles the buffer, while this pass keeps drawing from the bound copy.
+    private uint _indexCount;
     private RenderPassValidator _validator;
 
     private ShaderBindingCounts _fragmentShaderBindingCounts;
@@ -80,7 +81,7 @@ public class RenderPass : IDisposable
         ThrowIfDisposed();
 
         _validator.OnBindIndexBuffer(this, buffer);
-        _indexBuffer = buffer;
+        _indexCount = (uint)buffer.Size;
 
         unsafe
         {
@@ -302,7 +303,7 @@ public class RenderPass : IDisposable
 
     public void DrawIndexedPrimitive()
     {
-        uint indexCount = (uint)(_indexBuffer?.Size ?? 0);
+        uint indexCount = _indexCount;
         DrawIndexedPrimitive(indexCount);
     }
 
@@ -318,7 +319,7 @@ public class RenderPass : IDisposable
 
     public void DrawIndexedPrimitiveInstanced(uint instanceCount, uint firstInstance)
     {
-        uint indexCount = (uint)(_indexBuffer?.Size ?? 0);
+        uint indexCount = _indexCount;
         DrawIndexedPrimitiveInstanced(indexCount, instanceCount, 0, 0, firstInstance);
     }
 

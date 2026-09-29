@@ -32,6 +32,9 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     {
         if (!_window.IsRenderable || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
         {
+            // Uploads left unsubmitted keep their buffers in use, so each later update of such a buffer would make SDL cycle it
+            // into a new copy for as long as the window cannot render.
+            _gpuMemorySystem.Submit();
             return;
         }
 
