@@ -14,22 +14,16 @@ namespace Pixely.Input;
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationCommandInterpreter
 {
-    // Below this a single frame would take over 3 seconds of real time.
-    private const double MinimumSpeed = 0.01;
-
     private readonly InputAutomation _automation;
     private readonly WindowRegistry _windowRegistry;
     private readonly IImageWriter _imageWriter;
-    private readonly HeadlessClock _headlessClock;
     private readonly AppControl _appControl;
 
-    public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, HeadlessClock headlessClock,
-        AppControl appControl)
+    public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, AppControl appControl)
     {
         _automation = automation;
         _windowRegistry = windowRegistry;
         _imageWriter = imageWriter;
-        _headlessClock = headlessClock;
         _appControl = appControl;
     }
 
@@ -67,10 +61,6 @@ internal sealed class InputAutomationCommandInterpreter
             case ["wait", string frames]:
                 RejectViewScope(viewScope, command);
                 return ParseFrameCount(frames);
-            case ["speed", string factor]:
-                RejectViewScope(viewScope, command);
-                _headlessClock.Speed = ParseSpeed(factor);
-                return 0;
             case ["quit"]:
                 RejectViewScope(viewScope, command);
                 _appControl.Quit();
@@ -225,21 +215,6 @@ internal sealed class InputAutomationCommandInterpreter
         }
 
         return frames;
-    }
-
-    private static double ParseSpeed(string word)
-    {
-        if (!double.TryParse(word, NumberStyles.Float, CultureInfo.InvariantCulture, out double speed) || !double.IsFinite(speed))
-        {
-            throw new FormatException($"invalid number '{word}'");
-        }
-
-        if (speed != 0 && speed < MinimumSpeed)
-        {
-            throw new FormatException($"invalid speed '{word}', expected 0 or at least {MinimumSpeed.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        return speed;
     }
 
     private static float ParseAxisValue(string word, float minimum)

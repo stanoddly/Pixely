@@ -256,7 +256,7 @@ public sealed class InputAutomationTests
     }
 
     [Test]
-    public void GamepadDisconnect_RecentersAxesAndReleasesButtonsBeforeDisconnecting()
+    public void GamepadDisconnect_ReleasesButtonsThenRecentersAxesBeforeDisconnecting()
     {
         GamepadService gamepadService = new();
         (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
@@ -275,7 +275,7 @@ public sealed class InputAutomationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(events, Is.EqualTo(new[] { $"right stick {Vector2.Zero}", "right trigger 0", "release North", "disconnected" }));
+            Assert.That(events, Is.EqualTo(new[] { "release North", $"right stick {Vector2.Zero}", "right trigger 0", "disconnected" }));
             Assert.That(gamepadService.Gamepads, Is.Empty);
             Assert.That(automation.IsGamepadConnected, Is.False);
         });

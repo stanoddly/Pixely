@@ -5,7 +5,7 @@
 - `docs/class-registration.md` - ServiceCollection/ServiceProvider API: registration overloads, source generator requirements, lifecycle, aliases, multi-registration, parent/child provider callback merging and scoped lifecycles
 - `docs/events.md` - Pixely.Events EventBus, event handlers, publishing, and DI auto-subscription
 - `docs/observations.md` - Pixely.Observations: the log, its writer and its readers, trimming behind the slowest reader, capacity and stall detection, registration
-- `docs/headless.md` - Headless mode: hidden offscreen windows and screenshots, synthetic mouse, keyboard, text, and gamepad input on standard input, the `;` command grammar and one-line scenarios, the fixed-step game clock with `wait`, `speed` and `quit`, coordinate semantics, view targeting, physical-input boundaries, the `PIXELY_*` environment variables that override `PixelyConfig`
+- `docs/headless.md` - Headless mode: hidden offscreen windows and screenshots, synthetic mouse, keyboard, text, and gamepad input on standard input, the `;` command grammar and one-line scenarios, lockstep input with the fixed-step game clock, `wait` and `quit`, the end of input quitting, the per-frame GPU wait of offscreen windows, coordinate semantics, view targeting, physical-input boundaries, the `PIXELY_*` environment variables that override `PixelyConfig`
 - `docs/static-factory-methods.md` - Static Create() method pattern
 - `docs/componentize.md` - Pixely.Componentize setup and usage
 - `docs/components.md` - GameWorld, GameObject, GameComponent lifecycle, Services<T>, UpdateSystem

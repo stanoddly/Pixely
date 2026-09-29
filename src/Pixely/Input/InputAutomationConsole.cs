@@ -1,27 +1,21 @@
-using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using System.Text;
 
 namespace Pixely.Input;
 
 /// <summary>
-/// Reads <c>;</c>-terminated commands from a text stream on a background thread and runs them on the frame loop. The browser has
-/// neither a standard input nor a reader thread, so the factory registers no console there.
+/// Runs <c>;</c>-terminated commands from a text stream on the frame loop, in lockstep: game time advances only through
+/// <c>wait</c>, and while no command is left to run the frame blocks until the next one arrives. The end of the input quits
+/// the app. The browser has no standard input, so the factory registers no console there.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable
 {
-    private const int ReadBufferSize = 4096;
-
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
     private readonly AppControl _appControl;
-    // The commands completed by one read stay together, so a chain sent in one write is not split across frames.
-    private readonly ConcurrentQueue<ReadCommand[]> _readBatches = new();
-    // Commands taken from the reader that a wait still holds.
-    private readonly Queue<ReadCommand> _pendingCommands = new();
+    private readonly StringBuilder _command = new();
     private int _heldFrames;
-    private Thread? _readerThread;
 
     internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl)
     {
@@ -34,77 +28,47 @@ internal sealed class InputAutomationConsole : IUpdatable
 
     public void Update()
     {
-        _readerThread ??= StartReader();
-
-        // Only what was read when the console runs, so a fast writer cannot hold the frame.
-        int batchCount = _readBatches.Count;
-        for (int i = 0; i < batchCount && _readBatches.TryDequeue(out ReadCommand[]? batch); i++)
-        {
-            foreach (ReadCommand command in batch)
-            {
-                _pendingCommands.Enqueue(command);
-            }
-        }
-
         if (_heldFrames > 0 && --_heldFrames > 0)
         {
             return;
         }
 
-        // After a quit the frame is the last one, so the commands after it do not run.
-        while (_heldFrames == 0 && !_appControl.QuitRequested && _pendingCommands.TryDequeue(out ReadCommand command))
+        // After a quit the frame is the last one, so nothing after it is read.
+        while (_heldFrames == 0 && !_appControl.QuitRequested)
         {
-            if (!command.IsTerminated)
+            if (ReadCommand() is not { } command)
             {
-                throw new FormatException($"unterminated command '{command.Text.Trim()}'");
+                _appControl.Quit();
+                return;
             }
 
-            _heldFrames = _interpreter.Execute(command.Text);
+            _heldFrames = _interpreter.Execute(command);
         }
     }
 
-    private Thread StartReader()
+    // One character at a time, so the read returns as soon as a ';' is buffered instead of waiting to fill a larger buffer.
+    // Null at the end of the input.
+    private string? ReadCommand()
     {
-        Thread thread = new(ReadCommands) { IsBackground = true, Name = "Pixely input automation reader" };
-        thread.Start();
-        return thread;
-    }
-
-    // An error thrown here would end the process, so an unterminated command at the end is queued for the frame loop to throw.
-    private void ReadCommands()
-    {
-        char[] buffer = new char[ReadBufferSize];
-        StringBuilder command = new();
-        List<ReadCommand> batch = new();
-        int readCount;
-        while ((readCount = _input.Read(buffer, 0, buffer.Length)) > 0)
+        int character;
+        while ((character = _input.Read()) != -1)
         {
-            foreach (char character in buffer.AsSpan(0, readCount))
+            if (character == ';')
             {
-                if (character == ';')
-                {
-                    batch.Add(new ReadCommand(command.ToString(), IsTerminated: true));
-                    command.Clear();
-                }
-                else
-                {
-                    command.Append(character);
-                }
+                string command = _command.ToString();
+                _command.Clear();
+                return command;
             }
 
-            if (batch.Count > 0)
-            {
-                _readBatches.Enqueue(batch.ToArray());
-                batch.Clear();
-            }
+            _command.Append((char)character);
         }
 
-        string rest = command.ToString();
-        if (!string.IsNullOrWhiteSpace(rest))
+        string rest = _command.ToString().Trim();
+        if (rest.Length > 0)
         {
-            _readBatches.Enqueue([new ReadCommand(rest, IsTerminated: false)]);
+            throw new FormatException($"unterminated command '{rest}'");
         }
-    }
 
-    private readonly record struct ReadCommand(string Text, bool IsTerminated);
+        return null;
+    }
 }

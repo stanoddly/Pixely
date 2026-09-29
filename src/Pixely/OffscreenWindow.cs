@@ -9,7 +9,8 @@ namespace Pixely;
 /// <summary>
 /// The window of a headless app (<see cref="PixelyConfig.Headless"/>): a hidden SDL window whose frames go to a texture
 /// instead of the swapchain, so nothing is presented and frames can be read back. Events, size and text input still come from
-/// the SDL window. Without a swapchain there is no vsync, so the frame context paces the frames instead.
+/// the SDL window. Without a swapchain there is no vsync, so acquiring waits for the GPU to finish all earlier work instead, which
+/// keeps at most about one frame in flight.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 public sealed class OffscreenWindow : Window
@@ -43,6 +44,7 @@ public sealed class OffscreenWindow : Window
     public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
         ArgumentNullException.ThrowIfNull(commandBuffer);
+        WaitForSubmittedWork();
 
         Texture colorTarget = GetColorTarget(RenderSizeInPixels, ColorTargetFormat);
 
@@ -70,6 +72,16 @@ public sealed class OffscreenWindow : Window
         _colorTarget?.Dispose();
         _colorTarget = null;
         base.Dispose();
+    }
+
+    // The device has one queue, so a fence on an empty command buffer signals once everything submitted before it is done,
+    // whoever submitted it.
+    private void WaitForSubmittedWork()
+    {
+        using (GpuFence fence = _gpuDevice.AcquireCommandBuffer().SubmitAndAcquireFence())
+        {
+            _gpuDevice.WaitForFences([fence]);
+        }
     }
 
     private Texture GetColorTarget(ShortSize size, TextureFormat format)

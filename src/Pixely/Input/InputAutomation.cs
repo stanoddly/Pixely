@@ -129,21 +129,21 @@ internal sealed class InputAutomation
         _gamepad = _gamepadService.AddGamepad(VirtualGamepadId);
     }
 
-    // Like SDL on an unplug: every axis returns to 0 and every held button is released before the gamepad goes.
+    // Like SDL on an unplug: every held button is released and every axis returns to 0, in that order, before the gamepad goes.
     public void GamepadDisconnect()
     {
         Gamepad gamepad = GetGamepad();
-        foreach (SDL_GamepadAxis axis in GamepadAxes)
-        {
-            _gamepadService.OnGamepadAxisMotion(VirtualGamepadId, axis, 0, GetTimestamp());
-        }
-
         foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
         {
             if (button is not (GamepadButton.Invalid or GamepadButton.Count) && (gamepad.ButtonFlags & (1 << (int)button)) != 0)
             {
                 _gamepadService.OnGamepadButtonEvent(VirtualGamepadId, button, false, GetTimestamp());
             }
+        }
+
+        foreach (SDL_GamepadAxis axis in GamepadAxes)
+        {
+            _gamepadService.OnGamepadAxisMotion(VirtualGamepadId, axis, 0, GetTimestamp());
         }
 
         _gamepadService.OnGamepadRemoved(VirtualGamepadId);

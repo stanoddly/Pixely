@@ -71,18 +71,6 @@ public sealed class InputAutomationCommandInterpreterTests
         Assert.That(fixture.Interpreter.Execute(command), Is.EqualTo(expectedFrames));
     }
 
-    [TestCase("speed 4", 4.0)]
-    [TestCase("speed 0", 0.0)]
-    [TestCase("speed 0.01", 0.01)]
-    public void Execute_Speed_SetsClockSpeed(string command, double expectedSpeed)
-    {
-        Fixture fixture = CreateInterpreter();
-
-        fixture.Interpreter.Execute(command);
-
-        Assert.That(fixture.HeadlessClock.Speed, Is.EqualTo(expectedSpeed).Within(1e-6));
-    }
-
     [Test]
     public void Execute_Quit_RequestsQuit()
     {
@@ -113,10 +101,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("wait 0.5", "invalid frame count '0.5'")]
     [TestCase("wait 1 frames", "unknown command 'wait 1 frames'")]
     [TestCase("@7 wait 1", "'wait 1' takes no view scope")]
-    [TestCase("speed -1", "invalid speed '-1', expected 0 or at least 0.01")]
-    [TestCase("speed 0.001", "invalid speed '0.001', expected 0 or at least 0.01")]
-    [TestCase("speed NaN", "invalid number 'NaN'")]
-    [TestCase("@7 speed 2", "'speed 2' takes no view scope")]
+    [TestCase("speed 2", "unknown command 'speed 2'")]
     [TestCase("quit now", "unknown command 'quit now'")]
     [TestCase("@0 quit", "'quit' takes no view scope")]
     [TestCase("gamepad press South", "gamepad is not connected")]
@@ -164,14 +149,13 @@ public sealed class InputAutomationCommandInterpreterTests
     {
         WindowRegistry windowRegistry = new();
         InputAutomation automation = InputAutomationTests.CreateAutomation(windowRegistry).Automation;
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new HeadlessClock(), new AppControl());
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl());
 
         Assert.Multiple(() =>
         {
             Assert.That(() => interpreter.Execute("key press A"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
             Assert.That(() => interpreter.Execute("screenshot frame.png"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
             Assert.That(() => interpreter.Execute("wait 1"), Throws.Nothing);
-            Assert.That(() => interpreter.Execute("speed 2"), Throws.Nothing);
             Assert.That(() => interpreter.Execute("gamepad connect"), Throws.Nothing);
             Assert.That(() => interpreter.Execute("quit"), Throws.Nothing);
         });
@@ -208,14 +192,12 @@ public sealed class InputAutomationCommandInterpreterTests
         gamepadService.SubscribeLeftTriggerMotion(0, eventArgs => events.Add($"gamepad left trigger {eventArgs.Value}"));
         gamepadService.SubscribeRightTriggerMotion(0, eventArgs => events.Add($"gamepad right trigger {eventArgs.Value}"));
 
-        HeadlessClock headlessClock = new();
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), headlessClock, appControl);
-        return new Fixture(interpreter, events, keyboardService, headlessClock, appControl);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
+        return new Fixture(interpreter, events, keyboardService, appControl);
     }
 
-    private sealed record Fixture(InputAutomationCommandInterpreter Interpreter, List<string> Events, KeyboardService KeyboardService, HeadlessClock HeadlessClock,
-        AppControl AppControl);
+    private sealed record Fixture(InputAutomationCommandInterpreter Interpreter, List<string> Events, KeyboardService KeyboardService, AppControl AppControl);
 
     private sealed class NoImageWriter : IImageWriter
     {

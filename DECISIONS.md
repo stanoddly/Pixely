@@ -2,17 +2,19 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-09-28: Headless game time advances by a fixed step, and automation commands end with `;`
+## 2026-09-28: Headless apps run in lockstep with their input, on a fixed step, and automation commands end with `;`
 
-In headless mode, `PixelyFrameContext` ignores the real clock. Game time starts at 0 and advances by 1/30 second per frame. The `speed` command changes only how many frames run per real second. `wait` counts frames. Every automation command ends with `;`, and a newline is ordinary whitespace.
+In headless mode game time starts at 0 and advances by 1/30 second per frame. Frames run only through `wait N`, unpaced, and when no command is left the frame loop blocks on standard input until the next `;`. The end of the input quits the app. Every automation command ends with `;`, and a newline is ordinary whitespace. `OffscreenWindow` waits for all earlier GPU work each time its texture is acquired.
 
-- A time scale on the real clock stops working above about 3x: `TimeDelta` is capped at 0.1 second, and deltas that large break physics. A fixed step gives the game the same frame times at every speed.
+- Determinism needs the frame loop to advance on the script's text, not on when input arrives. With frames on the real clock, a command lands in whichever frame is running when it is read. A reader thread made that a race, and a non-blocking read on the frame loop would have kept the same race.
+- A time scale on the real clock stops working above about 3x: `TimeDelta` is capped at 0.1 second, and deltas that large break physics. A fixed step gives the game the same frame times however fast frames run.
 - Starting at 0 gives every run of a scenario the same `ElapsedTime`, so its screenshots can be repeated.
 - With a fixed step, a second is always 30 frames. A wait in seconds would add only a conversion and its rounding.
-- Pacing moved from each `OffscreenWindow` to the frame context. Each window kept its own schedule, so a speed change would have needed every schedule reset.
+- The two clocks are two `PixelyFrameContext` subclasses picked by `PixelyFactory.CreateFrameContext()`, so the real clock's code has no headless branch.
+- Unpaced offscreen frames never acquire a swapchain texture, so nothing limited the GPU work in flight. The wait sits in `OffscreenWindow` because acquiring is where a swapchain window waits for a free frame too, and it keeps headless code out of the frame loop. SDL GPU has one queue per device, so a fence on an empty command buffer covers every earlier submission on Vulkan, D3D12 and Metal.
 - `;` lets a whole scenario fit on one shell line. `text` and `screenshot` cannot contain `;`, because an escape rule was not worth its cost.
 
-Cost: the `;` grammar breaks every newline-only script, and `#` comments are gone. The public `OffscreenWindow.FrameInterval` was removed. Synthetic input takes its timestamps from game time, but events from SDL keep SDL's clock, so the two cannot be compared. `PerformanceTracker` reports the fixed step in headless mode. Scenarios count frames, so they would change meaning if the step ever became configurable.
+Cost: nothing happens without a `wait`, and the end of input now quits instead of leaving the app running. A blocked app processes no SDL events. Work that follows the real clock, such as loading on a background thread, can finish in different frames from run to run. Headless frames have no CPU/GPU overlap. The `;` grammar breaks every newline-only script, and `#` comments are gone. The public `OffscreenWindow.FrameInterval` was removed, `PixelyFrameContext` became abstract and its `StartFrame` internal. Synthetic input takes its timestamps from game time, but events from SDL keep SDL's clock, so the two cannot be compared. `PerformanceTracker` reports the fixed step in headless mode. Scenarios count frames, so they would change meaning if the step ever became configurable.
 
 ## 2026-09-27: Small objects that die within a frame are allocated, not pooled
 

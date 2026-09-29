@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.IO.Pipes;
 using Pixely.Content;
 using Pixely.Input;
 
@@ -6,159 +8,146 @@ namespace Pixely.Tests;
 public sealed class InputAutomationConsoleTests
 {
     [Test]
-    public void Update_RunsCommandsOnCallingThreadInOrder()
+    public void Update_RunsCommandsInOrder()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A;\n\n;key\npress B;\n", out GatedReader reader);
+        Fixture fixture = CreateConsole("key press A;\n\n;key\npress B;\n");
 
-        StartAndReadAll(console, reader);
-        console.Update();
+        fixture.Console.Update();
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A, Scancode.B }));
-            Assert.That(presses.Select(press => press.ThreadId), Is.All.EqualTo(Environment.CurrentManagedThreadId));
-        });
+        Assert.That(fixture.Presses, Is.EqualTo(new[] { Scancode.A, Scancode.B }));
     }
 
     [Test]
     public void Update_Wait_HoldsLaterCommandsForItsFrames()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A; wait 2; key press B; wait 0; key press C;", out GatedReader reader);
-        StartAndReadAll(console, reader);
-        List<int> pressCounts = new();
+        Fixture fixture = CreateConsole("key press A; wait 2; key press B; wait 0; key press C;");
+        List<(int Presses, bool QuitRequested)> frames = new();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 3; i++)
         {
-            console.Update();
-            pressCounts.Add(presses.Count);
+            fixture.Console.Update();
+            frames.Add((fixture.Presses.Count, fixture.AppControl.QuitRequested));
         }
 
-        Assert.That(pressCounts, Is.EqualTo(new[] { 1, 1, 3, 3 }));
+        Assert.That(frames, Is.EqualTo(new[] { (1, false), (1, false), (3, true) }));
     }
 
     [Test]
     public void Update_Quit_StopsTheCommandsAfterIt()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A; quit; key press B; bogus;", out GatedReader reader);
-        StartAndReadAll(console, reader);
+        Fixture fixture = CreateConsole("key press A; quit; key press B; bogus;");
 
-        console.Update();
+        fixture.Console.Update();
 
-        Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Presses, Is.EqualTo(new[] { Scancode.A }));
+            Assert.That(fixture.AppControl.QuitRequested, Is.True);
+        });
     }
 
     [Test]
     public void Update_MalformedCommand_ThrowsOutOfTheFrame()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("bogus;", out GatedReader reader);
-        StartAndReadAll(console, reader);
+        Fixture fixture = CreateConsole("bogus;");
 
-        FormatException? exception = Assert.Throws<FormatException>(console.Update);
+        FormatException? exception = Assert.Throws<FormatException>(fixture.Console.Update);
 
         Assert.Multiple(() =>
         {
             Assert.That(exception!.Message, Is.EqualTo("unknown command 'bogus'"));
-            Assert.That(presses, Is.Empty);
+            Assert.That(fixture.Presses, Is.Empty);
         });
     }
 
     [Test]
     public void Update_UnterminatedCommandAtEnd_ThrowsAfterTheCommandsBeforeIt()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A; key press B\n", out GatedReader reader);
-        StartAndReadAll(console, reader);
+        Fixture fixture = CreateConsole("key press A; key press B\n");
 
-        // The reader queues the unterminated rest after its last read, so the first updates may not find it yet.
-        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        FormatException? exception = null;
-        while (exception == null && DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                console.Update();
-                Thread.Yield();
-            }
-            catch (FormatException caught)
-            {
-                exception = caught;
-            }
-        }
+        FormatException? exception = Assert.Throws<FormatException>(fixture.Console.Update);
 
         Assert.Multiple(() =>
         {
             Assert.That(exception!.Message, Is.EqualTo("unterminated command 'key press B'"));
-            Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A }));
+            Assert.That(fixture.Presses, Is.EqualTo(new[] { Scancode.A }));
         });
     }
 
     [Test]
     public void Update_WhitespaceAfterLastCommand_IsNotAnUnterminatedCommand()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("key press A;\n \t\n", out GatedReader reader);
-        StartAndReadAll(console, reader);
+        Fixture fixture = CreateConsole("key press A;\n \t\n");
 
-        console.Update();
+        fixture.Console.Update();
 
-        Assert.That(presses.Select(press => press.Scancode), Is.EqualTo(new[] { Scancode.A }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Presses, Is.EqualTo(new[] { Scancode.A }));
+            Assert.That(fixture.AppControl.QuitRequested, Is.True);
+        });
     }
 
     [Test]
-    public void Update_WithEmptyInput_DoesNothing()
+    public void Update_EndOfInput_Quits()
     {
-        (InputAutomationConsole console, List<(Scancode Scancode, int ThreadId)> presses) = CreateConsole("", out GatedReader reader);
-        StartAndReadAll(console, reader);
+        Fixture fixture = CreateConsole("");
 
-        console.Update();
+        fixture.Console.Update();
 
-        Assert.That(presses, Is.Empty);
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Presses, Is.Empty);
+            Assert.That(fixture.AppControl.QuitRequested, Is.True);
+        });
     }
 
-    // The first update starts the reader, which is held until then, so the updates after this see the whole input.
-    private static void StartAndReadAll(InputAutomationConsole console, GatedReader reader)
+    [Test]
+    public void Update_PartialCommand_BlocksUntilItsSemicolonWithinOneUpdate()
     {
-        console.Update();
-        reader.Open();
-        Assert.That(reader.WaitUntilFinished(TimeSpan.FromSeconds(5)), Is.True, "the reader did not reach the end of the input");
+        using AnonymousPipeServerStream server = new(PipeDirection.Out);
+        using AnonymousPipeClientStream client = new(PipeDirection.In, server.ClientSafePipeHandle);
+        // Disposed first, which closes the pipe, so a blocked update ends even when an assertion fails.
+        using StreamWriter writer = new(server) { AutoFlush = true };
+        Fixture fixture = CreateConsole(new StreamReader(client));
+
+        writer.Write("key press A; key pre");
+        Task update = Task.Run(fixture.Console.Update);
+        // A has run, so the update now waits for the rest of the second command.
+        Assert.That(() => fixture.Presses.Count, Is.EqualTo(1).After(5000, 10));
+
+        writer.Write("ss B;");
+        writer.Close();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(update.Wait(TimeSpan.FromSeconds(5)), Is.True, "the update did not finish");
+            Assert.That(fixture.Presses, Is.EqualTo(new[] { Scancode.A, Scancode.B }));
+            Assert.That(fixture.AppControl.QuitRequested, Is.True);
+        });
     }
 
-    private static (InputAutomationConsole Console, List<(Scancode Scancode, int ThreadId)> Presses) CreateConsole(string input, out GatedReader reader)
+    private static Fixture CreateConsole(string input)
+    {
+        return CreateConsole(new StringReader(input));
+    }
+
+    private static Fixture CreateConsole(TextReader input)
     {
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
         (InputAutomation automation, _, KeyboardService keyboardService, _) = InputAutomationTests.CreateAutomation(windowRegistry);
 
-        List<(Scancode Scancode, int ThreadId)> presses = new();
-        keyboardService.SubscribeKeyDown(0, eventArgs => presses.Add((eventArgs.Scancode, Environment.CurrentManagedThreadId)));
+        // Concurrent, because the pipe test runs the update on another thread.
+        ConcurrentQueue<Scancode> presses = new();
+        keyboardService.SubscribeKeyDown(0, eventArgs => presses.Enqueue(eventArgs.Scancode));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new HeadlessClock(), appControl);
-        reader = new GatedReader(input);
-        return (new InputAutomationConsole(interpreter, reader, appControl), presses);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
+        return new Fixture(new InputAutomationConsole(interpreter, input, appControl), presses, appControl);
     }
 
-    private sealed class GatedReader(string input) : TextReader
-    {
-        private readonly StringReader _inner = new(input);
-        private readonly ManualResetEventSlim _opened = new();
-        private readonly ManualResetEventSlim _finished = new();
-
-        public void Open() => _opened.Set();
-
-        public bool WaitUntilFinished(TimeSpan timeout) => _finished.Wait(timeout);
-
-        // The whole input in one read, like a single write; the next read reports the end after the console queued that batch.
-        public override int Read(char[] buffer, int index, int count)
-        {
-            _opened.Wait();
-            int readCount = _inner.Read(buffer, index, count);
-            if (readCount == 0)
-            {
-                _finished.Set();
-            }
-
-            return readCount;
-        }
-    }
+    private sealed record Fixture(InputAutomationConsole Console, ConcurrentQueue<Scancode> Presses, AppControl AppControl);
 
     private sealed class NoImageWriter : IImageWriter
     {

@@ -80,9 +80,7 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
-        // Headless mode only; without it the frame context follows the real clock.
-        AddSingleton<HeadlessClock, PixelyFactory>();
-        AddSingleton<PixelyFrameContext>();
+        AddSingleton<PixelyFrameContext, PixelyFactory>();
         AddAlias<FrameContext, PixelyFrameContext>();
 
         AddSingleton<AppControl>();
