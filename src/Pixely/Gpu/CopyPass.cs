@@ -38,7 +38,9 @@ internal sealed class CopyPass
         }
     }
 
-    private unsafe void UploadToBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer) where T : unmanaged
+    // An update passes cycle = true, so SDL writes into a copy of the buffer when a submission in flight still reads it. A new
+    // buffer passes false: nothing reads it yet.
+    private unsafe void UploadToBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer, bool cycle) where T : unmanaged
     {
         uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);
         SDL_GPUBufferRegion destination = new SDL_GPUBufferRegion { buffer = buffer, offset = 0, size = sizeBytes };
@@ -50,7 +52,7 @@ internal sealed class CopyPass
         {
             Pointer<SDL_GPUTransferBuffer> temporary = CreateFilledTransferBuffer(data);
             SDL_GPUTransferBufferLocation temporarySource = new SDL_GPUTransferBufferLocation { transfer_buffer = temporary, offset = 0 };
-            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, false);
+            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, cycle);
             _gpuDevice.ReleaseTransferBuffer(temporary);
         }
         else
@@ -68,7 +70,7 @@ internal sealed class CopyPass
             _transferBufferOffset = offset + sizeBytes;
 
             SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer.SdlTransferBuffer, offset = offset };
-            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, false);
+            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, cycle);
         }
 
         IsEmpty = false;
@@ -79,7 +81,7 @@ internal sealed class CopyPass
     {
         try
         {
-            UploadToBuffer(data, buffer);
+            UploadToBuffer(data, buffer, false);
         }
         catch
         {
@@ -183,7 +185,7 @@ internal sealed class CopyPass
 
         unsafe
         {
-            UploadToBuffer(vertices, vertexBuffer.SdlVertexBuffer);
+            UploadToBuffer(vertices, vertexBuffer.SdlVertexBuffer, true);
         }
 
         vertexBuffer.Size = vertices.Length;
@@ -259,7 +261,7 @@ internal sealed class CopyPass
 
         unsafe
         {
-            UploadToBuffer(indices, indexBuffer.SdlBuffer);
+            UploadToBuffer(indices, indexBuffer.SdlBuffer, true);
         }
 
         indexBuffer.Size = indices.Length;
@@ -308,7 +310,7 @@ internal sealed class CopyPass
 
         unsafe
         {
-            UploadToBuffer(data, storageBuffer.SdlBuffer);
+            UploadToBuffer(data, storageBuffer.SdlBuffer, true);
         }
 
         storageBuffer.Size = data.Length;
