@@ -38,8 +38,15 @@ internal sealed class CopyPass
         }
     }
 
-    // An update passes cycle = true, so SDL writes into a copy of the buffer when a submission in flight still reads it. A new
-    // buffer passes false: nothing reads it yet.
+    // An update passes cycle = true: without it, the upload overwrites a buffer that an earlier submission may still read, such
+    // as the previous frame or another window in this frame. SDL then writes into a copy of the buffer when a command buffer in
+    // flight or still recording uses it, and overwrites in place otherwise. A new buffer passes false: nothing reads it yet.
+    // Cycling has these costs:
+    // - The copy starts undefined, so an update replaces the whole contents, not a prefix.
+    // - A pass that bound the buffer before the update keeps the previous copy until it binds the buffer again.
+    // - Each copy has the buffer's full size: one per submission in flight, plus one per extra update in the same submission.
+    //   SDL keeps the copies until the buffer is released, and the GPU memory tracking does not count them.
+    // - In the browser, uploads are already ordered against earlier submissions, so the copies there prevent no race.
     private unsafe void UploadToBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer, bool cycle) where T : unmanaged
     {
         uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);

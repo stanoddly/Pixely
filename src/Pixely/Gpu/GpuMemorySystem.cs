@@ -123,14 +123,47 @@ public class GpuMemorySystem: ICopyPass
             return;
         }
 
+        unsafe
+        {
+            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(EndCommandBuffer()), "SDL_SubmitGPUCommandBuffer");
+        }
+    }
+
+    // For a frame in which no submission acquires a swapchain texture, such as one whose windows are all minimized. SDL's Vulkan
+    // backend frees finished command buffers only on a submit that acquired a swapchain texture, on a fence wait, or when no
+    // window is claimed. Until then those command buffers keep the buffers they upload into in use, so every later update of
+    // such a buffer cycles it into a new full-size copy, and SDL keeps each copy until the buffer is released. Waiting on a
+    // fence makes SDL free them all: the device has one queue, so the fence also covers every earlier submission. The wait
+    // blocks until the GPU finishes that work, so it runs only when uploads are pending.
+    internal void SubmitAndReleaseFinishedWork()
+    {
+        if (_sdlCommandBuffer.IsNull)
+        {
+            return;
+        }
+
+#if BROWSER
+        // The WebGPU fork checks its fences on every submit, and waiting on a fence is not supported in the browser.
+        Submit();
+#else
+        unsafe
+        {
+            Pointer<SDL_GPUFence> sdlFence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(EndCommandBuffer());
+            SdlError.ThrowOnNull(sdlFence);
+            using (GpuFence fence = new GpuFence(_gpuDevice, sdlFence))
+            {
+                _gpuDevice.WaitForFences([fence]);
+            }
+        }
+#endif
+    }
+
+    private Pointer<SDL_GPUCommandBuffer> EndCommandBuffer()
+    {
         _copyPass?.End();
         _copyPass = null;
         Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = _sdlCommandBuffer;
         _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
-
-        unsafe
-        {
-            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
-        }
+        return sdlCommandBuffer;
     }
 }

@@ -25,7 +25,7 @@ public interface ICopyPass: IDisposable
 
     GpuStorageBuffer<T> CreateStorageBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged;
 
-    /// <summary>Writes <paramref name="data"/> at the start of the buffer. The rest of the buffer is undefined afterwards. A render pass that bound the buffer before the update keeps drawing the previous contents until it binds the buffer again.</summary>
+    /// <summary>Writes <paramref name="data"/> at the start of the buffer. The rest of the buffer is undefined afterwards. A render or compute pass that bound the buffer before the update, including a compute pass that began with it as a read-write buffer, keeps using the previous contents; bind the buffer again, or begin another compute pass, to use the update.</summary>
     void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged;
 
     Texture CreateTexture(Image image);

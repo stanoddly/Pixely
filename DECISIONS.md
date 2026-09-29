@@ -4,14 +4,12 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-09-29: Buffer updates cycle the GPU buffer
 
-`CopyPass.UpdateVertexBuffer`, `UpdateIndexBuffer` and `UpdateStorageBuffer` pass `cycle = true` to `SDL_UploadToGPUBuffer`. Buffer creation passes `false`.
+`CopyPass.UpdateVertexBuffer`, `UpdateIndexBuffer` and `UpdateStorageBuffer` pass `cycle = true` to `SDL_UploadToGPUBuffer`, so an update never overwrites a buffer that an earlier submission still reads.
 
-- Without cycling, an update overwrites a buffer that an earlier submission may still read: the previous frame, or another window in the same frame. The draw then reads old data, new data or a mix.
-- With `cycle = true`, SDL writes into a copy of the buffer when a submission in flight or still recording uses it, and overwrites in place otherwise. It tracks that itself: Pixely needs no fences and never waits.
-- A render pass keeps the copy that was active when it bound the buffer. So `RenderPass` takes the vertex and index counts at bind time, and an update after a bind shows only after the next bind.
-- Uploads left unsubmitted keep their buffers in use, so `RenderCoordinator` submits them even when its window cannot render. Otherwise every update of a buffer while a window is minimized would create a new copy.
+- SDL tracks which copies are in use: Pixely needs no fences, except on a frame that acquires no swapchain texture, where `GpuMemorySystem.SubmitAndReleaseFinishedWork` waits so that SDL's Vulkan backend frees finished work.
+- A pass keeps the copy it bound, so `RenderPass` takes vertex and index counts at bind time.
 
-Cost: a cycle leaves the rest of the buffer undefined, so an update replaces the whole contents, not a prefix. Each copy is the buffer's full size, one per submission in flight and one per extra update of the buffer in the same submission, and SDL keeps the copies until the buffer is released. The GPU memory tracking does not count them. In the browser, uploads are already ordered against earlier submissions, so the copies prevent no race there.
+Cost: an update replaces the whole contents, not a prefix, and shows in a pass only after the next bind. Each copy is full size and uncounted by the GPU memory tracking. `CopyPass.UploadToBuffer` lists the details.
 
 ## 2026-09-28: Headless apps run in lockstep with their input, on a fixed step
 

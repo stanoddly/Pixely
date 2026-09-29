@@ -32,9 +32,10 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     {
         if (!_window.IsRenderable || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
         {
-            // Uploads left unsubmitted keep their buffers in use, so each later update of such a buffer would make SDL cycle it
-            // into a new copy for as long as the window cannot render.
-            _gpuMemorySystem.Submit();
+            // A plain submit would leave finished uploads in use on Vulkan, since nothing acquires a swapchain texture. With
+            // several windows, the wait can stall a frame whose other windows still render, but only when this coordinator runs
+            // before them with uploads pending.
+            _gpuMemorySystem.SubmitAndReleaseFinishedWork();
             return;
         }
 

@@ -9,6 +9,7 @@ internal struct RenderPassValidator
 {
     private const int MaxVertexBufferSlots = 8;
 
+    // Taken at bind time, as in RenderPass: a later update changes the buffer's Size but not the copy this pass draws from.
     private uint _verticesCount;
     private uint? _indexCount;
     private GraphicsPipeline? _graphicsPipeline;

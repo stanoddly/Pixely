@@ -8,8 +8,9 @@ namespace Pixely.Gpu;
 public class RenderPass : IDisposable
 {
     private Pointer<SDL_GPURenderPass> _nativePointer;
+    // Both counts are taken at bind time: an update after the bind cycles the buffer into a new copy and changes its Size,
+    // while this pass keeps drawing from the copy it bound.
     private uint _verticesCount = 0;
-    // Taken at bind time: an update after the bind cycles the buffer, while this pass keeps drawing from the bound copy.
     private uint _indexCount;
     private RenderPassValidator _validator;
 
