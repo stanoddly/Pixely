@@ -59,7 +59,7 @@ public class RenderPass : IDisposable
         // Only update vertex count from slot 0 (the per-vertex buffer)
         if (slot == 0)
         {
-            _verticesCount = (uint)buffer.BufferSize;
+            _verticesCount = (uint)buffer.Size;
         }
 
         unsafe
