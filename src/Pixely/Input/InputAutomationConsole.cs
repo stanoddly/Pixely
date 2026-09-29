@@ -1,53 +1,74 @@
-using System.Collections.Concurrent;
 using System.Runtime.Versioning;
-using Pixely.Content;
+using System.Text;
 
 namespace Pixely.Input;
 
 /// <summary>
-/// Reads command lines from a text stream on a background thread and runs them on the frame loop. The browser has neither a standard
-/// input nor a reader thread, so the factory registers no console there.
+/// Runs <c>;</c>-terminated commands from a text stream on the frame loop, in lockstep: game time advances only through
+/// <c>wait</c>, and while no command is left to run the frame blocks until the next one arrives. The end of the input quits
+/// the app. The browser has no standard input, so the factory registers no console there.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable
 {
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
-    private readonly ConcurrentQueue<string> _pendingLines = new();
-    private Thread? _readerThread;
+    private readonly AppControl _appControl;
+    private readonly StringBuilder _command = new();
+    private int _heldFrames;
 
-    internal InputAutomationConsole(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, TextReader input)
+    internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl)
     {
-        _interpreter = new InputAutomationCommandInterpreter(automation, windowRegistry, imageWriter);
+        _interpreter = interpreter;
         _input = input;
+        _appControl = appControl;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
 
     public void Update()
     {
-        _readerThread ??= StartReader();
-
-        // Only what was queued when the frame started, so a fast writer cannot hold the frame.
-        int pendingCount = _pendingLines.Count;
-        for (int i = 0; i < pendingCount && _pendingLines.TryDequeue(out string? line); i++)
+        if (_heldFrames > 0 && --_heldFrames > 0)
         {
-            _interpreter.Execute(line);
+            return;
+        }
+
+        // After a quit the frame is the last one, so nothing after it is read.
+        while (_heldFrames == 0 && !_appControl.QuitRequested)
+        {
+            if (ReadCommand() is not { } command)
+            {
+                _appControl.Quit();
+                return;
+            }
+
+            _heldFrames = _interpreter.Execute(command);
         }
     }
 
-    private Thread StartReader()
+    // One character at a time, so the read returns as soon as a ';' is buffered instead of waiting to fill a larger buffer.
+    // Null at the end of the input.
+    private string? ReadCommand()
     {
-        Thread thread = new(ReadLines) { IsBackground = true, Name = "Pixely input automation reader" };
-        thread.Start();
-        return thread;
-    }
-
-    private void ReadLines()
-    {
-        while (_input.ReadLine() is { } line)
+        int character;
+        while ((character = _input.Read()) != -1)
         {
-            _pendingLines.Enqueue(line);
+            if (character == ';')
+            {
+                string command = _command.ToString();
+                _command.Clear();
+                return command;
+            }
+
+            _command.Append((char)character);
         }
+
+        string rest = _command.ToString().Trim();
+        if (rest.Length > 0)
+        {
+            throw new FormatException($"unterminated command '{rest}'");
+        }
+
+        return null;
     }
 }

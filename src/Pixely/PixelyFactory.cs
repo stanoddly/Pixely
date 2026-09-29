@@ -52,8 +52,13 @@ public partial class PixelyFactory: IDisposable
 
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
         SdlLogOutput.Install(_sdlLogger);
-        SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO |
-                                  SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
+        SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO;
+        // A headless run sees only the synthetic gamepad, so a scenario behaves the same whether or not a pad is plugged in.
+        if (!_config.Headless)
+        {
+            initFlags |= SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
+        }
+
         if (SDL3.SDL_Init(initFlags) == false)
         {
             SdlLogOutput.Uninstall();
@@ -207,8 +212,12 @@ public partial class PixelyFactory: IDisposable
         EnsureSdlInitialized();
         
         GamepadService gamepadService = new();
-        gamepadService.SetupGamepads();
-        
+        // Without the gamepad subsystem, which a headless run does not start, SDL cannot list gamepads.
+        if (!_config.Headless)
+        {
+            gamepadService.SetupGamepads();
+        }
+
         return gamepadService;
     }
 
@@ -227,9 +236,22 @@ public partial class PixelyFactory: IDisposable
     }
 
     // Automation exists in headless mode only; a null result registers nothing.
-    internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService)
+    internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService,
+        TextInputService textInputService, GamepadService gamepadService, FrameContext frameContext)
     {
-        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService) : null;
+        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameContext) : null;
+    }
+
+    public PixelyFrameContext CreateFrameContext()
+    {
+#if BROWSER
+        // Also fails an app without a window, which never reaches the check in CreateWindow.
+        if (_config.Headless)
+        {
+            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
+        }
+#endif
+        return _config.Headless ? new FixedStepFrameContext() : new SdlFrameContext();
     }
 
     internal IImageWriter? CreateImageWriter()
@@ -238,15 +260,17 @@ public partial class PixelyFactory: IDisposable
     }
 
     [UnsupportedOSPlatform("browser")]
-    internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter)
+    internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter,
+        AppControl appControl)
     {
         if (inputAutomation is null || imageWriter is null)
         {
             return null;
         }
 
+        InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, appControl);
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(inputAutomation, windowRegistry, imageWriter, new StreamReader(Console.OpenStandardInput()));
+        return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl);
     }
 
     internal EventService CreateEventService(
@@ -266,11 +290,6 @@ public partial class PixelyFactory: IDisposable
             textInputService,
             windowRegistry,
             appControl);
-    }
-
-    public PixelyFrameContext CreateFrameContext()
-    {
-        return new PixelyFrameContext();
     }
 
     public void Dispose()

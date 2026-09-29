@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-28: Headless apps run in lockstep with their input, on a fixed step
+
+In headless mode game time starts at 0 and advances by 1/30 second per frame. Frames run only through `wait N`, as fast as they can, and when no command is left the app blocks on standard input. The end of input quits the app.
+
+- A scenario must give the same frames on every run. That needs the frame loop to advance on the script's text. With frames on the real clock, a command lands in whichever frame is running when it arrives.
+- A time scale on the real clock stops working above about 3x, because `TimeDelta` is capped at 0.1 second. A fixed step gives the same frame times at any speed.
+- Unpaced frames need a limit on GPU work in flight, so an offscreen window waits for earlier GPU work when its texture is acquired.
+
+Cost: nothing happens without a `wait`. A blocked app processes no SDL events. Work that follows the real clock, such as loading on a background thread, can finish in different frames from run to run.
+
 ## 2026-09-27: Small objects that die within a frame are allocated, not pooled
 
 `CommandBuffer`, `RenderPass`, `CopyPass` and `BasicRenderContext` are classes allocated every frame. Small managed objects that nothing references after the frame are allocated rather than pooled.

@@ -80,7 +80,7 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
-        AddSingleton<PixelyFrameContext>();
+        AddSingleton<PixelyFrameContext, PixelyFactory>();
         AddAlias<FrameContext, PixelyFrameContext>();
 
         AddSingleton<AppControl>();
