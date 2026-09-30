@@ -460,6 +460,28 @@ public class AtlasPackerTests
         Assert.That(RectanglesOverlap(a.ImageRegion, b.ImageRegion), Is.False);
     }
 
+    [Test]
+    public void LoadedImages_AllDisposedAfterBuild()
+    {
+        DictionaryContentSource contentSource = new(
+            new Dictionary<string, ImmutableArray<ContentFile>>
+            {
+                ["sprites"] =
+                [
+                    new ByteContentFile("sprites/a.json", MakeSpriteJson(0, 0, 32, 32)),
+                    new ByteContentFile("sprites/b.json", MakeSpriteJson(32, 0, 16, 16)),
+                    new ByteContentFile("sprites/c.json", MakeSpriteJson(0, 0, 8, 8, "other.png")),
+                ]
+            }.ToFrozenDictionary(),
+            new Dictionary<string, ImmutableArray<string>> { ["sprites"] = [] }.ToFrozenDictionary());
+        DisposalTrackingImageLoader imageLoader = new();
+
+        SpriteAtlasBuilder.Create(new SpriteAtlasBuilderConfig(["sprites"]), new StubTextureLoader(), imageLoader, contentSource, new SpriteAssetStorage());
+
+        Assert.That(imageLoader.Images, Has.Count.EqualTo(3));
+        Assert.That(imageLoader.Images, Has.All.Matches<DisposalTrackingImage>(image => image.IsDisposed));
+    }
+
     private static bool RectanglesOverlap(ShortRectangle a, ShortRectangle b)
     {
         return a.X < b.X + b.Width
@@ -478,5 +500,26 @@ public class AtlasPackerTests
     {
         public Image Load(ReadOnlySpan<char> path) =>
             images.GetValueOrDefault(path.ToString()) ?? MakeImage(256, 256);
+    }
+
+    private class DisposalTrackingImage(RawImage image) : Image
+    {
+        public bool IsDisposed { get; private set; }
+        public override ReadOnlySpan<byte> Data => image.Data;
+        public override ShortSize Size => image.Size;
+        public override PixelFormat PixelFormat => image.PixelFormat;
+        public override void Dispose() => IsDisposed = true;
+    }
+
+    private class DisposalTrackingImageLoader : IImageLoader
+    {
+        public List<DisposalTrackingImage> Images { get; } = [];
+
+        public Image Load(ReadOnlySpan<char> path)
+        {
+            DisposalTrackingImage image = new(MakeImage(256, 256));
+            Images.Add(image);
+            return image;
+        }
     }
 }

@@ -58,104 +58,114 @@ public sealed class SpriteAtlasBuilder
         // Deduplicate by (texturePath, region) — flipped sprites share atlas space
         var dedupMap = new Dictionary<(string texturePath, ShortRectangle region), int>();
         var uniqueImages = new List<(Image image, ShortRectangle region)>();
-        var entryToUnique = new int[entries.Count];
-
-        for (int i = 0; i < entries.Count; i++)
+        try
         {
-            ShortRectangle region = entries[i].region;
-            var key = (entries[i].texturePath, region);
-            if (!dedupMap.TryGetValue(key, out int uniqueIndex))
+            var entryToUnique = new int[entries.Count];
+
+            for (int i = 0; i < entries.Count; i++)
             {
-                uniqueIndex = uniqueImages.Count;
-                Image image = _imageLoader.Load(entries[i].texturePath);
-                uniqueImages.Add((image, region));
-                dedupMap[key] = uniqueIndex;
-            }
-            entryToUnique[i] = uniqueIndex;
-        }
-
-        // Sort unique images by area descending for packing
-        var sortedIndices = Enumerable.Range(0, uniqueImages.Count).ToList();
-        sortedIndices.Sort((a, b) =>
-        {
-            int areaA = uniqueImages[a].region.Width * uniqueImages[a].region.Height;
-            int areaB = uniqueImages[b].region.Width * uniqueImages[b].region.Height;
-            return areaB.CompareTo(areaA);
-        });
-
-        // Build a reordered list for packing and a mapping back
-        var sortedImages = new List<(Image image, ShortRectangle region)>(uniqueImages.Count);
-        var sortedToOriginal = new int[uniqueImages.Count];
-        var originalToSorted = new int[uniqueImages.Count];
-        for (int i = 0; i < sortedIndices.Count; i++)
-        {
-            sortedToOriginal[i] = sortedIndices[i];
-            originalToSorted[sortedIndices[i]] = i;
-            sortedImages.Add(uniqueImages[sortedIndices[i]]);
-        }
-
-        // Pack
-        (ShortSize atlasSize, List<PackedRectangle> packedRectangles) = PackImagesIntoAtlas(sortedImages);
-
-        // Create atlas image
-        RawImage atlasImage = CreateAtlasImage(sortedImages, packedRectangles, atlasSize);
-        Texture atlasTexture = _textureLoader.Load(atlasImage);
-
-        // Store static sprites
-        for (int i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-            if (entry.isAnimatedFrame)
-            {
-                continue;
+                ShortRectangle region = entries[i].region;
+                var key = (entries[i].texturePath, region);
+                if (!dedupMap.TryGetValue(key, out int uniqueIndex))
+                {
+                    uniqueIndex = uniqueImages.Count;
+                    Image image = _imageLoader.Load(entries[i].texturePath);
+                    uniqueImages.Add((image, region));
+                    dedupMap[key] = uniqueIndex;
+                }
+                entryToUnique[i] = uniqueIndex;
             }
 
-            int uniqueIndex = entryToUnique[i];
-            int sortedIndex = originalToSorted[uniqueIndex];
-            PackedRectangle packed = packedRectangles[sortedIndex];
-
-            short atlasX = (short)(packed.Rectangle.X + Padding);
-            short atlasY = (short)(packed.Rectangle.Y + Padding);
-            ShortRectangle atlasRegion = new ShortRectangle(atlasX, atlasY, entry.region.Width, entry.region.Height);
-            _storage.StoreSprite(entry.path, new SpriteAsset(atlasTexture, atlasRegion, entry.flip));
-        }
-
-        // Store animated sprites
-        var animationFramesByPath = new Dictionary<string, ShortRectangle[]>();
-        foreach (var kv in animatedSpriteInfos)
-        {
-            animationFramesByPath[kv.Key] = new ShortRectangle[kv.Value.frameIndices.Count];
-        }
-
-        for (int i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-            if (!entry.isAnimatedFrame || entry.animationPath == null)
+            // Sort unique images by area descending for packing
+            var sortedIndices = Enumerable.Range(0, uniqueImages.Count).ToList();
+            sortedIndices.Sort((a, b) =>
             {
-                continue;
+                int areaA = uniqueImages[a].region.Width * uniqueImages[a].region.Height;
+                int areaB = uniqueImages[b].region.Width * uniqueImages[b].region.Height;
+                return areaB.CompareTo(areaA);
+            });
+
+            // Build a reordered list for packing and a mapping back
+            var sortedImages = new List<(Image image, ShortRectangle region)>(uniqueImages.Count);
+            var sortedToOriginal = new int[uniqueImages.Count];
+            var originalToSorted = new int[uniqueImages.Count];
+            for (int i = 0; i < sortedIndices.Count; i++)
+            {
+                sortedToOriginal[i] = sortedIndices[i];
+                originalToSorted[sortedIndices[i]] = i;
+                sortedImages.Add(uniqueImages[sortedIndices[i]]);
             }
 
-            int uniqueIndex = entryToUnique[i];
-            int sortedIndex = originalToSorted[uniqueIndex];
-            PackedRectangle packed = packedRectangles[sortedIndex];
+            // Pack
+            (ShortSize atlasSize, List<PackedRectangle> packedRectangles) = PackImagesIntoAtlas(sortedImages);
 
-            short atlasX = (short)(packed.Rectangle.X + Padding);
-            short atlasY = (short)(packed.Rectangle.Y + Padding);
-            ShortRectangle atlasRegion = new ShortRectangle(atlasX, atlasY, entry.region.Width, entry.region.Height);
-            animationFramesByPath[entry.animationPath][entry.frameIndex] = atlasRegion;
+            // Create atlas image
+            RawImage atlasImage = CreateAtlasImage(sortedImages, packedRectangles, atlasSize);
+            Texture atlasTexture = _textureLoader.Load(atlasImage);
+
+            // Store static sprites
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (entry.isAnimatedFrame)
+                {
+                    continue;
+                }
+
+                int uniqueIndex = entryToUnique[i];
+                int sortedIndex = originalToSorted[uniqueIndex];
+                PackedRectangle packed = packedRectangles[sortedIndex];
+
+                short atlasX = (short)(packed.Rectangle.X + Padding);
+                short atlasY = (short)(packed.Rectangle.Y + Padding);
+                ShortRectangle atlasRegion = new ShortRectangle(atlasX, atlasY, entry.region.Width, entry.region.Height);
+                _storage.StoreSprite(entry.path, new SpriteAsset(atlasTexture, atlasRegion, entry.flip));
+            }
+
+            // Store animated sprites
+            var animationFramesByPath = new Dictionary<string, ShortRectangle[]>();
+            foreach (var kv in animatedSpriteInfos)
+            {
+                animationFramesByPath[kv.Key] = new ShortRectangle[kv.Value.frameIndices.Count];
+            }
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (!entry.isAnimatedFrame || entry.animationPath == null)
+                {
+                    continue;
+                }
+
+                int uniqueIndex = entryToUnique[i];
+                int sortedIndex = originalToSorted[uniqueIndex];
+                PackedRectangle packed = packedRectangles[sortedIndex];
+
+                short atlasX = (short)(packed.Rectangle.X + Padding);
+                short atlasY = (short)(packed.Rectangle.Y + Padding);
+                ShortRectangle atlasRegion = new ShortRectangle(atlasX, atlasY, entry.region.Width, entry.region.Height);
+                animationFramesByPath[entry.animationPath][entry.frameIndex] = atlasRegion;
+            }
+
+            foreach (var kv in animatedSpriteInfos)
+            {
+                string animationPath = kv.Key;
+                (double frameDuration, SpriteFlip flip, _) = kv.Value;
+                var frames = animationFramesByPath[animationPath];
+                var immutableFrames = System.Collections.Immutable.ImmutableArray.CreateRange(frames);
+                AnimatedSpriteAsset animatedSpriteAsset = new AnimatedSpriteAsset((float)frameDuration, atlasTexture, immutableFrames, Vector2.Zero, flip);
+                _storage.StoreAnimatedSprite(animationPath, animatedSpriteAsset);
+            }
+
+            atlasImage.Dispose();
         }
-
-        foreach (var kv in animatedSpriteInfos)
+        finally
         {
-            string animationPath = kv.Key;
-            (double frameDuration, SpriteFlip flip, _) = kv.Value;
-            var frames = animationFramesByPath[animationPath];
-            var immutableFrames = System.Collections.Immutable.ImmutableArray.CreateRange(frames);
-            AnimatedSpriteAsset animatedSpriteAsset = new AnimatedSpriteAsset((float)frameDuration, atlasTexture, immutableFrames, Vector2.Zero, flip);
-            _storage.StoreAnimatedSprite(animationPath, animatedSpriteAsset);
+            foreach ((Image image, _) in uniqueImages)
+            {
+                image.Dispose();
+            }
         }
-
-        atlasImage.Dispose();
     }
 
     private void CollectSpritesRecursively(string directory,

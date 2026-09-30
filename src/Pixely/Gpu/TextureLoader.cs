@@ -21,7 +21,7 @@ public class TextureLoader : ITextureLoader
 
     public Texture Load(string path)
     {
-        Image image = _imageLoader.Load(path);
+        using Image image = _imageLoader.Load(path);
         return Load(image);
     }
 
