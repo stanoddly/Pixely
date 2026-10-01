@@ -47,7 +47,11 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
         if (!_window.TryAcquireFrame(_gpuDevice, out CommandBuffer? commandBuffer, out SwapchainTexture? swapchainTexture))
         {
+            // In the browser, pending uploads wait for the next drawn frame instead: a submission there takes one of the
+            // frame-limit slots that kept the acquire from returning a texture.
+#if !BROWSER
             _gpuMemorySystem.Submit();
+#endif
             return false;
         }
 

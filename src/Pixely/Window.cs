@@ -394,9 +394,12 @@ public abstract class Window : IDisposable
 
     public abstract bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture);
 
-    // Acquires the command buffer and swapchain texture one frame of the window draws with. When no texture comes back, the
-    // command buffer is submitted, not cancelled: SDL's Vulkan backend frees finished GPU work only on a submit whose command
-    // buffer requested a swapchain texture, or on a fence wait. Virtual so tests can acquire without a GPU device.
+    // Acquires the command buffer and swapchain texture one frame of the window draws with. When no texture comes back on the
+    // desktop, the command buffer is submitted, not cancelled: SDL's Vulkan backend frees finished GPU work only on a submit
+    // whose command buffer requested a swapchain texture, or on a fence wait. In the browser it is cancelled: the WebGPU fork
+    // returns no texture while its submissions in flight reach the frame limit, counting empty ones, so a submit there would
+    // hold a slot until the frame ahead of it finishes. The fork frees finished work on every acquire. Virtual so tests can
+    // acquire without a GPU device.
     internal virtual bool TryAcquireFrame(GpuDevice gpuDevice, [NotNullWhen(true)] out CommandBuffer? commandBuffer, [NotNullWhen(true)] out SwapchainTexture? swapchainTexture)
     {
         CommandBuffer acquired = gpuDevice.AcquireCommandBuffer();
@@ -413,7 +416,11 @@ public abstract class Window : IDisposable
 
         if (!hasTexture)
         {
+#if BROWSER
+            acquired.Cancel();
+#else
             acquired.Submit();
+#endif
             commandBuffer = null;
             swapchainTexture = null;
             return false;
