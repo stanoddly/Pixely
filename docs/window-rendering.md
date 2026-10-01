@@ -116,7 +116,7 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
         {
-            commandBuffer.Dispose();
+            commandBuffer.Submit();
             renderContext = null;
             return false;
         }
@@ -127,7 +127,7 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
-`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
+`RenderCoordinator` calls the provider every frame, but runs renderers only while the window's `IsRenderable` is true. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the provider submits its command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
@@ -163,8 +163,8 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-The framework coordinator passes its managed window to the provider for each frame, skips windows
-whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
+The framework coordinator passes its managed window to the provider for each frame, invokes renderers for the
+same `ViewScope` while the window's `IsRenderable` is true, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
 registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
 and call the base implementation to submit its command buffer. Window registration, event routing
@@ -242,8 +242,9 @@ bool hidden = inventoryWindow.Hide();
 
 `Show()`, `Raise()`, and `Hide()` return whether the native window operation succeeded. Raising a window requests input focus, subject to the operating system's window-management policy.
 
-Hidden windows remain registered and retain their renderer and GPU resources, but their render
-coordinators do not acquire a swapchain texture or invoke renderers. They are disposed with the
+Hidden and minimized windows remain registered and retain their renderer and GPU resources. Their render
+coordinators still request a swapchain texture every frame, but do not invoke renderers. When no window draws a
+frame, the frame loop waits up to 16 ms for an event, so the app does not spin. They are disposed with the
 service provider that owns them. `InitiallyVisible` controls initial visibility; it does not defer
 native window creation.
 

@@ -62,7 +62,7 @@ public class RenderCoordinatorTests
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        Assert.DoesNotThrow(renderCoordinator.Execute);
+        Assert.DoesNotThrow(() => renderCoordinator.Execute());
     }
 
     [Test]
@@ -75,12 +75,50 @@ public class RenderCoordinatorTests
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        renderCoordinator.Execute();
+        bool drawn = renderCoordinator.Execute();
 
         Assert.Multiple(() =>
         {
+            Assert.That(drawn, Is.False);
             Assert.That(calls, Is.Empty);
             Assert.That(renderContextSource.LastRenderContext, Is.Null);
+        });
+    }
+
+    [Test]
+    public void Execute_WhenWindowIsNotRenderable_CreatesAndDisposesContextWithoutRendering()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new();
+        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource, renderable: false);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
+        IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
+
+        bool drawn = renderCoordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.False);
+            Assert.That(calls, Is.Empty);
+            Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
+        });
+    }
+
+    [Test]
+    public void Execute_WithRenderableWindow_ReportsDrawn()
+    {
+        List<string> calls = new();
+        PixelyAppBuilder builder = CreateBuilder(calls);
+        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
+
+        bool drawn = provider.GetRequiredService<IRenderCoordinator>().Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.True);
+            Assert.That(calls, Is.EqualTo(new[] { "root" }));
         });
     }
 
@@ -241,12 +279,13 @@ public class RenderCoordinatorTests
     private static PixelyAppBuilder CreateBuilder(
         List<string> calls,
         TestRenderContextSource? renderContextSource = null,
-        ViewScope viewScope = default)
+        ViewScope viewScope = default,
+        bool renderable = true)
     {
         PixelyAppBuilder builder = new();
         builder.AddSingleton(CreateGpuDeviceStub());
         builder.UseWindowRendering<TestRenderContext>(viewScope);
-        builder.AddSingleton(CreateWindow(viewScope, 42));
+        builder.AddSingleton(CreateWindow(viewScope, 42, renderable));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
         builder.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         builder.AddSingleton(new GpuMemorySystem(null!));
@@ -260,9 +299,9 @@ public class RenderCoordinatorTests
         return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
+    private static Window CreateWindow(ViewScope viewScope, uint sdlId, bool renderable = true)
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(renderable ? typeof(SwapchainWindow) : typeof(NonRenderableWindow));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
         SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
@@ -272,6 +311,22 @@ public class RenderCoordinatorTests
     {
         FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
         field.SetValue(window, value);
+    }
+
+    // Created uninitialised like the other test windows. The constructor exists only because a derived class must name a base
+    // constructor to compile.
+    private sealed class NonRenderableWindow : Window
+    {
+        private NonRenderableWindow()
+            : base(default, default, 0, null!, null!, default)
+        {
+        }
+
+        public override bool IsRenderable => false;
+
+        public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
+
+        public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
     }
 
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>

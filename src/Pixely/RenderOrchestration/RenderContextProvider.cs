@@ -5,6 +5,12 @@ namespace Pixely.RenderOrchestration;
 public abstract class RenderContextProvider<TRenderContext>
     where TRenderContext : IRenderContext
 {
+    /// <summary>
+    /// Creates the context for one frame of <paramref name="window"/>. The render coordinator calls this every frame, even
+    /// while the window is not renderable, and then disposes the context without rendering. When no swapchain texture comes
+    /// back, submit the command buffer that requested it instead of cancelling it: SDL's Vulkan backend frees finished GPU
+    /// work only on such a submit.
+    /// </summary>
     public abstract bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TRenderContext? renderContext);
 
     /// <summary>

@@ -1,11 +1,15 @@
 using System.Diagnostics.CodeAnalysis;
 using Pixely.DependencyInjection;
 using Pixely.RenderOrchestration;
+using SDL;
 
 namespace Pixely.App;
 
 public class PixelyApp : IPixelyApp
 {
+    // How long a frame that no window drew waits for an event, about one frame of a 60 Hz display.
+    private const int UndrawnFrameWaitMilliseconds = 16;
+
     public ServiceProvider ServiceProvider { get; }
 
     private readonly PixelyFrameClock _frameClock;
@@ -65,7 +69,21 @@ public class PixelyApp : IPixelyApp
         }
 
         // finally render
-        Render(_renderCoordinators);
+        bool drawn = Render(_renderCoordinators);
+#if !BROWSER
+        // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
+        // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
+        // sees. An event, such as the window being restored, ends the wait early and stays queued for the next frame. The
+        // browser needs no wait: requestAnimationFrame paces its frames.
+        if (!drawn)
+        {
+            unsafe
+            {
+                SDL3.SDL_WaitEventTimeout(null, UndrawnFrameWaitMilliseconds);
+            }
+        }
+#endif
+
         return true;
     }
 
@@ -82,11 +100,18 @@ public class PixelyApp : IPixelyApp
         }
     }
 
-    private static void Render(ServiceRegistry<IRenderCoordinator> renderCoordinators)
+    // Whether a window drew the frame, or the app renders no window at all. An app without render coordinators keeps its
+    // own pacing.
+    private static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators)
     {
+        bool hasCoordinator = false;
+        bool drawn = false;
         foreach (IRenderCoordinator renderCoordinator in renderCoordinators)
         {
-            renderCoordinator.Execute();
+            hasCoordinator = true;
+            drawn |= renderCoordinator.Execute();
         }
+
+        return drawn || !hasCoordinator;
     }
 }

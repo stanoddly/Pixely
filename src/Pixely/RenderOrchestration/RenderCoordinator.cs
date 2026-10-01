@@ -5,7 +5,8 @@ namespace Pixely.RenderOrchestration;
 
 public interface IRenderCoordinator
 {
-    void Execute();
+    // Whether renderers drew a frame to the window.
+    bool Execute();
 }
 
 public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
@@ -28,28 +29,40 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         _renderers = renderers;
     }
 
-    public void Execute()
+    public bool Execute()
     {
-        if (!_window.IsRenderable || !_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
+        // The context is created every frame, even for a window that is not renderable, so its command buffer requests a
+        // swapchain texture and is submitted. SDL's Vulkan backend frees finished GPU work only on a submit whose command buffer
+        // requested a swapchain texture, or on a fence wait. Without that request, every upload would keep its buffer in use,
+        // and every later update of the buffer would cycle it into a new full-size copy. Metal and D3D12 free finished work on
+        // every submit.
+        //
+        // Apple documents that CAMetalLayer.nextDrawable, which SDL's Metal acquire calls without checking the window's state,
+        // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
+        // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
+        // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
+        if (!_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
         {
-            // A plain submit would leave finished uploads in use on Vulkan, since nothing acquires a swapchain texture. With
-            // several windows, the wait can stall a frame whose other windows still render, but only when this coordinator runs
-            // before them with uploads pending.
-            _gpuMemorySystem.SubmitAndReleaseFinishedWork();
-            return;
+            _gpuMemorySystem.Submit();
+            return false;
         }
 
         using (renderContext)
         {
-            foreach (IRenderer<TRenderContext> renderer in _renderers)
+            bool isRenderable = _window.IsRenderable;
+            if (isRenderable)
             {
-                if (renderer.ViewScope == _window.ViewScope)
+                foreach (IRenderer<TRenderContext> renderer in _renderers)
                 {
-                    renderer.Render(renderContext);
+                    if (renderer.ViewScope == _window.ViewScope)
+                    {
+                        renderer.Render(renderContext);
+                    }
                 }
             }
 
             _gpuMemorySystem.Submit();
+            return isRenderable;
         }
     }
 }

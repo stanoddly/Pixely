@@ -17,7 +17,8 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
         CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
         if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
         {
-            commandBuffer.Dispose();
+            // Submitted, not cancelled: SDL's Vulkan backend frees finished GPU work on a submit that requested a swapchain texture.
+            commandBuffer.Submit();
             renderContext = null;
             return false;
         }
