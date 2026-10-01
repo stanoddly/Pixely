@@ -3,7 +3,7 @@ using SDL;
 namespace Pixely;
 
 // Follows SDL's clock, the one SDL's event timestamps use, without the time spent paused.
-internal sealed class SdlFrameContext : PixelyFrameContext
+internal sealed class SdlFrameClock : PixelyFrameClock
 {
     // 100 ms = 0.1 seconds maximum delta time
     private const double MaxDeltaTime = 0.100;
@@ -31,7 +31,7 @@ internal sealed class SdlFrameContext : PixelyFrameContext
     {
         if (_paused)
         {
-            throw new InvalidOperationException("Frame context is already paused.");
+            throw new InvalidOperationException("Frame clock is already paused.");
         }
 
         _pauseStartNanoseconds = SDL3.SDL_GetTicksNS();
@@ -42,7 +42,7 @@ internal sealed class SdlFrameContext : PixelyFrameContext
     {
         if (!_paused)
         {
-            throw new InvalidOperationException("Frame context is not paused.");
+            throw new InvalidOperationException("Frame clock is not paused.");
         }
 
         ulong pauseEndNanoseconds = SDL3.SDL_GetTicksNS();

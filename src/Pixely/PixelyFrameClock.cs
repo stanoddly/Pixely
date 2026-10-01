@@ -1,12 +1,12 @@
 namespace Pixely;
 
 /// <summary>
-/// The frame context of a Pixely app. <see cref="PixelyFactory.CreateFrameContext"/> picks the clock: the real one, or a fixed step
+/// The frame clock of a Pixely app. <see cref="PixelyFactory.CreateFrameClock"/> picks which one: the real clock, or a fixed step
 /// per frame in headless mode.
 /// </summary>
-public abstract class PixelyFrameContext: FrameContext
+public abstract class PixelyFrameClock: FrameClock
 {
-    internal PixelyFrameContext()
+    internal PixelyFrameClock()
     {
     }
 

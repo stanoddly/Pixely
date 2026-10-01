@@ -80,8 +80,8 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
-        AddSingleton<PixelyFrameContext, PixelyFactory>();
-        AddAlias<FrameContext, PixelyFrameContext>();
+        AddSingleton<PixelyFrameClock, PixelyFactory>();
+        AddAlias<FrameClock, PixelyFrameClock>();
 
         AddSingleton<AppControl>();
         AddSingleton<UpdateSystem>();
@@ -98,7 +98,7 @@ public class PixelyAppBuilder : ServiceCollection
         ServiceProvider serviceProvider = BuildServiceProvider();
         return new PixelyApp(
             serviceProvider,
-            serviceProvider.GetRequiredService<PixelyFrameContext>(),
+            serviceProvider.GetRequiredService<PixelyFrameClock>(),
             serviceProvider.GetRequiredService<EventService>(),
             serviceProvider.GetRequiredService<AppControl>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),

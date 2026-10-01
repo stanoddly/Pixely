@@ -19,7 +19,7 @@ public static class WindowServiceCollectionExtensions
             provider.GetRequiredService<PixelyFactory>().CreateWindow(
                 viewScope,
                 provider.GetService<GpuDevice>(),
-                provider.GetRequiredService<PixelyFrameContext>(),
+                provider.GetRequiredService<PixelyFrameClock>(),
                 config ?? new WindowConfig(),
                 provider.GetRequiredService<PlatformInfo>(),
                 provider.GetRequiredService<IImageLoader>()));

@@ -84,7 +84,7 @@ public partial class PixelyFactory: IDisposable
     internal Window CreateWindow(
         ViewScope viewScope,
         GpuDevice? gpuDevice,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         WindowConfig config,
         PlatformInfo platformInfo,
         IImageLoader imageLoader)
@@ -100,11 +100,11 @@ public partial class PixelyFactory: IDisposable
                 throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
             }
 
-            return CreateOffscreenWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
+            return CreateOffscreenWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
 #endif
         }
 
-        Window window = CreateWindow(viewScope, gpuDevice, frameContext, platformInfo, config);
+        Window window = CreateWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -237,12 +237,12 @@ public partial class PixelyFactory: IDisposable
 
     // Automation exists in headless mode only; a null result registers nothing.
     internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService,
-        TextInputService textInputService, GamepadService gamepadService, FrameContext frameContext)
+        TextInputService textInputService, GamepadService gamepadService, FrameClock frameClock)
     {
-        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameContext) : null;
+        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameClock) : null;
     }
 
-    public PixelyFrameContext CreateFrameContext()
+    public PixelyFrameClock CreateFrameClock()
     {
 #if BROWSER
         // Also fails an app without a window, which never reaches the check in CreateWindow.
@@ -251,7 +251,7 @@ public partial class PixelyFactory: IDisposable
             throw new PixelyInitializationException("Headless mode is not supported in the browser.");
         }
 #endif
-        return _config.Headless ? new FixedStepFrameContext() : new SdlFrameContext();
+        return _config.Headless ? new FixedStepFrameClock() : new SdlFrameClock();
     }
 
     internal IImageWriter? CreateImageWriter()

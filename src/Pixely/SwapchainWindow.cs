@@ -18,10 +18,10 @@ public sealed partial class SwapchainWindow : Window
         Pointer<SDL_Window> sdlWindow,
         Pointer<SDL_GPUDevice> sdlGpuDevice,
         uint sdlId,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameContext, platformInfo, closeBehavior)
+        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
     {
         SdlGpuDevice = sdlGpuDevice;
     }

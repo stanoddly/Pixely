@@ -1,6 +1,6 @@
 namespace Pixely;
 
-public abstract class FrameContext
+public abstract class FrameClock
 {
     public ulong FrameNumber { get; protected set; }
 
@@ -11,7 +11,7 @@ public abstract class FrameContext
     public double TimeDelta64 { get; protected set; }
 }
 
-public class TestFrameContext : FrameContext
+public class TestFrameClock : FrameClock
 {
     public void StartTestFrame(ulong elapsedMilliseconds)
     {
