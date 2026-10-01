@@ -275,6 +275,40 @@ public class RenderCoordinatorTests
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
 
+    [Test]
+    public void AppRender_WithoutCoordinators_CountsAsDrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry()), Is.True);
+    }
+
+    [Test]
+    public void AppRender_WhenAnyCoordinatorDraws_CountsAsDrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, true)), Is.True);
+    }
+
+    [Test]
+    public void AppRender_WhenNoCoordinatorDraws_CountsAsUndrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, false)), Is.False);
+    }
+
+    private static ServiceRegistry<IRenderCoordinator> CreateCoordinatorRegistry(params bool[] drawn)
+    {
+        PixelyAppBuilder builder = new();
+        foreach (bool coordinatorDraws in drawn)
+        {
+            builder.AddSingleton<IRenderCoordinator>(new StubRenderCoordinator(coordinatorDraws));
+        }
+
+        return builder.BuildServiceProvider().GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
+    }
+
+    private sealed class StubRenderCoordinator(bool drawn) : IRenderCoordinator
+    {
+        public bool Execute() => drawn;
+    }
+
     private static PixelyAppBuilder CreateBuilder(
         List<string> calls,
         TestRenderContextSource? renderContextSource = null,
@@ -336,7 +370,7 @@ public class RenderCoordinatorTests
 
         internal override bool TryAcquireFrame(GpuDevice gpuDevice, out FrameContext frameContext)
         {
-            frameContext = new FrameContext(this, null!, null!);
+            frameContext = new FrameContext { Window = this, CommandBuffer = null!, SwapchainTexture = null! };
             return CanAcquireFrame;
         }
     }

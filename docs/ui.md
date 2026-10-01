@@ -67,7 +67,7 @@ builder.UseUi(updateOrder: 500);
 
 The viewport event is raised by `SetTargetSize`, which the same system calls immediately before the build, and by `Update` applying a requested scale, not by the build itself. Pointer and focus callbacks still arrive during event routing as they always did, `RemoveLayer` still reconciles immediately, and `UiRoot.Update` stays public for an application that wants to drive a root itself.
 
-A hidden or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
+A hidden, minimized or zero-area window does not build. A window resized between the update phase and rendering shows one blank UI frame, because the instructions describe the previous size; the next update catches up.
 
 The build lays out against the render context's colour target, divided by the root's scale, see below. A render context whose colour target is a different size than the window is not supported: the UI is laid out for that target and the renderer refuses to draw it into a target of another size, so it stays blank.
 

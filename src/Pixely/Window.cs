@@ -426,7 +426,7 @@ public abstract class Window : IDisposable
             return false;
         }
 
-        frameContext = new FrameContext(this, acquired, swapchainTexture);
+        frameContext = new FrameContext { Window = this, CommandBuffer = acquired, SwapchainTexture = swapchainTexture };
         return true;
     }
 

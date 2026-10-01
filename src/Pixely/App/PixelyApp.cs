@@ -102,7 +102,7 @@ public class PixelyApp : IPixelyApp
 
     // Whether a window drew the frame, or the app renders no window at all. An app without render coordinators keeps its
     // own pacing.
-    private static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators)
+    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators)
     {
         bool hasCoordinator = false;
         bool drawn = false;

@@ -5,7 +5,11 @@ namespace Pixely.RenderOrchestration;
 
 public interface IRenderCoordinator
 {
-    // Whether renderers drew a frame to the window.
+    /// <summary>
+    /// Runs one frame for the window. Returns true when the window could show the frame: it was renderable and a swapchain
+    /// texture came back, even if no renderer drew. When every coordinator returns false, the frame loop waits up to 16 ms
+    /// for an event, except in the browser.
+    /// </summary>
     bool Execute();
 }
 
@@ -34,12 +38,23 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 
     public bool Execute()
     {
+#if BROWSER
+        // SDL's browser driver does not hide the canvas, so a frame acquired for a hidden window would present an undrawn
+        // texture and blank it. The browser needs no acquire to free finished work: the WebGPU fork frees it on every acquire
+        // and submit. Pending uploads are still submitted, so their buffers are not cycled on every update while hidden.
+        if (!_window.IsRenderable)
+        {
+            _gpuMemorySystem.Submit();
+            return false;
+        }
+#endif
+
         // The coordinator, not the provider, acquires the command buffer and swapchain texture, so no provider can skip the
-        // request or cancel the command buffer. They are acquired every frame, even for a window that is not renderable, so the
-        // command buffer requests a swapchain texture and is submitted. SDL's Vulkan backend frees finished GPU work only on a submit whose command buffer
-        // requested a swapchain texture, or on a fence wait. Without that request, every upload would keep its buffer in use,
-        // and every later update of the buffer would cycle it into a new full-size copy. Metal and D3D12 free finished work on
-        // every submit.
+        // request. On the desktop they are acquired every frame, even for a window that is not renderable, and the command
+        // buffer is submitted even when no texture comes back. SDL's Vulkan backend frees finished GPU work only on a submit
+        // whose command buffer requested a swapchain texture, or on a fence wait. Without that request, every upload would
+        // keep its buffer in use, and every later update of the buffer would cycle it into a new full-size copy. Metal and
+        // D3D12 free finished work on every submit.
         //
         // Apple documents that CAMetalLayer.nextDrawable, which SDL's Metal acquire calls without checking the window's state,
         // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
@@ -63,6 +78,8 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         catch
         {
             // The context never took ownership, and a command buffer with an acquired swapchain texture cannot be cancelled.
+            // Uploads go first, as on every path: work the provider recorded may read them.
+            _gpuMemorySystem.Submit();
             frameContext.CommandBuffer.Submit();
             throw;
         }
@@ -70,18 +87,26 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         using (renderContext)
         {
             bool isRenderable = _window.IsRenderable;
-            if (isRenderable)
+            try
             {
-                foreach (IRenderer<TRenderContext> renderer in _renderers)
+                if (isRenderable)
                 {
-                    if (renderer.ViewScope == _window.ViewScope)
+                    foreach (IRenderer<TRenderContext> renderer in _renderers)
                     {
-                        renderer.Render(renderContext);
+                        if (renderer.ViewScope == _window.ViewScope)
+                        {
+                            renderer.Render(renderContext);
+                        }
                     }
                 }
             }
+            finally
+            {
+                // Before disposing the context submits its command buffer, even when a renderer throws: a draw recorded before
+                // the throw may read a buffer whose update is still pending, and with cycling that copy is otherwise unwritten.
+                _gpuMemorySystem.Submit();
+            }
 
-            _gpuMemorySystem.Submit();
             return isRenderable;
         }
     }
