@@ -64,10 +64,14 @@ the frame loop processes events and updates, and the window's `ColorTargetFormat
 `TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an
 app spins the loop.
 
-With `UseGpu()` but without window rendering, as in a compute-only app, `AddWindow` still claims the window for the
-device, but no render coordinator requests its swapchain texture. SDL's Vulkan backend then never frees finished GPU
-work, so every buffer update makes a new full-size copy of the buffer until the app waits on a `GpuFence`. Such an
-app must wait on a fence regularly.
+With `UseGpu()` but without window rendering, as in a compute-only app, no render coordinator runs, and two things
+fall to the app:
+
+- Only a render coordinator submits the uploads `GpuMemorySystem` records. The app must call `GpuMemorySystem.Submit()`
+  before the GPU work that reads them. Until then the uploads do not run, and on every backend each buffer update makes
+  a new full-size copy of the buffer, because the unsubmitted uploads keep the earlier copies in use.
+- `AddWindow` still claims the window for the device, but nothing requests its swapchain texture. SDL's Vulkan backend
+  then frees finished GPU work only on a fence wait, so the app must also wait on a `GpuFence` regularly.
 
 ## The browser
 

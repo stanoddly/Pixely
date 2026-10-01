@@ -79,8 +79,16 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         {
             // The context never took ownership, and a command buffer with an acquired swapchain texture cannot be cancelled.
             // Uploads go first, as on every path: work the provider recorded may read them.
-            _gpuMemorySystem.Submit();
-            frameContext.CommandBuffer.Submit();
+            // The frame is submitted even when submitting the uploads throws, so the acquired texture is not abandoned.
+            try
+            {
+                _gpuMemorySystem.Submit();
+            }
+            finally
+            {
+                frameContext.CommandBuffer.Submit();
+            }
+
             throw;
         }
 
