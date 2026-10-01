@@ -174,13 +174,13 @@ public sealed class InputAutomationTests
     [Test]
     public void Input_IsTimestampedWithGameTime()
     {
-        TestFrameContext frameContext = new();
+        TestFrameClock frameClock = new();
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(CreateWindow(_viewScope, 42));
-        (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry, frameContext: frameContext);
+        (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry, frameClock: frameClock);
         ulong? timestamp = null;
         keyboardService.SubscribeKeyDown(_viewScope, 0, eventArgs => timestamp = eventArgs.Timestamp);
-        frameContext.StartTestFrame(1500);
+        frameClock.StartTestFrame(1500);
 
         automation.KeyDown(Scancode.A, _viewScope);
 
@@ -289,12 +289,12 @@ public sealed class InputAutomationTests
     }
 
     internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(
-        WindowRegistry windowRegistry, GamepadService? gamepadService = null, FrameContext? frameContext = null)
+        WindowRegistry windowRegistry, GamepadService? gamepadService = null, FrameClock? frameClock = null)
     {
         MouseService mouseService = new(windowRegistry);
         KeyboardService keyboardService = new(new AppControl());
         TextInputService textInputService = new(windowRegistry);
-        InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameContext ?? new TestFrameContext());
+        InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameClock ?? new TestFrameClock());
         return (automation, mouseService, keyboardService, textInputService);
     }
 

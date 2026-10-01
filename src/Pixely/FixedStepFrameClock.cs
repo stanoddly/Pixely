@@ -1,8 +1,8 @@
 namespace Pixely;
 
-// The frame context of a headless app (PixelyConfig.Headless). Game time starts at 0 and advances by a fixed step per frame,
+// The frame clock of a headless app (PixelyConfig.Headless). Game time starts at 0 and advances by a fixed step per frame,
 // so every run of a script sees the same frame times however fast its frames run.
-internal sealed class FixedStepFrameContext : PixelyFrameContext
+internal sealed class FixedStepFrameClock : PixelyFrameClock
 {
     // 1/30 s rounded up to whole nanoseconds, so 30 steps make at least a full second.
     public const ulong StepNanoseconds = 33_333_334;

@@ -8,7 +8,7 @@ public class PixelyApp : IPixelyApp
 {
     public ServiceProvider ServiceProvider { get; }
 
-    private readonly PixelyFrameContext _frameContext;
+    private readonly PixelyFrameClock _frameClock;
     private readonly EventService _eventService;
     private readonly AppControl _appControl;
     private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
@@ -17,7 +17,7 @@ public class PixelyApp : IPixelyApp
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         EventService eventService,
         AppControl appControl,
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
@@ -25,7 +25,7 @@ public class PixelyApp : IPixelyApp
         StageManager stageManager)
     {
         ServiceProvider = serviceProvider;
-        _frameContext = frameContext;
+        _frameClock = frameClock;
         _eventService = eventService;
         _appControl = appControl;
         _renderCoordinators = renderCoordinators;
@@ -52,7 +52,7 @@ public class PixelyApp : IPixelyApp
     public bool RunFrame()
     {
         // start the frame before applying queued stage transitions
-        _frameContext.StartFrame();
+        _frameClock.StartFrame();
         _stageManager.ApplyPendingTransition();
         // then process events
         _eventService.Process();

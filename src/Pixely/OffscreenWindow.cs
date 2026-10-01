@@ -23,10 +23,10 @@ public sealed class OffscreenWindow : Window
         Pointer<SDL_Window> sdlWindow,
         GpuDevice gpuDevice,
         uint sdlId,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameContext, platformInfo, closeBehavior)
+        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
     {
         _gpuDevice = gpuDevice;
     }

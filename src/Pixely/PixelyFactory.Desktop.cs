@@ -60,7 +60,7 @@ public partial class PixelyFactory
         }
     }
 
-    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameContext frameContext, PlatformInfo platformInfo, WindowConfig config)
+    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -96,13 +96,13 @@ public partial class PixelyFactory
 
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
 
-        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, config.CloseBehavior);
+        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 
     private OffscreenWindow CreateOffscreenWindow(
         ViewScope viewScope,
         GpuDevice gpuDevice,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowConfig config)
     {
@@ -111,7 +111,7 @@ public partial class PixelyFactory
         // submit that acquired a swapchain texture, which an offscreen window never does.
         (uint width, uint height) = config.Size ?? DefaultSize;
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameContext, platformInfo, WindowCloseBehavior.QuitApplication);
+        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameClock, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 }
 #endif

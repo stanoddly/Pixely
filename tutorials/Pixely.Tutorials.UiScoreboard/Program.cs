@@ -40,7 +40,7 @@ static partial class Program
         builder.AddSingleton<IUpdatable, ScoreboardSimulation>(provider =>
             new ScoreboardSimulation(
                 provider.GetRequiredService<ScoreboardViewModel>(),
-                provider.GetRequiredService<FrameContext>()));
+                provider.GetRequiredService<FrameClock>()));
 
         builder.OnBuilt((
             IKeyboardService keyboardService,
@@ -92,15 +92,15 @@ internal sealed class ScoreboardSimulation : IUpdatable
     private const int ScorePerSecondSurvived = 5;
 
     private readonly ScoreboardViewModel _viewModel;
-    private readonly FrameContext _frameContext;
+    private readonly FrameClock _frameClock;
 
     private float _healthRemainder;
     private float _scoreRemainder;
 
-    internal ScoreboardSimulation(ScoreboardViewModel viewModel, FrameContext frameContext)
+    internal ScoreboardSimulation(ScoreboardViewModel viewModel, FrameClock frameClock)
     {
         _viewModel = viewModel;
-        _frameContext = frameContext;
+        _frameClock = frameClock;
     }
 
     public void Update()
@@ -110,7 +110,7 @@ internal sealed class ScoreboardSimulation : IUpdatable
             return;
         }
 
-        float delta = _frameContext.TimeDelta;
+        float delta = _frameClock.TimeDelta;
         _viewModel.Elapsed += TimeSpan.FromSeconds(delta);
 
         _healthRemainder += HealthDrainPerSecond * delta;

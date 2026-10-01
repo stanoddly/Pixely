@@ -20,7 +20,7 @@ public abstract class Window : IDisposable
     internal Pointer<SDL_Window> SdlWindow { get; private set; }
     internal uint SdlId { get; }
     internal WindowCloseBehavior CloseBehavior { get; }
-    private readonly PixelyFrameContext _frameContext;
+    private readonly PixelyFrameClock _frameClock;
     private readonly PlatformInfo _platformInfo;
 
     internal ViewScope ViewScope { get; }
@@ -33,14 +33,14 @@ public abstract class Window : IDisposable
         ViewScope viewScope,
         Pointer<SDL_Window> sdlWindow,
         uint sdlId,
-        PixelyFrameContext frameContext,
+        PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
     {
         ViewScope = viewScope;
         SdlWindow = sdlWindow;
         SdlId = sdlId;
-        _frameContext = frameContext;
+        _frameClock = frameClock;
         _platformInfo = platformInfo;
         CloseBehavior = closeBehavior;
         _lastSize = RenderSizeInPixels;
@@ -429,40 +429,40 @@ public abstract class Window : IDisposable
 
     public unsafe void ShowModalMessageBox(MessageBoxSeverity severity, string title, string message)
     {
-        _frameContext.Pause();
+        _frameClock.Pause();
         try
         {
             MessageBox.Show(severity, title, message, SdlWindow);
         }
         finally
         {
-            _frameContext.Resume();
+            _frameClock.Resume();
         }
     }
 
     public FileDialogResult ShowModalOpenFileDialog(IReadOnlyList<FileDialogFilter>? filters = null, string? defaultLocation = null, bool allowMany = false)
     {
-        _frameContext.Pause();
+        _frameClock.Pause();
         try
         {
             return ShowModalFileDialog(filters ?? Array.Empty<FileDialogFilter>(), defaultLocation, allowMany, FileDialogKind.Open);
         }
         finally
         {
-            _frameContext.Resume();
+            _frameClock.Resume();
         }
     }
 
     public FileDialogResult ShowModalSaveFileDialog(IReadOnlyList<FileDialogFilter>? filters = null, string? defaultLocation = null)
     {
-        _frameContext.Pause();
+        _frameClock.Pause();
         try
         {
             return ShowModalFileDialog(filters ?? Array.Empty<FileDialogFilter>(), defaultLocation, false, FileDialogKind.Save);
         }
         finally
         {
-            _frameContext.Resume();
+            _frameClock.Resume();
         }
     }
 

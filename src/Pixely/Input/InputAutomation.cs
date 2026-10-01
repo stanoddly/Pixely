@@ -26,18 +26,18 @@ internal sealed class InputAutomation
     private readonly KeyboardService _keyboardService;
     private readonly TextInputService _textInputService;
     private readonly GamepadService _gamepadService;
-    private readonly FrameContext _frameContext;
+    private readonly FrameClock _frameClock;
     private Gamepad? _gamepad;
 
     internal InputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService,
-        GamepadService gamepadService, FrameContext frameContext)
+        GamepadService gamepadService, FrameClock frameClock)
     {
         _windowRegistry = windowRegistry;
         _mouseService = mouseService;
         _keyboardService = keyboardService;
         _textInputService = textInputService;
         _gamepadService = gamepadService;
-        _frameContext = frameContext;
+        _frameClock = frameClock;
     }
 
     public bool IsGamepadConnected => _gamepad != null;
@@ -201,6 +201,6 @@ internal sealed class InputAutomation
     // Synthetic input happens at the frame that runs it, so its timestamps follow game time, which a headless run fixes per frame.
     private ulong GetTimestamp()
     {
-        return _frameContext.ElapsedNanoseconds;
+        return _frameClock.ElapsedNanoseconds;
     }
 }

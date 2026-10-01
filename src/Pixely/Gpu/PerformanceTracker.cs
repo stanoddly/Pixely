@@ -3,24 +3,24 @@ namespace Pixely.Gpu;
 public class PerformanceTracker : IUpdatable, IDisposable
 {
     private readonly GpuDevice _gpuDevice;
-    private readonly FrameContext _frameContext;
+    private readonly FrameClock _frameClock;
     private long _frameCount;
     private double _totalFrameTime;
     private double _minFrameTime = double.MaxValue;
     private double _maxFrameTime;
     private GpuMemoryStats _peakMemoryStats;
 
-    public PerformanceTracker(GpuDevice gpuDevice, FrameContext frameContext)
+    public PerformanceTracker(GpuDevice gpuDevice, FrameClock frameClock)
     {
         _gpuDevice = gpuDevice;
-        _frameContext = frameContext;
+        _frameClock = frameClock;
     }
 
     public int UpdateOrder => UpdateOrders.Diagnostics;
 
     public void Update()
     {
-        double frameTime = _frameContext.TimeDelta64;
+        double frameTime = _frameClock.TimeDelta64;
 
         if (frameTime > 0)
         {

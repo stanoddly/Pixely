@@ -21,13 +21,13 @@ public readonly struct TimerCallback
 
 public class TimerSystem : IUpdatable
 {
-    private readonly FrameContext _frameContext;
+    private readonly FrameClock _frameClock;
     private DenseSlotMapStruct<Handle<TimerTag>, TimerCallback> _timers = new();
     private readonly List<Handle<TimerTag>> _toRemove = new();
 
-    public TimerSystem(FrameContext frameContext)
+    public TimerSystem(FrameClock frameClock)
     {
-        _frameContext = frameContext;
+        _frameClock = frameClock;
     }
 
     public int UpdateOrder => UpdateOrders.Default;
@@ -42,7 +42,7 @@ public class TimerSystem : IUpdatable
         for (int i = 0; i < handles.Length; i++)
         {
             TimerCallback callback = callbacks[i];
-            if (_frameContext.ElapsedTime >= callback.TriggerTime)
+            if (_frameClock.ElapsedTime >= callback.TriggerTime)
             {
                 callback.Action();
                 _toRemove.Add(handles[i]);
@@ -57,7 +57,7 @@ public class TimerSystem : IUpdatable
 
     public Handle<TimerTag> Schedule(TimeSpan delay, Action action)
     {
-        TimeSpan triggerTime = _frameContext.ElapsedTime + delay;
+        TimeSpan triggerTime = _frameClock.ElapsedTime + delay;
         TimerCallback callback = new(triggerTime, action);
         return _timers.Add(callback);
     }
@@ -74,7 +74,7 @@ public class TimerSystem : IUpdatable
             return false;
         }
 
-        TimeSpan newTriggerTime = _frameContext.ElapsedTime + delay;
+        TimeSpan newTriggerTime = _frameClock.ElapsedTime + delay;
         TimerCallback updated = new(newTriggerTime, existing.Action);
         _timers.Set(handle, updated);
         return true;

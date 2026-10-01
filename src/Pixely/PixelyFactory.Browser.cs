@@ -38,11 +38,11 @@ public partial class PixelyFactory
     // Emscripten driver drop fill-document mode and take the window size from the canvas box; only a resizable window then
     // reads that box again on each page resize and resizes the canvas bitmap with it. Fill-document mode stays on for a
     // page whose canvas has no CSS size.
-    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameContext frameContext, PlatformInfo platformInfo, WindowConfig config)
+    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
         SDL_WindowFlags windowFlags = FillDocumentWindowFlag | SDL_WindowFlags.SDL_WINDOW_RESIZABLE | (config.InitiallyVisible ? 0 : SDL_WindowFlags.SDL_WINDOW_HIDDEN);
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, DefaultSize.Width, DefaultSize.Height, windowFlags);
-        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameContext, platformInfo, config.CloseBehavior);
+        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 }
 #endif
