@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Pixely;
 using Pixely.App;
 using Pixely.DependencyInjection;
@@ -43,10 +42,9 @@ public sealed class PackageRenderContextProvider : RenderContextProvider<Package
         return new PackageRenderContextProvider(gpuDevice);
     }
 
-    public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out PackageRenderContext? renderContext)
+    public override PackageRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
     {
-        renderContext = null;
-        return false;
+        return new PackageRenderContext();
     }
 }
 

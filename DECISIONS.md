@@ -4,7 +4,7 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 
-`RenderCoordinator` creates a render context every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. A provider that gets no swapchain texture submits its command buffer instead of cancelling it. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event.
+`RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. When no texture comes back, it submits the command buffer instead of cancelling it. Providers only build a context from what the coordinator acquired, so no provider can skip the request or cancel the command buffer; a different acquire needs a custom `IRenderCoordinator`. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event.
 
 - SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture, or on a fence wait. Skipping the request kept every uploaded buffer in use, so each update cycled it into a new copy. Metal and D3D12 free finished work on every submit.
 - Requesting is what SDL's own usage assumes, and its 2025-07-31 fix for hidden windows relies on it. The alternative was a fence wait in the frame loop whenever no window rendered, which blocked on the GPU on every backend.

@@ -13,17 +13,20 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     where TRenderContext : IRenderContext
 {
     private readonly Window _window;
+    private readonly GpuDevice _gpuDevice;
     private readonly GpuMemorySystem _gpuMemorySystem;
     private readonly RenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
 
     public RenderCoordinator(
         Window window,
+        GpuDevice gpuDevice,
         GpuMemorySystem gpuMemorySystem,
         RenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers)
     {
         _window = window;
+        _gpuDevice = gpuDevice;
         _gpuMemorySystem = gpuMemorySystem;
         _renderContextProvider = renderContextProvider;
         _renderers = renderers;
@@ -31,8 +34,9 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 
     public bool Execute()
     {
-        // The context is created every frame, even for a window that is not renderable, so its command buffer requests a
-        // swapchain texture and is submitted. SDL's Vulkan backend frees finished GPU work only on a submit whose command buffer
+        // The coordinator, not the provider, acquires the command buffer and swapchain texture, so no provider can skip the
+        // request or cancel the command buffer. They are acquired every frame, even for a window that is not renderable, so the
+        // command buffer requests a swapchain texture and is submitted. SDL's Vulkan backend frees finished GPU work only on a submit whose command buffer
         // requested a swapchain texture, or on a fence wait. Without that request, every upload would keep its buffer in use,
         // and every later update of the buffer would cycle it into a new full-size copy. Metal and D3D12 free finished work on
         // every submit.
@@ -41,10 +45,22 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
         // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
         // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
-        if (!_renderContextProvider.TryCreateRenderContext(_window, out TRenderContext? renderContext))
+        if (!_window.TryAcquireFrame(_gpuDevice, out CommandBuffer? commandBuffer, out SwapchainTexture? swapchainTexture))
         {
             _gpuMemorySystem.Submit();
             return false;
+        }
+
+        TRenderContext renderContext;
+        try
+        {
+            renderContext = _renderContextProvider.CreateRenderContext(_window, commandBuffer, swapchainTexture);
+        }
+        catch
+        {
+            // The context never took ownership, and a command buffer with an acquired swapchain texture cannot be cancelled.
+            commandBuffer.Submit();
+            throw;
         }
 
         using (renderContext)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pixely.Content;
@@ -392,6 +393,35 @@ public abstract class Window : IDisposable
     }
 
     public abstract bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture);
+
+    // Acquires the command buffer and swapchain texture one frame of the window draws with. When no texture comes back, the
+    // command buffer is submitted, not cancelled: SDL's Vulkan backend frees finished GPU work only on a submit whose command
+    // buffer requested a swapchain texture, or on a fence wait. Virtual so tests can acquire without a GPU device.
+    internal virtual bool TryAcquireFrame(GpuDevice gpuDevice, [NotNullWhen(true)] out CommandBuffer? commandBuffer, [NotNullWhen(true)] out SwapchainTexture? swapchainTexture)
+    {
+        CommandBuffer acquired = gpuDevice.AcquireCommandBuffer();
+        bool hasTexture;
+        try
+        {
+            hasTexture = TryWaitAndAcquireSwapchainTexture(acquired, out swapchainTexture);
+        }
+        catch
+        {
+            acquired.Cancel();
+            throw;
+        }
+
+        if (!hasTexture)
+        {
+            acquired.Submit();
+            commandBuffer = null;
+            swapchainTexture = null;
+            return false;
+        }
+
+        commandBuffer = acquired;
+        return true;
+    }
 
     public void SetFullscreenBorderless(bool fullscreen)
     {

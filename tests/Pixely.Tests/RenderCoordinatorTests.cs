@@ -66,11 +66,11 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void Execute_WhenRenderContextCannotBeCreated_DoesNotRender()
+    public void Execute_WhenFrameCannotBeAcquired_DoesNotCreateContextOrRender()
     {
         List<string> calls = new();
-        TestRenderContextSource renderContextSource = new() { CanCreate = false };
-        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
+        TestRenderContextSource renderContextSource = new();
+        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource, canAcquireFrame: false);
         builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
@@ -81,7 +81,7 @@ public class RenderCoordinatorTests
         {
             Assert.That(drawn, Is.False);
             Assert.That(calls, Is.Empty);
-            Assert.That(renderContextSource.LastRenderContext, Is.Null);
+            Assert.That(renderContextSource.LastWindow, Is.Null);
         });
     }
 
@@ -280,12 +280,13 @@ public class RenderCoordinatorTests
         List<string> calls,
         TestRenderContextSource? renderContextSource = null,
         ViewScope viewScope = default,
-        bool renderable = true)
+        bool renderable = true,
+        bool canAcquireFrame = true)
     {
         PixelyAppBuilder builder = new();
         builder.AddSingleton(CreateGpuDeviceStub());
         builder.UseWindowRendering<TestRenderContext>(viewScope);
-        builder.AddSingleton(CreateWindow(viewScope, 42, renderable));
+        builder.AddSingleton(CreateWindow(viewScope, 42, renderable, canAcquireFrame));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
         builder.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         builder.AddSingleton(new GpuMemorySystem(null!));
@@ -299,9 +300,11 @@ public class RenderCoordinatorTests
         return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId, bool renderable = true)
+    private static Window CreateWindow(ViewScope viewScope, uint sdlId, bool renderable = true, bool canAcquireFrame = true)
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(renderable ? typeof(SwapchainWindow) : typeof(NonRenderableWindow));
+        TestWindow window = (TestWindow)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
+        window.Renderable = renderable;
+        window.CanAcquireFrame = canAcquireFrame;
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
         SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
@@ -313,40 +316,43 @@ public class RenderCoordinatorTests
         field.SetValue(window, value);
     }
 
-    // Created uninitialised like the other test windows. The constructor exists only because a derived class must name a base
-    // constructor to compile.
-    private sealed class NonRenderableWindow : Window
+    // Created uninitialised, so it never reaches SDL. The constructor exists only because a derived class must name a base
+    // constructor to compile. A frame it acquires has no command buffer or texture: the test contexts never use them.
+    private sealed class TestWindow : Window
     {
-        private NonRenderableWindow()
+        private TestWindow()
             : base(default, default, 0, null!, null!, default)
         {
         }
 
-        public override bool IsRenderable => false;
+        public bool Renderable { get; set; }
+
+        public bool CanAcquireFrame { get; set; }
+
+        public override bool IsRenderable => Renderable;
 
         public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
 
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
+
+        internal override bool TryAcquireFrame(GpuDevice gpuDevice, [NotNullWhen(true)] out CommandBuffer? commandBuffer, [NotNullWhen(true)] out SwapchainTexture? swapchainTexture)
+        {
+            commandBuffer = null!;
+            swapchainTexture = null!;
+            return CanAcquireFrame;
+        }
     }
 
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>
     {
-        public bool CanCreate { get; init; } = true;
         public TestRenderContext? LastRenderContext { get; private set; }
         public Window? LastWindow { get; private set; }
 
-        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
+        public override TestRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
         {
             LastWindow = window;
-            if (!CanCreate)
-            {
-                renderContext = null;
-                return false;
-            }
-
-            renderContext = new TestRenderContext();
-            LastRenderContext = renderContext;
-            return true;
+            LastRenderContext = new TestRenderContext();
+            return LastRenderContext;
         }
     }
 
