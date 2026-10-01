@@ -117,9 +117,11 @@ public class GpuMemorySystem: ICopyPass
     }
 
     /// <summary>
-    /// Submits the uploads recorded since the last submit. Render coordinators call this every frame. An app without window
-    /// rendering must call it before the GPU work that reads the uploads: until then they do not run, and every update of a
-    /// buffer cycles it into a new copy, because the unsubmitted uploads keep the earlier copies in use.
+    /// Submits the uploads recorded since the last submit. Uploads run only once this is called: a command buffer submitted
+    /// earlier that reads a buffer updated since the last submit reads undefined contents. Render coordinators call this
+    /// every frame, after the renderers and before the frame's own command buffer. Call it yourself before submitting any
+    /// other command buffer that reads updated buffers. An app without window rendering must always call it itself: until
+    /// then every update of a buffer cycles it into a new copy, because the unsubmitted uploads keep the earlier copies in use.
     /// </summary>
     public void Submit()
     {
