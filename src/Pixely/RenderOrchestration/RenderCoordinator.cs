@@ -45,7 +45,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
         // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
         // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
-        if (!_window.TryAcquireFrame(_gpuDevice, out CommandBuffer? commandBuffer, out SwapchainTexture? swapchainTexture))
+        if (!_window.TryAcquireFrame(_gpuDevice, out FrameContext frameContext))
         {
             // In the browser, pending uploads wait for the next drawn frame instead: a submission there takes one of the
             // frame-limit slots that kept the acquire from returning a texture.
@@ -58,12 +58,12 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         TRenderContext renderContext;
         try
         {
-            renderContext = _renderContextProvider.CreateRenderContext(_window, commandBuffer, swapchainTexture);
+            renderContext = _renderContextProvider.CreateRenderContext(frameContext);
         }
         catch
         {
             // The context never took ownership, and a command buffer with an acquired swapchain texture cannot be cancelled.
-            commandBuffer.Submit();
+            frameContext.CommandBuffer.Submit();
             throw;
         }
 

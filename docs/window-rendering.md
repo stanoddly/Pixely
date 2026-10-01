@@ -109,14 +109,14 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
         return new GameRenderContextProvider(depthTarget, camera);
     }
 
-    public override GameRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+    public override GameRenderContext CreateRenderContext(FrameContext frameContext)
     {
-        return new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera, window.RenderSizeInPixels);
+        return new GameRenderContext(frameContext.SwapchainTexture, frameContext.CommandBuffer, _depthTarget, _camera, frameContext.Window.RenderSizeInPixels);
     }
 }
 ```
 
-`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext`. The context owns the command buffer and submits it when disposed. The coordinator acquires a frame every frame, even for a window that is not renderable, but runs renderers only while the window's `IsRenderable` is true. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire, such as one that does not wait, needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
+`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. One provider can serve several windows, such as two that use `UseDefaultRendering`, so `FrameContext.Window` tells them apart. The context owns the command buffer and submits it when disposed. The coordinator acquires a frame every frame, even for a window that is not renderable, but runs renderers only while the window's `IsRenderable` is true. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire, such as one that does not wait, needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
@@ -152,7 +152,7 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-The framework coordinator passes its managed window and the acquired frame to the provider for each frame, invokes renderers for the
+The framework coordinator passes its managed window and the acquired frame to the provider in a `FrameContext` for each frame, invokes renderers for the
 same `ViewScope` while the window's `IsRenderable` is true, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
 registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup

@@ -42,7 +42,7 @@ public sealed class PackageRenderContextProvider : RenderContextProvider<Package
         return new PackageRenderContextProvider(gpuDevice);
     }
 
-    public override PackageRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+    public override PackageRenderContext CreateRenderContext(FrameContext frameContext)
     {
         return new PackageRenderContext();
     }

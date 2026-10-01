@@ -1,5 +1,3 @@
-using Pixely.Gpu;
-
 namespace Pixely.RenderOrchestration;
 
 public class BasicRenderContextProvider : RenderContextProvider<BasicRenderContext>
@@ -8,8 +6,8 @@ public class BasicRenderContextProvider : RenderContextProvider<BasicRenderConte
     {
     }
 
-    public override BasicRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+    public override BasicRenderContext CreateRenderContext(FrameContext frameContext)
     {
-        return new BasicRenderContext(swapchainTexture, commandBuffer);
+        return new BasicRenderContext(frameContext.SwapchainTexture, frameContext.CommandBuffer);
     }
 }

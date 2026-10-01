@@ -214,7 +214,7 @@ public class UiUpdateSystemTests
             return _size;
         }
 
-        public override BasicRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+        public override BasicRenderContext CreateRenderContext(FrameContext frameContext)
         {
             throw new NotSupportedException();
         }

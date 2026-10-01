@@ -1,17 +1,15 @@
-using Pixely.Gpu;
-
 namespace Pixely.RenderOrchestration;
 
 public abstract class RenderContextProvider<TRenderContext>
     where TRenderContext : IRenderContext
 {
     /// <summary>
-    /// Creates the context for one frame of <paramref name="window"/> from the command buffer and swapchain texture the render
-    /// coordinator acquired for it. The coordinator calls this every frame it gets a swapchain texture, even while the window
-    /// is not renderable, and then disposes the context without rendering. The context owns
-    /// <paramref name="commandBuffer"/> and submits it when disposed; a texture acquired on it forbids cancelling it.
+    /// Creates the context for the frame the render coordinator acquired. The coordinator calls this every frame it gets a
+    /// swapchain texture, even while the window is not renderable, and then disposes the context without rendering. The
+    /// context owns the frame's command buffer and submits it when disposed; a texture acquired on it forbids cancelling it.
+    /// One provider can serve several windows, so <see cref="FrameContext.Window"/> tells them apart.
     /// </summary>
-    public abstract TRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture);
+    public abstract TRenderContext CreateRenderContext(FrameContext frameContext);
 
     /// <summary>
     /// The size of the colour target <see cref="CreateRenderContext"/> will produce, answered

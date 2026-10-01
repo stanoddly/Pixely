@@ -1,8 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
+using Pixely.RenderOrchestration;
 using Pixely.Utilities;
 using SDL;
 
@@ -400,10 +400,11 @@ public abstract class Window : IDisposable
     // returns no texture while its submissions in flight reach the frame limit, counting empty ones, so a submit there would
     // hold a slot until the frame ahead of it finishes. The fork frees finished work on every acquire. Virtual so tests can
     // acquire without a GPU device.
-    internal virtual bool TryAcquireFrame(GpuDevice gpuDevice, [NotNullWhen(true)] out CommandBuffer? commandBuffer, [NotNullWhen(true)] out SwapchainTexture? swapchainTexture)
+    internal virtual bool TryAcquireFrame(GpuDevice gpuDevice, out FrameContext frameContext)
     {
         CommandBuffer acquired = gpuDevice.AcquireCommandBuffer();
         bool hasTexture;
+        SwapchainTexture swapchainTexture;
         try
         {
             hasTexture = TryWaitAndAcquireSwapchainTexture(acquired, out swapchainTexture);
@@ -421,12 +422,11 @@ public abstract class Window : IDisposable
 #else
             acquired.Submit();
 #endif
-            commandBuffer = null;
-            swapchainTexture = null;
+            frameContext = default;
             return false;
         }
 
-        commandBuffer = acquired;
+        frameContext = new FrameContext(this, acquired, swapchainTexture);
         return true;
     }
 

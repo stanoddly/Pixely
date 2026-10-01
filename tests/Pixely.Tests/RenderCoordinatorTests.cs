@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
@@ -335,10 +334,9 @@ public class RenderCoordinatorTests
 
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
 
-        internal override bool TryAcquireFrame(GpuDevice gpuDevice, [NotNullWhen(true)] out CommandBuffer? commandBuffer, [NotNullWhen(true)] out SwapchainTexture? swapchainTexture)
+        internal override bool TryAcquireFrame(GpuDevice gpuDevice, out FrameContext frameContext)
         {
-            commandBuffer = null!;
-            swapchainTexture = null!;
+            frameContext = new FrameContext(this, null!, null!);
             return CanAcquireFrame;
         }
     }
@@ -348,9 +346,9 @@ public class RenderCoordinatorTests
         public TestRenderContext? LastRenderContext { get; private set; }
         public Window? LastWindow { get; private set; }
 
-        public override TestRenderContext CreateRenderContext(Window window, CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+        public override TestRenderContext CreateRenderContext(FrameContext frameContext)
         {
-            LastWindow = window;
+            LastWindow = frameContext.Window;
             LastRenderContext = new TestRenderContext();
             return LastRenderContext;
         }
