@@ -2,6 +2,26 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
+
+On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. In the browser it skips a window that is not renderable, since SDL's browser driver does not hide the canvas. When no texture comes back, it submits the command buffer instead of cancelling it, except in the browser, where the WebGPU fork returns no texture while its submissions in flight reach the frame limit and a submission would only hold a slot. The coordinator also submits the command buffer after disposing the context, so no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or cancel the command buffer, and a different acquire needs a custom `IRenderCoordinator`. Providers are called only for a frame that is drawn, so a frame nobody sees is submitted without a context. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event, except in the browser.
+
+- SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture, or on a fence wait. Skipping the request kept every uploaded buffer in use, so each update cycled it into a new copy. Metal and D3D12 free finished work on every submit.
+- Requesting is what SDL's own usage assumes, and its 2025-07-31 fix for hidden windows relies on it. The alternative was a fence wait in the frame loop whenever no window rendered, which blocked on the GPU on every backend.
+- Apple documents that `nextDrawable`, which SDL's Metal acquire calls for hidden windows too, waits up to one second when no drawable is free. Measured on GitHub's macOS 14.8 and 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16: for a minimized and for a hidden window the acquire never blocked, always returned a texture, and memory stayed flat.
+- A hidden or minimized window paces nothing. Vulkan returns no texture at once for a hidden window, and on macOS 14 Metal returned 300 textures in 0.02 s for a minimized one. Without the wait the loop spins and every update records uploads for frames nobody sees. A driver that reports a zero extent for a minimized window, such as NVIDIA on Win32, makes each Vulkan acquire wait for the device to go idle instead (#597).
+
+Cost: on Metal and D3D12, a hidden or minimized window presents an undrawn texture every frame, and so does a minimized Vulkan window whose surface keeps a non-zero size. An app without window rendering must submit `GpuMemorySystem` itself, and with a claimed window it never requests a texture, so on Vulkan it keeps finished work until it waits on a fence. D3D12 was not measured. The wait is a fixed 16 ms, not the display's refresh rate.
+
+## 2026-09-29: Buffer updates cycle the GPU buffer
+
+`CopyPass.UpdateVertexBuffer`, `UpdateIndexBuffer` and `UpdateStorageBuffer` pass `cycle = true` to `SDL_UploadToGPUBuffer`, so an update never overwrites a buffer that an earlier submission still reads.
+
+- SDL tracks which copies are in use, so Pixely needs no fences. On Vulkan this relies on every frame requesting a swapchain texture (2026-09-30).
+- A pass keeps the copy it bound, so `RenderPass` takes vertex and index counts at bind time.
+
+Cost: an update replaces the whole contents, not a prefix, and shows in a pass only after the next bind. Each copy is full size and uncounted by the GPU memory tracking. `CopyPass.UploadToBuffer` lists the details.
+
 ## 2026-09-28: Headless apps run in lockstep with their input, on a fixed step
 
 In headless mode game time starts at 0 and advances by 1/30 second per frame. Frames run only through `wait N`, as fast as they can, and when no command is left the app blocks on standard input. The end of input quits the app.
@@ -43,7 +63,7 @@ Cost: SDL keeps a copy per submission in flight at the buffer's current size unt
 
 `Window` is abstract. `SwapchainWindow` is claimed for the GPU device and presents through its swapchain. `OffscreenWindow`, the window of a headless run, is never claimed and renders into a texture.
 
-- SDL's Vulkan backend frees finished work, released buffers included, only on a submit that acquired a swapchain texture or when no window is claimed. A claimed offscreen window never acquires one, so a headless run kept every released buffer until a screenshot waited on a fence.
+- SDL's Vulkan backend frees finished work, released buffers included, only on a submit that requested a swapchain texture or when no window is claimed. A claimed offscreen window never requests one, so a headless run kept every released buffer until a screenshot waited on a fence.
 - Each kind of window owns what differs: the swapchain window releases its claim on dispose, and the offscreen window has no claim to release.
 
 Cost: an unclaimed window has no swapchain to report a format, so `OffscreenWindow.ColorTargetFormat` is the fixed `B8G8R8A8Unorm`, the SDR swapchain format of Vulkan and D3D12. A Vulkan driver without it gives a desktop run `R8G8B8A8Unorm` instead, so the two runs then render in different formats. Metal was not checked.

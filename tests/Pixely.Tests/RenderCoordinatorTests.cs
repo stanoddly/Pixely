@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
@@ -56,61 +55,42 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void Execute_WithNoRenderers_DoesNotThrow()
+    public void Render_WithNoRenderers_DoesNotThrow()
     {
         PixelyAppBuilder builder = CreateBuilder(new List<string>());
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        Assert.DoesNotThrow(renderCoordinator.Execute);
+        Assert.DoesNotThrow(() => Render(renderCoordinator));
     }
 
     [Test]
-    public void Execute_WhenRenderContextCannotBeCreated_DoesNotRender()
-    {
-        List<string> calls = new();
-        TestRenderContextSource renderContextSource = new() { CanCreate = false };
-        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
-        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
-        ServiceProvider provider = builder.BuildServiceProvider();
-        IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
-
-        renderCoordinator.Execute();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(calls, Is.Empty);
-            Assert.That(renderContextSource.LastRenderContext, Is.Null);
-        });
-    }
-
-    [Test]
-    public void Execute_WithRenderContext_DisposesRenderContext()
+    public void Render_DisposesRenderContext()
     {
         TestRenderContextSource renderContextSource = new();
         PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
     }
 
     [Test]
-    public void Execute_PassesManagedWindowToRenderContextProvider()
+    public void Render_PassesManagedWindowToRenderContextProvider()
     {
         TestRenderContextSource renderContextSource = new();
         PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
         ServiceProvider provider = builder.BuildServiceProvider();
 
-        provider.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(provider.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(renderContextSource.LastWindow, Is.SameAs(provider.GetRequiredService<Window>()));
     }
 
     [Test]
-    public void Execute_RendersOnlyMatchingViewScope()
+    public void Render_RendersOnlyMatchingViewScope()
     {
         ViewScope viewScope = new(7);
         List<string> calls = new();
@@ -119,7 +99,7 @@ public class RenderCoordinatorTests
         builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("other", calls));
         ServiceProvider provider = builder.BuildServiceProvider();
 
-        provider.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(provider.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(calls, Is.EqualTo(new[] { "matching" }));
     }
@@ -141,7 +121,7 @@ public class RenderCoordinatorTests
         childCollection.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         ServiceProvider child = childCollection.BuildServiceProvider();
 
-        child.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(child.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(renderContextSource.LastWindow, Is.SameAs(window));
     }
@@ -158,7 +138,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("child", calls));
         using ServiceProvider child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child" }));
     }
@@ -176,7 +156,7 @@ public class RenderCoordinatorTests
         ServiceProvider child = childCollection.BuildServiceProvider();
 
         child.Dispose();
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.Empty);
     }
@@ -194,7 +174,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("child", calls, 5));
         using ServiceProvider child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
@@ -213,7 +193,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new DisposingRenderer("child", calls, () => child!, 0));
         child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
@@ -228,14 +208,177 @@ public class RenderCoordinatorTests
         parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "root" }));
 
         calls.Clear();
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
+    }
+
+    [Test]
+    public void AppRender_WithoutCoordinators_CountsAsDrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry()), Is.True);
+    }
+
+    [Test]
+    public void AppRender_WhenAnyCoordinatorDraws_CountsAsDrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, true)), Is.True);
+    }
+
+    [Test]
+    public void AppRender_WhenNoCoordinatorDraws_CountsAsUndrawn()
+    {
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, false)), Is.False);
+    }
+
+    private static ServiceRegistry<IRenderCoordinator> CreateCoordinatorRegistry(params bool[] drawn)
+    {
+        PixelyAppBuilder builder = new();
+        foreach (bool coordinatorDraws in drawn)
+        {
+            builder.AddSingleton<IRenderCoordinator>(new StubRenderCoordinator(coordinatorDraws));
+        }
+
+        return builder.BuildServiceProvider().GetRequiredService<ServiceRegistry<IRenderCoordinator>>();
+    }
+
+    private sealed class StubRenderCoordinator(bool drawn) : IRenderCoordinator
+    {
+        public bool Execute() => drawn;
+    }
+
+    // Runs the part of a frame after the GPU acquire, which needs no GPU device. The test contexts never use the command buffer
+    // or the texture.
+    private static void Render(IRenderCoordinator renderCoordinator)
+    {
+        ((RenderCoordinator<TestRenderContext>)renderCoordinator).Render(null!, null!);
+    }
+
+    [Test]
+    public void Execute_WhenNoTextureComesBack_SubmitsUploadsAndFrameWithoutCallingProvider()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource, hasTexture: false);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.False);
+            Assert.That(renderContextSource.LastWindow, Is.Null);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenWindowIsNotRenderable_SubmitsFrameWithoutContext()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource, renderable: false);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.False);
+            Assert.That(renderContextSource.LastWindow, Is.Null);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenDrawn_SubmitsUploadsBeforeFrameAfterContextIsDisposed()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new(calls);
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.True);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "root", "dispose", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenRendererThrows_StillSubmitsUploadsBeforeFrame()
+    {
+        List<string> calls = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, new TestRenderContextSource(calls), new ThrowingRenderer());
+
+        Assert.Throws<InvalidOperationException>(() => coordinator.Execute());
+        Assert.That(calls, Is.EqualTo(new[] { "acquire", "dispose", "uploads", "submit" }));
+    }
+
+    private static RenderCoordinator<TestRenderContext> CreateCoordinator(
+        List<string> calls,
+        TestRenderContextSource renderContextSource,
+        IRenderer<TestRenderContext>? renderer = null,
+        bool renderable = true,
+        bool hasTexture = true)
+    {
+        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
+        builder.AddSingleton(renderer ?? new TestRenderer("root", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
+        TestWindow window = (TestWindow)provider.GetRequiredService<Window>();
+        window.Renderable = renderable;
+        window.HasTexture = hasTexture;
+        return new RenderCoordinator<TestRenderContext>(
+            window,
+            new RecordingGpu(calls),
+            renderContextSource,
+            provider.GetRequiredService<ServiceRegistry<IRenderer<TestRenderContext>>>());
+    }
+
+    // Records the coordinator's GPU calls in order. The command buffer is a token the test contexts never use.
+    private sealed class RecordingGpu : IRenderCoordinatorGpu
+    {
+        private readonly List<string> _calls;
+
+        public RecordingGpu(List<string> calls)
+        {
+            _calls = calls;
+        }
+
+        public CommandBuffer AcquireCommandBuffer()
+        {
+            _calls.Add("acquire");
+            return (CommandBuffer)RuntimeHelpers.GetUninitializedObject(typeof(CommandBuffer));
+        }
+
+        public void SubmitUploads()
+        {
+            _calls.Add("uploads");
+        }
+
+        public void Submit(CommandBuffer commandBuffer)
+        {
+            _calls.Add("submit");
+        }
+
+        public void Cancel(CommandBuffer commandBuffer)
+        {
+            _calls.Add("cancel");
+        }
+    }
+
+    private sealed class ThrowingRenderer : IRenderer<TestRenderContext>
+    {
+        public int RenderOrder => 0;
+
+        public void Render(TestRenderContext renderContext)
+        {
+            throw new InvalidOperationException("renderer failed");
+        }
     }
 
     private static PixelyAppBuilder CreateBuilder(
@@ -262,7 +405,7 @@ public class RenderCoordinatorTests
 
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
         SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
@@ -274,24 +417,48 @@ public class RenderCoordinatorTests
         field.SetValue(window, value);
     }
 
+    // Created uninitialised, so it never reaches SDL. The constructor exists only because a derived class must name a base
+    // constructor to compile.
+    private sealed class TestWindow : Window
+    {
+        private TestWindow()
+            : base(default, default, 0, null!, null!, default)
+        {
+        }
+
+        // Set by the test: the window is created uninitialised, so initialisers would not run.
+        public bool Renderable { get; set; }
+
+        public bool HasTexture { get; set; }
+
+        public override bool IsRenderable => Renderable;
+
+        public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
+
+        public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
+        {
+            swapchainTexture = null!;
+            return HasTexture;
+        }
+    }
+
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>
     {
-        public bool CanCreate { get; init; } = true;
+        private readonly List<string>? _calls;
+
+        public TestRenderContextSource(List<string>? calls = null)
+        {
+            _calls = calls;
+        }
+
         public TestRenderContext? LastRenderContext { get; private set; }
         public Window? LastWindow { get; private set; }
 
-        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out TestRenderContext? renderContext)
+        public override TestRenderContext CreateRenderContext(FrameContext frameContext)
         {
-            LastWindow = window;
-            if (!CanCreate)
-            {
-                renderContext = null;
-                return false;
-            }
-
-            renderContext = new TestRenderContext();
-            LastRenderContext = renderContext;
-            return true;
+            LastWindow = frameContext.Window;
+            LastRenderContext = new TestRenderContext(_calls);
+            return LastRenderContext;
         }
     }
 
@@ -301,11 +468,19 @@ public class RenderCoordinatorTests
 
         public Texture ColorTarget => null!;
 
+        private readonly List<string>? _calls;
+
+        public TestRenderContext(List<string>? calls = null)
+        {
+            _calls = calls;
+        }
+
         public bool IsDisposed { get; private set; }
 
         public void Dispose()
         {
             IsDisposed = true;
+            _calls?.Add("dispose");
         }
     }
 

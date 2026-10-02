@@ -32,8 +32,7 @@ public static class RenderingExtensions
     {
         if (!services.IsRegistered<RenderContextProvider<BasicRenderContext>>())
         {
-            services.AddSingleton<RenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(provider =>
-                new BasicRenderContextProvider(provider.GetRequiredService<GpuDevice>()));
+            services.AddSingleton<RenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(static _ => new BasicRenderContextProvider());
         }
         ConfigureWindowRendering<BasicRenderContext>(services, viewScope);
     }
@@ -44,6 +43,7 @@ public static class RenderingExtensions
         services.AddRegistry<IRenderer<TRenderContext>>(static renderer => renderer.RenderOrder);
         services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(
             provider.GetWindow(viewScope),
+            provider.GetRequiredService<GpuDevice>(),
             provider.GetRequiredService<GpuMemorySystem>(),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>(),
             provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>()));

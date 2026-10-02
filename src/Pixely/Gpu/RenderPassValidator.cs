@@ -9,8 +9,9 @@ internal struct RenderPassValidator
 {
     private const int MaxVertexBufferSlots = 8;
 
+    // Taken at bind time, as in RenderPass: a later update changes the buffer's Size but not the copy this pass draws from.
     private uint _verticesCount;
-    private GpuIndexBuffer? _indexBuffer;
+    private uint? _indexCount;
     private GraphicsPipeline? _graphicsPipeline;
     private readonly CommandBuffer _commandBuffer;
 
@@ -83,7 +84,7 @@ internal struct RenderPassValidator
 
     public void OnBindIndexBuffer(RenderPass renderPass, GpuIndexBuffer buffer)
     {
-        _indexBuffer = buffer;
+        _indexCount = (uint)buffer.Size;
     }
 
     private void SetSlotType(uint slot, VertexTypeId typeId)
@@ -177,28 +178,28 @@ internal struct RenderPassValidator
         ValidateSystemValueInputs(firstInstance);
         ValidateVertexOffset(vertexOffset);
 
-        if (_indexBuffer == null)
+        if (_indexCount is not uint boundIndexCount)
         {
             throw new InvalidOperationException("IndexBuffer must be bound before indexed drawing.");
         }
 
-        if (_indexBuffer.Size == 0)
+        if (boundIndexCount == 0)
         {
             throw new InvalidOperationException("Bound IndexBuffer is empty.");
         }
 
-        if (firstIndex >= _indexBuffer.Size)
+        if (firstIndex >= boundIndexCount)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(firstIndex),
-                $"First index {firstIndex} is outside the bound IndexBuffer size {_indexBuffer.Size}.");
+                $"First index {firstIndex} is outside the bound IndexBuffer size {boundIndexCount}.");
         }
 
-        if (indexCount > _indexBuffer.Size - firstIndex)
+        if (indexCount > boundIndexCount - firstIndex)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(indexCount),
-                $"Index count {indexCount} starting at {firstIndex} exceeds the bound IndexBuffer size {_indexBuffer.Size}.");
+                $"Index count {indexCount} starting at {firstIndex} exceeds the bound IndexBuffer size {boundIndexCount}.");
         }
     }
 

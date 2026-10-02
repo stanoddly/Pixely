@@ -133,6 +133,9 @@ public partial class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateWindow failed: {SDL3.SDL_GetError()}");
         }
 
+        // A claimed window makes SDL's Vulkan backend free finished GPU work only on a submit that requested a swapchain texture,
+        // or on a fence wait. Without window rendering nothing requests one, so such an app must wait on a fence regularly, and
+        // must also submit GpuMemorySystem itself.
         unsafe
         {
             if (gpuDevice != null && SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)

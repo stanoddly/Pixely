@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
@@ -215,10 +214,9 @@ public class UiUpdateSystemTests
             return _size;
         }
 
-        public override bool TryCreateRenderContext(Window window, [NotNullWhen(true)] out BasicRenderContext? renderContext)
+        public override BasicRenderContext CreateRenderContext(FrameContext frameContext)
         {
-            renderContext = null;
-            return false;
+            throw new NotSupportedException();
         }
     }
 

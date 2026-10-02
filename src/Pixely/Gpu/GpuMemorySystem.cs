@@ -116,6 +116,14 @@ public class GpuMemorySystem: ICopyPass
         _uploadTransferBuffer.Dispose();
     }
 
+    /// <summary>
+    /// Submits the uploads recorded since the last submit. Uploads run only once this is called: a command buffer submitted
+    /// earlier that reads a buffer updated since the last submit reads undefined contents. Render coordinators call this
+    /// every frame, after the renderers and before the frame's own command buffer, except in the browser on a frame that gets
+    /// no swapchain texture: there the uploads wait for the next drawn frame. Call it yourself before submitting any
+    /// other command buffer that reads updated buffers. An app without window rendering must always call it itself: until
+    /// then every update of a buffer cycles it into a new copy, because the unsubmitted uploads keep the earlier copies in use.
+    /// </summary>
     public void Submit()
     {
         if (_sdlCommandBuffer.IsNull)

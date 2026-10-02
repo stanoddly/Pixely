@@ -187,11 +187,20 @@ public abstract class Window : IDisposable
     }
 
     /// <summary>
-    /// Whether frames can be rendered to the window right now. The render coordinator and update systems
-    /// that only work for the renderer skip their frame when this is false. A swapchain has no image for a
-    /// hidden window, so the default is <see cref="IsVisible"/>; a window that draws elsewhere overrides it.
+    /// Whether frames rendered to the window can be seen right now. The render coordinator skips its renderers,
+    /// and update systems that only work for the renderer skip their frame, when this is false. By default a
+    /// hidden or minimized window is not renderable; a window that draws elsewhere overrides it.
     /// </summary>
-    public virtual bool IsRenderable => IsVisible;
+    public virtual bool IsRenderable
+    {
+        get
+        {
+            unsafe
+            {
+                return (SDL3.SDL_GetWindowFlags(SdlWindow) & (SDL_WindowFlags.SDL_WINDOW_HIDDEN | SDL_WindowFlags.SDL_WINDOW_MINIMIZED)) == 0;
+            }
+        }
+    }
 
     public virtual bool Show()
     {

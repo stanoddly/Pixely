@@ -64,6 +64,15 @@ the frame loop processes events and updates, and the window's `ColorTargetFormat
 `TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an
 app spins the loop.
 
+With `UseGpu()` but without window rendering, as in a compute-only app, no render coordinator runs, and two things
+fall to the app:
+
+- Only a render coordinator submits the uploads `GpuMemorySystem` records. The app must call `GpuMemorySystem.Submit()`
+  before the GPU work that reads them. Until then the uploads do not run, and on every backend each buffer update makes
+  a new full-size copy of the buffer, because the unsubmitted uploads keep the earlier copies in use.
+- `AddWindow` still claims the window for the device, but nothing requests its swapchain texture. SDL's Vulkan backend
+  then frees finished GPU work only on a fence wait, so the app must also wait on a `GpuFence` regularly.
+
 ## The browser
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
@@ -95,39 +104,28 @@ receive or resolve a window during construction:
 ```csharp
 public sealed class GameRenderContextProvider : RenderContextProvider<GameRenderContext>
 {
-    private readonly GpuDevice _gpuDevice;
     private readonly DepthTarget _depthTarget;
     private readonly Camera _camera;
 
-    private GameRenderContextProvider(GpuDevice gpuDevice, DepthTarget depthTarget, Camera camera)
+    private GameRenderContextProvider(DepthTarget depthTarget, Camera camera)
     {
-        _gpuDevice = gpuDevice;
         _depthTarget = depthTarget;
         _camera = camera;
     }
 
-    public static GameRenderContextProvider Create(GpuDevice gpuDevice, DepthTarget depthTarget, Camera camera)
+    public static GameRenderContextProvider Create(DepthTarget depthTarget, Camera camera)
     {
-        return new GameRenderContextProvider(gpuDevice, depthTarget, camera);
+        return new GameRenderContextProvider(depthTarget, camera);
     }
 
-    public override bool TryCreateRenderContext(Window window, out GameRenderContext? renderContext)
+    public override GameRenderContext CreateRenderContext(FrameContext frameContext)
     {
-        CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
-        if (!window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out SwapchainTexture swapchainTexture))
-        {
-            commandBuffer.Dispose();
-            renderContext = null;
-            return false;
-        }
-
-        renderContext = new GameRenderContext(swapchainTexture, commandBuffer, _depthTarget, _camera, window.RenderSizeInPixels);
-        return true;
+        return new GameRenderContext(frameContext.SwapchainTexture, frameContext.CommandBuffer, _depthTarget, _camera, frameContext.Window.RenderSizeInPixels);
     }
 }
 ```
 
-`RenderCoordinator` skips a window whose `IsRenderable` is false; by default that is `IsVisible`, since a hidden window has no swapchain image. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
+`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. One provider can serve several windows, such as two that use `UseDefaultRendering`, so `FrameContext.Window` tells them apart. The coordinator disposes the context after the renderers and then submits the command buffer itself, so neither the context nor a renderer submits or cancels it. On the desktop the coordinator acquires a frame every frame, even for a window that is not renderable, but calls the provider and the renderers only while the window's `IsRenderable` is true; a frame nobody sees is submitted without a context. In the browser it skips a window that is not renderable: SDL's browser driver does not hide the canvas, so presenting an undrawn texture would blank it. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire policy needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes under `PixelyConfig.Headless`, hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
@@ -144,7 +142,7 @@ public override ShortSize GetColorTargetSize(Window window)
 
 Systems that run in the update phase read this. They lay out against the target before any render context exists, so they cannot inspect one. `Pixely.Ui` builds its element tree this way. A provider that draws into a differently sized target and does not override this leaves the UI laid out for the window, and the UI renderer then refuses to draw it into a target of another size.
 
-Extend `BasicRenderContext` to retain its swapchain texture, color target, command buffer, and submission behavior while adding application-specific state:
+Extend `BasicRenderContext` to retain its swapchain texture, color target and command buffer while adding application-specific state. The coordinator submits the command buffer, so a context never does:
 
 ```csharp
 public sealed class GameRenderContext : BasicRenderContext
@@ -163,11 +161,12 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-The framework coordinator passes its managed window to the provider for each frame, skips windows
-whose `IsRenderable` is false, invokes renderers for the same `ViewScope`, and disposes the resulting context. Registration
+For each frame it draws, where the window is renderable and a swapchain texture came back, the framework coordinator
+passes its managed window and the acquired frame to the provider in a `FrameContext`, invokes renderers for the
+same `ViewScope`, and disposes the resulting context. Registration
 order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
-registration. `BasicRenderContext.Dispose` is virtual, so a derived context can add per-frame cleanup
-and call the base implementation to submit its command buffer. Window registration, event routing
+registration. `BasicRenderContext.Dispose` is virtual and does nothing, so a derived context can add per-frame
+cleanup; the coordinator submits the command buffer after disposing the context. Window registration, event routing
 and disposal remain managed by Pixely.
 
 ## Multiple windows
@@ -242,8 +241,10 @@ bool hidden = inventoryWindow.Hide();
 
 `Show()`, `Raise()`, and `Hide()` return whether the native window operation succeeded. Raising a window requests input focus, subject to the operating system's window-management policy.
 
-Hidden windows remain registered and retain their renderer and GPU resources, but their render
-coordinators do not acquire a swapchain texture or invoke renderers. They are disposed with the
+Hidden and minimized windows remain registered and retain their renderer and GPU resources. Their render
+coordinators do not invoke renderers, and on the desktop they still request a swapchain texture every frame. When
+no window draws a frame, the desktop frame loop waits up to 16 ms for an event, so the app does not spin; in the
+browser, `requestAnimationFrame` paces the frames. They are disposed with the
 service provider that owns them. `InitiallyVisible` controls initial visibility; it does not defer
 native window creation.
 

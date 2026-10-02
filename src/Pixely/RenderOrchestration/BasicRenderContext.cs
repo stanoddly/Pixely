@@ -14,8 +14,9 @@ public class BasicRenderContext : IRenderContext
         CommandBuffer = commandBuffer;
     }
 
+    // The render coordinator submits the command buffer after disposing the context, so a derived context overrides this only
+    // for its own per-frame cleanup.
     public virtual void Dispose()
     {
-        CommandBuffer.Submit();
     }
 }
