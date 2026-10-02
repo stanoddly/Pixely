@@ -22,9 +22,10 @@
     </ItemGroup>
 
     <!-- Enumerate content after compilation so clean builds include generated files. Recording every
-         destination in FileWrites lets MSBuild remove stale build output. -->
+         destination in FileWrites lets MSBuild remove stale build output. A browser app reads its archive, not this copy. -->
     <Target Name="CopyContentToBuildOutput"
-            AfterTargets="CopyFilesToOutputDirectory">
+            AfterTargets="CopyFilesToOutputDirectory"
+            Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
         <ItemGroup>
             <_ContentForBuild Include="$(ContentSourceDirectory)\**\*" />
         </ItemGroup>
@@ -35,9 +36,10 @@
         </Copy>
     </Target>
 
-    <!-- Package the content used at runtime, then let the SDK copy the archive to the publish directory. -->
+    <!-- Package the content used at runtime, then let the SDK copy the archive to the publish directory. A browser publish has its own branch below. -->
     <Target Name="PackageContent"
-            BeforeTargets="ComputeFilesToPublish">
+            BeforeTargets="ComputeFilesToPublish"
+            Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
         <ZipDirectory SourceDirectory="$(OutDir)Content"
                       DestinationFile="$(IntermediateOutputPath)Content.pk3"
                       Overwrite="true" />
@@ -48,6 +50,21 @@
                 <!-- The content archive remains external when the application is published as a single file. -->
                 <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
             </ResolvedFileToPublish>
+        </ItemGroup>
+    </Target>
+
+    <!-- The browser has no directory beside the executable, so its archive goes into the browser's file system. Static web assets are
+         resolved before CopyFilesToOutputDirectory, so it is zipped from the project's Content tree, after compilation; on every build,
+         so a deleted file leaves it. -->
+    <PropertyGroup>
+        <PixelyBrowserContentDependsOn>$(PixelyBrowserContentDependsOn);PackageBrowserContent</PixelyBrowserContentDependsOn>
+    </PropertyGroup>
+
+    <Target Name="PackageBrowserContent">
+        <ZipDirectory SourceDirectory="$(ContentSourceDirectory)" DestinationFile="$(IntermediateOutputPath)Content.pk3" Overwrite="true" />
+        <ItemGroup>
+            <PixelyBrowserVfsFile Include="$(IntermediateOutputPath)Content.pk3" />
+            <FileWrites Include="$(IntermediateOutputPath)Content.pk3" />
         </ItemGroup>
     </Target>
 

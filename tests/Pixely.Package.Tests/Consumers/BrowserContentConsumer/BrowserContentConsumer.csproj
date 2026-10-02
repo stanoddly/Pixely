@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- The version comes from the global.json PackageIntegrationTests writes beside this project. -->
+    <Sdk Name="Pixely" />
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- The fixture intentionally stays outside repository-wide central package management. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+        <PixelyBrowserContentDependsOn>$(PixelyBrowserContentDependsOn);PackageBrowserContent</PixelyBrowserContentDependsOn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <SdlangShader Include="Content\shaders\package.slang" />
+        <!-- The relink variant: PackageIntegrationTests sets the property with the wasm-tools workload installed. -->
+        <NativeFileReference Include="native.c" Condition="'$(BrowserContentConsumerNative)' == 'true'" />
+    </ItemGroup>
+
+    <!-- Variants PackageIntegrationTests selects by property: a file beside the archive, a file nothing produces, metadata the item must ignore, a linked static web asset, and a referenced project's asset. -->
+    <ItemGroup>
+        <PixelyBrowserVfsFile Include="Extras\first.txt" TargetPath="$(BrowserContentConsumerExtraFile)" Condition="'$(BrowserContentConsumerExtraFile)' != ''" />
+        <PixelyBrowserVfsFile Update="Extras\first.txt" RelativePath="other/first.txt" CopyToPublishDirectory="Never" Condition="'$(BrowserContentConsumerExtraMetadata)' == 'true'" />
+        <PixelyBrowserVfsFile Include="Extras\missing.txt" Condition="'$(BrowserContentConsumerMissingFile)' == 'true'" />
+        <Content Include="Extras\first.txt" Link="wwwroot\linked.txt" Condition="'$(BrowserContentConsumerLinkedAsset)' == 'true'" />
+        <ProjectReference Include="..\BrowserContentLibrary\BrowserContentLibrary.csproj" Condition="'$(BrowserContentConsumerLibraryAsset)' == 'true'" />
+    </ItemGroup>
+
+    <!-- The browser branch of the Nerudova policy: zipped on every build, so a file deleted from Content leaves the archive. -->
+    <Target Name="PackageBrowserContent" Condition="'$(BrowserContentConsumerArchive)' != 'false'">
+        <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/Content" DestinationFile="$(IntermediateOutputPath)Content.pk3" Overwrite="true" />
+        <ItemGroup>
+            <PixelyBrowserVfsFile Include="$(IntermediateOutputPath)Content.pk3" />
+            <FileWrites Include="$(IntermediateOutputPath)Content.pk3" />
+        </ItemGroup>
+    </Target>
+
+    <!-- A hook on the public target that leaves a marker, so the tests can check that design-time builds and publishes without build skip it. -->
+    <Target Name="RecordBrowserContentHook" BeforeTargets="PixelyBrowserContent">
+        <Touch Files="$(IntermediateOutputPath)browser-content-hook.txt" AlwaysCreate="true" />
+    </Target>
+
+</Project>

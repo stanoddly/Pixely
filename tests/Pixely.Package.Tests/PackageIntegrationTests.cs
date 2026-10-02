@@ -51,6 +51,8 @@ public class PackageIntegrationTests
         "TransitiveConsumer",
         "ReversedSdkConsumer",
         "BrowserLoopConsumer",
+        "BrowserContentConsumer",
+        "BrowserContentLibrary",
         "MultiTargetConsumer"
     ];
 
@@ -680,6 +682,331 @@ public class PackageIntegrationTests
         });
     }
 
+    // The fixture zips its Content tree, generated shaders included, into a PixelyBrowserVfsFile; UseDefaultContent's loader finds it at
+    // /Content.pk3. The CoreCLR runtime would relink by default in a trimmed publish, which the managed-only fixture does not need.
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task BrowserPublishLoadsContentArchiveThroughDefaultContent(bool useMonoRuntime)
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        string[] properties = useMonoRuntime ? [] : ["UseMonoRuntime=false", "WasmBuildNative=false"];
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: properties);
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
+            Assert.That(ReadArchiveEntries(Path.Combine(wwwroot, "Content.pk3")), Does.Contain(BrowserContentGeneratedShader));
+        });
+        AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
+    }
+
+    // A build is what dotnet run serves; its boot config and manifest list the archive without a publish.
+    [Test]
+    public async Task BrowserBuildListsContentArchiveInBuildBootConfig()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm");
+        string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "staticwebassets.build.json")), Does.Contain("vfs:Content.pk3"));
+        });
+    }
+
+    // Invoked directly, the static web asset inputs still compile first, so the archive has the generated shaders of a clean tree.
+    [Test]
+    public async Task ResolvingStaticWebAssetInputsCompilesBeforePackaging()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await RunBrowserConsumerTargetAsync(consumerDirectory, "ResolveStaticWebAssetsInputs");
+        Assert.That(ReadArchiveEntries(Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "Content.pk3")), Does.Contain(BrowserContentGeneratedShader));
+    }
+
+    // The WebAssembly targets in the same call need a compiled assembly, so a build comes first; its archive and the marker of the
+    // fixture's BeforeTargets hook are then removed. Neither the producer nor the hook runs again.
+    [Test]
+    public async Task DesignTimeBuildDoesNotPackageBrowserContent()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm");
+        string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+        string hookMarkerPath = Path.Combine(intermediateDirectory, BrowserContentHookMarker);
+        Assert.That(File.Exists(hookMarkerPath), Is.True);
+        File.Delete(hookMarkerPath);
+        File.Delete(Path.Combine(intermediateDirectory, "Content.pk3"));
+        DeleteDirectory(Path.Combine(intermediateDirectory, "pixely-browser-vfs"));
+
+        await RunBrowserConsumerTargetAsync(consumerDirectory, "ResolveStaticWebAssetsInputs", "DesignTimeBuild=true");
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(Path.Combine(intermediateDirectory, "Content.pk3")), Is.False);
+            Assert.That(Directory.Exists(Path.Combine(intermediateDirectory, "pixely-browser-vfs")), Is.False);
+            Assert.That(File.Exists(hookMarkerPath), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task BrowserPublishReplacesChangedContentArchive()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string greetingPath = Path.Combine(consumerDirectory, "Content", "greeting.txt");
+        string greeting = File.ReadAllText(greetingPath);
+        try
+        {
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            File.WriteAllText(greetingPath, "Hello from the changed archive\n");
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            Assert.That(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), Does.Contain("RESULT greeting Hello from the changed archive"));
+        }
+        finally
+        {
+            File.WriteAllText(greetingPath, greeting);
+        }
+    }
+
+    [Test]
+    public async Task BrowserPublishDropsDeletedContentFile()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string removedPath = Path.Combine(consumerDirectory, "Content", "removed.txt");
+        try
+        {
+            File.WriteAllText(removedPath, "Removed before the second publish\n");
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            Assert.That(ReadArchiveEntries(Path.Combine(GetPublishedWwwroot(consumerDirectory), "Content.pk3")), Does.Contain("removed.txt"));
+            File.Delete(removedPath);
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            Assert.That(ReadArchiveEntries(Path.Combine(GetPublishedWwwroot(consumerDirectory), "Content.pk3")), Does.Not.Contain("removed.txt"));
+        }
+        finally
+        {
+            File.Delete(removedPath);
+        }
+    }
+
+    // The nested publish of a relinked runtime and a publish without build skip ComputeWasmVfs and reload the build manifest, which keeps
+    // the tag Pixely gave the asset. Without a build nothing packages again: the archive in obj keeps its time stamp, and the fixture's
+    // BeforeTargets hook leaves no marker.
+    [Test]
+    public async Task RelinkedBrowserPublishKeepsVfsAfterPublishWithoutBuild()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        await RequireWasmToolsAsync(consumerDirectory);
+
+        string[] properties = ["BrowserContentConsumerNative=true"];
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: properties);
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
+        string archivePath = Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "Content.pk3");
+        DateTime packagedAt = File.GetLastWriteTimeUtc(archivePath);
+        string hookMarkerPath = Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), BrowserContentHookMarker);
+        Assert.That(File.Exists(hookMarkerPath), Is.True);
+        File.Delete(hookMarkerPath);
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: properties, noBuild: true);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.GetLastWriteTimeUtc(archivePath), Is.EqualTo(packagedAt));
+            Assert.That(File.Exists(hookMarkerPath), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
+        });
+        AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
+    }
+
+    [Test]
+    public async Task BrowserPublishPlacesNestedTargetPath()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["BrowserContentConsumerExtraFile=data/levels.pak"]);
+        string result = await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: new() { ["BROWSER_CONTENT_EXTRA"] = "data/levels.pak" });
+        Assert.That(result, Does.Contain("RESULT extra data/levels.pak First extra file"));
+    }
+
+    // An item removed between builds leaves the manifest and the boot config, and MSBuild's incremental clean deletes its staged file.
+    [Test]
+    public async Task BrowserBuildWithoutAPreviousVfsFileRemovesIt()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+        string stagedPath = Path.Combine(intermediateDirectory, "pixely-browser-vfs", "data", "levels.pak");
+
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", properties: ["BrowserContentConsumerExtraFile=data/levels.pak"]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(stagedPath), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "staticwebassets.build.json")), Does.Contain("vfs:data/levels.pak"));
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Contain("\"virtualPath\": \"data/levels.pak\""));
+        });
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm");
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(stagedPath), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "staticwebassets.build.json")), Does.Not.Contain("levels.pak"));
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Not.Contain("levels.pak").And.Contain(BrowserContentArchiveBootEntry));
+        });
+    }
+
+    [Test]
+    public async Task BrowserBuildWithMissingVfsFileFailsWithPixely0010()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: ["BrowserContentConsumerMissingFile=true"]);
+        Assert.That(output, Does.Contain("error PIXELY0010").And.Contain("missing.txt"));
+    }
+
+    // Content.pk3 duplicates the archive, content.pk3 too because MSBuild batches ignoring case; index.html is the default page's asset,
+    // with no wwwroot file; the module initializer takes the mandatory fingerprint expression #[.{fingerprint}]!. A quote would break a
+    // property function. Content.pk3/x.pak and index.html/x.pak need a file as a folder, css a folder as a file.
+    [TestCase("/abs.pak")]
+    [TestCase("C:/abs.pak")]
+    [TestCase("../up.pak")]
+    [TestCase("a/./b.pak")]
+    [TestCase("a//b.pak")]
+    [TestCase("a\\b.pak")]
+    [TestCase("dir/")]
+    [TestCase("*.pak")]
+    [TestCase("a?.pak")]
+    [TestCase("[ab].pak")]
+    [TestCase("_framework/x.pak")]
+    [TestCase("_content/x.pak")]
+    [TestCase("_Framework/x.pak")]
+    [TestCase("_framework")]
+    [TestCase("Bob's.pak")]
+    [TestCase("Content.pk3/x.pak")]
+    [TestCase("index.html/x.pak")]
+    [TestCase("css", "css/site.css")]
+    [TestCase("Content.pk3")]
+    [TestCase("content.pk3")]
+    [TestCase("index.html")]
+    [TestCase("static.txt", "static.txt")]
+    [TestCase("x.lib.module.js", "x.lib.module.js")]
+    [TestCase("linked.txt", null, true)]
+    public async Task BrowserBuildRejectsInvalidTargetPath(string targetPath, string? wwwrootFile = null, bool linkedAsset = false)
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        if (wwwrootFile is not null)
+        {
+            string wwwrootPath = Path.Combine(consumerDirectory, "wwwroot", wwwrootFile);
+            Directory.CreateDirectory(Path.GetDirectoryName(wwwrootPath)!);
+            File.WriteAllText(wwwrootPath, "// wwwroot fixture\n");
+        }
+
+        try
+        {
+            string[] properties = linkedAsset ? [$"BrowserContentConsumerExtraFile={targetPath}", "BrowserContentConsumerLinkedAsset=true"] : [$"BrowserContentConsumerExtraFile={targetPath}"];
+            string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: properties);
+            Assert.That(output, Does.Contain("error PIXELY0011"));
+        }
+        finally
+        {
+            DeleteDirectory(Path.Combine(consumerDirectory, "wwwroot"));
+        }
+    }
+
+    // DefineStaticWebAssets prefers a candidate's RelativePath over its parameters, so metadata the item brings along must not reach it.
+    [Test]
+    public async Task BrowserBuildIgnoresOtherMetadataOfAVfsFile()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", properties: ["BrowserContentConsumerExtraFile=data/levels.pak", "BrowserContentConsumerExtraMetadata=true"]);
+        Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Contain("\"virtualPath\": \"data/levels.pak\""));
+    }
+
+    // ComputeWasmVfs matches every static web asset by relative path, so the asset a referenced project serves below _content/ collides too.
+    [Test]
+    public async Task BrowserBuildRejectsTargetPathOfAReferencedProjectAsset()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentLibrary");
+
+        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: ["BrowserContentConsumerExtraFile=shared.txt", "BrowserContentConsumerLibraryAsset=true"]);
+        Assert.That(output, Does.Contain("error PIXELY0011").And.Contain("TargetPath shared.txt is already the path"));
+    }
+
+    [Test]
+    public async Task BrowserAppWithoutContentArchiveNamesTheArchiveInTheError()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["BrowserContentConsumerArchive=false"]);
+        string result = await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null);
+        Assert.That(result, Does.Contain("RESULT error").And.Contain("PixelyBrowserVfsFile with TargetPath Content.pk3").And.Contain("RESULT exit code 1"));
+    }
+
+    // On the desktop the item is inert and the loader finds the Content directory through the project tree.
+    [Test]
+    public async Task DesktopBuildIgnoresPixelyBrowserVfsFile()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, properties: ["BrowserContentConsumerMissingFile=true"]);
+        string result = await RunConsumerDotnetAsync(consumerDirectory, Path.Combine(consumerDirectory, "bin", "Release", "net11.0", "BrowserContentConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(Directory.Exists(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "pixely-browser-vfs")), Is.False);
+            Assert.That(File.Exists(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "Content.pk3")), Is.False);
+        });
+        AssertBrowserContentLoaded(result);
+    }
+
+    private const string BrowserContentArchiveBootEntry = "\"virtualPath\": \"Content.pk3\"";
+    private const string BrowserContentGeneratedShader = "shaders/.generated/package.vertex.wgsl";
+    private const string BrowserContentHookMarker = "browser-content-hook.txt";
+
+    private static void AssertBrowserContentLoaded(string result)
+    {
+        Assert.That(result, Does.Contain("RESULT greeting Hello from Content.pk3").And.Contain("RESULT shader True").And.Not.Contain("RESULT error"));
+    }
+
+    private static string GetBrowserIntermediateDirectory(string consumerDirectory)
+    {
+        return Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm");
+    }
+
+    private static string[] ReadArchiveEntries(string archivePath)
+    {
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+        return archive.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToArray();
+    }
+
+    // One target of the browser build, as an IDE or another target would invoke it, with the restore the build commands run first.
+    private async Task RunBrowserConsumerTargetAsync(string consumerDirectory, string target, params string[] properties)
+    {
+        WriteConsumerConfiguration(consumerDirectory);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        List<string> arguments = ["msbuild", projectPath, "-restore", $"-t:{target}", "-p:Configuration=Release", "-p:RuntimeIdentifier=browser-wasm", "-p:UseAppHost=false", $"-p:PixelyPackageVersion={_packageVersion}", "-nologo"];
+        arguments.AddRange(properties.Select(property => $"-p:{property}"));
+        await RunConsumerDotnetAsync(consumerDirectory, arguments.ToArray());
+    }
+
     [Test]
     public async Task BrowserRuntimeIdentifierInTheProjectBodyFailsWithThePlainMessage()
     {
@@ -905,12 +1232,12 @@ public class PackageIntegrationTests
 
     private Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
     {
-        return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties);
+        return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties, noBuild: false);
     }
 
-    private Task<string> PublishConsumerAsync(string consumerDirectory, string runtimeIdentifier, string? defineConstants = null, string[]? properties = null)
+    private Task<string> PublishConsumerAsync(string consumerDirectory, string runtimeIdentifier, string? defineConstants = null, string[]? properties = null, bool noBuild = false)
     {
-        return RunConsumerBuildCommandAsync("publish", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess: true, properties);
+        return RunConsumerBuildCommandAsync("publish", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess: true, properties, noBuild);
     }
 
     private static string GetPublishedWwwroot(string consumerDirectory)
@@ -918,7 +1245,7 @@ public class PackageIntegrationTests
         return Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "publish", "wwwroot");
     }
 
-    private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties)
+    private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties, bool noBuild)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -944,6 +1271,10 @@ public class PackageIntegrationTests
             $"--property:PixelyPackageVersion={_packageVersion}",
             "--nologo"
         ];
+        if (noBuild)
+        {
+            buildArguments.Add("--no-build");
+        }
         if (runtimeIdentifier is not null)
         {
             restoreArguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
@@ -1195,7 +1526,7 @@ public class PackageIntegrationTests
         DeleteDirectory(Path.Combine(consumerDirectory, "bin"));
         DeleteDirectory(Path.Combine(consumerDirectory, "obj"));
         DeleteDirectory(Path.Combine(consumerDirectory, "Content", "shaders", ".generated"));
-        // written by HostedConsumerPublishesABrowserBundle; no fixture has a wwwroot of its own
+        // written by HostedConsumerPublishesABrowserBundle and BrowserBuildRejectsInvalidTargetPath; no fixture has a wwwroot of its own
         DeleteDirectory(Path.Combine(consumerDirectory, "wwwroot"));
         File.Delete(Path.Combine(consumerDirectory, "NuGet.Config"));
         File.Delete(Path.Combine(consumerDirectory, "global.json"));

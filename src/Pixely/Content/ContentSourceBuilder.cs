@@ -60,7 +60,13 @@ public class ContentSourceBuilder
         }
         else if (!archiveExists)
         {
+#if BROWSER
+            // A browser app has no project tree to search; its content reaches the file system only as a PixelyBrowserVfsFile.
+            throw new InvalidOperationException(
+                $"Content not found. Checked '{archivePath}' and '{directoryPath}'. A browser app ships its content as a PixelyBrowserVfsFile with TargetPath {Path.GetRelativePath(appDirectory, archivePath)}.");
+#else
             AddProjectDirectory(contentDirectory);
+#endif
         }
 
         return this;
@@ -78,6 +84,10 @@ public class ContentSourceBuilder
             return appContentDirectory;
         }
 
+#if BROWSER
+        throw new InvalidOperationException(
+            $"Content directory not found. Checked '{appContentDirectory}'. A browser app has no project directory; its files reach the file system as PixelyBrowserVfsFile items.");
+#else
         DirectoryInfo? directory = new DirectoryInfo(appDirectory);
 
         while (directory != null)
@@ -102,6 +112,7 @@ public class ContentSourceBuilder
 
         throw new InvalidOperationException(
             $"Content directory not found. Checked '{appContentDirectory}' and no project directory was found.");
+#endif
     }
 
     public ContentSourceBuilder AddZip(string filename)

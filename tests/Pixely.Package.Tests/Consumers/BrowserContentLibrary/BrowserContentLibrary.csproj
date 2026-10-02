@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <!-- The fixture intentionally stays outside repository-wide central package management. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+    <!-- A static web asset served at _content/BrowserContentLibrary/shared.txt, with relative path shared.txt. Consumers/*/wwwroot/ is ignored, so it links a tracked file. -->
+    <ItemGroup>
+        <Content Include="shared.txt" Link="wwwroot\shared.txt" />
+    </ItemGroup>
+
+</Project>
