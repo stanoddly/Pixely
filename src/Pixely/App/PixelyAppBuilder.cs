@@ -105,6 +105,7 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
             serviceProvider.GetRequiredService<StageManager>(),
-            serviceProvider.GetService<GpuMemorySystem>());
+            serviceProvider.GetService<GpuMemorySystem>(),
+            serviceProvider.GetRequiredService<WindowRegistry>());
     }
 }

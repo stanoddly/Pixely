@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-02: Windows are claimed for the GPU device on first use and released while nothing renders
+
+`SwapchainWindow` claims its window when `ColorTargetFormat` or `TryWaitAndAcquireSwapchainTexture` is first used, not when it is created. On the desktop, a frame without render coordinators releases every claimed window and submits `GpuMemorySystem`. The acquire does not claim a minimized window, and `ColorTargetFormat` keeps the format after the first claim.
+
+- SDL's Vulkan backend frees finished GPU work on a submit only when it requested a swapchain texture or no window is claimed. An app with `UseGpu()` but no window rendering, or whose rendering stage was unloaded, kept a claimed window that never requested one, and nothing submitted its uploads, so every buffer update cycled a new copy.
+- A fallback coordinator that presents a cleared frame for every window while no coordinator is registered was the alternative. It keeps the claim at creation, but makes every window nothing renders show black and present every frame.
+- On NVIDIA with Win32, SDL's Vulkan claim of a minimized window returns true without claiming it. The acquire therefore skips minimized windows, and every claim checks for a swapchain format.
+
+Cost: releasing a window waits for the device to go idle, and claiming it again recreates its swapchain, once each time rendering stops and starts. Reading `ColorTargetFormat` first while the window is minimized can still hit the SDL bug and throw, and each such claim leaks SDL's data for the window. The cached format assumes SDL picks the same format when it claims the same window again. A stage with its own GPU device and no window rendering still submits its own uploads.
+
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 
 On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. In the browser it skips a window that is not renderable, since SDL's browser driver does not hide the canvas. When no texture comes back, it submits the command buffer instead of cancelling it, except in the browser, where the WebGPU fork returns no texture while its submissions in flight reach the frame limit and a submission would only hold a slot. The coordinator also submits the command buffer after disposing the context, so no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or cancel the command buffer, and a different acquire needs a custom `IRenderCoordinator`. Providers are called only for a frame that is drawn, so a frame nobody sees is submitted without a context. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event, except in the browser.

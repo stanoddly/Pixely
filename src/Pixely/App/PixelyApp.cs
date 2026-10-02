@@ -20,6 +20,7 @@ public class PixelyApp : IPixelyApp
     private readonly ServiceRegistry<IUpdatable> _updatables;
     private readonly StageManager _stageManager;
     private readonly GpuMemorySystem? _gpuMemorySystem;
+    private readonly WindowRegistry _windowRegistry;
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
@@ -29,7 +30,8 @@ public class PixelyApp : IPixelyApp
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
         ServiceRegistry<IUpdatable> updatables,
         StageManager stageManager,
-        GpuMemorySystem? gpuMemorySystem)
+        GpuMemorySystem? gpuMemorySystem,
+        WindowRegistry windowRegistry)
     {
         ServiceProvider = serviceProvider;
         _frameClock = frameClock;
@@ -39,6 +41,7 @@ public class PixelyApp : IPixelyApp
         _updatables = updatables;
         _stageManager = stageManager;
         _gpuMemorySystem = gpuMemorySystem;
+        _windowRegistry = windowRegistry;
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -73,7 +76,7 @@ public class PixelyApp : IPixelyApp
         }
 
         // finally render
-        bool drawn = Render(_renderCoordinators, _gpuMemorySystem);
+        bool drawn = Render(_renderCoordinators, _gpuMemorySystem, _windowRegistry);
 #if !BROWSER
         // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
@@ -112,7 +115,13 @@ public class PixelyApp : IPixelyApp
     // updates that recorded them. While any coordinator runs they are left to it: in the browser a coordinator keeps them
     // pending on purpose on a frame that gets no swapchain texture. Only the root's GpuMemorySystem is submitted here, so a
     // stage that registers its own GPU device without window rendering must submit its own.
-    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators, GpuMemorySystem? gpuMemorySystem)
+    //
+    // On the desktop, a frame without coordinators also releases every window claimed for a GPU device, such as one whose
+    // rendering stage was unloaded or one whose ColorTargetFormat was read. With a claimed window, SDL's Vulkan backend frees
+    // finished GPU work only on a submit that requested a swapchain texture, which no coordinator makes now. A coordinator
+    // claims its window again on its first acquire. The browser keeps the claims: the WebGPU fork frees finished work on every
+    // submit, and its release tears down the canvas surface.
+    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators, GpuMemorySystem? gpuMemorySystem, WindowRegistry windowRegistry)
     {
         bool hasCoordinator = false;
         bool drawn = false;
@@ -124,6 +133,15 @@ public class PixelyApp : IPixelyApp
 
         if (!hasCoordinator)
         {
+#if !BROWSER
+            foreach ((_, _, Window window) in windowRegistry.Windows)
+            {
+                if (window is SwapchainWindow swapchainWindow)
+                {
+                    swapchainWindow.ReleaseClaim();
+                }
+            }
+#endif
             gpuMemorySystem?.Submit();
         }
 
