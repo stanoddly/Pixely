@@ -72,16 +72,20 @@ no render coordinator runs:
   call `GpuMemorySystem.Submit()` before it; otherwise the command buffer reads undefined contents. This covers only the
   root's `GpuMemorySystem`: a stage that registers its own GPU device without window rendering must submit its own.
 - A window is claimed for the device only when its swapchain is first used, by `ColorTargetFormat` or
-  `TryWaitAndAcquireSwapchainTexture`, and on the desktop a frame without render coordinators releases every claimed
-  window. SDL's Vulkan backend frees finished GPU work on every submit only while no window is claimed; a claimed
-  window that never requests a swapchain texture would keep that work until a fence wait. SDL waits for the device to
-  go idle when it releases a window, so this waits once each time rendering stops, and the next coordinator's first
-  acquire claims the window again and recreates its swapchain. The browser keeps the claims, because its WebGPU
-  backend frees finished work on every submit.
-- `ColorTargetFormat` keeps the format after the first claim, so reading it after a release does not claim the window
-  again. The acquire does not claim a minimized window and returns no texture instead: on drivers that report a zero
-  size for a minimized window, such as NVIDIA on Win32, SDL's Vulkan backend reports such a claim as successful
-  without claiming the window. A claim that SDL reports as successful but that leaves no swapchain format throws
+  `TryWaitAndAcquireSwapchainTexture`. On the desktop, after a frame in which no window of a device requested a
+  swapchain texture, every window claimed for that device is released. With a claimed window, SDL's Vulkan backend
+  frees finished GPU work only on a submit that requested a swapchain texture, or on a fence wait, so a claimed window
+  nothing renders would keep that work. SDL waits for the device to go idle when it releases a window, so this waits
+  once each time the device's windows stop requesting textures, and the next coordinator's acquire claims the window
+  again and recreates its swapchain. The browser keeps the claims, because its WebGPU backend frees finished work on
+  every submit.
+- While a window is released, `ColorTargetFormat` returns the format SDL reported last, so reading it does not claim
+  the window again; while it is claimed, it returns SDL's current format. SDL picks the format again whenever it creates
+  a swapchain, after a resize as well as when it claims the window again, so a pipeline built for the earlier format
+  can stop matching.
+- The acquire does not claim a minimized window and returns no texture instead: on drivers that report a zero size for
+  a minimized window, such as NVIDIA on Win32, SDL's Vulkan backend reports such a claim as successful without claiming
+  the window. A claim that SDL reports as successful but that leaves no swapchain format throws
   `PixelyInitializationException`; reading `ColorTargetFormat` for the first time while the window is minimized can
   hit it there. Each such claim leaks SDL's data for the window.
 

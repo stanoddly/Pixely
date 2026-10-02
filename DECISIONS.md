@@ -4,13 +4,14 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-10-02: Windows are claimed for the GPU device on first use and released while nothing renders
 
-`SwapchainWindow` claims its window when `ColorTargetFormat` or `TryWaitAndAcquireSwapchainTexture` is first used, not when it is created. On the desktop, a frame without render coordinators releases every claimed window and submits `GpuMemorySystem`. The acquire does not claim a minimized window, and `ColorTargetFormat` keeps the format after the first claim.
+`SwapchainWindow` claims its window when `ColorTargetFormat` or `TryWaitAndAcquireSwapchainTexture` is first used, not when it is created. A frame without render coordinators submits `GpuMemorySystem`. On the desktop, after a frame in which no window of a device requested a swapchain texture, every window claimed for that device is released. The acquire does not claim a minimized window, and while a window is released `ColorTargetFormat` returns the format SDL reported last.
 
 - SDL's Vulkan backend frees finished GPU work on a submit only when it requested a swapchain texture or no window is claimed. An app with `UseGpu()` but no window rendering, or whose rendering stage was unloaded, kept a claimed window that never requested one, and nothing submitted its uploads, so every buffer update cycled a new copy.
 - A fallback coordinator that presents a cleared frame for every window while no coordinator is registered was the alternative. It keeps the claim at creation, but makes every window nothing renders show black and present every frame.
 - On NVIDIA with Win32, SDL's Vulkan claim of a minimized window returns true without claiming it. The acquire therefore skips minimized windows, and every claim checks for a swapchain format.
+- The release follows the requests, not the coordinators: a coordinator whose minimized window is not claimed requests no texture, so another claimed window would otherwise stop Vulkan from freeing work while coordinators still run.
 
-Cost: releasing a window waits for the device to go idle, and claiming it again recreates its swapchain, once each time rendering stops and starts. Reading `ColorTargetFormat` first while the window is minimized can still hit the SDL bug and throw, and each such claim leaks SDL's data for the window. The cached format assumes SDL picks the same format when it claims the same window again. A stage with its own GPU device and no window rendering still submits its own uploads.
+Cost: releasing a window waits for the device to go idle, and claiming it again recreates its swapchain, once each time rendering stops and starts. Reading `ColorTargetFormat` first while the window is minimized can still hit the SDL bug and throw, and each such claim leaks SDL's data for the window. SDL picks the swapchain format again when it claims the window again, as it already does after a resize, so a pipeline built while the window was released can stop matching. A stage with its own GPU device and no window rendering still submits its own uploads.
 
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 

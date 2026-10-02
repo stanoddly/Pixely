@@ -7,15 +7,18 @@ namespace Pixely;
 /// <summary>
 /// A window whose frames are presented through the swapchain of the GPU device it is claimed for. It is claimed the first time
 /// <see cref="ColorTargetFormat"/> or <see cref="TryWaitAndAcquireSwapchainTexture"/> is used, so a window nothing renders to
-/// stays unclaimed, and on the desktop the claim is released on a frame no render coordinator runs. Without a GPU device, when
-/// the app registers no rendering, it has no swapchain, and both throw.
+/// stays unclaimed, and on the desktop the claim is released after a frame in which no window of its GPU device requested a
+/// swapchain texture. Without a GPU device, when the app registers no rendering, it has no swapchain, and both throw.
 /// </summary>
 public sealed partial class SwapchainWindow : Window
 {
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
 
     private bool _claimed;
-    // Kept after a release, so building a pipeline from the format does not claim the window again.
+    // Set when SDL's acquire is called, and cleared by the frame loop after each frame.
+    private bool _swapchainRequested;
+    // SDL's format at the last claim or acquire. While the window is released, ColorTargetFormat returns it, so building a
+    // pipeline from the format does not claim the window again.
     private TextureFormat? _colorTargetFormat;
 
     internal SwapchainWindow(
@@ -35,6 +38,12 @@ public sealed partial class SwapchainWindow : Window
     {
         get
         {
+            if (_claimed)
+            {
+                _colorTargetFormat = ReadSwapchainFormat();
+                return _colorTargetFormat.Value;
+            }
+
             if (_colorTargetFormat is TextureFormat colorTargetFormat)
             {
                 return colorTargetFormat;
@@ -50,9 +59,7 @@ public sealed partial class SwapchainWindow : Window
         ThrowIfNoGpuDevice();
         swapchainTexture = default!;
         // A frame of a minimized window is not drawn anyway, and an unclaimed window needs no request for SDL's Vulkan backend
-        // to free finished work. See EnsureClaimed for why a minimized window is not claimed. While it stays unclaimed, another
-        // window claimed without a coordinator of its own, only by reading its ColorTargetFormat, keeps Vulkan from freeing
-        // finished work, since no submit requests a swapchain texture.
+        // to free finished work. See EnsureClaimed for why a minimized window is not claimed.
         if (!_claimed && IsMinimized)
         {
             return false;
@@ -63,6 +70,8 @@ public sealed partial class SwapchainWindow : Window
 
         unsafe
         {
+            // SDL's Vulkan backend counts the request even when no texture comes back.
+            _swapchainRequested = true;
             SDL_GPUTexture* swapchainTexturePointer;
             if (!AcquireSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, &swapchainTexturePointer, &width, &height))
             {
@@ -74,7 +83,9 @@ public sealed partial class SwapchainWindow : Window
                 return false;
             }
 
-            swapchainTexture = new SwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), _colorTargetFormat!.Value);
+            // Read on every acquire: SDL picks the format again whenever it recreates the swapchain, such as after a resize.
+            _colorTargetFormat = ReadSwapchainFormat();
+            swapchainTexture = new SwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), _colorTargetFormat.Value);
         }
 
         return true;
@@ -86,10 +97,20 @@ public sealed partial class SwapchainWindow : Window
         base.Dispose();
     }
 
-    // Called by the frame loop on a frame no render coordinator runs, so a window that stopped being rendered, such as one
-    // whose rendering stage was unloaded, does not keep SDL's Vulkan backend from freeing finished work; see EnsureClaimed.
-    // SDL waits for the device to go idle before it releases a window, so this waits once each time rendering stops. The next
-    // use of the swapchain claims the window again, which recreates the swapchain.
+    internal bool IsClaimed => _claimed;
+
+    internal bool SwapchainRequested => _swapchainRequested;
+
+    internal void ClearSwapchainRequest()
+    {
+        _swapchainRequested = false;
+    }
+
+    // Called by the frame loop after a frame in which no window of this window's device requested a swapchain texture, so a
+    // window that stopped being rendered, such as one whose rendering stage was unloaded, does not keep SDL's Vulkan backend
+    // from freeing finished work; see EnsureClaimed. SDL waits for the device to go idle before it releases a window, so this
+    // waits once each time the device's windows stop requesting textures. The next use of the swapchain claims the window
+    // again, which recreates the swapchain.
     internal void ReleaseClaim()
     {
         if (!_claimed)
@@ -120,8 +141,11 @@ public sealed partial class SwapchainWindow : Window
     // and the claim throws. A later claim, once the window is restored, can succeed. Each failed claim leaks SDL's window data
     // and its Vulkan surface, which SDL never stored where a release would find them.
     //
-    // The format is cached after the first claim. A window claimed again keeps its device and the SDR composition SDL's claim
-    // defaults to, so SDL picks the same format for it.
+    // SDL's Vulkan backend picks the swapchain format again whenever it creates a swapchain: when it claims the window and
+    // whenever it recreates the swapchain, such as after a resize. It prefers B8G8R8A8 and falls back to R8G8B8A8 when the
+    // surface does not support it. ColorTargetFormat reads SDL's format while the window is claimed and the last one while
+    // it is released. A pipeline built for one format does not match a swapchain SDL later creates with the other, whether
+    // after a resize or after the window is claimed again.
     private void EnsureClaimed()
     {
         ThrowIfNoGpuDevice();
@@ -138,8 +162,9 @@ public sealed partial class SwapchainWindow : Window
                 throw new PixelyInitializationException($"SDL_ClaimWindowForGPUDevice failed: {SDL3.SDL_GetError()}");
             }
 
-            colorTargetFormat = (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
         }
+
+        colorTargetFormat = ReadSwapchainFormat();
 
         if (colorTargetFormat == TextureFormat.None)
         {
@@ -148,6 +173,14 @@ public sealed partial class SwapchainWindow : Window
 
         _claimed = true;
         _colorTargetFormat = colorTargetFormat;
+    }
+
+    private TextureFormat ReadSwapchainFormat()
+    {
+        unsafe
+        {
+            return (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
+        }
     }
 
     private void ThrowIfNoGpuDevice()

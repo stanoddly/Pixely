@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.App;
@@ -115,12 +116,6 @@ public class PixelyApp : IPixelyApp
     // updates that recorded them. While any coordinator runs they are left to it: in the browser a coordinator keeps them
     // pending on purpose on a frame that gets no swapchain texture. Only the root's GpuMemorySystem is submitted here, so a
     // stage that registers its own GPU device without window rendering must submit its own.
-    //
-    // On the desktop, a frame without coordinators also releases every window claimed for a GPU device, such as one whose
-    // rendering stage was unloaded or one whose ColorTargetFormat was read. With a claimed window, SDL's Vulkan backend frees
-    // finished GPU work only on a submit that requested a swapchain texture, which no coordinator makes now. A coordinator
-    // claims its window again on its first acquire. The browser keeps the claims: the WebGPU fork frees finished work on every
-    // submit, and its release tears down the canvas surface.
     internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators, GpuMemorySystem? gpuMemorySystem, WindowRegistry windowRegistry)
     {
         bool hasCoordinator = false;
@@ -133,18 +128,55 @@ public class PixelyApp : IPixelyApp
 
         if (!hasCoordinator)
         {
-#if !BROWSER
-            foreach ((_, _, Window window) in windowRegistry.Windows)
-            {
-                if (window is SwapchainWindow swapchainWindow)
-                {
-                    swapchainWindow.ReleaseClaim();
-                }
-            }
-#endif
             gpuMemorySystem?.Submit();
         }
 
+#if !BROWSER
+        ReleaseClaimsWithoutSwapchainRequest(windowRegistry);
+#endif
+
         return drawn || !hasCoordinator;
     }
+
+#if !BROWSER
+    // With a claimed window, SDL's Vulkan backend frees a device's finished GPU work only on a submit that requested a swapchain
+    // texture. So after a frame in which no window of a device requested one, every window claimed for that device is
+    // released: one whose rendering stage was unloaded, one claimed only by reading its ColorTargetFormat, or any other while
+    // the device's only coordinator renders a minimized window that the acquire does not claim. Each device frees its own
+    // work, so a request for one device does not keep another's windows claimed. A coordinator claims its window again on its
+    // next acquire. The browser keeps the claims: the WebGPU fork frees finished work on every submit, and its release tears
+    // down the canvas surface.
+    private static void ReleaseClaimsWithoutSwapchainRequest(WindowRegistry windowRegistry)
+    {
+        ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows = windowRegistry.Windows;
+        foreach ((_, _, Window window) in windows)
+        {
+            if (window is SwapchainWindow { IsClaimed: true } swapchainWindow && !IsSwapchainRequested(windows, swapchainWindow.SdlGpuDevice))
+            {
+                swapchainWindow.ReleaseClaim();
+            }
+        }
+
+        foreach ((_, _, Window window) in windows)
+        {
+            if (window is SwapchainWindow swapchainWindow)
+            {
+                swapchainWindow.ClearSwapchainRequest();
+            }
+        }
+    }
+
+    private static bool IsSwapchainRequested(ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows, Pointer<SDL_GPUDevice> sdlGpuDevice)
+    {
+        foreach ((_, _, Window window) in windows)
+        {
+            if (window is SwapchainWindow { SwapchainRequested: true } swapchainWindow && swapchainWindow.SdlGpuDevice == sdlGpuDevice)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+#endif
 }
