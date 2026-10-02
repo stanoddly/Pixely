@@ -828,7 +828,7 @@ public class PackageIntegrationTests
         Assert.That(result, Does.Contain("RESULT extra data/levels.pak First extra file"));
     }
 
-    // An item removed between builds leaves neither the manifest nor the staging folder, through MSBuild's incremental clean.
+    // An item removed between builds leaves the manifest and the boot config, and MSBuild's incremental clean deletes its staged file.
     [Test]
     public async Task BrowserBuildWithoutAPreviousVfsFileRemovesIt()
     {
@@ -838,7 +838,12 @@ public class PackageIntegrationTests
         string stagedPath = Path.Combine(intermediateDirectory, "pixely-browser-vfs", "data", "levels.pak");
 
         await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", properties: ["BrowserContentConsumerExtraFile=data/levels.pak"]);
-        Assert.That(File.Exists(stagedPath), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(stagedPath), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "staticwebassets.build.json")), Does.Contain("vfs:data/levels.pak"));
+            Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Contain("\"virtualPath\": \"data/levels.pak\""));
+        });
         await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm");
         Assert.Multiple(() =>
         {

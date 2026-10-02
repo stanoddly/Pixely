@@ -50,7 +50,7 @@ The embedded tutorial follows the policy used by `Pixely.Ui`. The ZIP tutorial f
 
 ## Browser
 
-A browser app has no directory beside the executable. Its file system is in memory, and `AppContext.BaseDirectory` is `/`. A `PixelyBrowserVfsFile` item puts a file into it before `Main` runs, at its `TargetPath` below `/`. `UseDefaultContent()` loads an item with `TargetPath` `Content.pk3`. `AddZipPattern` searches `/` as it searches beside a desktop executable, and `AddZip` takes the full path, such as `/levels.pak`.
+A browser app has no directory beside the executable. Its file system is in memory, and `AppContext.BaseDirectory` is `/`. A `PixelyBrowserVfsFile` item puts a file into it before `Main` runs, at its `TargetPath` below `/`. `UseDefaultContent()` loads an item with `TargetPath` `Content.pk3`. `AddZipPattern` searches `/` as it searches beside a desktop executable, and `AddZip` uses the path as given, such as `/levels.pak`.
 
 ```xml
 <PropertyGroup>
@@ -69,7 +69,7 @@ A browser app has no directory beside the executable. Its file system is in memo
 - The targets in `PixelyBrowserVfsFileDependsOn` run after `Compile`, so generated shaders exist, and before the static web assets are resolved, which is before `CopyFilesToOutputDirectory`. Zip the project's content tree, not a copy in `$(OutDir)`.
 - A target that produces the file adds the item itself, because `$(IntermediateOutputPath)` is not set in the project body. A file that already exists in the source tree can be an item in the project body.
 - Zip on every build. `Inputs` and `Outputs` cannot see a deleted source file, so an incremental archive keeps it.
-- `TargetPath` defaults to the file name. It is a relative path of segments made of `A-Z`, `a-z`, `0-9`, `.`, `_` and `-`, separated by `/`, without `.` or `..` segments and not below `_framework/` or `_content/`. Two items cannot share a `TargetPath`, and neither can a `TargetPath` and a static web asset defined before this step: a `wwwroot` file, a linked asset or a file of the default page, such as `index.html`. An asset that a later target adds fails the build later, with the WebAssembly SDK's message. Both checks ignore case, although the browser's file system does not, because MSBuild batches item metadata ignoring case. Each of these is error PIXELY0011.
+- `TargetPath` defaults to the file name. It is a relative path of segments made of `A-Z`, `a-z`, `0-9`, `.`, `_` and `-`, separated by `/`, without `.` or `..` segments and not below `_framework/` or `_content/`. Two items cannot share a `TargetPath`, and neither can a `TargetPath` and a static web asset defined before this step: a `wwwroot` file, a linked asset or a file of the default page, such as `index.html`. Both checks ignore case, although the browser's file system does not, because MSBuild batches item metadata ignoring case. Each of these is error PIXELY0011. An asset that a later target adds is not checked; its collision fails the build later, with the static web assets SDK's message.
 - An item whose file does not exist when the browser assets are defined is error PIXELY0010.
 - The item applies to browser builds only. A desktop build ignores it, and neither a design-time build nor a publish with `--no-build` runs the producing targets.
 - The browser downloads the whole file into memory before `Main` starts, so its size adds to startup time and memory use. A publish serves it as it is, without a compressed copy.
