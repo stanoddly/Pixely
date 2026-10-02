@@ -91,3 +91,50 @@ export function runFrameLoop(runFrame) {
         }
     });
 }
+
+// The runtime files a publish precompresses that are worth decompressing in the page: dotnet.native.wasm and the assemblies.
+const brotliTypes = new Set(['dotnetwasm', 'assembly']);
+let brotliStreams = null;
+let brotliDecoder = null;
+
+// A loader for dotnet.withResourceLoader that fetches the Brotli copy a publish writes beside each runtime file and decompresses it
+// in the page, which main.js installs with PixelyBrowserBrotli. A static host such as GitHub Pages serves foo.wasm.br as an opaque
+// file and compresses foo.wasm with gzip at best, since it sets no Content-Encoding: br. The vendored decoder ships only with the
+// property. DecompressionStream keeps compilation streaming where it decodes Brotli; elsewhere, Chrome
+// among them, the vendored decoder decodes the whole file once it has arrived. Without a .br file, as in a build that was not
+// published, the original file is fetched as the runtime would, with its integrity check. The runtime checks the integrity only
+// of files it fetches itself, so the decompressed ones go without; their names carry a hash of their content.
+export function loadCompressedResource(type, name, defaultUri, integrity) {
+    return brotliTypes.has(type) ? fetchBrotli(type, defaultUri, integrity) : undefined;
+}
+
+async function fetchBrotli(type, defaultUri, integrity) {
+    const url = new URL(defaultUri, globalThis.document?.baseURI);
+    url.pathname += '.br';
+    const compressed = await fetch(url, { cache: 'no-cache' });
+    // A static host answers a missing file with 404; a development server that falls back to index.html answers with the page.
+    if (!compressed.ok || compressed.headers.get('Content-Type')?.startsWith('text/html')) {
+        return fetch(defaultUri, { cache: 'no-cache', integrity });
+    }
+    const headers = { 'Content-Type': type === 'dotnetwasm' ? 'application/wasm' : 'application/octet-stream' };
+    // A server that labels the file Content-Encoding: br has had the browser decompress it already.
+    if (compressed.headers.get('Content-Encoding') === 'br') {
+        return new Response(compressed.body, { headers });
+    }
+    brotliStreams ??= supportsBrotliStreams();
+    if (brotliStreams) {
+        return new Response(compressed.body.pipeThrough(new DecompressionStream('brotli')), { headers });
+    }
+    brotliDecoder ??= import('./brotli-decode.js');
+    const { BrotliDecode } = await brotliDecoder;
+    return new Response(BrotliDecode(new Int8Array(await compressed.arrayBuffer())), { headers });
+}
+
+function supportsBrotliStreams() {
+    try {
+        new DecompressionStream('brotli');
+        return true;
+    } catch {
+        return false;
+    }
+}

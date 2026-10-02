@@ -44,6 +44,7 @@
         <PixelyBrowserIndexHtml Condition="'$(PixelyBrowserIndexHtml)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\index.html</PixelyBrowserIndexHtml>
         <PixelyBrowserMainJs Condition="'$(PixelyBrowserMainJs)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\main.js</PixelyBrowserMainJs>
         <_PixelyBrowserHostJs>$(MSBuildThisFileDirectory)..\wwwroot\pixely-host.js</_PixelyBrowserHostJs>
+        <_PixelyBrowserBrotliDecodeJs>$(MSBuildThisFileDirectory)..\wwwroot\brotli-decode.js</_PixelyBrowserBrotliDecodeJs>
     </PropertyGroup>
 
     <!--
@@ -151,25 +152,35 @@
     </Target>
 
     <!--
-      The default page, its bootstrap and the frame loop, as static web assets of the project, each only when the
-      project has no wwwroot file at that relative path (two assets with one path fail manifest generation; a linked
-      or generated file at that path needs PixelyBrowserDefaultAssets=false). Copied into obj/ first so two projects
-      on one SDK do not share an asset identity. The recipe is the WebAssembly SDK's own hot-reload injection.
+      The default page, its bootstrap, the frame loop, the page options and, with PixelyBrowserBrotli, the Brotli decoder, as
+      static web assets of the project, each only when the project has no wwwroot file at that relative path (two assets with
+      one path fail manifest generation; a linked or generated file at that path needs PixelyBrowserDefaultAssets=false).
+      Copied into obj/ first so two projects on one SDK do not share an asset identity; pixely-options.js is written there
+      from the properties, which main.js cannot read otherwise. The recipe is the WebAssembly SDK's own hot-reload injection.
     -->
     <Target Name="_PixelyDefineBrowserDefaultAssets" BeforeTargets="ResolveProjectStaticWebAssets" AfterTargets="ResolveStaticWebAssetsConfiguration"
             Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserDefaultAssets)' == 'true'">
         <PropertyGroup>
             <_PixelyBrowserAssetsRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-browser'))</_PixelyBrowserAssetsRoot>
+            <_PixelyBrowserOptionsJs>$(_PixelyBrowserAssetsRoot)pixely-options.js</_PixelyBrowserOptionsJs>
+            <_PixelyBrowserBrotliOption>false</_PixelyBrowserBrotliOption>
+            <_PixelyBrowserBrotliOption Condition="'$(PixelyBrowserBrotli)' == 'true'">true</_PixelyBrowserBrotliOption>
         </PropertyGroup>
         <ItemGroup>
             <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserIndexHtml)" RelativePath="index.html" />
             <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserMainJs)" RelativePath="main.js" />
             <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserHostJs)" RelativePath="pixely-host.js" />
+            <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserBrotliDecodeJs)" RelativePath="brotli-decode.js" Condition="'$(_PixelyBrowserBrotliOption)' == 'true'" />
             <_PixelyBrowserDefaultAssetSource Remove="@(_PixelyBrowserDefaultAssetSource)" Condition="Exists('$(MSBuildProjectDirectory)/wwwroot/%(RelativePath)')" />
+            <_PixelyBrowserOptionsLine Include="// Written by the Pixely SDK from the project's properties (docs/hosting.md)." />
+            <_PixelyBrowserOptionsLine Include="export const brotli = $(_PixelyBrowserBrotliOption)%3B" />
         </ItemGroup>
         <Copy SourceFiles="@(_PixelyBrowserDefaultAssetSource)" DestinationFiles="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" SkipUnchangedFiles="true" />
+        <WriteLinesToFile File="$(_PixelyBrowserOptionsJs)" Lines="@(_PixelyBrowserOptionsLine)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                          Condition="!Exists('$(MSBuildProjectDirectory)/wwwroot/pixely-options.js')" />
         <ItemGroup>
             <_PixelyBrowserDefaultAsset Include="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" />
+            <_PixelyBrowserDefaultAsset Include="$(_PixelyBrowserOptionsJs)" Condition="!Exists('$(MSBuildProjectDirectory)/wwwroot/pixely-options.js')" />
             <_PixelyBrowserDefaultAsset Update="@(_PixelyBrowserDefaultAsset)" OriginalItemSpec="%(Identity)" />
             <FileWrites Include="@(_PixelyBrowserDefaultAsset)" />
         </ItemGroup>

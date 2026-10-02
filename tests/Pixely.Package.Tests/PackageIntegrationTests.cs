@@ -163,6 +163,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("wwwroot/index.html"));
             Assert.That(entries, Does.Contain("wwwroot/main.js"));
             Assert.That(entries, Does.Contain("wwwroot/pixely-host.js"));
+            Assert.That(entries, Does.Contain("wwwroot/brotli-decode.js"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Version.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
             Assert.That(entries.Any(entry => entry.StartsWith("build/", StringComparison.Ordinal)), Is.False);
@@ -409,8 +410,9 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("CS0117").And.Contain("'Configure'"));
     }
 
-    // One browser publish covers the layout, the consumer's own asset replacing a default, a referenced library staying a library
-    // and, under node, the generated default OnException rethrowing from the async Main (the fixture is compiled without a handler).
+    // One browser publish covers the layout, the consumer's own asset replacing a default, PixelyBrowserBrotli, a referenced library
+    // staying a library and, under node, the generated default OnException rethrowing from the async Main (the fixture is compiled
+    // without a handler).
     [Test]
     public async Task HostedConsumerPublishesABrowserBundle()
     {
@@ -418,12 +420,12 @@ public class PackageIntegrationTests
         string libraryDirectory = GetConsumerDirectory("LibraryConsumer");
         DeleteConsumerOutputs("HostedConsumer");
         DeleteConsumerOutputs("LibraryConsumer");
-        // The check is per file, so main.js stands in for any of the three defaults and index.html stays the package's.
+        // The check is per file, so main.js stands in for any of the defaults and index.html stays the package's.
         string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
         Directory.CreateDirectory(consumerWwwroot);
         File.WriteAllText(Path.Combine(consumerWwwroot, "main.js"), "// consumer bootstrap\n");
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "HOSTED_CONSUMER_NO_HANDLER", properties: ["HostedConsumerReferencesLibrary=true"]);
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "HOSTED_CONSUMER_NO_HANDLER", properties: ["HostedConsumerReferencesLibrary=true", "PixelyBrowserBrotli=true"]);
         string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm", "PixelyProgram.g.cs");
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         // Without the guard the library's restore pulls the WebAssembly pack, whose props turn it into an exe (CS5001) in the reference build,
@@ -438,9 +440,14 @@ public class PackageIntegrationTests
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Does.Contain("<canvas id=\"canvas\""));
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "main.js")), Does.Contain("consumer bootstrap"));
             Assert.That(File.Exists(Path.Combine(wwwroot, "pixely-host.js")), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = true;"));
+            Assert.That(File.Exists(Path.Combine(wwwroot, "brotli-decode.js")), Is.True);
             // dotnet.js is not fingerprinted on disk; the assemblies (WebCIL) are, and the endpoint manifest aliases their plain names.
             Assert.That(File.Exists(Path.Combine(wwwroot, "_framework", "dotnet.js")), Is.True);
             Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "HostedConsumer.*.wasm"), Has.Length.EqualTo(1));
+            // loadCompressedResource in pixely-host.js fetches these beside the files they compress.
+            Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "HostedConsumer.*.wasm.br"), Has.Length.EqualTo(1));
+            Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "dotnet.native.*.wasm.br"), Has.Length.EqualTo(1));
             Assert.That(File.ReadAllText(Path.Combine(libraryDirectory, "obj", "LibraryConsumer.csproj.nuget.g.props")), Does.Not.Contain("WebAssembly"));
             Assert.That(libraryAssets, Does.Not.Contain("Microsoft.NETCore.App.Runtime.Mono.browser-wasm").And.Not.Contain("Microsoft.NET.ILLink.Tasks"));
             Assert.That(File.Exists(Path.Combine(libraryDirectory, "bin", "Release", "net11.0", "LibraryConsumer.dll")), Is.True);
@@ -478,6 +485,9 @@ public class PackageIntegrationTests
         string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
         Assert.Multiple(() =>
         {
+            // Without PixelyBrowserBrotli main.js installs no loader and the decoder stays out of the bundle.
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = false;"));
+            Assert.That(File.Exists(Path.Combine(wwwroot, "brotli-decode.js")), Is.False);
             Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
             Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
         });
