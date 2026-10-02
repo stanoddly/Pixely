@@ -202,9 +202,10 @@
       reaches the build boot config. The target depends on Compile, so generated content exists when a producer listed in
       PixelyBrowserContentDependsOn packages it, also when ResolveStaticWebAssetsInputs is invoked directly.
 
-      TargetPath is checked against an allowlist because ComputeWasmVfs uses it as a RelativePathFilter pattern, and against the
-      served paths of the static web assets defined so far, fingerprint expressions removed, because two assets with one path fail
-      manifest generation. _framework/ and _content/ are reserved: the WebAssembly assets there are defined later, package assets
+      TargetPath is checked against an allowlist because ComputeWasmVfs uses it as a RelativePathFilter pattern. It is checked against
+      the static web assets defined so far, fingerprint expressions removed: against their served paths, because two assets with one
+      path fail manifest generation, and against their relative paths, because ComputeWasmVfs matches every asset by relative path,
+      also one of a referenced project or package below _content/. _framework/ and _content/ are reserved: the WebAssembly assets there are defined later, package assets
       elsewhere. Both checks ignore case although the file system does not: MSBuild batches metadata values ignoring case, so
       ComputeWasmVfs and the tagging below would put two target paths that differ only in case into one batch.
     -->
@@ -219,23 +220,29 @@
             <_PixelyMissingBrowserVfsFile Include="@(PixelyBrowserVfsFile)" Condition="!Exists('%(FullPath)')" />
             <_PixelyInvalidBrowserVfsFile Include="@(PixelyBrowserVfsFile)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(TargetPath)', '$(_PixelyBrowserVfsTargetPathPattern)'))" />
             <_PixelyBrowserVfsTargetPath Include="@(PixelyBrowserVfsFile->'%(TargetPath)')" />
+            <_PixelyDuplicateBrowserVfsTargetPath Include="@(_PixelyBrowserVfsTargetPath)" Condition="'@(_PixelyBrowserVfsTargetPath->Count())' &gt; 1 and '%(Identity)' != ''" />
             <_PixelyStaticWebAssetPath Include="$([System.Text.RegularExpressions.Regex]::Replace('%(StaticWebAsset.BasePath)/%(StaticWebAsset.RelativePath)', '#\[[^\]]*\][?!]?', '').Trim('/').Replace('//', '/'))" />
+            <_PixelyStaticWebAssetRelativePath Include="$([System.Text.RegularExpressions.Regex]::Replace('%(StaticWebAsset.RelativePath)', '#\[[^\]]*\][?!]?', '').Trim('/'))" />
             <_PixelyBrowserVfsServedPath Include="$([System.String]::Copy('$(StaticWebAssetBasePath)/%(PixelyBrowserVfsFile.TargetPath)').Trim('/').Replace('//', '/'))" TargetPath="%(PixelyBrowserVfsFile.TargetPath)" />
             <_PixelyFreeBrowserVfsServedPath Include="@(_PixelyBrowserVfsServedPath)" />
             <_PixelyFreeBrowserVfsServedPath Remove="@(_PixelyStaticWebAssetPath)" />
             <_PixelyCollidingBrowserVfsServedPath Include="@(_PixelyBrowserVfsServedPath)" />
             <_PixelyCollidingBrowserVfsServedPath Remove="@(_PixelyFreeBrowserVfsServedPath)" />
+            <_PixelyFreeBrowserVfsTargetPath Include="@(_PixelyBrowserVfsTargetPath)" />
+            <_PixelyFreeBrowserVfsTargetPath Remove="@(_PixelyStaticWebAssetRelativePath)" />
+            <_PixelyCollidingBrowserVfsTargetPath Include="@(_PixelyCollidingBrowserVfsServedPath->'%(TargetPath)')" />
+            <_PixelyCollidingBrowserVfsTargetPath Include="@(_PixelyBrowserVfsTargetPath)" Exclude="@(_PixelyFreeBrowserVfsTargetPath)" />
         </ItemGroup>
         <Error Code="PIXELY0010" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyMissingBrowserVfsFile)' != ''"
                Text="PixelyBrowserVfsFile @(_PixelyMissingBrowserVfsFile->'%(Identity)', ', ') does not exist; produce it in a target listed in PixelyBrowserContentDependsOn." />
         <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyInvalidBrowserVfsFile)' != ''"
                Text="PixelyBrowserVfsFile TargetPath @(_PixelyInvalidBrowserVfsFile->'%(TargetPath)', ', ') is not a relative path of segments made of A-Z, a-z, 0-9, '.', '_' and '-' separated by '/', has a '.' or '..' segment, or is below _framework/ or _content/." />
-        <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyBrowserVfsTargetPath->Distinct()->Count())' != '@(_PixelyBrowserVfsTargetPath->Count())'"
-               Text="Two PixelyBrowserVfsFile items share a TargetPath, ignoring case: @(_PixelyBrowserVfsTargetPath, ', ')." />
-        <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyCollidingBrowserVfsServedPath)' != ''"
-               Text="PixelyBrowserVfsFile TargetPath @(_PixelyCollidingBrowserVfsServedPath->'%(TargetPath)', ', ') is already the path of a static web asset: a wwwroot file, a linked or generated asset, or a file of the default page." />
-        <!-- The copy gives each asset a content root whose relative path is its TargetPath, as for the default page. -->
-        <Copy SourceFiles="@(PixelyBrowserVfsFile)" DestinationFiles="@(PixelyBrowserVfsFile->'$(_PixelyBrowserVfsRoot)%(TargetPath)')" SkipUnchangedFiles="true" />
+        <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyDuplicateBrowserVfsTargetPath)' != ''"
+               Text="Two PixelyBrowserVfsFile items share a TargetPath, ignoring case: @(_PixelyDuplicateBrowserVfsTargetPath, ', ')." />
+        <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyCollidingBrowserVfsTargetPath)' != ''"
+               Text="PixelyBrowserVfsFile TargetPath @(_PixelyCollidingBrowserVfsTargetPath->Distinct(), ', ') is already the path of a static web asset: a wwwroot file, a linked or generated asset, a file of the default page, or an asset of a referenced project or package with that relative path." />
+        <!-- The copy gives each asset a content root whose relative path is its TargetPath, as for the default page; a hard link avoids copying a large archive. -->
+        <Copy SourceFiles="@(PixelyBrowserVfsFile)" DestinationFiles="@(PixelyBrowserVfsFile->'$(_PixelyBrowserVfsRoot)%(TargetPath)')" SkipUnchangedFiles="true" UseHardlinksIfPossible="true" />
         <ItemGroup>
             <_PixelyBrowserVfsAsset Include="@(PixelyBrowserVfsFile->'$(_PixelyBrowserVfsRoot)%(TargetPath)')" />
             <_PixelyBrowserVfsAsset Update="@(_PixelyBrowserVfsAsset)" OriginalItemSpec="%(Identity)" />

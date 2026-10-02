@@ -22,9 +22,10 @@
     </ItemGroup>
 
     <!-- Enumerate content after compilation so clean builds include generated files. Recording every
-         destination in FileWrites lets MSBuild remove stale build output. -->
+         destination in FileWrites lets MSBuild remove stale build output. A browser app reads its archive, not this copy. -->
     <Target Name="CopyContentToBuildOutput"
-            AfterTargets="CopyFilesToOutputDirectory">
+            AfterTargets="CopyFilesToOutputDirectory"
+            Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
         <ItemGroup>
             <_ContentForBuild Include="$(ContentSourceDirectory)\**\*" />
         </ItemGroup>

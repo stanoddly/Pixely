@@ -24,7 +24,7 @@ appBuilder.ConfigureContent(contentSourceBuilder => contentSourceBuilder
 
 Patterns are resolved relative to `AppContext.BaseDirectory`. Matching directory names are sorted ordinally. When multiple sources contain the same content path, the source added last wins.
 
-`UseDefaultContent()` loads `Content.pk3` beside the application when present, then adds a loose `Content` directory so it takes precedence over the archive. When neither exists beside the application, it resolves the `Content` directory from the project tree for development. In the browser there is no project tree, so it throws instead and names the `PixelyBrowserVfsFile` item (see [Browser](#browser)).
+`UseDefaultContent()` loads `Content.pk3` beside the application when present, then adds a loose `Content` directory so it takes precedence over the archive. When neither exists beside the application, it resolves the `Content` directory from the project tree for development. In the browser there is no project tree, so it throws instead and names the `PixelyBrowserVfsFile` item (see [Browser](#browser)). `AddProjectDirectory` throws there too.
 
 ## Build and publish policy
 
@@ -58,7 +58,7 @@ A browser app has no directory beside the executable. Its file system is in memo
 </PropertyGroup>
 
 <Target Name="PackageBrowserContent">
-    <ZipDirectory SourceDirectory="$(ContentSourceDirectory)" DestinationFile="$(IntermediateOutputPath)Content.pk3" Overwrite="true" />
+    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/Content" DestinationFile="$(IntermediateOutputPath)Content.pk3" Overwrite="true" />
     <ItemGroup>
         <PixelyBrowserVfsFile Include="$(IntermediateOutputPath)Content.pk3" />
         <FileWrites Include="$(IntermediateOutputPath)Content.pk3" />
@@ -70,7 +70,7 @@ A browser app has no directory beside the executable. Its file system is in memo
 - A target with `BeforeTargets="PixelyBrowserContent"` works as a producer too. One with `AfterTargets` is too late to add an item. Invoked on its own, `PixelyBrowserContent` is not a complete build: the manifest and the boot config come from the rest of the static web assets resolution.
 - A target that produces the file adds the item itself, because `$(IntermediateOutputPath)` is not set in the project body. A file that already exists in the source tree can be an item in the project body.
 - Zip on every build. `Inputs` and `Outputs` cannot see a deleted source file, so an incremental archive keeps it.
-- `TargetPath` defaults to the file name. It is a relative path of segments made of `A-Z`, `a-z`, `0-9`, `.`, `_` and `-`, separated by `/`, without `.` or `..` segments and not below `_framework/` or `_content/`. Two items cannot share a `TargetPath`, and neither can a `TargetPath` and a static web asset defined before this step: a `wwwroot` file, a linked asset or a file of the default page, such as `index.html`. Both checks ignore case, although the browser's file system does not, because MSBuild batches item metadata ignoring case. Each of these is error PIXELY0011. An asset that a later target adds is not checked; its collision fails the build later, with the static web assets SDK's message.
+- `TargetPath` defaults to the file name. It is a relative path of segments made of `A-Z`, `a-z`, `0-9`, `.`, `_` and `-`, separated by `/`, without `.` or `..` segments and not below `_framework/` or `_content/`. Two items cannot share a `TargetPath`, and neither can a `TargetPath` and a static web asset defined before this step: a `wwwroot` file, a linked asset or a file of the default page, such as `index.html`. A `TargetPath` also cannot be the relative path of an asset of a referenced project or package, such as `Content.pk3` for its `wwwroot/Content.pk3`, because the static web assets SDK finds the file by its relative path. Both checks ignore case, although the browser's file system does not, because MSBuild batches item metadata ignoring case. Each of these is error PIXELY0011. An asset that a later target adds is not checked; its collision fails the build later, with the static web assets SDK's message.
 - An item whose file does not exist when the browser assets are defined is error PIXELY0010.
 - The item applies to browser builds only. A desktop build ignores it, and neither a design-time build nor a publish with `--no-build` runs `PixelyBrowserContent` or the targets hooked to it.
 - The browser downloads the whole file into memory before `Main` starts, so its size adds to startup time and memory use. A publish serves it as it is, without a compressed copy.

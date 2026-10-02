@@ -915,6 +915,18 @@ public class PackageIntegrationTests
         }
     }
 
+    // ComputeWasmVfs matches every static web asset by relative path, so the asset a referenced project serves below _content/ collides too.
+    [Test]
+    public async Task BrowserBuildRejectsTargetPathOfAReferencedProjectAsset()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentLibrary");
+
+        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: ["BrowserContentConsumerExtraFile=shared.txt", "BrowserContentConsumerLibraryAsset=true"]);
+        Assert.That(output, Does.Contain("error PIXELY0011").And.Contain("TargetPath shared.txt is already the path"));
+    }
+
     [Test]
     public async Task BrowserAppWithoutContentArchiveNamesTheArchiveInTheError()
     {

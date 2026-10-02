@@ -19,11 +19,12 @@
         <NativeFileReference Include="native.c" Condition="'$(BrowserContentConsumerNative)' == 'true'" />
     </ItemGroup>
 
-    <!-- Variants PackageIntegrationTests selects by property: a file beside the archive, a file nothing produces, and a linked static web asset. -->
+    <!-- Variants PackageIntegrationTests selects by property: a file beside the archive, a file nothing produces, a linked static web asset, and a referenced project's asset. -->
     <ItemGroup>
         <PixelyBrowserVfsFile Include="Extras\first.txt" TargetPath="$(BrowserContentConsumerExtraFile)" Condition="'$(BrowserContentConsumerExtraFile)' != ''" />
         <PixelyBrowserVfsFile Include="Extras\missing.txt" Condition="'$(BrowserContentConsumerMissingFile)' == 'true'" />
         <Content Include="Extras\first.txt" Link="wwwroot\linked.txt" Condition="'$(BrowserContentConsumerLinkedAsset)' == 'true'" />
+        <ProjectReference Include="..\BrowserContentLibrary\BrowserContentLibrary.csproj" Condition="'$(BrowserContentConsumerLibraryAsset)' == 'true'" />
     </ItemGroup>
 
     <!-- The browser branch of the Nerudova policy: zipped on every build, so a file deleted from Content leaves the archive. -->
