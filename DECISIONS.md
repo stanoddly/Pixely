@@ -11,7 +11,7 @@ On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain te
 - Apple documents that `nextDrawable`, which SDL's Metal acquire calls for hidden windows too, waits up to one second when no drawable is free. Measured on GitHub's macOS 14.8 and 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16: for a minimized and for a hidden window the acquire never blocked, always returned a texture, and memory stayed flat.
 - A hidden or minimized window paces nothing. Vulkan returns no texture at once for a hidden window, and on macOS 14 Metal returned 300 textures in 0.02 s for a minimized one. Without the wait the loop spins and every update records uploads for frames nobody sees. A driver that reports a zero extent for a minimized window, such as NVIDIA on Win32, makes each Vulkan acquire wait for the device to go idle instead (#597).
 
-Cost: on Metal and D3D12, a hidden or minimized window presents an undrawn texture every frame, and so does a minimized Vulkan window whose surface keeps a non-zero size. An app without window rendering must submit `GpuMemorySystem` itself, and with a claimed window it never requests a texture, so on Vulkan it keeps finished work until it waits on a fence. D3D12 was not measured. The wait is a fixed 16 ms, not the display's refresh rate.
+Cost: on Metal and D3D12, a hidden or minimized window presents an undrawn texture every frame, and so does a minimized Vulkan window whose surface keeps a non-zero size. D3D12 was not measured. The wait is a fixed 16 ms, not the display's refresh rate.
 
 ## 2026-09-29: Buffer updates cycle the GPU buffer
 

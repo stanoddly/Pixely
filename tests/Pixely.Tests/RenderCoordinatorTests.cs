@@ -221,19 +221,19 @@ public class RenderCoordinatorTests
     [Test]
     public void AppRender_WithoutCoordinators_CountsAsDrawn()
     {
-        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry()), Is.True);
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(), null), Is.True);
     }
 
     [Test]
     public void AppRender_WhenAnyCoordinatorDraws_CountsAsDrawn()
     {
-        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, true)), Is.True);
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, true), null), Is.True);
     }
 
     [Test]
     public void AppRender_WhenNoCoordinatorDraws_CountsAsUndrawn()
     {
-        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, false)), Is.False);
+        Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, false), null), Is.False);
     }
 
     private static ServiceRegistry<IRenderCoordinator> CreateCoordinatorRegistry(params bool[] drawn)

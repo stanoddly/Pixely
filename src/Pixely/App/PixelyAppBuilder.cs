@@ -1,5 +1,6 @@
 using Pixely.Content;
 using Pixely.DependencyInjection;
+using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
@@ -103,6 +104,7 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<AppControl>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
-            serviceProvider.GetRequiredService<StageManager>());
+            serviceProvider.GetRequiredService<StageManager>(),
+            serviceProvider.GetService<GpuMemorySystem>());
     }
 }
