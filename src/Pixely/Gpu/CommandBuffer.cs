@@ -32,11 +32,12 @@ public class CommandBuffer: IDisposable
     public void Submit()
     {
         ThrowIfDisposed();
+        // SDL invalidates the command buffer even when the submit fails, so it cannot be retried or cancelled.
+        Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = SdlGpuCommandBuffer;
+        SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
         unsafe
         {
-            // TODO: error handling
-            SDL3.SDL_SubmitGPUCommandBuffer(SdlGpuCommandBuffer);
-            SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
         }
     }
 
