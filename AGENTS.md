@@ -26,6 +26,7 @@
 - `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, the Pixely conventions rule set, adding other rule sets
 - `docs/logging.md` - Pixely.Logging: registering ZLogger through the service collection, the application logger, logging calls, shutdown and durability
 - `docs/window-rendering.md` - Single- and multi-window rendering: ViewScope, UseDefaultRendering, custom render contexts and window providers, scoped input, activating mouse clicks
+- `docs/custom-render-coordinators.md` - Writing an IRenderCoordinator: submitting within the frame, uploads before the frame, requesting a swapchain texture every frame on the desktop and the window-claim release, the browser differences
 
 ## Maintenance
 

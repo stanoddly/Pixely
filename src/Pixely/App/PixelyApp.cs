@@ -145,7 +145,8 @@ public class PixelyApp : IPixelyApp
     // the device's only coordinator renders a minimized window that the acquire does not claim. Each device frees its own
     // work, so a request for one device does not keep another's windows claimed. A coordinator claims its window again on its
     // next acquire. The browser keeps the claims: the WebGPU fork frees finished work on every submit, and its release tears
-    // down the canvas surface.
+    // down the canvas surface. Each claimed window is checked against every registered window, which is quadratic in the
+    // number of windows but allocates nothing; apps have a handful of windows.
     private static void ReleaseClaimsWithoutSwapchainRequest(WindowRegistry windowRegistry)
     {
         ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows = windowRegistry.Windows;

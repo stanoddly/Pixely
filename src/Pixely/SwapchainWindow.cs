@@ -108,9 +108,11 @@ public sealed partial class SwapchainWindow : Window
 
     // Called by the frame loop after a frame in which no window of this window's device requested a swapchain texture, so a
     // window that stopped being rendered, such as one whose rendering stage was unloaded, does not keep SDL's Vulkan backend
-    // from freeing finished work; see EnsureClaimed. SDL waits for the device to go idle before it releases a window, so this
-    // waits once each time the device's windows stop requesting textures. The next use of the swapchain claims the window
-    // again, which recreates the swapchain.
+    // from freeing finished work; see EnsureClaimed. SDL waits for the device to go idle every time it releases a window. The
+    // frame loop releases windows one by one, so releasing several waits once per window, but only the first wait blocks on
+    // submitted work: nothing is submitted between the releases, so the others find the device idle. This happens on the
+    // frame the device's windows stop requesting textures, not on the frames after it. The next use of the swapchain claims
+    // the window again, which recreates the swapchain.
     internal void ReleaseClaim()
     {
         if (!_claimed)

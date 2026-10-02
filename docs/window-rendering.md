@@ -75,9 +75,10 @@ no render coordinator runs:
   `TryWaitAndAcquireSwapchainTexture`. On the desktop, after a frame in which no window of a device requested a
   swapchain texture, every window claimed for that device is released. With a claimed window, SDL's Vulkan backend
   frees finished GPU work only on a submit that requested a swapchain texture, or on a fence wait, so a claimed window
-  nothing renders would keep that work. SDL waits for the device to go idle when it releases a window, so this waits
-  once each time the device's windows stop requesting textures, and the next coordinator's acquire claims the window
-  again and recreates its swapchain. The browser keeps the claims, because its WebGPU backend frees finished work on
+  nothing renders would keep that work. SDL waits for the device to go idle every time it releases a window. Releasing
+  several windows waits once per window, but only the first wait blocks on submitted work, and it happens only on the
+  frame the device's windows stop requesting textures. The next coordinator's acquire claims the window again and
+  recreates its swapchain. The browser keeps the claims, because its WebGPU backend frees finished work on
   every submit.
 - While a window is released, `ColorTargetFormat` returns the format SDL reported last, so reading it does not claim
   the window again; while it is claimed, it returns SDL's current format. SDL picks the format again whenever it creates
