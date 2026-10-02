@@ -278,8 +278,9 @@ with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no textur
 `requestAnimationFrame` paces the frames anyway.
 
 Shaders reach the browser as the WGSL the shader compiler emits beside SPIR-V, DXIL and MSL (see
-[Shaders](shaders.md), WGSL bindings). A content directory beside the executable has no browser
-counterpart yet, so the tutorial embeds the generated shaders in the assembly, on both hosts.
+[Shaders](shaders.md), WGSL bindings). The tutorial embeds the generated shaders in the assembly, on both
+hosts; an app can ship them in `Content.pk3` in the browser's file system instead (see
+[Content distribution](content-distribution.md#browser)).
 
 ### The frame loop
 
@@ -306,7 +307,9 @@ SDL build, which is a separate piece of work.
 In a browser the page is the screen: the window fills it and follows the browser window's size, so
 `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
 `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as
-on the desktop. `UseDefaultContent()` and file logging are not supported in the browser yet.
+on the desktop. `UseDefaultContent()` loads `Content.pk3` from the browser's file system when the
+project adds it as a `PixelyBrowserVfsFile` (see [Content distribution](content-distribution.md#browser)).
+File logging is not supported in the browser yet.
 
 ### The page
 

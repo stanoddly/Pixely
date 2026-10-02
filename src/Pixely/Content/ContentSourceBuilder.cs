@@ -60,6 +60,13 @@ public class ContentSourceBuilder
         }
         else if (!archiveExists)
         {
+            // A browser app has no project tree to search; its content reaches the file system only as a PixelyBrowserVfsFile.
+            if (OperatingSystem.IsBrowser())
+            {
+                throw new InvalidOperationException(
+                    $"Content not found. Checked '{archivePath}' and '{directoryPath}'. A browser app ships its content as a PixelyBrowserVfsFile with TargetPath {contentDirectory}.pk3.");
+            }
+
             AddProjectDirectory(contentDirectory);
         }
 

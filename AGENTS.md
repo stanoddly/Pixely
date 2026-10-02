@@ -12,7 +12,7 @@
 - `docs/frame-order.md` - Update and render ordering: UpdateOrders/RenderOrders constants, the registration-order tie-break, input order as a separate axis
 - `docs/pipeline-configuration.md` - GraphicsPipelineBuilder API (vertex types, shaders, depth testing)
 - `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages)
-- `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies
+- `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies, `Content.pk3` in the browser's file system with `PixelyBrowserVfsFile`
 - `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
 - `docs/subrenderers.md` - Composing multiple renderers within IRenderer<T> (ordering members, IEnumerable injection)
 - `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, scrolling, views and view models, pointer, wheel and focus routing, text fields, styling

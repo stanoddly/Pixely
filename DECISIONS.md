@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-02: Browser content is a project-owned archive in the wasm file system
+
+A browser app ships `Content.pk3` as a `PixelyBrowserVfsFile`: a static web asset that the runtime downloads and writes to its in-memory file system below `/` before `Main`. `AddDefaultContent` and `AddZip` load it unchanged, so `UseDefaultContent()` works on both hosts.
+
+- The WebAssembly SDK's `WasmFilesToIncludeInFileSystem` only tags files that are already static web assets, and only in the build. The nested publish of a relinked runtime and a publish without build skip that step and reload the build manifest. So Pixely defines the asset and tags it itself, and also lists it in that item, because only the SDK's step reaches the build boot config.
+- Static web assets are resolved before `CopyFilesToOutputDirectory`, so the archive is zipped from the project's content tree. The Pixely target depends on `Compile`, so generated shaders exist however the target is reached.
+- The project packages the archive, as on the desktop: content producers do not choose a distribution, and the consuming project does.
+
+Cost: the whole archive downloads into memory before `Main` starts, so its size is startup time and memory, and nothing streams. A browser build zips and copies the archive on every build, because incremental inputs cannot see a deleted file. Two target paths cannot differ only in case, although the file system tells them apart: MSBuild batches item metadata ignoring case, and both the SDK's step and Pixely's tagging batch on the target path.
+
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 
 On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. In the browser it skips a window that is not renderable, since SDL's browser driver does not hide the canvas. When no texture comes back, it submits the command buffer instead of cancelling it, except in the browser, where the WebGPU fork returns no texture while its submissions in flight reach the frame limit and a submission would only hold a slot. The coordinator also submits the command buffer after disposing the context, so no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or cancel the command buffer, and a different acquire needs a custom `IRenderCoordinator`. Providers are called only for a frame that is drawn, so a frame nobody sees is submitted without a context. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event, except in the browser.
