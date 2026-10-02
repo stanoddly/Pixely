@@ -117,8 +117,9 @@ async function fetchBrotli(type, defaultUri, integrity) {
         return fetch(defaultUri, { cache: 'no-cache', integrity });
     }
     const headers = { 'Content-Type': type === 'dotnetwasm' ? 'application/wasm' : 'application/octet-stream' };
-    // A server that labels the file Content-Encoding: br has had the browser decompress it already.
-    if (compressed.headers.get('Content-Encoding') === 'br') {
+    // A server that labels the file Content-Encoding: br has had the browser decompress it already. Codings are case-insensitive
+    // tokens in a list.
+    if (/(^|,)\s*br\s*(,|$)/i.test(compressed.headers.get('Content-Encoding') ?? '')) {
         return new Response(compressed.body, { headers });
     }
     brotliStreams ??= supportsBrotliStreams();
