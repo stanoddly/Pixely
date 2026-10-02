@@ -55,99 +55,42 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void Execute_WithNoRenderers_DoesNotThrow()
+    public void Render_WithNoRenderers_DoesNotThrow()
     {
         PixelyAppBuilder builder = CreateBuilder(new List<string>());
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        Assert.DoesNotThrow(() => renderCoordinator.Execute());
+        Assert.DoesNotThrow(() => Render(renderCoordinator));
     }
 
     [Test]
-    public void Execute_WhenFrameCannotBeAcquired_DoesNotCreateContextOrRender()
-    {
-        List<string> calls = new();
-        TestRenderContextSource renderContextSource = new();
-        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource, canAcquireFrame: false);
-        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
-        ServiceProvider provider = builder.BuildServiceProvider();
-        IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
-
-        bool drawn = renderCoordinator.Execute();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(drawn, Is.False);
-            Assert.That(calls, Is.Empty);
-            Assert.That(renderContextSource.LastWindow, Is.Null);
-        });
-    }
-
-    [Test]
-    public void Execute_WhenWindowIsNotRenderable_CreatesAndDisposesContextWithoutRendering()
-    {
-        List<string> calls = new();
-        TestRenderContextSource renderContextSource = new();
-        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource, renderable: false);
-        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
-        ServiceProvider provider = builder.BuildServiceProvider();
-        IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
-
-        bool drawn = renderCoordinator.Execute();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(drawn, Is.False);
-            Assert.That(calls, Is.Empty);
-            Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
-        });
-    }
-
-    [Test]
-    public void Execute_WithRenderableWindow_ReportsDrawn()
-    {
-        List<string> calls = new();
-        PixelyAppBuilder builder = CreateBuilder(calls);
-        builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("root", calls));
-        ServiceProvider provider = builder.BuildServiceProvider();
-
-        bool drawn = provider.GetRequiredService<IRenderCoordinator>().Execute();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(drawn, Is.True);
-            Assert.That(calls, Is.EqualTo(new[] { "root" }));
-        });
-    }
-
-    [Test]
-    public void Execute_WithRenderContext_DisposesRenderContext()
+    public void Render_DisposesRenderContext()
     {
         TestRenderContextSource renderContextSource = new();
         PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
         ServiceProvider provider = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(renderContextSource.LastRenderContext?.IsDisposed, Is.True);
     }
 
     [Test]
-    public void Execute_PassesManagedWindowToRenderContextProvider()
+    public void Render_PassesManagedWindowToRenderContextProvider()
     {
         TestRenderContextSource renderContextSource = new();
         PixelyAppBuilder builder = CreateBuilder(new List<string>(), renderContextSource);
         ServiceProvider provider = builder.BuildServiceProvider();
 
-        provider.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(provider.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(renderContextSource.LastWindow, Is.SameAs(provider.GetRequiredService<Window>()));
     }
 
     [Test]
-    public void Execute_RendersOnlyMatchingViewScope()
+    public void Render_RendersOnlyMatchingViewScope()
     {
         ViewScope viewScope = new(7);
         List<string> calls = new();
@@ -156,7 +99,7 @@ public class RenderCoordinatorTests
         builder.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("other", calls));
         ServiceProvider provider = builder.BuildServiceProvider();
 
-        provider.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(provider.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(calls, Is.EqualTo(new[] { "matching" }));
     }
@@ -178,7 +121,7 @@ public class RenderCoordinatorTests
         childCollection.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         ServiceProvider child = childCollection.BuildServiceProvider();
 
-        child.GetRequiredService<IRenderCoordinator>().Execute();
+        Render(child.GetRequiredService<IRenderCoordinator>());
 
         Assert.That(renderContextSource.LastWindow, Is.SameAs(window));
     }
@@ -195,7 +138,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("child", calls));
         using ServiceProvider child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child" }));
     }
@@ -213,7 +156,7 @@ public class RenderCoordinatorTests
         ServiceProvider child = childCollection.BuildServiceProvider();
 
         child.Dispose();
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.Empty);
     }
@@ -231,7 +174,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new TestRenderer("child", calls, 5));
         using ServiceProvider child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
@@ -250,7 +193,7 @@ public class RenderCoordinatorTests
         childCollection.AddSingleton<IRenderer<TestRenderContext>>(new DisposingRenderer("child", calls, () => child!, 0));
         child = childCollection.BuildServiceProvider();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
@@ -265,12 +208,12 @@ public class RenderCoordinatorTests
         parent = builder.BuildServiceProvider();
         IRenderCoordinator renderCoordinator = parent.GetRequiredService<IRenderCoordinator>();
 
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "root" }));
 
         calls.Clear();
-        renderCoordinator.Execute();
+        Render(renderCoordinator);
 
         Assert.That(calls, Is.EqualTo(new[] { "child", "root" }));
     }
@@ -309,17 +252,22 @@ public class RenderCoordinatorTests
         public bool Execute() => drawn;
     }
 
+    // Runs the part of a frame after the GPU acquire, which needs no GPU device. The test contexts never use the command buffer
+    // or the texture.
+    private static void Render(IRenderCoordinator renderCoordinator)
+    {
+        ((RenderCoordinator<TestRenderContext>)renderCoordinator).Render(null!, null!);
+    }
+
     private static PixelyAppBuilder CreateBuilder(
         List<string> calls,
         TestRenderContextSource? renderContextSource = null,
-        ViewScope viewScope = default,
-        bool renderable = true,
-        bool canAcquireFrame = true)
+        ViewScope viewScope = default)
     {
         PixelyAppBuilder builder = new();
         builder.AddSingleton(CreateGpuDeviceStub());
         builder.UseWindowRendering<TestRenderContext>(viewScope);
-        builder.AddSingleton(CreateWindow(viewScope, 42, renderable, canAcquireFrame));
+        builder.AddSingleton(CreateWindow(viewScope, 42));
         builder.AddSingleton(renderContextSource ?? new TestRenderContextSource());
         builder.AddAlias<RenderContextProvider<TestRenderContext>, TestRenderContextSource>();
         builder.AddSingleton(new GpuMemorySystem(null!));
@@ -333,11 +281,9 @@ public class RenderCoordinatorTests
         return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId, bool renderable = true, bool canAcquireFrame = true)
+    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
-        TestWindow window = (TestWindow)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
-        window.Renderable = renderable;
-        window.CanAcquireFrame = canAcquireFrame;
+        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
         SetBackingField(window, nameof(Window.ViewScope), viewScope);
         SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
@@ -350,7 +296,7 @@ public class RenderCoordinatorTests
     }
 
     // Created uninitialised, so it never reaches SDL. The constructor exists only because a derived class must name a base
-    // constructor to compile. A frame it acquires has no command buffer or texture: the test contexts never use them.
+    // constructor to compile.
     private sealed class TestWindow : Window
     {
         private TestWindow()
@@ -358,21 +304,9 @@ public class RenderCoordinatorTests
         {
         }
 
-        public bool Renderable { get; set; }
-
-        public bool CanAcquireFrame { get; set; }
-
-        public override bool IsRenderable => Renderable;
-
         public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
 
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
-
-        internal override bool TryAcquireFrame(GpuDevice gpuDevice, out FrameContext frameContext)
-        {
-            frameContext = new FrameContext { Window = this, CommandBuffer = null!, SwapchainTexture = null! };
-            return CanAcquireFrame;
-        }
     }
 
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>

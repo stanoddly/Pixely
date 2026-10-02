@@ -49,73 +49,92 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         }
 #endif
 
-        // The coordinator, not the provider, acquires the command buffer and swapchain texture, so no provider can skip the
-        // request. On the desktop they are acquired every frame, even for a window that is not renderable, and the command
-        // buffer is submitted even when no texture comes back. SDL's Vulkan backend frees finished GPU work only on a submit
-        // whose command buffer requested a swapchain texture, or on a fence wait. Without that request, every upload would
-        // keep its buffer in use, and every later update of the buffer would cycle it into a new full-size copy. Metal and
-        // D3D12 free finished work on every submit.
+        // The coordinator, not the provider or the context, acquires and submits the command buffer and swapchain texture, so
+        // no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or
+        // cancel the command buffer. On the desktop they are acquired every frame, even
+        // for a window that is not renderable, and the command buffer is submitted even when no texture comes back. SDL's
+        // Vulkan backend frees finished GPU work only on a submit whose command buffer requested a swapchain texture, or on a
+        // fence wait. Without that request, every upload would keep its buffer in use, and every later update of the buffer
+        // would cycle it into a new full-size copy. Metal and D3D12 free finished work on every submit.
         //
         // Apple documents that CAMetalLayer.nextDrawable, which SDL's Metal acquire calls without checking the window's state,
         // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
         // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
         // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
-        if (!_window.TryAcquireFrame(_gpuDevice, out FrameContext frameContext))
+        CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+        bool hasTexture;
+        SwapchainTexture swapchainTexture;
+        try
         {
-            // In the browser, pending uploads wait for the next drawn frame instead: a submission there takes one of the
-            // frame-limit slots that kept the acquire from returning a texture.
-#if !BROWSER
-            _gpuMemorySystem.Submit();
+            hasTexture = _window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture);
+        }
+        catch
+        {
+            commandBuffer.Cancel();
+            throw;
+        }
+
+        if (!hasTexture)
+        {
+#if BROWSER
+            // The WebGPU fork returns no texture while its submissions in flight reach the frame limit, counting empty ones,
+            // so a submission here would hold a slot until the frame ahead of it finishes. Pending uploads wait for the next
+            // drawn frame instead.
+            commandBuffer.Cancel();
+#else
+            SubmitUploadsAndFrame(commandBuffer);
 #endif
             return false;
         }
 
-        TRenderContext renderContext;
+        // A frame nobody sees, such as one of a hidden or minimized window on Metal or D3D12, is submitted without a context.
+        bool isRenderable = false;
         try
         {
-            renderContext = _renderContextProvider.CreateRenderContext(frameContext);
+            isRenderable = _window.IsRenderable;
+            if (isRenderable)
+            {
+                Render(commandBuffer, swapchainTexture);
+            }
         }
-        catch
+        finally
         {
-            // The context never took ownership, and a command buffer with an acquired swapchain texture cannot be cancelled.
-            // Uploads go first, as on every path: work the provider recorded may read them.
-            // The frame is submitted even when submitting the uploads throws, so the acquired texture is not abandoned.
-            try
-            {
-                _gpuMemorySystem.Submit();
-            }
-            finally
-            {
-                frameContext.CommandBuffer.Submit();
-            }
-
-            throw;
+            // Even when the window, the provider or a renderer throws: a draw recorded before the throw may read a buffer whose
+            // update is still pending, and a command buffer with an acquired swapchain texture cannot be cancelled.
+            SubmitUploadsAndFrame(commandBuffer);
         }
 
-        using (renderContext)
+        return isRenderable;
+    }
+
+    // Builds the frame's context, runs the window's renderers and disposes the context. Separate from Execute so tests can
+    // run it without a GPU device.
+    internal void Render(CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
+    {
+        FrameContext frameContext = new() { Window = _window, CommandBuffer = commandBuffer, SwapchainTexture = swapchainTexture };
+        using (TRenderContext renderContext = _renderContextProvider.CreateRenderContext(frameContext))
         {
-            bool isRenderable = _window.IsRenderable;
-            try
+            foreach (IRenderer<TRenderContext> renderer in _renderers)
             {
-                if (isRenderable)
+                if (renderer.ViewScope == _window.ViewScope)
                 {
-                    foreach (IRenderer<TRenderContext> renderer in _renderers)
-                    {
-                        if (renderer.ViewScope == _window.ViewScope)
-                        {
-                            renderer.Render(renderContext);
-                        }
-                    }
+                    renderer.Render(renderContext);
                 }
             }
-            finally
-            {
-                // Before disposing the context submits its command buffer, even when a renderer throws: a draw recorded before
-                // the throw may read a buffer whose update is still pending, and with cycling that copy is otherwise unwritten.
-                _gpuMemorySystem.Submit();
-            }
+        }
+    }
 
-            return isRenderable;
+    // Uploads go first, because the frame's work may read them. The frame is submitted even when submitting the uploads
+    // throws, so an acquired swapchain texture is not abandoned.
+    private void SubmitUploadsAndFrame(CommandBuffer commandBuffer)
+    {
+        try
+        {
+            _gpuMemorySystem.Submit();
+        }
+        finally
+        {
+            commandBuffer.Submit();
         }
     }
 }
