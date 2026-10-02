@@ -19,9 +19,10 @@
         <NativeFileReference Include="native.c" Condition="'$(BrowserContentConsumerNative)' == 'true'" />
     </ItemGroup>
 
-    <!-- Variants PackageIntegrationTests selects by property: a file beside the archive, a file nothing produces, a linked static web asset, and a referenced project's asset. -->
+    <!-- Variants PackageIntegrationTests selects by property: a file beside the archive, a file nothing produces, metadata the item must ignore, a linked static web asset, and a referenced project's asset. -->
     <ItemGroup>
         <PixelyBrowserVfsFile Include="Extras\first.txt" TargetPath="$(BrowserContentConsumerExtraFile)" Condition="'$(BrowserContentConsumerExtraFile)' != ''" />
+        <PixelyBrowserVfsFile Update="Extras\first.txt" RelativePath="other/first.txt" CopyToPublishDirectory="Never" Condition="'$(BrowserContentConsumerExtraMetadata)' == 'true'" />
         <PixelyBrowserVfsFile Include="Extras\missing.txt" Condition="'$(BrowserContentConsumerMissingFile)' == 'true'" />
         <Content Include="Extras\first.txt" Link="wwwroot\linked.txt" Condition="'$(BrowserContentConsumerLinkedAsset)' == 'true'" />
         <ProjectReference Include="..\BrowserContentLibrary\BrowserContentLibrary.csproj" Condition="'$(BrowserContentConsumerLibraryAsset)' == 'true'" />

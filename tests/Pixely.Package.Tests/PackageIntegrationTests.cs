@@ -52,6 +52,7 @@ public class PackageIntegrationTests
         "ReversedSdkConsumer",
         "BrowserLoopConsumer",
         "BrowserContentConsumer",
+        "BrowserContentLibrary",
         "MultiTargetConsumer"
     ];
 
@@ -874,7 +875,8 @@ public class PackageIntegrationTests
     }
 
     // Content.pk3 duplicates the archive, content.pk3 too because MSBuild batches ignoring case; index.html is the default page's asset,
-    // with no wwwroot file; the module initializer takes the mandatory fingerprint expression #[.{fingerprint}]!.
+    // with no wwwroot file; the module initializer takes the mandatory fingerprint expression #[.{fingerprint}]!. A quote would break a
+    // property function. Content.pk3/x.pak and index.html/x.pak need a file as a folder, css a folder as a file.
     [TestCase("/abs.pak")]
     [TestCase("C:/abs.pak")]
     [TestCase("../up.pak")]
@@ -887,6 +889,12 @@ public class PackageIntegrationTests
     [TestCase("[ab].pak")]
     [TestCase("_framework/x.pak")]
     [TestCase("_content/x.pak")]
+    [TestCase("_Framework/x.pak")]
+    [TestCase("_framework")]
+    [TestCase("Bob's.pak")]
+    [TestCase("Content.pk3/x.pak")]
+    [TestCase("index.html/x.pak")]
+    [TestCase("css", "css/site.css")]
     [TestCase("Content.pk3")]
     [TestCase("content.pk3")]
     [TestCase("index.html")]
@@ -899,8 +907,9 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("BrowserContentConsumer");
         if (wwwrootFile is not null)
         {
-            Directory.CreateDirectory(Path.Combine(consumerDirectory, "wwwroot"));
-            File.WriteAllText(Path.Combine(consumerDirectory, "wwwroot", wwwrootFile), "// wwwroot fixture\n");
+            string wwwrootPath = Path.Combine(consumerDirectory, "wwwroot", wwwrootFile);
+            Directory.CreateDirectory(Path.GetDirectoryName(wwwrootPath)!);
+            File.WriteAllText(wwwrootPath, "// wwwroot fixture\n");
         }
 
         try
@@ -913,6 +922,18 @@ public class PackageIntegrationTests
         {
             DeleteDirectory(Path.Combine(consumerDirectory, "wwwroot"));
         }
+    }
+
+    // DefineStaticWebAssets prefers a candidate's RelativePath over its parameters, so metadata the item brings along must not reach it.
+    [Test]
+    public async Task BrowserBuildIgnoresOtherMetadataOfAVfsFile()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+
+        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", properties: ["BrowserContentConsumerExtraFile=data/levels.pak", "BrowserContentConsumerExtraMetadata=true"]);
+        Assert.That(File.ReadAllText(Path.Combine(intermediateDirectory, "dotnet.js")), Does.Contain("\"virtualPath\": \"data/levels.pak\""));
     }
 
     // ComputeWasmVfs matches every static web asset by relative path, so the asset a referenced project serves below _content/ collides too.
