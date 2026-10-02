@@ -2,6 +2,20 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-02: Brotli decompression in the page is opt-in
+
+With `PixelyBrowserBrotli=true`, the default `main.js` installs a resource loader that fetches the `.br` copy of `dotnet.native.wasm` and of each assembly and decompresses it in the page. The page uses `DecompressionStream` where it decodes Brotli and google/brotli's JavaScript decoder elsewhere. Without the property nothing changes.
+
+- GitHub Pages sets no custom headers. It compresses `.wasm` with gzip on the fly and serves `.br` files as opaque files, so the browser never uses the Brotli copies a publish writes.
+- Brotli makes the ManyWorlds `_framework/` download 22% smaller than gzip (2.1 MB against 2.6 MB), and 30% smaller with `RunAOTCompilation` (3.6 MB against 5.1 MB).
+- Chrome's `DecompressionStream` has no Brotli, so a decoder in JavaScript is the only way there. It costs 67 KB gzipped, loaded only where it is needed.
+- On a host that sends `Content-Encoding: br` itself, the loader saves nothing and makes Chrome slower, so it is off by default.
+- `main.js` is a static file and cannot read MSBuild properties, so the SDK writes `pixely-options.js` at build time.
+- A missing `.br` file falls back to the original, so a build that was not published keeps working.
+- The decoder is vendored, not loaded from a CDN, so a game does not depend on a third-party host at run time.
+
+Cost: the decompressed files skip the runtime's integrity check. On Chrome, `dotnet.native.wasm` compiles only after it has fully arrived and been decoded, about 220 ms for a 13 MB AOT runtime. A build without `.br` files costs one failed request per file before the original, and the browser logs each one as a console error. Every page requests `pixely-options.js`, with or without the property.
+
 ## 2026-10-02: Browser content is a project-owned archive in the wasm file system
 
 A browser app ships `Content.pk3` as a `PixelyBrowserVfsFile`: a static web asset that the runtime downloads and writes to its in-memory file system below `/` before `Main`. `AddDefaultContent` and `AddZip` load it unchanged, so `UseDefaultContent()` works on both hosts.
