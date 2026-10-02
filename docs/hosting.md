@@ -364,9 +364,10 @@ includes `brotli-decode.js`. For `dotnet.native.wasm` and the assemblies the loa
 Without a `.br` copy, as in a build that was not published, it fetches the original file as the
 runtime would, and the browser logs each missing `.br` file as a failed request in the console. A
 server that falls back to `index.html` for a missing file is detected by the `text/html` content
-type, and one that labels `.br` files with `Content-Encoding: br` gets no second decompression. The runtime checks the integrity hash only of the files it fetches itself, so the
-decompressed files go without it; their names carry a hash of their content. A project with its
-own `main.js` and the property adds `.withResourceLoader(host.loadCompressedResource)` itself.
+type, and one that labels `.br` files with `Content-Encoding: br` gets no second decompression.
+The runtime checks the integrity hash only of the files it fetches itself, so the decompressed
+files go without it; their names carry a hash of their content. A project with its own `main.js`
+and the property adds `.withResourceLoader(host.loadCompressedResource)` itself.
 
 Leave the property off on a host that sends `Content-Encoding: br` itself. The download is the same
 size, and Chrome compiles `dotnet.native.wasm` while it downloads instead of decoding it afterwards.
