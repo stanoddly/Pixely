@@ -17,8 +17,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     where TRenderContext : IRenderContext
 {
     private readonly Window _window;
-    private readonly GpuDevice _gpuDevice;
-    private readonly GpuMemorySystem _gpuMemorySystem;
+    private readonly IRenderCoordinatorGpu _gpu;
     private readonly RenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
 
@@ -28,10 +27,18 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         GpuMemorySystem gpuMemorySystem,
         RenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers)
+        : this(window, new RenderCoordinatorGpu(gpuDevice, gpuMemorySystem), renderContextProvider, renderers)
+    {
+    }
+
+    internal RenderCoordinator(
+        Window window,
+        IRenderCoordinatorGpu gpu,
+        RenderContextProvider<TRenderContext> renderContextProvider,
+        ServiceRegistry<IRenderer<TRenderContext>> renderers)
     {
         _window = window;
-        _gpuDevice = gpuDevice;
-        _gpuMemorySystem = gpuMemorySystem;
+        _gpu = gpu;
         _renderContextProvider = renderContextProvider;
         _renderers = renderers;
     }
@@ -44,24 +51,24 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         // and submit. Pending uploads are still submitted, so their buffers are not cycled on every update while hidden.
         if (!_window.IsRenderable)
         {
-            _gpuMemorySystem.Submit();
+            _gpu.SubmitUploads();
             return false;
         }
 #endif
 
         // The coordinator, not the provider or the context, acquires and submits the command buffer and swapchain texture, so
         // no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or
-        // cancel the command buffer. On the desktop they are acquired every frame, even
-        // for a window that is not renderable, and the command buffer is submitted even when no texture comes back. SDL's
-        // Vulkan backend frees finished GPU work only on a submit whose command buffer requested a swapchain texture, or on a
-        // fence wait. Without that request, every upload would keep its buffer in use, and every later update of the buffer
-        // would cycle it into a new full-size copy. Metal and D3D12 free finished work on every submit.
+        // cancel the command buffer. On the desktop they are acquired every frame, even for a window that is not renderable,
+        // and the command buffer is submitted even when no texture comes back. SDL's Vulkan backend frees finished GPU work
+        // only on a submit whose command buffer requested a swapchain texture, or on a fence wait. Without that request, every
+        // upload would keep its buffer in use, and every later update of the buffer would cycle it into a new full-size copy.
+        // Metal and D3D12 free finished work on every submit.
         //
         // Apple documents that CAMetalLayer.nextDrawable, which SDL's Metal acquire calls without checking the window's state,
         // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
         // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
         // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
-        CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+        CommandBuffer commandBuffer = _gpu.AcquireCommandBuffer();
         bool hasTexture;
         SwapchainTexture swapchainTexture;
         try
@@ -70,7 +77,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         }
         catch
         {
-            commandBuffer.Cancel();
+            _gpu.Cancel(commandBuffer);
             throw;
         }
 
@@ -80,7 +87,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             // The WebGPU fork returns no texture while its submissions in flight reach the frame limit, counting empty ones,
             // so a submission here would hold a slot until the frame ahead of it finishes. Pending uploads wait for the next
             // drawn frame instead.
-            commandBuffer.Cancel();
+            _gpu.Cancel(commandBuffer);
 #else
             SubmitUploadsAndFrame(commandBuffer);
 #endif
@@ -107,8 +114,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         return isRenderable;
     }
 
-    // Builds the frame's context, runs the window's renderers and disposes the context. Separate from Execute so tests can
-    // run it without a GPU device.
+    // Builds the frame's context, runs the window's renderers and disposes the context.
     internal void Render(CommandBuffer commandBuffer, SwapchainTexture swapchainTexture)
     {
         FrameContext frameContext = new() { Window = _window, CommandBuffer = commandBuffer, SwapchainTexture = swapchainTexture };
@@ -130,11 +136,11 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     {
         try
         {
-            _gpuMemorySystem.Submit();
+            _gpu.SubmitUploads();
         }
         finally
         {
-            commandBuffer.Submit();
+            _gpu.Submit(commandBuffer);
         }
     }
 }

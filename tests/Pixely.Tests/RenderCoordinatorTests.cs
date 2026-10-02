@@ -259,6 +259,128 @@ public class RenderCoordinatorTests
         ((RenderCoordinator<TestRenderContext>)renderCoordinator).Render(null!, null!);
     }
 
+    [Test]
+    public void Execute_WhenNoTextureComesBack_SubmitsUploadsAndFrameWithoutCallingProvider()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource, hasTexture: false);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.False);
+            Assert.That(renderContextSource.LastWindow, Is.Null);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenWindowIsNotRenderable_SubmitsFrameWithoutContext()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource, renderable: false);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.False);
+            Assert.That(renderContextSource.LastWindow, Is.Null);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenDrawn_SubmitsUploadsBeforeFrameAfterContextIsDisposed()
+    {
+        List<string> calls = new();
+        TestRenderContextSource renderContextSource = new(calls);
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, renderContextSource);
+
+        bool drawn = coordinator.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn, Is.True);
+            Assert.That(calls, Is.EqualTo(new[] { "acquire", "root", "dispose", "uploads", "submit" }));
+        });
+    }
+
+    [Test]
+    public void Execute_WhenRendererThrows_StillSubmitsUploadsBeforeFrame()
+    {
+        List<string> calls = new();
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(calls, new TestRenderContextSource(calls), new ThrowingRenderer());
+
+        Assert.Throws<InvalidOperationException>(() => coordinator.Execute());
+        Assert.That(calls, Is.EqualTo(new[] { "acquire", "dispose", "uploads", "submit" }));
+    }
+
+    private static RenderCoordinator<TestRenderContext> CreateCoordinator(
+        List<string> calls,
+        TestRenderContextSource renderContextSource,
+        IRenderer<TestRenderContext>? renderer = null,
+        bool renderable = true,
+        bool hasTexture = true)
+    {
+        PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
+        builder.AddSingleton(renderer ?? new TestRenderer("root", calls));
+        ServiceProvider provider = builder.BuildServiceProvider();
+        TestWindow window = (TestWindow)provider.GetRequiredService<Window>();
+        window.Renderable = renderable;
+        window.HasTexture = hasTexture;
+        return new RenderCoordinator<TestRenderContext>(
+            window,
+            new RecordingGpu(calls),
+            renderContextSource,
+            provider.GetRequiredService<ServiceRegistry<IRenderer<TestRenderContext>>>());
+    }
+
+    // Records the coordinator's GPU calls in order. The command buffer is a token the test contexts never use.
+    private sealed class RecordingGpu : IRenderCoordinatorGpu
+    {
+        private readonly List<string> _calls;
+
+        public RecordingGpu(List<string> calls)
+        {
+            _calls = calls;
+        }
+
+        public CommandBuffer AcquireCommandBuffer()
+        {
+            _calls.Add("acquire");
+            return (CommandBuffer)RuntimeHelpers.GetUninitializedObject(typeof(CommandBuffer));
+        }
+
+        public void SubmitUploads()
+        {
+            _calls.Add("uploads");
+        }
+
+        public void Submit(CommandBuffer commandBuffer)
+        {
+            _calls.Add("submit");
+        }
+
+        public void Cancel(CommandBuffer commandBuffer)
+        {
+            _calls.Add("cancel");
+        }
+    }
+
+    private sealed class ThrowingRenderer : IRenderer<TestRenderContext>
+    {
+        public int RenderOrder => 0;
+
+        public void Render(TestRenderContext renderContext)
+        {
+            throw new InvalidOperationException("renderer failed");
+        }
+    }
+
     private static PixelyAppBuilder CreateBuilder(
         List<string> calls,
         TestRenderContextSource? renderContextSource = null,
@@ -304,20 +426,38 @@ public class RenderCoordinatorTests
         {
         }
 
+        // Set by the test: the window is created uninitialised, so initialisers would not run.
+        public bool Renderable { get; set; }
+
+        public bool HasTexture { get; set; }
+
+        public override bool IsRenderable => Renderable;
+
         public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
 
-        public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
+        public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
+        {
+            swapchainTexture = null!;
+            return HasTexture;
+        }
     }
 
     private sealed class TestRenderContextSource : RenderContextProvider<TestRenderContext>
     {
+        private readonly List<string>? _calls;
+
+        public TestRenderContextSource(List<string>? calls = null)
+        {
+            _calls = calls;
+        }
+
         public TestRenderContext? LastRenderContext { get; private set; }
         public Window? LastWindow { get; private set; }
 
         public override TestRenderContext CreateRenderContext(FrameContext frameContext)
         {
             LastWindow = frameContext.Window;
-            LastRenderContext = new TestRenderContext();
+            LastRenderContext = new TestRenderContext(_calls);
             return LastRenderContext;
         }
     }
@@ -328,11 +468,19 @@ public class RenderCoordinatorTests
 
         public Texture ColorTarget => null!;
 
+        private readonly List<string>? _calls;
+
+        public TestRenderContext(List<string>? calls = null)
+        {
+            _calls = calls;
+        }
+
         public bool IsDisposed { get; private set; }
 
         public void Dispose()
         {
             IsDisposed = true;
+            _calls?.Add("dispose");
         }
     }
 
