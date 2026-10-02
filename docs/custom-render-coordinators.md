@@ -10,6 +10,15 @@ A coordinator is an `IRenderCoordinator` singleton. The frame loop calls `Execut
 
 Only one coordinator may acquire a given window's swapchain texture per frame. Two would present the window twice.
 
+## SDL's rules for the frame
+
+`RenderCoordinator<TRenderContext>` keeps these by acquiring, drawing and submitting on one command buffer, on the frame loop's thread, for one window.
+
+- Draw into the swapchain texture only on the command buffer that acquired it. The acquire attaches the texture's synchronization and presentation to that command buffer, and SDL says the texture "should only be referenced by the command buffer used to acquire it" (`SDL_AcquireGPUSwapchainTexture` in `SDL_gpu.h`). On Vulkan, another command buffer would access the image without waiting for it to be acquired.
+- Use one GPU device for the frame: the window must be claimed for the device the command buffer comes from, and the uploads must come from that device's `GpuMemorySystem`. SDL acquires through the command buffer's device and does not check which device claimed the window, so a stage's coordinator that pairs its own device with a root window passes one device's swapchain to another.
+- Acquire the swapchain texture on the thread that created the window, and submit a command buffer on the thread that acquired it (`SDL_AcquireGPUSwapchainTexture` and `SDL_SubmitGPUCommandBuffer` in `SDL_gpu.h`). Pixely runs the frame loop, and with it every coordinator, on that one thread.
+- Draw nothing when the acquire returns no texture, even while `Window.IsRenderable` is true. SDL returns no texture for a hidden window, while too many frames are in flight, and after Vulkan loses the window's surface, among other cases.
+
 ## Submit within the frame
 
 A command buffer that acquired a swapchain texture must be submitted before `Execute()` returns, and never kept for a later frame. SDL does not allow cancelling it once a texture was acquired on it.

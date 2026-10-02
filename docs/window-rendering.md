@@ -76,7 +76,7 @@ no render coordinator runs:
   swapchain texture, every window claimed for that device is released. With a claimed window, SDL's Vulkan backend
   frees finished GPU work only on a submit that requested a swapchain texture, or on a fence wait, so a claimed window
   nothing renders would keep that work. SDL waits for the device to go idle every time it releases a window. Releasing
-  several windows waits once per window, but only the first wait blocks on submitted work, and it happens only on the
+  several windows waits once per window, but only the first wait for each device blocks on submitted work, and it happens only on the
   frame the device's windows stop requesting textures. The next coordinator's acquire claims the window again and
   recreates its swapchain. The browser keeps the claims, because its WebGPU backend frees finished work on
   every submit.
