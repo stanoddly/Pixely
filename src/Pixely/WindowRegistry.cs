@@ -32,9 +32,6 @@ public sealed class WindowRegistry
         });
     }
 
-    // A span over the list itself: it is valid until a window is registered or unregistered.
-    internal ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> Windows => _windows.AsReadOnlySpan();
-
     public Window GetWindow(ViewScope viewScope = default)
     {
         if (TryGetWindow(viewScope, out Window window))

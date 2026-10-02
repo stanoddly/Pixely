@@ -97,14 +97,6 @@ public class PixelyAppBuilder : ServiceCollection
         }
 
         ServiceProvider serviceProvider = BuildServiceProvider();
-        GpuDevice? gpuDevice = serviceProvider.GetService<GpuDevice>();
-        // Not registered as an IRenderCoordinator: the frame loop runs it only while no registered coordinator exists.
-        IRenderCoordinator? fallbackRenderCoordinator = gpuDevice == null
-            ? null
-            : new FallbackRenderCoordinator(
-                gpuDevice,
-                new RenderCoordinatorGpu(gpuDevice, serviceProvider.GetRequiredService<GpuMemorySystem>()),
-                serviceProvider.GetRequiredService<WindowRegistry>());
         return new PixelyApp(
             serviceProvider,
             serviceProvider.GetRequiredService<PixelyFrameClock>(),
@@ -113,6 +105,6 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
             serviceProvider.GetRequiredService<StageManager>(),
-            fallbackRenderCoordinator);
+            serviceProvider.GetService<GpuMemorySystem>());
     }
 }

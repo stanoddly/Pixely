@@ -2,16 +2,6 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-10-02: A fallback coordinator runs the frame while no render coordinator is registered
-
-When the app has a GPU device but no registered `IRenderCoordinator`, `PixelyApp` runs a `FallbackRenderCoordinator` that `PixelyAppBuilder.Build` creates. It submits `GpuMemorySystem`, and for every window claimed for the root's device it acquires a frame, clears it to black and submits it, sharing `RenderCoordinator`'s frame handling.
-
-- Without a coordinator nothing submitted the uploads, so every buffer update cycled a new copy, and a claimed window never requested a swapchain texture, so SDL's Vulkan backend kept finished work until a fence wait.
-- It is decided each frame, not at registration: stages add and remove coordinators at runtime, and two coordinators must not present one window. `UseWindowRendering` also calls `UseGpu()` before it registers its coordinator.
-- Claiming a window only on its swapchain's first use was the alternative. It needed releasing claims whenever no coordinator ran, which waits for the GPU to go idle, and on NVIDIA with Win32 SDL's Vulkan claim of a minimized window returns true without claiming it.
-
-Cost: a visible window nothing renders shows black, and an app that rendered nothing to its windows now presents a frame per window and waits for the display. It covers only the root's device, so a stage with its own device and no window rendering still submits its uploads itself.
-
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 
 On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. In the browser it skips a window that is not renderable, since SDL's browser driver does not hide the canvas. When no texture comes back, it submits the command buffer instead of cancelling it, except in the browser, where the WebGPU fork returns no texture while its submissions in flight reach the frame limit and a submission would only hold a slot. The coordinator also submits the command buffer after disposing the context, so no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or cancel the command buffer, and a different acquire needs a custom `IRenderCoordinator`. Providers are called only for a frame that is drawn, so a frame nobody sees is submitted without a context. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event, except in the browser.
