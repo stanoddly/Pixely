@@ -80,7 +80,8 @@ public partial class PixelyFactory: IDisposable
         return new PlatformInfo(GetCurrentVideoDriver());
     }
 
-    // A null device is an app that registered no rendering: the window is created without being claimed for a device.
+    // A null device is an app that registered no rendering: the window has no swapchain. Otherwise the window claims itself
+    // for the device when its swapchain is first used.
     internal Window CreateWindow(
         ViewScope viewScope,
         GpuDevice? gpuDevice,
@@ -115,7 +116,7 @@ public partial class PixelyFactory: IDisposable
         return window;
     }
 
-    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
+    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(string? title, uint width, uint height, SDL_WindowFlags windowFlags)
     {
         EnsureSdlInitialized();
 
@@ -133,17 +134,6 @@ public partial class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateWindow failed: {SDL3.SDL_GetError()}");
         }
 
-        // A claimed window makes SDL's Vulkan backend free finished GPU work only on a submit that requested a swapchain texture,
-        // or on a fence wait. Without window rendering nothing requests one, so such an app must wait on a fence regularly, and
-        // must also submit GpuMemorySystem itself.
-        unsafe
-        {
-            if (gpuDevice != null && SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
-            {
-                throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
-            }
-        }
-
         uint sdlWindowId;
         unsafe
         {
@@ -151,7 +141,7 @@ public partial class PixelyFactory: IDisposable
 
             if (sdlWindowId == 0)
             {
-                throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"SDL_GetWindowID failed: {SDL3.SDL_GetError()}");
             }
         }
 

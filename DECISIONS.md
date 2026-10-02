@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-02: Windows are claimed for the GPU device on first use and released while nothing renders
+
+`SwapchainWindow` claims its window when `ColorTargetFormat` or `TryWaitAndAcquireSwapchainTexture` is first used, not when it is created. A frame without render coordinators submits `GpuMemorySystem`. On the desktop, after a frame in which no window of a device requested a swapchain texture, every window claimed for that device is released. The acquire does not claim a minimized window, and while a window is released `ColorTargetFormat` returns the format SDL reported last.
+
+- SDL's Vulkan backend frees finished GPU work on a submit only when it requested a swapchain texture or no window is claimed. An app with `UseGpu()` but no window rendering, or whose rendering stage was unloaded, kept a claimed window that never requested one, and nothing submitted its uploads, so every buffer update cycled a new copy.
+- A fallback coordinator that presents a cleared frame for every window while no coordinator is registered was the alternative. It keeps the claim at creation, but makes every window nothing renders show black and present every frame.
+- On NVIDIA with Win32, SDL's Vulkan claim of a minimized window returns true without claiming it. The acquire therefore skips minimized windows, and every claim checks for a swapchain format.
+- The release follows the requests, not the coordinators: a coordinator whose minimized window is not claimed requests no texture, so another claimed window would otherwise stop Vulkan from freeing work while coordinators still run.
+
+Cost: releasing a window waits for the device to go idle, and claiming it again recreates its swapchain, once each time rendering stops and starts. Reading `ColorTargetFormat` first while the window is minimized can still hit the SDL bug and throw, and each such claim leaks SDL's data for the window. SDL picks the swapchain format again when it claims the window again, as it already does after a resize, so a pipeline built while the window was released can stop matching. A stage with its own GPU device and no window rendering still submits its own uploads.
+
 ## 2026-09-30: Every frame requests a swapchain texture, and a frame no window draws waits
 
 On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain texture every frame, even for a hidden or minimized window, and runs renderers only while `Window.IsRenderable` is true. In the browser it skips a window that is not renderable, since SDL's browser driver does not hide the canvas. When no texture comes back, it submits the command buffer instead of cancelling it, except in the browser, where the WebGPU fork returns no texture while its submissions in flight reach the frame limit and a submission would only hold a slot. The coordinator also submits the command buffer after disposing the context, so no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or cancel the command buffer, and a different acquire needs a custom `IRenderCoordinator`. Providers are called only for a frame that is drawn, so a frame nobody sees is submitted without a context. When no window draws a frame, `PixelyApp.RunFrame` waits up to 16 ms for an SDL event, except in the browser.
@@ -11,7 +22,7 @@ On the desktop, `RenderCoordinator` acquires a command buffer and a swapchain te
 - Apple documents that `nextDrawable`, which SDL's Metal acquire calls for hidden windows too, waits up to one second when no drawable is free. Measured on GitHub's macOS 14.8 and 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16: for a minimized and for a hidden window the acquire never blocked, always returned a texture, and memory stayed flat.
 - A hidden or minimized window paces nothing. Vulkan returns no texture at once for a hidden window, and on macOS 14 Metal returned 300 textures in 0.02 s for a minimized one. Without the wait the loop spins and every update records uploads for frames nobody sees. A driver that reports a zero extent for a minimized window, such as NVIDIA on Win32, makes each Vulkan acquire wait for the device to go idle instead (#597).
 
-Cost: on Metal and D3D12, a hidden or minimized window presents an undrawn texture every frame, and so does a minimized Vulkan window whose surface keeps a non-zero size. An app without window rendering must submit `GpuMemorySystem` itself, and with a claimed window it never requests a texture, so on Vulkan it keeps finished work until it waits on a fence. D3D12 was not measured. The wait is a fixed 16 ms, not the display's refresh rate.
+Cost: on Metal and D3D12, a hidden or minimized window presents an undrawn texture every frame, and so does a minimized Vulkan window whose surface keeps a non-zero size. D3D12 was not measured. The wait is a fixed 16 ms, not the display's refresh rate.
 
 ## 2026-09-29: Buffer updates cycle the GPU buffer
 
