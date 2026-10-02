@@ -5,15 +5,13 @@ using SDL;
 namespace Pixely;
 
 /// <summary>
-/// A window whose frames are presented through the swapchain of the GPU device it is claimed for. It is claimed the first time
-/// <see cref="ColorTargetFormat"/> or <see cref="TryWaitAndAcquireSwapchainTexture"/> is used, so a window nothing renders to
-/// stays unclaimed. Without a GPU device, when the app registers no rendering, it has no swapchain, and both throw.
+/// A window whose frames are presented through the swapchain of the GPU device it is claimed for. Without a GPU device, when
+/// the app registers no rendering, it has no swapchain, and <see cref="ColorTargetFormat"/> and
+/// <see cref="TryWaitAndAcquireSwapchainTexture"/> throw.
 /// </summary>
 public sealed partial class SwapchainWindow : Window
 {
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
-
-    private bool _claimed;
 
     internal SwapchainWindow(
         ViewScope viewScope,
@@ -32,7 +30,7 @@ public sealed partial class SwapchainWindow : Window
     {
         get
         {
-            EnsureClaimed();
+            ThrowIfNoGpuDevice();
             unsafe
             {
                 return (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
@@ -42,7 +40,7 @@ public sealed partial class SwapchainWindow : Window
 
     public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
     {
-        EnsureClaimed();
+        ThrowIfNoGpuDevice();
         swapchainTexture = default!;
         uint width, height;
 
@@ -71,7 +69,7 @@ public sealed partial class SwapchainWindow : Window
     {
         unsafe
         {
-            if (_claimed)
+            if (!SdlGpuDevice.IsNull)
             {
                 SDL3.SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
             }
@@ -80,35 +78,11 @@ public sealed partial class SwapchainWindow : Window
         base.Dispose();
     }
 
-    // The claim waits for the swapchain's first use because a claimed window changes when SDL's Vulkan backend frees finished
-    // GPU work: only on a submit whose command buffer requested a swapchain texture, or on a fence wait. With no window claimed
-    // it frees finished work on every submit. A window nothing renders to, as in an app with UseGpu() but no window rendering,
-    // would never request a texture, so it would keep every finished submission and every buffer copy it holds alive.
-    //
-    // On a driver that reports a zero extent for a minimized window, such as NVIDIA on Win32, SDL's Vulkan claim returns true
-    // without claiming the window, and the acquire then fails as for an unclaimed window. A window is normally first used on
-    // the app's first frame, before it can be minimized; a window first rendered later, by a stage that starts while it is
-    // minimized, would hit this.
-    private void EnsureClaimed()
+    private void ThrowIfNoGpuDevice()
     {
         if (SdlGpuDevice.IsNull)
         {
             throw new InvalidOperationException("The window has no GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
         }
-
-        if (_claimed)
-        {
-            return;
-        }
-
-        unsafe
-        {
-            if (!SDL3.SDL_ClaimWindowForGPUDevice(SdlGpuDevice, SdlWindow))
-            {
-                throw new PixelyInitializationException($"SDL_ClaimWindowForGPUDevice failed: {SDL3.SDL_GetError()}");
-            }
-        }
-
-        _claimed = true;
     }
 }

@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Pixely.DependencyInjection;
-using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using SDL;
 
@@ -19,7 +18,7 @@ public class PixelyApp : IPixelyApp
     private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
     private readonly ServiceRegistry<IUpdatable> _updatables;
     private readonly StageManager _stageManager;
-    private readonly GpuMemorySystem? _gpuMemorySystem;
+    private readonly IRenderCoordinator? _fallbackRenderCoordinator;
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
@@ -29,7 +28,7 @@ public class PixelyApp : IPixelyApp
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
         ServiceRegistry<IUpdatable> updatables,
         StageManager stageManager,
-        GpuMemorySystem? gpuMemorySystem)
+        IRenderCoordinator? fallbackRenderCoordinator)
     {
         ServiceProvider = serviceProvider;
         _frameClock = frameClock;
@@ -38,7 +37,7 @@ public class PixelyApp : IPixelyApp
         _renderCoordinators = renderCoordinators;
         _updatables = updatables;
         _stageManager = stageManager;
-        _gpuMemorySystem = gpuMemorySystem;
+        _fallbackRenderCoordinator = fallbackRenderCoordinator;
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -73,7 +72,7 @@ public class PixelyApp : IPixelyApp
         }
 
         // finally render
-        bool drawn = Render(_renderCoordinators, _gpuMemorySystem);
+        bool drawn = Render(_renderCoordinators, _fallbackRenderCoordinator);
 #if !BROWSER
         // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
@@ -105,14 +104,9 @@ public class PixelyApp : IPixelyApp
     }
 
     // Whether a window drew the frame, or the app renders no window at all. An app without render coordinators keeps its
-    // own pacing.
-    //
-    // Render coordinators submit the uploads GpuMemorySystem records. Without one, nothing else would, so the uploads would
-    // never run and every update of a buffer would cycle it into a new copy; they are submitted here instead, after the
-    // updates that recorded them. While any coordinator runs they are left to it: in the browser a coordinator keeps them
-    // pending on purpose on a frame that gets no swapchain texture. Only the root's GpuMemorySystem is submitted here, so a
-    // stage that registers its own GPU device without window rendering must submit its own.
-    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators, GpuMemorySystem? gpuMemorySystem)
+    // own pacing. The fallback coordinator, which an app with a GPU device has, runs only on a frame no other coordinator is
+    // registered for: stages add and remove coordinators at runtime, and two coordinators must not present one window.
+    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators, IRenderCoordinator? fallbackRenderCoordinator)
     {
         bool hasCoordinator = false;
         bool drawn = false;
@@ -122,11 +116,11 @@ public class PixelyApp : IPixelyApp
             drawn |= renderCoordinator.Execute();
         }
 
-        if (!hasCoordinator)
+        if (hasCoordinator)
         {
-            gpuMemorySystem?.Submit();
+            return drawn;
         }
 
-        return drawn || !hasCoordinator;
+        return fallbackRenderCoordinator?.Execute() ?? true;
     }
 }

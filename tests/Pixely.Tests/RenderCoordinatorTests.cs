@@ -219,7 +219,7 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void AppRender_WithoutCoordinators_CountsAsDrawn()
+    public void AppRender_WithoutCoordinatorsOrFallback_CountsAsDrawn()
     {
         Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(), null), Is.True);
     }
@@ -236,6 +236,73 @@ public class RenderCoordinatorTests
         Assert.That(PixelyApp.Render(CreateCoordinatorRegistry(false, false), null), Is.False);
     }
 
+    [Test]
+    public void AppRender_WithoutCoordinators_RunsFallbackAndReturnsItsResult()
+    {
+        StubRenderCoordinator fallback = new(false);
+
+        bool drawn = PixelyApp.Render(CreateCoordinatorRegistry(), fallback);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fallback.ExecuteCount, Is.EqualTo(1));
+            Assert.That(drawn, Is.False);
+        });
+    }
+
+    [Test]
+    public void AppRender_WithCoordinator_SkipsFallback()
+    {
+        StubRenderCoordinator fallback = new(true);
+
+        bool drawn = PixelyApp.Render(CreateCoordinatorRegistry(false), fallback);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fallback.ExecuteCount, Is.Zero);
+            Assert.That(drawn, Is.False);
+        });
+    }
+
+    [Test]
+    public void FallbackExecute_WithoutWindows_SubmitsUploadsAndCountsAsDrawn()
+    {
+        List<string> calls = new();
+        FallbackRenderCoordinator fallback = CreateFallback(calls, new WindowRegistry());
+
+        bool drawn = fallback.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(calls, Is.EqualTo(new[] { "uploads" }));
+            Assert.That(drawn, Is.True);
+        });
+    }
+
+    [Test]
+    public void FallbackExecute_WithOnlyWindowsWithoutSwapchain_SubmitsUploadsWithoutAcquiringFrames()
+    {
+        List<string> calls = new();
+        WindowRegistry windowRegistry = new();
+        windowRegistry.Register((Window)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow)));
+        FallbackRenderCoordinator fallback = CreateFallback(calls, windowRegistry);
+
+        bool drawn = fallback.Execute();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(calls, Is.EqualTo(new[] { "uploads" }));
+            Assert.That(drawn, Is.True);
+        });
+    }
+
+    // The device is created uninitialised: without a swapchain window the fallback never reaches it.
+    private static FallbackRenderCoordinator CreateFallback(List<string> calls, WindowRegistry windowRegistry)
+    {
+        GpuDevice gpuDevice = (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
+        return new FallbackRenderCoordinator(gpuDevice, new RecordingGpu(calls), windowRegistry);
+    }
+
     private static ServiceRegistry<IRenderCoordinator> CreateCoordinatorRegistry(params bool[] drawn)
     {
         PixelyAppBuilder builder = new();
@@ -249,7 +316,13 @@ public class RenderCoordinatorTests
 
     private sealed class StubRenderCoordinator(bool drawn) : IRenderCoordinator
     {
-        public bool Execute() => drawn;
+        public int ExecuteCount { get; private set; }
+
+        public bool Execute()
+        {
+            ExecuteCount++;
+            return drawn;
+        }
     }
 
     // Runs the part of a frame after the GPU acquire, which needs no GPU device. The test contexts never use the command buffer

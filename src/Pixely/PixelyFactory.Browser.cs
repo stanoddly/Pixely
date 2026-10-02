@@ -41,7 +41,7 @@ public partial class PixelyFactory
     private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
         SDL_WindowFlags windowFlags = FillDocumentWindowFlag | SDL_WindowFlags.SDL_WINDOW_RESIZABLE | (config.InitiallyVisible ? 0 : SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(config.Title, DefaultSize.Width, DefaultSize.Height, windowFlags);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, DefaultSize.Width, DefaultSize.Height, windowFlags);
         return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 }
