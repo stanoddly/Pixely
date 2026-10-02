@@ -10,7 +10,7 @@
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <!-- The fixture intentionally stays outside repository-wide central package management. -->
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-        <PixelyBrowserVfsFileDependsOn>$(PixelyBrowserVfsFileDependsOn);PackageBrowserContent</PixelyBrowserVfsFileDependsOn>
+        <PixelyBrowserContentDependsOn>$(PixelyBrowserContentDependsOn);PackageBrowserContent</PixelyBrowserContentDependsOn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -33,6 +33,11 @@
             <PixelyBrowserVfsFile Include="$(IntermediateOutputPath)Content.pk3" />
             <FileWrites Include="$(IntermediateOutputPath)Content.pk3" />
         </ItemGroup>
+    </Target>
+
+    <!-- A hook on the public target that leaves a marker, so the tests can check that design-time builds and publishes without build skip it. -->
+    <Target Name="RecordBrowserContentHook" BeforeTargets="PixelyBrowserContent">
+        <Touch Files="$(IntermediateOutputPath)browser-content-hook.txt" AlwaysCreate="true" />
     </Target>
 
 </Project>

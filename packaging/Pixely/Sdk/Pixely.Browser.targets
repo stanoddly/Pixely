@@ -186,10 +186,12 @@
 
     <!--
       Every definition of ResolveStaticWebAssetsInputsDependsOn keeps the previous value, and the WebAssembly pack's targets, imported
-      after this file, append _AddWasmStaticWebAssets, which runs ComputeWasmVfs; the Pixely target stays ahead of it.
+      after this file, append _AddWasmStaticWebAssets, which runs ComputeWasmVfs; the Pixely target stays ahead of it. A publish
+      without build and a design-time build leave it out of the graph, because MSBuild runs targets that name it in BeforeTargets or
+      AfterTargets even when its own condition is false; both properties are global, so they are known here.
     -->
-    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
-        <ResolveStaticWebAssetsInputsDependsOn>$(ResolveStaticWebAssetsInputsDependsOn);_PixelyDefineBrowserVfsFiles</ResolveStaticWebAssetsInputsDependsOn>
+    <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true' and '$(NoBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'">
+        <ResolveStaticWebAssetsInputsDependsOn>$(ResolveStaticWebAssetsInputsDependsOn);PixelyBrowserContent</ResolveStaticWebAssetsInputsDependsOn>
     </PropertyGroup>
 
     <!--
@@ -198,7 +200,7 @@
       static web asset tagged for the file system. Pixely tags it, so the tag is in the build manifest that the nested publish build
       and a publish without build reload; it is also listed in WasmFilesToIncludeInFileSystem because only ComputeWasmVfs output
       reaches the build boot config. The target depends on Compile, so generated content exists when a producer listed in
-      PixelyBrowserVfsFileDependsOn packages it, also when ResolveStaticWebAssetsInputs is invoked directly.
+      PixelyBrowserContentDependsOn packages it, also when ResolveStaticWebAssetsInputs is invoked directly.
 
       TargetPath is checked against an allowlist because ComputeWasmVfs uses it as a RelativePathFilter pattern, and against the
       served paths of the static web assets defined so far, fingerprint expressions removed, because two assets with one path fail
@@ -206,7 +208,7 @@
       elsewhere. Both checks ignore case although the file system does not: MSBuild batches metadata values ignoring case, so
       ComputeWasmVfs and the tagging below would put two target paths that differ only in case into one batch.
     -->
-    <Target Name="_PixelyDefineBrowserVfsFiles" DependsOnTargets="Compile;$(PixelyBrowserVfsFileDependsOn)"
+    <Target Name="PixelyBrowserContent" DependsOnTargets="Compile;$(PixelyBrowserContentDependsOn)"
             Condition="'$(_PixelyBrowser)' == 'true' and '$(NoBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'">
         <PropertyGroup>
             <_PixelyBrowserVfsTargetPathPattern>^(?!_framework/|_content/)(?!(.*/)?\.{1,2}(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$</_PixelyBrowserVfsTargetPathPattern>
@@ -225,7 +227,7 @@
             <_PixelyCollidingBrowserVfsServedPath Remove="@(_PixelyFreeBrowserVfsServedPath)" />
         </ItemGroup>
         <Error Code="PIXELY0010" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyMissingBrowserVfsFile)' != ''"
-               Text="PixelyBrowserVfsFile @(_PixelyMissingBrowserVfsFile->'%(Identity)', ', ') does not exist; produce it in a target listed in PixelyBrowserVfsFileDependsOn." />
+               Text="PixelyBrowserVfsFile @(_PixelyMissingBrowserVfsFile->'%(Identity)', ', ') does not exist; produce it in a target listed in PixelyBrowserContentDependsOn." />
         <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyInvalidBrowserVfsFile)' != ''"
                Text="PixelyBrowserVfsFile TargetPath @(_PixelyInvalidBrowserVfsFile->'%(TargetPath)', ', ') is not a relative path of segments made of A-Z, a-z, 0-9, '.', '_' and '-' separated by '/', has a '.' or '..' segment, or is below _framework/ or _content/." />
         <Error Code="PIXELY0011" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelyBrowserVfsTargetPath->Distinct()->Count())' != '@(_PixelyBrowserVfsTargetPath->Count())'"

@@ -56,7 +56,7 @@
          resolved before CopyFilesToOutputDirectory, so it is zipped from the project's Content tree, after compilation; on every build,
          so a deleted file leaves it. -->
     <PropertyGroup>
-        <PixelyBrowserVfsFileDependsOn>$(PixelyBrowserVfsFileDependsOn);PackageBrowserContent</PixelyBrowserVfsFileDependsOn>
+        <PixelyBrowserContentDependsOn>$(PixelyBrowserContentDependsOn);PackageBrowserContent</PixelyBrowserContentDependsOn>
     </PropertyGroup>
 
     <Target Name="PackageBrowserContent">

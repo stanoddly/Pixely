@@ -729,7 +729,8 @@ public class PackageIntegrationTests
         Assert.That(ReadArchiveEntries(Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "Content.pk3")), Does.Contain(BrowserContentGeneratedShader));
     }
 
-    // The WebAssembly targets in the same call need a compiled assembly, so a build comes first; its archive is then removed.
+    // The WebAssembly targets in the same call need a compiled assembly, so a build comes first; its archive and the marker of the
+    // fixture's BeforeTargets hook are then removed. Neither the producer nor the hook runs again.
     [Test]
     public async Task DesignTimeBuildDoesNotPackageBrowserContent()
     {
@@ -737,6 +738,9 @@ public class PackageIntegrationTests
         DeleteConsumerOutputs("BrowserContentConsumer");
         await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm");
         string intermediateDirectory = GetBrowserIntermediateDirectory(consumerDirectory);
+        string hookMarkerPath = Path.Combine(intermediateDirectory, BrowserContentHookMarker);
+        Assert.That(File.Exists(hookMarkerPath), Is.True);
+        File.Delete(hookMarkerPath);
         File.Delete(Path.Combine(intermediateDirectory, "Content.pk3"));
         DeleteDirectory(Path.Combine(intermediateDirectory, "pixely-browser-vfs"));
 
@@ -745,6 +749,7 @@ public class PackageIntegrationTests
         {
             Assert.That(File.Exists(Path.Combine(intermediateDirectory, "Content.pk3")), Is.False);
             Assert.That(Directory.Exists(Path.Combine(intermediateDirectory, "pixely-browser-vfs")), Is.False);
+            Assert.That(File.Exists(hookMarkerPath), Is.False);
         });
     }
 
@@ -791,7 +796,8 @@ public class PackageIntegrationTests
     }
 
     // The nested publish of a relinked runtime and a publish without build skip ComputeWasmVfs and reload the build manifest, which keeps
-    // the tag Pixely gave the asset. Without a build nothing packages again: the archive in obj keeps its time stamp.
+    // the tag Pixely gave the asset. Without a build nothing packages again: the archive in obj keeps its time stamp, and the fixture's
+    // BeforeTargets hook leaves no marker.
     [Test]
     public async Task RelinkedBrowserPublishKeepsVfsAfterPublishWithoutBuild()
     {
@@ -806,11 +812,15 @@ public class PackageIntegrationTests
         Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
         string archivePath = Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "Content.pk3");
         DateTime packagedAt = File.GetLastWriteTimeUtc(archivePath);
+        string hookMarkerPath = Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), BrowserContentHookMarker);
+        Assert.That(File.Exists(hookMarkerPath), Is.True);
+        File.Delete(hookMarkerPath);
 
         await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: properties, noBuild: true);
         Assert.Multiple(() =>
         {
             Assert.That(File.GetLastWriteTimeUtc(archivePath), Is.EqualTo(packagedAt));
+            Assert.That(File.Exists(hookMarkerPath), Is.False);
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
         });
         AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
@@ -936,6 +946,7 @@ public class PackageIntegrationTests
 
     private const string BrowserContentArchiveBootEntry = "\"virtualPath\": \"Content.pk3\"";
     private const string BrowserContentGeneratedShader = "shaders/.generated/package.vertex.wgsl";
+    private const string BrowserContentHookMarker = "browser-content-hook.txt";
 
     private static void AssertBrowserContentLoaded(string result)
     {
