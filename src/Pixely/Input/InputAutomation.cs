@@ -135,7 +135,7 @@ internal sealed class InputAutomation
         Gamepad gamepad = GetGamepad();
         foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
         {
-            if (button is not (GamepadButton.Invalid or GamepadButton.Count) && (gamepad.ButtonFlags & (1 << (int)button)) != 0)
+            if (gamepad.IsPressed(button))
             {
                 _gamepadService.OnGamepadButtonEvent(VirtualGamepadId, button, false, GetTimestamp());
             }

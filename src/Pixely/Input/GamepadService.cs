@@ -15,7 +15,12 @@ public class Gamepad
     public Vector2 RightStick { get; set; }
     public float LeftTrigger { get; set; }
     public float RightTrigger { get; set; }
-    public int ButtonFlags { get; internal set; }
+    internal int ButtonFlags { get; set; }
+
+    public bool IsPressed(GamepadButton button)
+    {
+        return (ButtonFlags & (1 << (int)button)) != 0;
+    }
 }
 
 public class GamepadButtonEventArgs : ConsumableInputEventArgs
@@ -215,15 +220,12 @@ public class GamepadService : IGamepadService
             return;
         }
 
-        int buttonState = (1 << (int)button);
-        bool isPressed = (buttonState & gamepad.ButtonFlags) != 0;
-
-        if (isPressed == pressed)
+        if (gamepad.IsPressed(button) == pressed)
         {
             return;
         }
 
-        gamepad.ButtonFlags ^= buttonState;
+        gamepad.ButtonFlags ^= 1 << (int)button;
 
         _buttonEventArgs.Gamepad = gamepad;
         _buttonEventArgs.Button = button;

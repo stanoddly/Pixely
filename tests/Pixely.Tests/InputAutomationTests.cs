@@ -223,14 +223,14 @@ public sealed class InputAutomationTests
     {
         GamepadService gamepadService = new();
         (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
-        List<(string Event, GamepadButton Button, int ButtonFlags)> events = new();
-        gamepadService.SubscribeButtonPress(0, eventArgs => events.Add(("press", eventArgs.Button, eventArgs.Gamepad.ButtonFlags)));
-        gamepadService.SubscribeButtonRelease(0, eventArgs => events.Add(("release", eventArgs.Button, eventArgs.Gamepad.ButtonFlags)));
+        List<(string Event, GamepadButton Button, bool IsPressed)> events = new();
+        gamepadService.SubscribeButtonPress(0, eventArgs => events.Add(("press", eventArgs.Button, eventArgs.Gamepad.IsPressed(eventArgs.Button))));
+        gamepadService.SubscribeButtonRelease(0, eventArgs => events.Add(("release", eventArgs.Button, eventArgs.Gamepad.IsPressed(eventArgs.Button))));
         automation.GamepadConnect();
 
         automation.GamepadButtonPress(GamepadButton.South);
 
-        Assert.That(events, Is.EqualTo(new[] { ("press", GamepadButton.South, 1 << (int)GamepadButton.South), ("release", GamepadButton.South, 0) }));
+        Assert.That(events, Is.EqualTo(new[] { ("press", GamepadButton.South, true), ("release", GamepadButton.South, false) }));
     }
 
     [Test]
