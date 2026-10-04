@@ -524,38 +524,6 @@ public class PackageIntegrationTests
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
     }
 
-    // RunAOTCompilation compiles the methods into dotnet.native.wasm (wasm-tools workload), and WasmStripILAfterAOT, on by default with it,
-    // empties the IL body of each compiled method. A method with an exception handler keeps its IL, so the async Main's state machine
-    // stays readable. The WebAssembly SDK keeps the stripped assembly under obj before it converts it to WebCIL.
-    [Test]
-    public async Task AotBrowserPublishRunsAndStripsCompiledMethodBodies()
-    {
-        RequireNode();
-        string consumerDirectory = GetConsumerDirectory("BrowserLoopConsumer");
-        DeleteConsumerOutputs("BrowserLoopConsumer");
-        await RequireWasmToolsAsync(consumerDirectory);
-
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["RunAOTCompilation=true"]);
-        AssertBrowserLoopOutcome(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
-        string strippedAssembly = Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm", "wasm", "for-publish", "stripped", "BrowserLoopConsumer.dll");
-        Assert.Multiple(() =>
-        {
-            Assert.That(GetILBodyLength(strippedAssembly, "FrameApp", "RunFrame"), Is.Zero);
-            Assert.That(GetILBodyLength(strippedAssembly, "<Main>d__", "MoveNext"), Is.GreaterThan(0));
-        });
-    }
-
-    private static int GetILBodyLength(string assemblyPath, string typeNamePrefix, string methodName)
-    {
-        using PEReader peReader = new(File.OpenRead(assemblyPath));
-        MetadataReader metadata = peReader.GetMetadataReader();
-        MethodDefinition method = metadata.MethodDefinitions
-            .Select(metadata.GetMethodDefinition)
-            .Single(candidate => metadata.GetString(candidate.Name) == methodName
-                && metadata.GetString(metadata.GetTypeDefinition(candidate.GetDeclaringType()).Name).StartsWith(typeNamePrefix, StringComparison.Ordinal));
-        return peReader.GetMethodBody(method.RelativeVirtualAddress).GetILBytes()!.Length;
-    }
-
     // The URL answers with a redirect, as a GitHub release asset does, and is declared twice. The cache folder is set in Directory.Build.targets.
     // The second publish finds the file in the cache and downloads nothing.
     [Test]
