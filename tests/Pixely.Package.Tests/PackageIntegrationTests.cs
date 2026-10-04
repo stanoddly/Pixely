@@ -439,7 +439,8 @@ public class PackageIntegrationTests
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Does.Contain("<canvas id=\"canvas\""));
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "main.js")), Does.Contain("consumer bootstrap"));
             Assert.That(File.Exists(Path.Combine(wwwroot, "pixely-host.js")), Is.True);
-            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = true;"));
+            // The publish merges its boot config into dotnet.js.
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""pixely"":\s*\{\s*""brotli"":\s*true"));
             // dotnet.js is not fingerprinted on disk; the assemblies (WebCIL) are, and the endpoint manifest aliases their plain names.
             Assert.That(File.Exists(Path.Combine(wwwroot, "_framework", "dotnet.js")), Is.True);
             Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "HostedConsumer.*.wasm"), Has.Length.EqualTo(1));
@@ -486,8 +487,8 @@ public class PackageIntegrationTests
         string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
         Assert.Multiple(() =>
         {
-            // Without PixelyBrowserBrotli main.js installs no loader.
-            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = false;"));
+            // Without PixelyBrowserBrotli the loader that main.js installs stays off.
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""pixely"":\s*\{\s*""brotli"":\s*false"));
             Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
             Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
         });
@@ -1388,8 +1389,8 @@ public class PackageIntegrationTests
         return output;
     }
 
-    // Runs the bundle as RunBrowserBundleAsync does, with loadCompressedResource installed through dotnet.withResourceLoader as main.js
-    // installs it, so the runtime consumes the decompressed responses. Under node the runtime's URLs are file paths, so the loader gets
+    // Runs the bundle as RunBrowserBundleAsync does, with the loader installed as main.js installs it, so the publish's boot config turns
+    // it on and the runtime consumes the decompressed responses. Under node the runtime's URLs are file paths, so the loader gets
     // the same file from a local HTTP server; RESULT brotli counts the .br files that server sent.
     private static async Task<string> RunBrowserBundleWithBrotliLoaderAsync(string wwwroot)
     {
@@ -1418,7 +1419,7 @@ public class PackageIntegrationTests
             globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 5);
             const loader = (type, name, defaultUri, integrity) => host.loadCompressedResource(type, name, `${origin}/_framework/${path.basename(defaultUri)}`, integrity);
             try {
-                const exitCode = await dotnet.withResourceLoader(loader).runMain();
+                const exitCode = await dotnet.withModuleConfig({ onConfigLoaded: host.configureCompressedResources }).withResourceLoader(loader).runMain();
                 console.log(`RESULT exit code ${exitCode}`);
             } catch (error) {
                 console.log(`RESULT rejected ${error}`);
@@ -1458,11 +1459,15 @@ public class PackageIntegrationTests
                     response.end('export function BrotliDecode() { return new Int8Array(0); }');
                 } else if (brotli && mode === 'reset') {
                     request.socket.destroy();
+                } else if (brotli && mode === 'truncated') {
+                    const compressed = fs.readFileSync(file);
+                    response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+                    response.end(compressed.subarray(0, compressed.length / 2));
                 } else if (brotli && mode === 'missing') {
                     response.writeHead(404);
                     response.end();
                 } else if (brotli && mode === 'page') {
-                    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    response.writeHead(200, { 'Content-Type': 'Text/HTML; charset=utf-8' });
                     response.end(fs.readFileSync('index.html'));
                 } else {
                     // As GitHub Pages does, a .br file is opaque; "encoded" labels it the way a server that negotiates Brotli would.
@@ -1488,8 +1493,13 @@ public class PackageIntegrationTests
                 }
             }
 
+            const leftToRuntime = (host, type, uri) => host.loadCompressedResource(type, path.basename(uri), uri, '') === undefined ? 'runtime' : 'loader';
             // Each import URL is its own module instance, so each remembers its own answer to whether DecompressionStream decodes Brotli.
+            // An instance stays off until the boot config of a publish with PixelyBrowserBrotli turns it on.
             const streams = await import('./pixely-host.js?streams');
+            console.log(`CASE unconfigured ${leftToRuntime(streams, 'assembly', `${origin}/served/_framework/${assembly}`)}`);
+            const brotliConfig = { extensions: { pixely: { brotli: true } } };
+            streams.configureCompressedResources(brotliConfig);
             await check('streams-runtime', streams, 'served', 'dotnetwasm', runtime);
             await check('streams-assembly', streams, 'served', 'assembly', assembly);
             await check('encoded-runtime', streams, 'encoded', 'dotnetwasm', runtime);
@@ -1497,12 +1507,18 @@ public class PackageIntegrationTests
             await check('missing-runtime-other-integrity', streams, 'missing', 'dotnetwasm', runtime, integrityOf(assembly));
             await check('page-assembly', streams, 'page', 'assembly', assembly);
             await check('reset-assembly', streams, 'reset', 'assembly', assembly);
-            const leftToRuntime = (host, type, file) => host.loadCompressedResource(type, file, `${origin}/served/_framework/${file}`, '') === undefined ? 'runtime' : 'loader';
-            console.log(`CASE pdb ${leftToRuntime(streams, 'pdb', 'x.pdb')}`);
+            // Half a .br file decodes partway; the rest of the stream comes from the original.
+            await check('truncated-runtime', streams, 'truncated', 'dotnetwasm', runtime);
+            await check('truncated-assembly', streams, 'truncated', 'assembly', assembly);
+            console.log(`CASE pdb ${leftToRuntime(streams, 'pdb', `${origin}/served/_framework/x.pdb`)}`);
+            // Without a document or location a relative path cannot be resolved.
+            console.log(`CASE relative ${leftToRuntime(streams, 'assembly', `_framework/${assembly}`)}`);
             // A page on another origin than the file cannot read its Content-Encoding.
-            globalThis.location = { origin: 'https://elsewhere.example' };
-            console.log(`CASE cross-origin ${leftToRuntime(streams, 'assembly', assembly)}`);
+            globalThis.location = { origin: 'https://elsewhere.example', href: 'https://elsewhere.example/' };
+            console.log(`CASE cross-origin ${leftToRuntime(streams, 'assembly', `${origin}/served/_framework/${assembly}`)}`);
             delete globalThis.location;
+            streams.configureCompressedResources({ ...brotliConfig, disableIntegrityCheck: true });
+            await check('missing-runtime-integrity-disabled', streams, 'missing', 'dotnetwasm', runtime, integrityOf(assembly));
 
             // A DecompressionStream without Brotli, as in Chrome, makes the second instance load google/brotli's decoder.
             const decompressionStream = globalThis.DecompressionStream;
@@ -1515,13 +1531,19 @@ public class PackageIntegrationTests
                 }
             };
             const decoder = await import('./pixely-host.js?decoder');
-            // The decoder comes from the CDN. "offline" rejects that request and "tampered" answers it with other bytes, which fetch rejects
-            // by the integrity value; either way the loader falls back to the original. The decoder then still loads.
+            decoder.configureCompressedResources(brotliConfig);
+            // The decoder comes from the CDN, which the test does not reach. "offline" rejects that request and "tampered" answers it with
+            // other bytes, which fetch rejects by the integrity value; either way the loader falls back to the original. "online" answers
+            // with a stand-in on node's Brotli decoder, skipping the integrity check that only google/brotli's file passes.
             let cdn = 'offline';
             const realFetch = globalThis.fetch;
+            const standIn = "import zlib from 'node:zlib'; export function BrotliDecode(bytes) { return new Int8Array(zlib.brotliDecompressSync(bytes)); }";
             globalThis.fetch = (input, init) => {
-                if (!String(input).startsWith('https://cdn.jsdelivr.net/') || cdn === 'online') {
+                if (!String(input).startsWith('https://cdn.jsdelivr.net/')) {
                     return realFetch(input, init);
+                }
+                if (cdn === 'online') {
+                    return Promise.resolve(new Response(standIn, { headers: { 'Content-Type': 'text/javascript' } }));
                 }
                 return cdn === 'offline' ? Promise.reject(new TypeError('offline')) : realFetch(`${origin}/decoder/tampered.js`, init);
             };
@@ -1552,8 +1574,13 @@ public class PackageIntegrationTests
             Assert.That(output, Does.Contain("CASE missing-runtime-other-integrity rejected"));
             Assert.That(output, Does.Contain("CASE page-assembly same application/wasm"));
             Assert.That(output, Does.Contain("CASE reset-assembly same application/wasm"));
+            Assert.That(output, Does.Contain("CASE truncated-runtime same application/wasm"));
+            Assert.That(output, Does.Contain("CASE truncated-assembly same application/octet-stream"));
+            Assert.That(output, Does.Contain("CASE unconfigured runtime"));
             Assert.That(output, Does.Contain("CASE pdb runtime"));
+            Assert.That(output, Does.Contain("CASE relative runtime"));
             Assert.That(output, Does.Contain("CASE cross-origin runtime"));
+            Assert.That(output, Does.Contain("CASE missing-runtime-integrity-disabled same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-offline-assembly same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-tampered-assembly same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-runtime same application/wasm"));

@@ -319,17 +319,15 @@ has no file at that relative path:
 - `index.html`: `<canvas id="canvas">`, the element SDL's Emscripten port draws into, a full-page
   stylesheet and `<script type="module" src="main.js">`.
 - `main.js`: imports `./_framework/dotnet.js` and `./pixely-host.js`, passes the canvas as
-  `Module.canvas`, installs `loadCompressedResource` as the resource loader when `pixely-options.js`
-  says so, awaits `dotnet.runMain()`, logs the exit code, logs and rethrows a rejection, and covers
-  the canvas with a message on a rejection or a non-zero exit code.
+  `Module.canvas` and `configureCompressedResources` as `onConfigLoaded`, installs
+  `loadCompressedResource` as the resource loader, awaits `dotnet.runMain()`, logs the exit code,
+  logs and rethrows a rejection, and covers the canvas with a message on a rejection or a non-zero
+  exit code.
 - `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()` and `readDeviceLoss()`,
   which `BrowserHost` imports as module `pixely-host` from `../pixely-host.js`, relative to
-  `dotnet.js`; `main.js` imports the same module for `readDeviceLoss()` and
-  `loadCompressedResource`. A replacement keeps the exports and the location.
-- `pixely-options.js`: written by the SDK at build time, so `main.js` can read the project's
-  properties. It exports `brotli`, the value of `PixelyBrowserBrotli`. A copy of the default
-  `main.js` needs it too, so a project with `PixelyBrowserDefaultAssets=false` that copies `main.js`
-  also adds its own `pixely-options.js`.
+  `dotnet.js`; `main.js` imports the same module for `readDeviceLoss()`,
+  `configureCompressedResources` and `loadCompressedResource`. A replacement keeps the exports and
+  the location.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
 setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;
@@ -349,31 +347,37 @@ browser uses them only when the server answers a request for `foo.wasm` with the
 and `Content-Encoding: br` or `gzip`. GitHub Pages sets no custom headers: it compresses `.wasm`
 files with gzip on the fly and serves `foo.wasm.br` as an opaque file.
 
-For such a host, set `PixelyBrowserBrotli=true`. The default `main.js` then passes
-`loadCompressedResource` from `pixely-host.js` to `dotnet.withResourceLoader`. For
-`dotnet.native.wasm`, the assemblies and the ICU data the loader fetches the `.br` copy and
-decompresses it in the page:
+For such a host, set `PixelyBrowserBrotli=true`. A publish then puts `"pixely": { "brotli": true }`
+in the `extensions` of its boot config, which `dotnet.js` carries. The default `main.js` installs
+`loadCompressedResource` from `pixely-host.js` with `dotnet.withResourceLoader` and passes
+`configureCompressedResources` as `onConfigLoaded`, which hands it the boot config before any file
+downloads. The loader stays off without the extension, so a build, which writes no `.br` files, and
+a publish without the property fetch as the runtime does. A project with its own `main.js` passes
+both functions itself. For `dotnet.native.wasm`, the assemblies and the ICU data the loader fetches
+the `.br` copy and decompresses it in the page:
 
 - With `DecompressionStream('brotli')` where the browser has it (Firefox 147 and Safari 18.4 or
   later). The runtime still compiles `dotnet.native.wasm` while it downloads.
 - With google/brotli's JavaScript decoder elsewhere, Chrome among them. The page fetches it from
   jsDelivr, pinned to the v1.2.0 tag by its SHA-256, and imports it from a `data:` URL, since
-  `import()` checks no integrity. It decodes a file once the whole file has arrived, so compilation starts after the download. Under Node 24, which shares Chrome's engine,
+  `import()` checks no integrity. The download starts with the first file. It decodes a file once
+  the whole file has arrived, so compilation starts after the download. Under Node 24, which shares
+  Chrome's engine,
   decoding takes about 50 ms for a 4 MB `dotnet.native.wasm` and about 220 ms for a 13 MB one
   built with `RunAOTCompilation`.
 
-When the `.br` copy cannot be used, the loader fetches the original file as the runtime would, with
-its integrity hash: without a `.br` copy, as in a build that was not published, after a failed
-request, or when the decoder does not load, for example because jsDelivr is unreachable or the
-page's Content-Security-Policy blocks it or `data:` scripts. The browser logs each missing `.br`
-file as a failed request in the console. The loader cannot read the runtime's config, so the
-fallback checks the hash even with `disableIntegrityCheck`. A server that falls back to
-`index.html` for a missing file is detected by the `text/html` content type, and one that labels
-`.br` files with `Content-Encoding: br` gets no second decompression. A file on another origin
-than the page is left to the runtime, since CORS hides its `Content-Encoding`. The runtime checks
-the integrity hash only of the files it fetches itself, so the decompressed files go without it;
-their names carry a hash of their content. A project with its own `main.js`
-and the property adds `.withResourceLoader(host.loadCompressedResource)` itself.
+When the `.br` copy cannot be used, the loader fetches the original file as the runtime would,
+following the config's `disableIntegrityCheck` and `disableNoCacheFetch`: without a `.br` copy,
+after a failed request, or when the decoder does not load, for example because jsDelivr is
+unreachable or the page's Content-Security-Policy blocks it or `data:` scripts. The browser logs
+each missing `.br` file as a failed request in the console. A streamed copy that fails partway,
+truncated or corrupt, continues from the original file past the bytes already delivered. A server
+that falls back to `index.html` for a missing file is detected by the `text/html` content type, and
+one that labels `.br` files with `Content-Encoding: br` gets no second decompression. A file on
+another origin than the page, or at a path the page cannot resolve, is left to the runtime, since
+CORS hides another origin's `Content-Encoding`. The runtime checks the integrity hash only of the
+files it fetches itself, so the decompressed files go without it; their names carry a hash of
+their content.
 
 Leave the property off on a host that sends `Content-Encoding: br` itself. The download is the same
 size, and Chrome compiles `dotnet.native.wasm` while it downloads instead of decoding it afterwards.
