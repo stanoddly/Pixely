@@ -35,6 +35,11 @@
         <TargetFramework>net11.0-browser</TargetFramework>
     </PropertyGroup>
 
+    <!--
+      NativeAOT has no browser target, so a project's PublishAot only applies to the desktop. The browser's compiler is Mono AOT, which
+      a project opts into with RunAOTCompilation; it doubles the download and needs the wasm-tools workload, so it stays off by default.
+      The WebAssembly SDK turns WasmStripILAfterAOT on with it, so a Pixely property would only rename the two.
+    -->
     <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
         <PublishAot>false</PublishAot>
         <SelfContained>true</SelfContained>
