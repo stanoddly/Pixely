@@ -157,7 +157,33 @@ a design-time build) is a browser build, `net11.0-browser` included, until the n
 `dotnet build` and `dotnet run` restore first.
 
 For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`;
-the project's own values apply to the desktop. Trim analysis warnings stay on.
+the project's own values apply to the desktop. NativeAOT has no browser target: `PublishAot` fails
+framework reference resolution on `browser-wasm`. Trim analysis warnings stay on.
+
+### Compiled code in the browser
+
+A browser publish ships every assembly as WebCIL under `_framework/`. The runtime interprets their
+IL, and a decompiler such as ILSpy turns it back into C#. Mono's AOT compiler compiles the methods
+into `dotnet.native.wasm` instead:
+
+```xml
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+  <RunAOTCompilation>true</RunAOTCompilation>
+</PropertyGroup>
+```
+
+- It applies to a publish, and it relinks the runtime, so it needs the `wasm-tools` workload.
+- With it the WebAssembly SDK sets `WasmStripILAfterAOT` to `true` by default, which empties the IL
+  body of each method the compiler compiled. Set it to `false` to keep the IL.
+- Metadata stays: type and member names and signatures. Some methods keep their IL as well. In a
+  ManyWorlds publish those were generic methods, methods of generic types, methods with an exception
+  handler (`try`, `catch`, `finally`, `using`) and empty constructors: 471 of the 2,223 methods in
+  Pixely and the game, its render passes among them.
+- It makes the download about twice as large. The ManyWorlds `_framework/` grows from 2.6 MB to
+  5.1 MB with gzip and from 2.1 MB to 3.6 MB with Brotli, and `dotnet.native.wasm` from 4.2 MB to
+  12.8 MB before compression.
+
+The Pixely SDK adds nothing for it. Both properties are the WebAssembly SDK's own.
 
 ### SDL3 in the browser
 

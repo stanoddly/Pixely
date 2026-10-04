@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-04: AOT in the browser is the WebAssembly SDK's opt-in
+
+A browser publish keeps the interpreter by default. A project that wants its methods compiled into `dotnet.native.wasm`, and their IL removed from the assemblies, sets `RunAOTCompilation=true`. Pixely adds no property of its own.
+
+- NativeAOT, which the desktop uses, has no browser target, so the SDK forces `PublishAot=false` there. Mono AOT is the browser's only compiler.
+- The WebAssembly SDK already turns on `WasmStripILAfterAOT` with `RunAOTCompilation`, so a Pixely property would only rename it.
+- AOT doubles the ManyWorlds download: 5.1 MB against 2.6 MB with gzip. It also needs the `wasm-tools` workload, which a browser app without native references does not.
+- ManyWorlds with the WebGPU link publishes with it and runs in Chrome 153 and Firefox 156.
+
+Cost: stripping hides method bodies, not structure. Names and signatures stay, and generic methods, methods with exception handlers and empty constructors keep their IL: a fifth of the methods in Pixely and ManyWorlds.
+
 ## 2026-10-02: Brotli decompression in the page is opt-in
 
 With `PixelyBrowserBrotli=true`, the default `main.js` installs a resource loader that fetches the `.br` copy of `dotnet.native.wasm`, of each assembly and of the ICU data and decompresses it in the page. The page uses `DecompressionStream` where it decodes Brotli and google/brotli's JavaScript decoder from jsDelivr elsewhere. Without the property nothing changes.
