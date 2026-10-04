@@ -16,13 +16,14 @@ public class PixelyConfigEnvironmentTests
     [TestCase("   ")]
     public void Apply_WithoutVariables_KeepsConfig(string? value)
     {
-        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true);
+        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true, PreferLowPowerGpu: true);
         PixelyConfig original = config with { };
         Func<string, string?> variables = Variables(
             (PixelyConfigEnvironment.GpuBackendVariable, value),
             (PixelyConfigEnvironment.HeadlessVariable, value),
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
-            (PixelyConfigEnvironment.GpuValidationVariable, value));
+            (PixelyConfigEnvironment.GpuValidationVariable, value),
+            (PixelyConfigEnvironment.PreferLowPowerGpuVariable, value));
 
         PixelyConfigEnvironment.Apply(config, variables);
 
@@ -61,17 +62,19 @@ public class PixelyConfigEnvironmentTests
     [TestCase("false", false)]
     public void Apply_WithBooleanVariables_OverridesEachFlag(string value, bool expected)
     {
-        PixelyConfig config = new(EnableSdlLogging: !expected, EnableGpuValidation: !expected, Headless: !expected);
+        PixelyConfig config = new(EnableSdlLogging: !expected, EnableGpuValidation: !expected, Headless: !expected, PreferLowPowerGpu: !expected);
         Func<string, string?> variables = Variables(
             (PixelyConfigEnvironment.HeadlessVariable, value),
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
-            (PixelyConfigEnvironment.GpuValidationVariable, value));
+            (PixelyConfigEnvironment.GpuValidationVariable, value),
+            (PixelyConfigEnvironment.PreferLowPowerGpuVariable, value));
 
         PixelyConfigEnvironment.Apply(config, variables);
 
         Assert.That(config.Headless, Is.EqualTo(expected));
         Assert.That(config.EnableSdlLogging, Is.EqualTo(expected));
         Assert.That(config.EnableGpuValidation, Is.EqualTo(expected));
+        Assert.That(config.PreferLowPowerGpu, Is.EqualTo(expected));
     }
 
     [Test]

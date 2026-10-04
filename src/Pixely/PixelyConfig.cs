@@ -18,12 +18,14 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false)
+    bool Headless = false,
+    bool PreferLowPowerGpu = false)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
     public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
     public bool Headless { get; internal set; } = Headless;
+    public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
 }
 #else
 public sealed record PixelyConfig(
@@ -33,11 +35,13 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false)
+    bool Headless = false,
+    bool PreferLowPowerGpu = false)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
     public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
     public bool Headless { get; internal set; } = Headless;
+    public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
 }
 #endif
