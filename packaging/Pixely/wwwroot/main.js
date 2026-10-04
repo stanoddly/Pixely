@@ -1,5 +1,6 @@
 import { dotnet } from './_framework/dotnet.js';
-// A namespace import keeps a replaced pixely-host.js that predates readDeviceLoss loading; a named import would fail to link.
+// A namespace import keeps a replaced pixely-host.js that predates readDeviceLoss or loadCompressedResource loading; a named import
+// would fail to link. Without loadCompressedResource the runtime fetches every file itself.
 import * as host from './pixely-host.js';
 
 // The page is the screen; SDL's Emscripten port draws into Module.canvas, the element its default selector "#canvas" names.
@@ -7,7 +8,8 @@ const canvas = document.getElementById('canvas');
 
 try {
     // runMain resolves with the value the managed Main returns; it rejects when Main throws, which the default OnException does.
-    const exitCode = await dotnet.withModuleConfig({ canvas }).runMain();
+    // The loader reads PixelyBrowserBrotli from the boot config that onConfigLoaded hands it, before the runtime downloads any file.
+    const exitCode = await dotnet.withModuleConfig({ canvas, onConfigLoaded: host.configureCompressedResources }).withResourceLoader(host.loadCompressedResource).runMain();
     console.log(`Pixely exited with code ${exitCode}`);
     if (exitCode !== 0) {
         showStopped(`Exit code ${exitCode}.`);

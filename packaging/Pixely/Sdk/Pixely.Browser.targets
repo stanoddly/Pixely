@@ -185,6 +185,30 @@
     </Target>
 
     <!--
+      The publish's boot config carries extensions.pixely, which pixely-host.js reads when main.js passes it the config: brotli is
+      PixelyBrowserBrotli, when the publish writes .br files (CompressionEnabled and brotli in PublishCompressionFormats). A build
+      writes none and gets no extension, so the loader stays off there. Every publish writes the file, only when its content changes,
+      so turning the property off also makes the incremental boot config target run again.
+    -->
+    <Target Name="_PixelyAddBrowserBootConfigExtension" BeforeTargets="GeneratePublishWasmBootJson" Condition="'$(_PixelyBrowser)' == 'true'">
+        <PropertyGroup>
+            <_PixelyBrowserBootConfigExtension>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-boot-config.json'))</_PixelyBrowserBootConfigExtension>
+            <_PixelyPublishCompressionFormats>;$(PublishCompressionFormats.Replace(' ', '').ToLowerInvariant());</_PixelyPublishCompressionFormats>
+            <_PixelyPublishWritesBrotli>false</_PixelyPublishWritesBrotli>
+            <_PixelyPublishWritesBrotli Condition="'$(CompressionEnabled)' == 'true' and '$(_PixelyPublishCompressionFormats.Contains(`;brotli;`))' == 'true'">true</_PixelyPublishWritesBrotli>
+            <_PixelyBrowserBrotli>false</_PixelyBrowserBrotli>
+            <_PixelyBrowserBrotli Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' == 'true'">true</_PixelyBrowserBrotli>
+        </PropertyGroup>
+        <Warning Code="PIXELY0012" File="$(MSBuildProjectFullPath)" Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' != 'true'"
+                 Text="PixelyBrowserBrotli has no effect: this publish writes no .br files, because CompressionEnabled is not true or PublishCompressionFormats has no brotli." />
+        <WriteLinesToFile File="$(_PixelyBrowserBootConfigExtension)" Lines="{ &quot;brotli&quot;: $(_PixelyBrowserBrotli) }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+        <ItemGroup>
+            <WasmBootConfigExtension Include="$(_PixelyBrowserBootConfigExtension)" Key="pixely" />
+            <FileWrites Include="$(_PixelyBrowserBootConfigExtension)" />
+        </ItemGroup>
+    </Target>
+
+    <!--
       Every definition of ResolveStaticWebAssetsInputsDependsOn keeps the previous value, and the WebAssembly pack's targets, imported
       after this file, append _AddWasmStaticWebAssets, which runs ComputeWasmVfs; the Pixely target stays ahead of it. A publish
       without build and a design-time build leave it out of the graph, because MSBuild runs targets that name it in BeforeTargets or

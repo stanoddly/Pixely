@@ -2,6 +2,20 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-02: Brotli decompression in the page is opt-in
+
+With `PixelyBrowserBrotli=true`, the default `main.js` installs a resource loader that fetches the `.br` copy of `dotnet.native.wasm`, of each assembly and of the ICU data and decompresses it in the page. The page uses `DecompressionStream` where it decodes Brotli and google/brotli's JavaScript decoder from jsDelivr elsewhere. Without the property nothing changes.
+
+- GitHub Pages sets no custom headers. It compresses `.wasm` with gzip on the fly and serves `.br` files as opaque files, so the browser never uses the Brotli copies a publish writes.
+- Brotli makes the ManyWorlds `_framework/` download 22% smaller than gzip (2.1 MB against 2.6 MB), and 30% smaller with `RunAOTCompilation` (3.6 MB against 5.1 MB).
+- Chrome's `DecompressionStream` has no Brotli, so a decoder in JavaScript is the only way there. It costs 67 KB gzipped, loaded only where it is needed.
+- On a host that sends `Content-Encoding: br` itself, the loader saves nothing and makes Chrome slower, so it is off by default.
+- `main.js` is a static file and cannot read MSBuild properties. A publish puts the property in its boot config as `extensions.pixely`, which the runtime hands to `onConfigLoaded` before any download, with `disableIntegrityCheck` and `disableNoCacheFetch` for the fallback. A build writes no `.br` files and gets no extension, so the loader stays off there.
+- Anything that keeps a `.br` file from being used falls back to the original: a missing file, a failed request, or a decoder that did not load. A streamed file that fails partway continues from the original, because the runtime does not refetch `dotnet.native.wasm`. A file from another origin is left to the runtime, because CORS hides its `Content-Encoding`.
+- The decoder comes from jsDelivr, pinned to the v1.2.0 tag and its SHA-256, so neither the repository nor the package carries a 150 KB minified file. `import()` checks no integrity, so the page fetches it with one and imports it from a data URL.
+
+Cost: streamed files skip the runtime's integrity check, and only a truncated one recovers: a corrupt one can decode to wrong bytes before it fails, since Brotli has no checksum. Files the JavaScript decoder decodes are checked against their hash. The fallback never sees a file's own cache or credentials setting. `onConfigLoaded` belongs to the loader, so a page that sets its own calls `configureCompressedResources` from it. Where the decoder is needed, each player's browser contacts jsDelivr, and a page whose Content-Security-Policy blocks it, or blocks `data:` scripts, downloads the originals. On Chrome, `dotnet.native.wasm` compiles only after it has fully arrived and been decoded, about 220 ms for a 13 MB AOT runtime. A publish whose `.br` files were removed costs one failed request per file before the original, and the browser logs each one as a console error.
+
 ## 2026-10-02: Browser content is a project-owned archive in the wasm file system
 
 A browser app ships `Content.pk3` as a `PixelyBrowserVfsFile`: a static web asset that the runtime downloads and writes to its in-memory file system below `/` before `Main`. `AddDefaultContent` and `AddZip` load it unchanged, so `UseDefaultContent()` works on both hosts.
