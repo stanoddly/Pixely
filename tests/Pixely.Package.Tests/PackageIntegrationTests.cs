@@ -163,7 +163,6 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("wwwroot/index.html"));
             Assert.That(entries, Does.Contain("wwwroot/main.js"));
             Assert.That(entries, Does.Contain("wwwroot/pixely-host.js"));
-            Assert.That(entries, Does.Contain("wwwroot/brotli-decode.js"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.Version.props"));
             Assert.That(entries, Does.Contain("buildTransitive/Pixely.targets"));
             Assert.That(entries.Any(entry => entry.StartsWith("build/", StringComparison.Ordinal)), Is.False);
@@ -441,7 +440,6 @@ public class PackageIntegrationTests
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "main.js")), Does.Contain("consumer bootstrap"));
             Assert.That(File.Exists(Path.Combine(wwwroot, "pixely-host.js")), Is.True);
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = true;"));
-            Assert.That(File.Exists(Path.Combine(wwwroot, "brotli-decode.js")), Is.True);
             // dotnet.js is not fingerprinted on disk; the assemblies (WebCIL) are, and the endpoint manifest aliases their plain names.
             Assert.That(File.Exists(Path.Combine(wwwroot, "_framework", "dotnet.js")), Is.True);
             Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "HostedConsumer.*.wasm"), Has.Length.EqualTo(1));
@@ -459,6 +457,8 @@ public class PackageIntegrationTests
             string result = await RunBrowserBundleAsync(wwwroot, environment: null);
             Assert.That(result, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
             AssertBrotliLoaderOutcome(await RunBrotliLoaderAsync(wwwroot, "HostedConsumer"));
+            string decompressed = await RunBrowserBundleWithBrotliLoaderAsync(wwwroot);
+            Assert.That(decompressed, Does.Contain("Configure failed on purpose.").And.Contain("RESULT rejected").And.Not.Contain("without Brotli").And.Match(@"RESULT brotli [1-9]"));
         }
 
         // A desktop build afterwards keeps its own obj/ and bin/ and its synchronous Main.
@@ -486,9 +486,8 @@ public class PackageIntegrationTests
         string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
         Assert.Multiple(() =>
         {
-            // Without PixelyBrowserBrotli main.js installs no loader and the decoder stays out of the bundle.
+            // Without PixelyBrowserBrotli main.js installs no loader.
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "pixely-options.js")), Does.Contain("export const brotli = false;"));
-            Assert.That(File.Exists(Path.Combine(wwwroot, "brotli-decode.js")), Is.False);
             Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
             Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
         });
@@ -1389,6 +1388,49 @@ public class PackageIntegrationTests
         return output;
     }
 
+    // Runs the bundle as RunBrowserBundleAsync does, with loadCompressedResource installed through dotnet.withResourceLoader as main.js
+    // installs it, so the runtime consumes the decompressed responses. Under node the runtime's URLs are file paths, so the loader gets
+    // the same file from a local HTTP server; RESULT brotli counts the .br files that server sent.
+    private static async Task<string> RunBrowserBundleWithBrotliLoaderAsync(string wwwroot)
+    {
+        string script = Path.Combine(wwwroot, "run-brotli-bundle.mjs");
+        File.WriteAllText(script, """
+            import { dotnet } from './_framework/dotnet.js';
+            import * as host from './pixely-host.js';
+            import http from 'node:http';
+            import fs from 'node:fs';
+            import path from 'node:path';
+
+            let brotliFiles = 0;
+            const server = http.createServer((request, response) => {
+                const file = path.resolve('_framework', path.basename(new URL(request.url, 'http://localhost').pathname));
+                if (!fs.existsSync(file)) {
+                    response.writeHead(404);
+                    response.end();
+                    return;
+                }
+                brotliFiles += file.endsWith('.br') ? 1 : 0;
+                response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+                response.end(fs.readFileSync(file));
+            });
+            await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+            const origin = `http://127.0.0.1:${server.address().port}`;
+            globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 5);
+            const loader = (type, name, defaultUri, integrity) => host.loadCompressedResource(type, name, `${origin}/_framework/${path.basename(defaultUri)}`, integrity);
+            try {
+                const exitCode = await dotnet.withResourceLoader(loader).runMain();
+                console.log(`RESULT exit code ${exitCode}`);
+            } catch (error) {
+                console.log(`RESULT rejected ${error}`);
+            }
+            console.log(`RESULT brotli ${brotliFiles}`);
+            server.close();
+            """);
+        (int exitCode, string output) = await RunProcessExpectingExitCodeAsync("node", wwwroot, null, script);
+        Assert.That(exitCode, Is.EqualTo(0), output);
+        return output;
+    }
+
     // Calls loadCompressedResource from the published pixely-host.js under node against a local HTTP server, as dotnet.js would in a page.
     private static async Task<string> RunBrotliLoaderAsync(string wwwroot, string assemblyName)
     {
@@ -1396,7 +1438,8 @@ public class PackageIntegrationTests
         File.WriteAllText(script, """
             // Serves this publish over HTTP and calls loadCompressedResource from pixely-host.js directly, as dotnet.js would. The first path
             // segment picks how the server answers a .br request; the original files are always served. Each CASE line says whether the
-            // response body equals the original file.
+            // response body equals the original file, and its content type tells a decoded file (as the loader labels it) from the original
+            // (as the server does).
             import http from 'node:http';
             import fs from 'node:fs';
             import path from 'node:path';
@@ -1410,7 +1453,12 @@ public class PackageIntegrationTests
                 const [, mode, ...segments] = new URL(request.url, 'http://localhost').pathname.split('/');
                 const file = path.resolve(segments.join('/'));
                 const brotli = file.endsWith('.br');
-                if (brotli && mode === 'missing') {
+                if (mode === 'decoder') {
+                    response.writeHead(200, { 'Content-Type': 'text/javascript' });
+                    response.end('export function BrotliDecode() { return new Int8Array(0); }');
+                } else if (brotli && mode === 'reset') {
+                    request.socket.destroy();
+                } else if (brotli && mode === 'missing') {
                     response.writeHead(404);
                     response.end();
                 } else if (brotli && mode === 'page') {
@@ -1448,9 +1496,15 @@ public class PackageIntegrationTests
             await check('missing-runtime', streams, 'missing', 'dotnetwasm', runtime, integrityOf(runtime));
             await check('missing-runtime-other-integrity', streams, 'missing', 'dotnetwasm', runtime, integrityOf(assembly));
             await check('page-assembly', streams, 'page', 'assembly', assembly);
-            console.log(`CASE pdb ${streams.loadCompressedResource('pdb', 'x.pdb', `${origin}/served/_framework/x.pdb`, '') === undefined ? 'runtime' : 'loader'}`);
+            await check('reset-assembly', streams, 'reset', 'assembly', assembly);
+            const leftToRuntime = (host, type, file) => host.loadCompressedResource(type, file, `${origin}/served/_framework/${file}`, '') === undefined ? 'runtime' : 'loader';
+            console.log(`CASE pdb ${leftToRuntime(streams, 'pdb', 'x.pdb')}`);
+            // A page on another origin than the file cannot read its Content-Encoding.
+            globalThis.location = { origin: 'https://elsewhere.example' };
+            console.log(`CASE cross-origin ${leftToRuntime(streams, 'assembly', assembly)}`);
+            delete globalThis.location;
 
-            // A DecompressionStream without Brotli, as in Chrome, makes the second instance load brotli-decode.js.
+            // A DecompressionStream without Brotli, as in Chrome, makes the second instance load google/brotli's decoder.
             const decompressionStream = globalThis.DecompressionStream;
             globalThis.DecompressionStream = class extends decompressionStream {
                 constructor(format) {
@@ -1461,8 +1515,23 @@ public class PackageIntegrationTests
                 }
             };
             const decoder = await import('./pixely-host.js?decoder');
+            // The decoder comes from the CDN. "offline" rejects that request and "tampered" answers it with other bytes, which fetch rejects
+            // by the integrity value; either way the loader falls back to the original. The decoder then still loads.
+            let cdn = 'offline';
+            const realFetch = globalThis.fetch;
+            globalThis.fetch = (input, init) => {
+                if (!String(input).startsWith('https://cdn.jsdelivr.net/') || cdn === 'online') {
+                    return realFetch(input, init);
+                }
+                return cdn === 'offline' ? Promise.reject(new TypeError('offline')) : realFetch(`${origin}/decoder/tampered.js`, init);
+            };
+            await check('decoder-offline-assembly', decoder, 'served', 'assembly', assembly);
+            cdn = 'tampered';
+            await check('decoder-tampered-assembly', decoder, 'served', 'assembly', assembly);
+            cdn = 'online';
             await check('decoder-runtime', decoder, 'served', 'dotnetwasm', runtime);
             await check('decoder-assembly', decoder, 'served', 'assembly', assembly);
+            globalThis.fetch = realFetch;
             globalThis.DecompressionStream = decompressionStream;
             server.close();
             """);
@@ -1482,7 +1551,11 @@ public class PackageIntegrationTests
             // The fallback fetch carries the runtime's integrity value, so another file's hash fails it.
             Assert.That(output, Does.Contain("CASE missing-runtime-other-integrity rejected"));
             Assert.That(output, Does.Contain("CASE page-assembly same application/wasm"));
+            Assert.That(output, Does.Contain("CASE reset-assembly same application/wasm"));
             Assert.That(output, Does.Contain("CASE pdb runtime"));
+            Assert.That(output, Does.Contain("CASE cross-origin runtime"));
+            Assert.That(output, Does.Contain("CASE decoder-offline-assembly same application/wasm"));
+            Assert.That(output, Does.Contain("CASE decoder-tampered-assembly same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-runtime same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-assembly same application/octet-stream"));
         });

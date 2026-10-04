@@ -92,29 +92,55 @@ export function runFrameLoop(runFrame) {
     });
 }
 
-// The runtime files a publish precompresses that are worth decompressing in the page: dotnet.native.wasm and the assemblies.
-const brotliTypes = new Set(['dotnetwasm', 'assembly']);
-let brotliStreams = null;
+// The runtime files a publish precompresses that are worth decompressing in the page: dotnet.native.wasm, the assemblies and the ICU data.
+const brotliTypes = new Set(['dotnetwasm', 'assembly', 'globalization']);
+const brotliStreams = supportsBrotliStreams();
+// google/brotli's JavaScript decoder (MIT), pinned by its hash: the CDN serves the file of the release tag, and fetch rejects other bytes.
+const brotliDecoderUrl = 'https://cdn.jsdelivr.net/gh/google/brotli@v1.2.0/js/decode.min.js';
+const brotliDecoderIntegrity = 'sha256-ilNI2/saKHPby5pNU/Si2ZY4wROIi2WwPLuO2Gx/fCc=';
 let brotliDecoder = null;
 
 // A loader for dotnet.withResourceLoader that fetches the Brotli copy a publish writes beside each runtime file and decompresses it
 // in the page, which main.js installs with PixelyBrowserBrotli. A static host such as GitHub Pages serves foo.wasm.br as an opaque
-// file and compresses foo.wasm with gzip at best, since it sets no Content-Encoding: br. The vendored decoder ships only with the
-// property. DecompressionStream keeps compilation streaming where it decodes Brotli; elsewhere, Chrome
-// among them, the vendored decoder decodes the whole file once it has arrived. Without a .br file, as in a build that was not
-// published, the original file is fetched as the runtime would, with its integrity check. The runtime checks the integrity only
-// of files it fetches itself, so the decompressed ones go without; their names carry a hash of their content.
+// file and compresses foo.wasm with gzip at best, since it sets no Content-Encoding: br. DecompressionStream keeps compilation
+// streaming where it decodes Brotli; elsewhere, Chrome among them, google/brotli's decoder from a CDN decodes the whole file once it
+// has arrived. The runtime checks the integrity only of files it fetches itself, so the decompressed ones go without; their names
+// carry a hash of their content.
 export function loadCompressedResource(type, name, defaultUri, integrity) {
-    return brotliTypes.has(type) ? fetchBrotli(type, defaultUri, integrity) : undefined;
+    if (!brotliTypes.has(type)) {
+        return undefined;
+    }
+    const brotliUrl = new URL(defaultUri, globalThis.document?.baseURI);
+    // CORS hides Content-Encoding from the page unless the other origin exposes it, so a server that negotiates Brotli would have its
+    // files decompressed twice; the runtime fetches a file from another origin itself. Node has no location and no CORS.
+    if (globalThis.location && brotliUrl.origin !== globalThis.location.origin) {
+        return undefined;
+    }
+    brotliUrl.pathname += '.br';
+    return fetchBrotli(type, brotliUrl, defaultUri, integrity);
 }
 
-async function fetchBrotli(type, defaultUri, integrity) {
-    const url = new URL(defaultUri, globalThis.document?.baseURI);
-    url.pathname += '.br';
-    const compressed = await fetch(url, { cache: 'no-cache' });
+// Whatever keeps the .br copy from being used, the original file is fetched as the runtime would, with its integrity value: a missing
+// copy, as in a build that was not published, a failed request, or a decoder that did not load, such as one a Content-Security-Policy
+// blocks. The loader cannot read the runtime's config, so the fallback checks the integrity even when disableIntegrityCheck is set.
+async function fetchBrotli(type, brotliUrl, defaultUri, integrity) {
+    try {
+        const decompressed = await fetchDecompressed(type, brotliUrl);
+        if (decompressed) {
+            return decompressed;
+        }
+    } catch (error) {
+        console.warn(`Pixely fetches ${defaultUri} without Brotli`, error);
+    }
+    return fetch(defaultUri, { cache: 'no-cache', integrity });
+}
+
+async function fetchDecompressed(type, brotliUrl) {
+    const compressed = await fetch(brotliUrl, { cache: 'no-cache' });
     // A static host answers a missing file with 404; a development server that falls back to index.html answers with the page.
     if (!compressed.ok || compressed.headers.get('Content-Type')?.startsWith('text/html')) {
-        return fetch(defaultUri, { cache: 'no-cache', integrity });
+        await compressed.body?.cancel();
+        return null;
     }
     const headers = { 'Content-Type': type === 'dotnetwasm' ? 'application/wasm' : 'application/octet-stream' };
     // A server that labels the file Content-Encoding: br has had the browser decompress it already. Codings are case-insensitive
@@ -122,13 +148,31 @@ async function fetchBrotli(type, defaultUri, integrity) {
     if (/(^|,)\s*br\s*(,|$)/i.test(compressed.headers.get('Content-Encoding') ?? '')) {
         return new Response(compressed.body, { headers });
     }
-    brotliStreams ??= supportsBrotliStreams();
     if (brotliStreams) {
         return new Response(compressed.body.pipeThrough(new DecompressionStream('brotli')), { headers });
     }
-    brotliDecoder ??= import('./brotli-decode.js');
-    const { BrotliDecode } = await brotliDecoder;
-    return new Response(BrotliDecode(new Int8Array(await compressed.arrayBuffer())), { headers });
+    // A failed import is forgotten, so the next file, or the runtime's retry of this one, imports the decoder again.
+    brotliDecoder ??= importBrotliDecoder().catch(error => {
+        brotliDecoder = null;
+        throw error;
+    });
+    let decoder;
+    try {
+        decoder = await brotliDecoder;
+    } catch (error) {
+        await compressed.body?.cancel();
+        throw error;
+    }
+    return new Response(decoder.BrotliDecode(new Int8Array(await compressed.arrayBuffer())), { headers });
+}
+
+// import() checks no integrity, so the verified source is imported from a data URL, which node imports too.
+async function importBrotliDecoder() {
+    const response = await fetch(brotliDecoderUrl, { integrity: brotliDecoderIntegrity });
+    if (!response.ok) {
+        throw new Error(`${brotliDecoderUrl} answered ${response.status}`);
+    }
+    return import(`data:text/javascript,${encodeURIComponent(await response.text())}`);
 }
 
 function supportsBrotliStreams() {
