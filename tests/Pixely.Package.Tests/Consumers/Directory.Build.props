@@ -1,0 +1,14 @@
+<Project>
+
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
+
+    <!--
+      The Pixely SDK compiles browser publishes with Mono AOT by default, which needs the wasm-tools workload from the first
+      evaluation on. Most CI lanes run the fixtures without it, and AOT would add minutes to every browser publish, so the fixtures
+      opt out as a project would.
+    -->
+    <PropertyGroup>
+        <RunAOTCompilation Condition="'$(RunAOTCompilation)' == ''">false</RunAOTCompilation>
+    </PropertyGroup>
+
+</Project>
