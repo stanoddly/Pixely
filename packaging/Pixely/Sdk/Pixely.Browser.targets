@@ -35,8 +35,17 @@
         <TargetFramework>net11.0-browser</TargetFramework>
     </PropertyGroup>
 
+    <!--
+      NativeAOT has no browser target, so a project's PublishAot only applies to the desktop. The browser's compiler is Mono AOT, on
+      by default so that a publish ships compiled methods instead of decompilable IL: the WebAssembly SDK turns WasmStripILAfterAOT on
+      with RunAOTCompilation. It applies to a publish only, roughly doubles the download and needs the wasm-tools workload, which every
+      game that links SDL needs anyway; a project without it, or one that prefers the smaller download, sets RunAOTCompilation to false.
+      The default is not tied to the workload being installed, so a project publishes the same way on every machine. The CoreCLR
+      runtime (UseMonoRuntime=false) is left alone.
+    -->
     <PropertyGroup Condition="'$(_PixelyBrowser)' == 'true'">
         <PublishAot>false</PublishAot>
+        <RunAOTCompilation Condition="'$(RunAOTCompilation)' == '' and '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
         <SelfContained>true</SelfContained>
         <PublishTrimmed>true</PublishTrimmed>
         <AppendRuntimeIdentifierToOutputPath>true</AppendRuntimeIdentifierToOutputPath>

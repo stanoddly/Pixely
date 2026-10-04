@@ -122,9 +122,11 @@ WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, whether 
 reference of the browser app or published with the RID itself, so a solution-wide
 `dotnet publish -r browser-wasm` publishes the executables for the browser and the libraries as
 libraries. Prefer `-r` on the executable project all the same; a RID in `Directory.Build.props` makes
-every desktop build of the repository a browser build. Without native references no `wasm-tools`
-workload is needed, for publishing or for `dotnet run -r browser-wasm`, which serves the app from a
-local host; with them the runtime is relinked and the workload is required (see below).
+every desktop build of the repository a browser build. The `wasm-tools` workload is required for
+every command with `-r browser-wasm`, `dotnet run -r browser-wasm` included, which serves the app
+from a local host: a publish compiles with Mono AOT by default, and native references relink the
+runtime (see below). A project without native references that sets `RunAOTCompilation` to `false`
+needs no workload.
 
 ### The browser target framework
 
@@ -156,8 +158,37 @@ share the restore state: after a browser restore the WebAssembly pack's props de
 a design-time build) is a browser build, `net11.0-browser` included, until the next desktop restore.
 `dotnet build` and `dotnet run` restore first.
 
-For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`;
-the project's own values apply to the desktop. Trim analysis warnings stay on.
+For the browser the SDK forces `PublishAot=false`, `SelfContained=true` and `PublishTrimmed=true`,
+and defaults `RunAOTCompilation` to `true` (see below); the project's own values apply to the desktop. NativeAOT has no browser target: `PublishAot` fails
+framework reference resolution on `browser-wasm`. Trim analysis warnings stay on.
+
+### Compiled code in the browser
+
+A browser publish ships every assembly as WebCIL under `_framework/`. Without AOT the runtime
+interprets their IL, and a decompiler such as ILSpy turns it back into C#. So the SDK sets
+`RunAOTCompilation` to `true` for the browser unless the project sets it: Mono's AOT compiler
+compiles the methods into `dotnet.native.wasm`.
+
+- It applies to a publish; `dotnet build` and `dotnet run` interpret. It relinks the runtime, so
+  every command with `-r browser-wasm` needs the `wasm-tools` workload, as native references do.
+- The WebAssembly SDK sets `WasmStripILAfterAOT` to `true` with it, which empties the IL body of
+  each method the compiler compiled. Set it to `false` to keep the IL.
+- Metadata stays: type and member names and signatures. Some methods keep their IL as well. In a
+  ManyWorlds publish those were generic methods, methods of generic types, methods with an exception
+  handler (`try`, `catch`, `finally`, `using`) and empty constructors: 471 of the 2,223 methods in
+  Pixely and the game, its render passes among them.
+- It makes the download about twice as large. The ManyWorlds `_framework/` grows from 2.6 MB to
+  5.1 MB with gzip and from 2.1 MB to 3.6 MB with Brotli, and `dotnet.native.wasm` from 4.2 MB to
+  12.8 MB before compression.
+- The CoreCLR runtime (`UseMonoRuntime=false`) keeps its own default.
+
+To publish the interpreted IL instead, for the smaller download or without the workload:
+
+```xml
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+  <RunAOTCompilation>false</RunAOTCompilation>
+</PropertyGroup>
+```
 
 ### SDL3 in the browser
 
