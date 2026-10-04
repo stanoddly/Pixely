@@ -204,6 +204,18 @@ PIXELY_GRAPHICS=vulkan dotnet run --project tutorials/Pixely.Tutorials.Triangle
 
 Supported values are `automatic`, `vulkan`, `direct3d12`, `metal` and `webgpu`, matched case-insensitively. An unset, empty, or whitespace-only value leaves `PixelyConfig.GpuBackend` in effect. Any other value stops `Build()` with an error that lists the supported values. The other `PixelyConfig` variables are listed in headless.md.
 
+`GpuBackend` chooses the graphics API, not the GPU. On a machine with a discrete and an integrated GPU, SDL picks the discrete one. Set `PixelyConfig.PreferLowPowerGpu` to ask for the integrated GPU instead, for example to test against a laptop's performance budget:
+
+```csharp
+builder.AddSingleton(new PixelyConfig(PreferLowPowerGpu: true));
+```
+
+Pixely passes it to SDL as `SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN`. It is a preference: a machine with one GPU keeps it. It is verified on Vulkan; Direct3D 12, Metal and WebGPU are untested. Set `PIXELY_PREFER_LOW_POWER_GPU` to `1`, `true`, `0` or `false` to override it without changing application code:
+
+```shell
+PIXELY_PREFER_LOW_POWER_GPU=1 dotnet run --project tutorials/Pixely.Tutorials.Triangle
+```
+
 The selected SDL driver is available from `GpuDevice.Driver` for diagnostics.
 
 ### Manual Direct3D 12 validation

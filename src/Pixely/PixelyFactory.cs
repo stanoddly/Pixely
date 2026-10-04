@@ -168,6 +168,7 @@ public partial class PixelyFactory: IDisposable
         try
         {
             SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, _config.EnableGpuValidation);
+            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, _config.PreferLowPowerGpu);
 
             string? driverName = gpuBackend switch
             {
