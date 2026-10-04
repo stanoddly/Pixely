@@ -99,12 +99,15 @@ const brotliStreams = supportsBrotliStreams();
 const brotliDecoderUrl = 'https://cdn.jsdelivr.net/gh/google/brotli@v1.2.0/js/decode.min.js';
 const brotliDecoderIntegrity = 'sha256-ilNI2/saKHPby5pNU/Si2ZY4wROIi2WwPLuO2Gx/fCc=';
 let brotliDecoder = null;
+// A decoder that failed to load fails the same way for every file, as when a Content-Security-Policy blocks it, so later files are
+// left to the runtime at once.
+let brotliDecoderFailed = false;
 // The runtime's fetch policy while the publish turns the loader on, otherwise null.
 let brotliFetchPolicy = null;
 
 // An onConfigLoaded callback for dotnet.withModuleConfig, which runs before the runtime downloads any file. The SDK puts
 // PixelyBrowserBrotli in a publish's boot config as extensions.pixely.brotli; a build has no .br files and no extension. The loader
-// follows the config's integrity and cache policy as the runtime's own fetch does.
+// follows the config's disableIntegrityCheck and disableNoCacheFetch; it never sees a file's own cache or credentials setting.
 export function configureCompressedResources(config) {
     brotliFetchPolicy = config.extensions?.pixely?.brotli === true
         ? { integrity: !config.disableIntegrityCheck, cache: config.disableNoCacheFetch ? undefined : 'no-cache' }
@@ -115,9 +118,10 @@ export function configureCompressedResources(config) {
 // in the page. A static host such as GitHub Pages serves foo.wasm.br as an opaque file and compresses foo.wasm with gzip at best,
 // since it sets no Content-Encoding: br. DecompressionStream keeps compilation streaming where it decodes Brotli; elsewhere, Chrome
 // among them, google/brotli's decoder from a CDN decodes the whole file once it has arrived. The runtime checks the integrity only
-// of files it fetches itself, so the decompressed ones go without; their names carry a hash of their content.
+// of files it fetches itself. A file the decoder decodes is checked against the integrity value here, since the whole file is at
+// hand; a streamed one goes without, and its name carries a hash of its content.
 export function loadCompressedResource(type, name, defaultUri, integrity) {
-    if (!brotliFetchPolicy || !brotliTypes.has(type)) {
+    if (!brotliFetchPolicy || !brotliTypes.has(type) || !brotliStreams && brotliDecoderFailed) {
         return undefined;
     }
     // A path the page cannot resolve, as without a document or location, is left to the runtime.
@@ -141,8 +145,8 @@ export function loadCompressedResource(type, name, defaultUri, integrity) {
     return fetchBrotli(type, brotliUrl, defaultUri, original);
 }
 
-// Whatever keeps the .br copy from being used, the original file is fetched as the runtime would: a missing copy, as in a build
-// that was not published, a failed request, or a decoder that did not load, such as one a Content-Security-Policy blocks.
+// Whatever keeps the .br copy from being used, the original file is fetched with the config's policy: a missing copy, a failed
+// request, a decoded file that fails its integrity value, or a decoder that did not load, such as one a Content-Security-Policy blocks.
 async function fetchBrotli(type, brotliUrl, defaultUri, original) {
     try {
         const decompressed = await fetchDecompressed(type, brotliUrl, defaultUri, original);
@@ -178,12 +182,26 @@ async function fetchDecompressed(type, brotliUrl, defaultUri, original) {
         await compressed.body?.cancel();
         throw error;
     }
-    return new Response(decoder.BrotliDecode(new Int8Array(await compressed.arrayBuffer())), { headers });
+    const decoded = decoder.BrotliDecode(new Int8Array(await compressed.arrayBuffer()));
+    if (original.integrity && !await matchesIntegrity(decoded, original.integrity)) {
+        throw new Error(`${brotliUrl} does not decode to the file its integrity value names`);
+    }
+    return new Response(decoded, { headers });
 }
 
-// The runtime reads a streamed file after the loader has returned it, so a copy that fails partway, truncated or corrupt, cannot fall
-// back as a whole. The stream continues from the original file instead, skipping the bytes it has delivered, since the original holds
-// the decompressed bytes.
+// crypto.subtle exists only in a secure context, so elsewhere the check throws and the original is fetched.
+async function matchesIntegrity(bytes, integrity) {
+    const [, bits, expected] = /^sha(256|384|512)-(.+)$/.exec(integrity) ?? [];
+    if (!bits) {
+        throw new Error(`Unsupported integrity value ${integrity}`);
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest(`SHA-${bits}`, bytes));
+    return btoa(String.fromCharCode(...digest)) === expected;
+}
+
+// The runtime reads a streamed file after the loader has returned it, so a copy that fails partway cannot fall back as a whole. The
+// stream continues from the original file instead, skipping the bytes it has delivered, since the original holds the decompressed
+// bytes. That recovers a truncated copy; a corrupt one can decode to wrong bytes before it fails, and Brotli has no checksum.
 function resumeFromOriginal(stream, defaultUri, original) {
     let reader = stream.getReader();
     let resumed = false;
@@ -229,10 +247,10 @@ function resumeFromOriginal(stream, defaultUri, original) {
     });
 }
 
-// One import for every file; a failed one is forgotten, so the next file, or the runtime's retry of this one, imports it again.
+// One import for every file.
 function loadBrotliDecoder() {
     brotliDecoder ??= importBrotliDecoder().catch(error => {
-        brotliDecoder = null;
+        brotliDecoderFailed = true;
         throw error;
     });
     return brotliDecoder;

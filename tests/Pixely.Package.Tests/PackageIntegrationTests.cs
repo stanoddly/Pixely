@@ -481,13 +481,15 @@ public class PackageIntegrationTests
         string consumerDirectory = GetConsumerDirectory("HostedConsumer");
         DeleteConsumerOutputs("HostedConsumer");
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+        // PixelyBrowserBrotli without .br files leaves the loader that main.js installs off, with a warning.
+        string publishOutput = await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserBrotli=true", "PublishCompressionFormats=gzip"]);
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         string handled = await RunBrowserBundleAsync(wwwroot, environment: null);
         string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
         Assert.Multiple(() =>
         {
-            // Without PixelyBrowserBrotli the loader that main.js installs stays off.
+            Assert.That(publishOutput, Does.Contain("PIXELY0012"));
+            Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "*.br"), Is.Empty);
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""pixely"":\s*\{\s*""brotli"":\s*false"));
             Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
             Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
@@ -1530,11 +1532,15 @@ public class PackageIntegrationTests
                     super(format);
                 }
             };
-            const decoder = await import('./pixely-host.js?decoder');
-            decoder.configureCompressedResources(brotliConfig);
             // The decoder comes from the CDN, which the test does not reach. "offline" rejects that request and "tampered" answers it with
-            // other bytes, which fetch rejects by the integrity value; either way the loader falls back to the original. "online" answers
-            // with a stand-in on node's Brotli decoder, skipping the integrity check that only google/brotli's file passes.
+            // other bytes, which fetch rejects by the integrity value; either way the loader falls back to the original and leaves later
+            // files to the runtime. "online" answers with a stand-in on node's Brotli decoder, skipping the integrity check that only
+            // google/brotli's file passes. An instance remembers a failed decoder, so each answer gets its own.
+            const decoderInstance = async query => {
+                const host = await import(`./pixely-host.js?${query}`);
+                host.configureCompressedResources(brotliConfig);
+                return host;
+            };
             let cdn = 'offline';
             const realFetch = globalThis.fetch;
             const standIn = "import zlib from 'node:zlib'; export function BrotliDecode(bytes) { return new Int8Array(zlib.brotliDecompressSync(bytes)); }";
@@ -1547,12 +1553,18 @@ public class PackageIntegrationTests
                 }
                 return cdn === 'offline' ? Promise.reject(new TypeError('offline')) : realFetch(`${origin}/decoder/tampered.js`, init);
             };
-            await check('decoder-offline-assembly', decoder, 'served', 'assembly', assembly);
+            const offline = await decoderInstance('offline');
+            await check('decoder-offline-assembly', offline, 'served', 'assembly', assembly);
+            console.log(`CASE decoder-offline-next ${leftToRuntime(offline, 'assembly', `${origin}/served/_framework/${assembly}`)}`);
             cdn = 'tampered';
-            await check('decoder-tampered-assembly', decoder, 'served', 'assembly', assembly);
+            await check('decoder-tampered-assembly', await decoderInstance('tampered'), 'served', 'assembly', assembly);
             cdn = 'online';
-            await check('decoder-runtime', decoder, 'served', 'dotnetwasm', runtime);
-            await check('decoder-assembly', decoder, 'served', 'assembly', assembly);
+            const decoder = await decoderInstance('decoder');
+            await check('decoder-runtime', decoder, 'served', 'dotnetwasm', runtime, integrityOf(runtime));
+            // A decoded file that matches its integrity value keeps the loader's content type.
+            await check('decoder-assembly', decoder, 'served', 'assembly', assembly, integrityOf(assembly));
+            // A decoded file is checked against the integrity value, so another file's hash falls back to the original, which fails it too.
+            await check('decoder-assembly-other-integrity', decoder, 'served', 'assembly', assembly, integrityOf(runtime));
             globalThis.fetch = realFetch;
             globalThis.DecompressionStream = decompressionStream;
             server.close();
@@ -1582,7 +1594,9 @@ public class PackageIntegrationTests
             Assert.That(output, Does.Contain("CASE cross-origin runtime"));
             Assert.That(output, Does.Contain("CASE missing-runtime-integrity-disabled same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-offline-assembly same application/wasm"));
+            Assert.That(output, Does.Contain("CASE decoder-offline-next runtime"));
             Assert.That(output, Does.Contain("CASE decoder-tampered-assembly same application/wasm"));
+            Assert.That(output, Does.Contain("CASE decoder-assembly-other-integrity rejected"));
             Assert.That(output, Does.Contain("CASE decoder-runtime same application/wasm"));
             Assert.That(output, Does.Contain("CASE decoder-assembly same application/octet-stream"));
         });
