@@ -737,11 +737,10 @@ public class PackageIntegrationTests
     }
 
     // The fixture zips its Content tree, generated shaders included, into a PixelyBrowserVfsFile; UseDefaultContent's loader finds it at
-    // /Content.pk3. A second publish after a change and a deletion in Content replaces the archive.
+    // /Content.pk3. A second publish after a change and a deletion in Content replaces the archive. Only the runs need node.
     [Test]
     public async Task BrowserPublishLoadsAndReplacesContentArchiveThroughDefaultContent()
     {
-        RequireNode();
         string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
         DeleteConsumerOutputs("BrowserContentConsumer");
         string greetingPath = Path.Combine(consumerDirectory, "Content", "greeting.txt");
@@ -758,13 +757,26 @@ public class PackageIntegrationTests
                 Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
                 Assert.That(ReadArchiveEntries(archivePath), Does.Contain(BrowserContentGeneratedShader).And.Contain("removed.txt"));
             });
-            AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
+            if (HasNode())
+            {
+                AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
+            }
 
             File.WriteAllText(greetingPath, "Hello from the changed archive\n");
             File.Delete(removedPath);
             await PublishConsumerAsync(consumerDirectory, "browser-wasm");
-            Assert.That(ReadArchiveEntries(archivePath), Does.Not.Contain("removed.txt"));
-            Assert.That(await RunBrowserBundleAsync(wwwroot, environment: null), Does.Contain("RESULT greeting Hello from the changed archive"));
+            using (ZipArchive archive = ZipFile.OpenRead(archivePath))
+            {
+                Assert.Multiple(() =>
+                {
+                    Assert.That(archive.Entries.Select(entry => entry.FullName.Replace('\\', '/')), Does.Not.Contain("removed.txt"));
+                    Assert.That(ReadPackageEntry(archive, "greeting.txt"), Does.Contain("Hello from the changed archive"));
+                });
+            }
+            if (HasNode())
+            {
+                Assert.That(await RunBrowserBundleAsync(wwwroot, environment: null), Does.Contain("RESULT greeting Hello from the changed archive"));
+            }
         }
         finally
         {
@@ -924,11 +936,11 @@ public class PackageIntegrationTests
     // Content.pk3 duplicates the archive, content.pk3 too because MSBuild batches ignoring case; index.html is the default page's asset,
     // with no wwwroot file; the module initializer takes the mandatory fingerprint expression #[.{fingerprint}]!. A quote would break a
     // property function. Content.pk3/x.pak needs the archive as a folder, css/site.css the file css as a folder, and index.html/x.pak the
-    // default page as a folder. _framework/x.pak is not in the pattern build: batching ignores case, so it would share a batch with
-    // _Framework/x.pak, whose rejection implies its own.
+    // default page as a folder. _framework/y.pak and _Framework/x.pak differ in more than case: batching ignores case, so with one name
+    // they would share a batch and only one spelling would reach the pattern.
     private static readonly TestCaseData[] InvalidTargetPathBuilds =
     [
-        new TestCaseData(new[] { "/abs.pak", "C:/abs.pak", "../up.pak", "a/./b.pak", "a//b.pak", "a\\b.pak", "dir/", "*.pak", "a?.pak", "[ab].pak", "_content/x.pak", "_Framework/x.pak", "_framework", "Bob's.pak" },
+        new TestCaseData(new[] { "/abs.pak", "C:/abs.pak", "../up.pak", "a/./b.pak", "a//b.pak", "a\\b.pak", "dir/", "*.pak", "a?.pak", "[ab].pak", "_content/x.pak", "_framework/y.pak", "_Framework/x.pak", "_framework", "Bob's.pak" },
             null, Array.Empty<string>(), false).SetArgDisplayNames("pattern"),
         new TestCaseData(new[] { "Content.pk3", "content.pk3" }, null, Array.Empty<string>(), false).SetArgDisplayNames("duplicate"),
         new TestCaseData(new[] { "index.html", "static.txt", "x.lib.module.js", "linked.txt" }, null, new[] { "static.txt", "x.lib.module.js" }, true).SetArgDisplayNames("static web asset"),
@@ -961,11 +973,13 @@ public class PackageIntegrationTests
             string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: properties);
             string[] errors = output.Split('\n').Where(line => line.Contains("error PIXELY0011:", StringComparison.Ordinal)).Select(line => line[(line.IndexOf("error PIXELY0011:", StringComparison.Ordinal) + "error PIXELY0011:".Length)..]).Distinct().ToArray();
             Assert.That(errors, Has.Length.EqualTo(1), output);
+            // Whole words, so that C:/abs.pak in the error does not stand in for /abs.pak.
+            string[] words = errors[0].Split(' ').Select(word => word.TrimEnd(',', '.')).ToArray();
             Assert.Multiple(() =>
             {
                 foreach (string rejectedPath in rejectedPaths ?? targetPaths)
                 {
-                    Assert.That(errors[0], Does.Contain(rejectedPath));
+                    Assert.That(words, Does.Contain(rejectedPath), errors[0]);
                 }
             });
         }
