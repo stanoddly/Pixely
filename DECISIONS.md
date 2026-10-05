@@ -11,7 +11,7 @@ With `PIXELY_DIAGNOSTICS`, `PixelyApp.RunFrame` and `RenderCoordinator<T>` time 
 - SDL GPU has no timestamp queries, so the swapchain wait stands in for GPU time, and timing each renderer would measure only command recording.
 - Counting draws, binds, render passes and uploaded bytes needs hooks in `RenderPass`, `CommandBuffer` and `CopyPass`. The time split already tells a CPU-bound frame from a GPU-bound one, so they are left out.
 
-Cost: a custom render coordinator's swapchain wait counts as render time. Only the root provider's GPU device is reported. Reports end after 4096 frames at most, so a loop faster than about 800 frames per second reports more often than every 5 seconds.
+Cost: the swapchain wait of a custom render coordinator, or of a `RenderCoordinator<T>` the app creates itself, counts as render time. Only the root provider's GPU device is reported. Reports end after 4096 frames at most, so a loop faster than about 800 frames per second reports more often than every 5 seconds.
 
 ## 2026-10-02: Brotli decompression in the page is opt-in
 

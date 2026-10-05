@@ -4,6 +4,8 @@ using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Utilities;
+using SDL;
 
 namespace Pixely.Tests;
 
@@ -319,12 +321,64 @@ public class RenderCoordinatorTests
         Assert.That(calls, Is.EqualTo(new[] { "acquire", "dispose", "uploads", "submit" }));
     }
 
+    [Test]
+    public void Execute_WithDiagnostics_CountsOnlyTheAcquireAsSwapchainWait()
+    {
+        RecordingLogger logger = new();
+        long now = 0;
+        // One timestamp tick is one second, so the five-tick frame ends a report period.
+        PerformanceDiagnostics diagnostics = new(logger, null, () => now, 1);
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(new List<string>(), new TestRenderContextSource(),
+            new ActionRenderer(() => now += 1), diagnostics: diagnostics, acquiring: () => now += 4);
+
+        diagnostics.BeginFrame();
+        diagnostics.EndUpdate();
+        coordinator.Execute();
+        diagnostics.EndRender();
+        diagnostics.EndFrame();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Messages.First(), Is.EqualTo("Swapchain of view 0: 640x480, B8G8R8A8Unorm, present mode vsync"));
+            Assert.That(logger.Messages.Last(), Does.Contain(", render 1000.00/1000.00/1000.00, swapchain wait 4000.00/4000.00/4000.00;"));
+        });
+    }
+
+    [Test]
+    public void Execute_WithDiagnosticsWhenNoTextureComesBack_ReportsNoSwapchain()
+    {
+        RecordingLogger logger = new();
+        PerformanceDiagnostics diagnostics = new(logger, null, () => 0, 1);
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(new List<string>(), new TestRenderContextSource(), hasTexture: false,
+            diagnostics: diagnostics);
+
+        coordinator.Execute();
+
+        Assert.That(logger.Messages, Is.Empty);
+    }
+
+    [Test]
+    public void UseWindowRendering_PassesRegisteredDiagnosticsToTheCoordinator()
+    {
+        PerformanceDiagnostics diagnostics = new(null, null);
+        PixelyAppBuilder builder = CreateBuilder(new List<string>());
+        builder.AddSingleton(diagnostics);
+        ServiceProvider provider = builder.BuildServiceProvider();
+
+        IRenderCoordinator coordinator = provider.GetRequiredService<IRenderCoordinator>();
+
+        FieldInfo field = coordinator.GetType().GetField("_diagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.That(field.GetValue(coordinator), Is.SameAs(diagnostics));
+    }
+
     private static RenderCoordinator<TestRenderContext> CreateCoordinator(
         List<string> calls,
         TestRenderContextSource renderContextSource,
         IRenderer<TestRenderContext>? renderer = null,
         bool renderable = true,
-        bool hasTexture = true)
+        bool hasTexture = true,
+        PerformanceDiagnostics? diagnostics = null,
+        Action? acquiring = null)
     {
         PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
         builder.AddSingleton(renderer ?? new TestRenderer("root", calls));
@@ -332,11 +386,13 @@ public class RenderCoordinatorTests
         TestWindow window = (TestWindow)provider.GetRequiredService<Window>();
         window.Renderable = renderable;
         window.HasTexture = hasTexture;
+        window.Acquiring = acquiring;
         return new RenderCoordinator<TestRenderContext>(
             window,
             new RecordingGpu(calls),
             renderContextSource,
-            provider.GetRequiredService<ServiceRegistry<IRenderer<TestRenderContext>>>());
+            provider.GetRequiredService<ServiceRegistry<IRenderer<TestRenderContext>>>(),
+            diagnostics);
     }
 
     // Records the coordinator's GPU calls in order. The command buffer is a token the test contexts never use.
@@ -368,6 +424,16 @@ public class RenderCoordinatorTests
         public void Cancel(CommandBuffer commandBuffer)
         {
             _calls.Add("cancel");
+        }
+    }
+
+    private sealed class ActionRenderer(Action action) : IRenderer<TestRenderContext>
+    {
+        public int RenderOrder => 0;
+
+        public void Render(TestRenderContext renderContext)
+        {
+            action();
         }
     }
 
@@ -431,13 +497,17 @@ public class RenderCoordinatorTests
 
         public bool HasTexture { get; set; }
 
+        // Runs while the texture is acquired, standing in for the wait.
+        public Action? Acquiring { get; set; }
+
         public override bool IsRenderable => Renderable;
 
         public override TextureFormat ColorTargetFormat => throw new NotSupportedException();
 
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
         {
-            swapchainTexture = null!;
+            Acquiring?.Invoke();
+            swapchainTexture = new SwapchainTexture(Pointer<SDL_GPUTexture>.Null, new ShortSize(640, 480), TextureFormat.B8G8R8A8Unorm);
             return HasTexture;
         }
     }

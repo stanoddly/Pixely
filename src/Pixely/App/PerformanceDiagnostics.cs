@@ -9,7 +9,7 @@ namespace Pixely.App;
 
 // Frame timing, the GPU device, the swapchains and GPU memory, written to the log while PixelyConfig.EnableDiagnostics is on.
 // See docs/diagnostics.md for what the numbers mean.
-internal sealed class PerformanceDiagnostics
+internal sealed class PerformanceDiagnostics : IDisposable
 {
     internal const string LoggerCategoryName = "Pixely.Diagnostics";
 
@@ -36,6 +36,8 @@ internal sealed class PerformanceDiagnostics
     private long _renderEnd;
     private long _waitStart;
     private long _waitTime;
+    private long _inputWaitStart;
+    private long _inputWaitTime;
 
     internal PerformanceDiagnostics(ILogger? logger, GpuDevice? gpuDevice)
         : this(logger, gpuDevice, Stopwatch.GetTimestamp, Stopwatch.Frequency)
@@ -58,9 +60,10 @@ internal sealed class PerformanceDiagnostics
     {
         _frameStart = _getTimestamp();
         _waitTime = 0;
+        _inputWaitTime = 0;
     }
 
-    // Stage transitions, events and updates.
+    // Stage transitions, events and updates, without the input wait.
     internal void EndUpdate()
     {
         _updateEnd = _getTimestamp();
@@ -82,6 +85,17 @@ internal sealed class PerformanceDiagnostics
         _waitTime += _getTimestamp() - _waitStart;
     }
 
+    // The time a headless app blocks on standard input for its next command, which is the operator's time, not the app's.
+    internal void BeginInputWait()
+    {
+        _inputWaitStart = _getTimestamp();
+    }
+
+    internal void EndInputWait()
+    {
+        _inputWaitTime += _getTimestamp() - _inputWaitStart;
+    }
+
     // Reports a window's swapchain on its first texture and whenever its size or format changes.
     internal void OnSwapchainAcquired(Window window, SwapchainTexture swapchainTexture)
     {
@@ -99,16 +113,16 @@ internal sealed class PerformanceDiagnostics
     }
 
     // The frame time is measured from the end of the previous frame, so it includes the wait of a frame that no window drew
-    // and, in the browser, the time until the next animation frame.
+    // and, in the browser, the time until the next animation frame. The input wait is left out.
     internal void EndFrame()
     {
         long frameEnd = _getTimestamp();
-        long frameTime = frameEnd - (_hasPreviousFrame ? _previousFrameEnd : _frameStart);
+        long frameTime = frameEnd - (_hasPreviousFrame ? _previousFrameEnd : _frameStart) - _inputWaitTime;
         _hasPreviousFrame = true;
         _previousFrameEnd = frameEnd;
 
         _frameTimes[_sampleCount] = frameTime;
-        _updateTimes[_sampleCount] = _updateEnd - _frameStart;
+        _updateTimes[_sampleCount] = _updateEnd - _frameStart - _inputWaitTime;
         _renderTimes[_sampleCount] = _renderEnd - _updateEnd - _waitTime;
         _waitTimes[_sampleCount] = _waitTime;
         _sampleCount++;
@@ -116,11 +130,26 @@ internal sealed class PerformanceDiagnostics
 
         if (_periodTime >= ReportSeconds * _timestampFrequency || _sampleCount == SampleCapacity)
         {
-            Write(DescribePeriod());
-            _sampleCount = 0;
-            _periodTime = 0;
-            _periodStartGen0Collections = GC.CollectionCount(0);
+            ReportPeriod();
         }
+    }
+
+    // Reports the frames since the last report, so a run shorter than a period still reports. The provider disposes this before
+    // the logger factory and the GPU device it was created from.
+    public void Dispose()
+    {
+        if (_sampleCount > 0)
+        {
+            ReportPeriod();
+        }
+    }
+
+    private void ReportPeriod()
+    {
+        Write(DescribePeriod());
+        _sampleCount = 0;
+        _periodTime = 0;
+        _periodStartGen0Collections = GC.CollectionCount(0);
     }
 
     private string DescribePeriod()
