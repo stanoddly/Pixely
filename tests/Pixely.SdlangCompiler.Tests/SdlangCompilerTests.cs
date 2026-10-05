@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Pixely.ShaderCommon;
 
@@ -801,6 +802,28 @@ public class SdlangCompilerTests
     }
 
     [Test]
+    public void CompileShader_FailedCompileThenRestoredSource_KeepsPreviousOutputs()
+    {
+        string shaderPath = Path.Combine(_testDir, "restored.slang");
+        File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: false);
+
+        string generatedDirectory = Path.Combine(_testDir, ".generated");
+        Dictionary<string, string> originalOutputs = HashGeneratedFiles(generatedDirectory);
+
+        // The SPIR-V target writes its output before the draw parameters check rejects it.
+        File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs.Replace("SV_VertexID", "SV_StartVertexLocation"));
+        Assert.Throws<ShaderCompilationException>(() => compiler.Compile([shaderPath], force: false));
+
+        File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs);
+        compiler.Compile([shaderPath], force: false);
+
+        Assert.That(HashGeneratedFiles(generatedDirectory), Is.EquivalentTo(originalOutputs));
+    }
+
+    [Test]
     public void CompileShader_ValidVertexShaderWithBindings_Succeeds()
     {
         string shaderPath = Path.Combine(_testDir, "valid_vertex.slang");
@@ -1570,6 +1593,9 @@ public class SdlangCompilerTests
         File.WriteAllText(shaderPath, shaderContent);
         return shaderPath;
     }
+
+    private static Dictionary<string, string> HashGeneratedFiles(string generatedDirectory) =>
+        Directory.GetFiles(generatedDirectory).ToDictionary(path => Path.GetFileName(path), path => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
 
     private static GraphicsShaderProgramMetadataDto ReadGraphicsMetadata(string metadataPath)
     {

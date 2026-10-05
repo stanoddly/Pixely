@@ -182,7 +182,6 @@ public class SdlangCompiler
     private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
         FileInfo filePath,
         DirectoryInfo tempDir,
-        DirectoryInfo outputDir,
         string entryPoint,
         string outputName)
     {
@@ -192,7 +191,7 @@ public class SdlangCompiler
         List<ShaderInstanceDto> shaderInstances = new List<ShaderInstanceDto>();
         shaderInstances.Add(CompileTarget(
             filePath,
-            outputDir,
+            tempDir,
             ShaderFormatDto.SpirV,
             entryPoint,
             outputName,
@@ -203,7 +202,7 @@ public class SdlangCompiler
         ShaderReflection reflection = ParseReflectionData(reflectionFile, entryPoint);
         foreach (ShaderFormatDto format in AdditionalTargetFormats)
         {
-            shaderInstances.Add(CompileTarget(filePath, outputDir, format, entryPoint, outputName, reflection: reflection));
+            shaderInstances.Add(CompileTarget(filePath, tempDir, format, entryPoint, outputName, reflection: reflection));
         }
 
         return (dependencyFile, reflection, shaderInstances);
@@ -1765,7 +1764,6 @@ public class SdlangCompiler
                 (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) = CompileTargets(
                     filePath,
                     tempDir,
-                    outputDir,
                     "computeMain",
                     filenameWithoutExt);
                 List<string> sourceDependencies = ReadSourceDependencies(filePath, dependencyFile);
@@ -1775,6 +1773,7 @@ public class SdlangCompiler
                     throw new ShaderCompilationException("Entry point 'computeMain' is not a compute shader.");
                 }
 
+                ReplaceGeneratedOutputs(tempDir, outputDir, filenameWithoutExt, shaderInstances);
                 WriteComputeMetadata(
                     outputDir,
                     filenameWithoutExt,
@@ -1792,7 +1791,6 @@ public class SdlangCompiler
             (FileInfo graphicsDependencyFile, ShaderReflection vertexReflection, List<ShaderInstanceDto> vertexShaders) = CompileTargets(
                 filePath,
                 tempDir,
-                outputDir,
                 "vertexMain",
                 $"{filenameWithoutExt}.vertex");
             List<string> graphicsSourceDependencies = ReadSourceDependencies(filePath, graphicsDependencyFile);
@@ -1805,7 +1803,6 @@ public class SdlangCompiler
             (FileInfo _, ShaderReflection fragmentReflection, List<ShaderInstanceDto> fragmentShaders) = CompileTargets(
                 filePath,
                 tempDir,
-                outputDir,
                 "fragmentMain",
                 $"{filenameWithoutExt}.fragment");
             if (fragmentReflection.Stage != ShaderStageDto.Fragment)
@@ -1813,6 +1810,7 @@ public class SdlangCompiler
                 throw new ShaderCompilationException("Entry point 'fragmentMain' is not a fragment shader.");
             }
 
+            ReplaceGeneratedOutputs(tempDir, outputDir, filenameWithoutExt, [.. vertexShaders, .. fragmentShaders]);
             WriteGraphicsMetadata(
                 outputDir,
                 filenameWithoutExt,
@@ -1827,6 +1825,22 @@ public class SdlangCompiler
         finally
         {
             tempDir.Delete(true);
+        }
+    }
+
+    // Every target compiles into the temporary directory first, so a failed target leaves the previous outputs untouched.
+    // The metadata makes the cache valid, so it goes before the outputs change and the caller writes it after they are
+    // all in place. A build interrupted in between then finds no metadata and recompiles.
+    private static void ReplaceGeneratedOutputs(
+        DirectoryInfo tempDir,
+        DirectoryInfo outputDir,
+        string filenameWithoutExt,
+        IEnumerable<ShaderInstanceDto> shaderInstances)
+    {
+        File.Delete(Path.Combine(outputDir.FullName, $"{filenameWithoutExt}.metadata.json"));
+        foreach (ShaderInstanceDto shaderInstance in shaderInstances)
+        {
+            File.Copy(Path.Combine(tempDir.FullName, shaderInstance.Filename), Path.Combine(outputDir.FullName, shaderInstance.Filename), overwrite: true);
         }
     }
 
