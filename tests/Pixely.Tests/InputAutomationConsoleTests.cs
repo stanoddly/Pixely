@@ -128,12 +128,33 @@ public sealed class InputAutomationConsoleTests
         });
     }
 
+    [Test]
+    public void Update_RecordsTheReadsAsInputWait()
+    {
+        long now = 0;
+        FrameTimings timings = new(() => now, FrameTimingsTests.Frequency);
+        Fixture fixture = CreateConsole(new AdvancingReader("key press A;", () => now += 100), timings);
+
+        timings.BeginFrame();
+        fixture.Console.Update();
+        timings.EndUpdate();
+        timings.EndRender();
+        timings.EndFrame();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(now, Is.Positive);
+            Assert.That(timings.UpdateTimes[0], Is.Zero);
+            Assert.That(timings.FrameTimes[0], Is.Zero);
+        });
+    }
+
     private static Fixture CreateConsole(string input)
     {
         return CreateConsole(new StringReader(input));
     }
 
-    private static Fixture CreateConsole(TextReader input)
+    private static Fixture CreateConsole(TextReader input, IFrameTimingRecorder? frameTimingRecorder = null)
     {
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
@@ -145,7 +166,17 @@ public sealed class InputAutomationConsoleTests
 
         AppControl appControl = new();
         InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
-        return new Fixture(new InputAutomationConsole(interpreter, input, appControl, NullFrameTimingRecorder.Instance), presses, appControl);
+        return new Fixture(new InputAutomationConsole(interpreter, input, appControl, frameTimingRecorder ?? NullFrameTimingRecorder.Instance), presses, appControl);
+    }
+
+    // Advances a clock on every character read, standing in for a read that blocks.
+    private sealed class AdvancingReader(string input, Action advance) : StringReader(input)
+    {
+        public override int Read()
+        {
+            advance();
+            return base.Read();
+        }
     }
 
     private sealed record Fixture(InputAutomationConsole Console, ConcurrentQueue<Scancode> Presses, AppControl AppControl);

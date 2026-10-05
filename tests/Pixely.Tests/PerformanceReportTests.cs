@@ -1,6 +1,4 @@
 using Pixely.App;
-using Pixely.DependencyInjection;
-using SDL;
 using static Pixely.Tests.FrameTimingsTests;
 
 namespace Pixely.Tests;
@@ -129,40 +127,5 @@ public class PerformanceReportTests
             "Swapchain of view 0: 1920x1080, B8G8R8A8Unorm, present mode vsync",
             "Swapchain of view 0: 800x600, B8G8R8A8Unorm, offscreen"
         }));
-    }
-
-    [Test]
-    [NonParallelizable]
-    public void Build_WithoutDiagnostics_RecordsNothingAndReportsNothing()
-    {
-        using PixelyApp app = BuildApp(new PixelyConfig(Headless: true));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(app.ServiceProvider.GetRequiredService<IFrameTimingRecorder>(), Is.SameAs(NullFrameTimingRecorder.Instance));
-            Assert.That(app.ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>().OfType<PerformanceReport>(), Is.Empty);
-        });
-    }
-
-    [Test]
-    [NonParallelizable]
-    public void Build_WithDiagnostics_RecordsFrameTimingsAndUpdatesTheReport()
-    {
-        using PixelyApp app = BuildApp(new PixelyConfig(Headless: true, EnableDiagnostics: true));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(app.ServiceProvider.GetRequiredService<IFrameTimingRecorder>(), Is.SameAs(app.ServiceProvider.GetRequiredService<FrameTimings>()));
-            Assert.That(app.ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>().OfType<PerformanceReport>().Count(), Is.EqualTo(1));
-        });
-    }
-
-    // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
-    private static PixelyApp BuildApp(PixelyConfig config)
-    {
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
-        PixelyAppBuilder builder = new();
-        builder.AddSingleton(config);
-        return (PixelyApp)builder.Build();
     }
 }

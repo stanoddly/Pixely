@@ -27,13 +27,6 @@ public class PixelyAppBuilder : ServiceCollection
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<BasicRenderContext>>(static renderer => renderer.RenderOrder);
         AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
-
-        // Diagnostics, see docs/diagnostics.md. While they are off, the frame records its timings to a recorder that does
-        // nothing and nothing reports them.
-        AddSingleton<FrameTimings>(static (PixelyConfig? config) => config is { EnableDiagnostics: true } ? new FrameTimings() : null);
-        AddSingleton<IFrameTimingRecorder>(static (FrameTimings? timings) => timings ?? (IFrameTimingRecorder)NullFrameTimingRecorder.Instance);
-        AddSingleton<PerformanceReport>(static (FrameTimings? timings, ILoggerFactory? loggerFactory, GpuDevice? gpuDevice) =>
-            timings is null ? null : new PerformanceReport(timings, loggerFactory?.CreateLogger(PerformanceReport.LoggerCategoryName), gpuDevice));
     }
 
     public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)
@@ -103,6 +96,15 @@ public class PixelyAppBuilder : ServiceCollection
         {
             AddSingleton<IImageLoader, SdlImageLoader>();
         }
+
+        // Diagnostics, see docs/diagnostics.md. Registered last, and the report resolves the logger factory and the GPU device only
+        // while diagnostics are on, so they change neither when the app's services are created nor when they are disposed. While
+        // they are off, the frame records its timings to a recorder that does nothing and no report is created.
+        AddSingleton<FrameTimings>(static provider => provider.GetRequiredService<PixelyConfig>().EnableDiagnostics ? new FrameTimings() : null);
+        AddSingleton<IFrameTimingRecorder>(static provider => provider.GetService<FrameTimings>() ?? (IFrameTimingRecorder)NullFrameTimingRecorder.Instance);
+        AddSingleton<PerformanceReport>(static provider => provider.GetService<FrameTimings>() is { } timings
+            ? new PerformanceReport(timings, provider.GetService<ILoggerFactory>()?.CreateLogger(PerformanceReport.LoggerCategoryName), provider.GetService<GpuDevice>())
+            : null);
 
         ServiceProvider serviceProvider = BuildServiceProvider();
         return new PixelyApp(

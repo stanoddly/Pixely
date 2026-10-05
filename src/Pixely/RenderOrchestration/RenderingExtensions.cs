@@ -47,6 +47,7 @@ public static class RenderingExtensions
             new RenderCoordinatorGpu(provider.GetRequiredService<GpuDevice>(), provider.GetRequiredService<GpuMemorySystem>()),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>(),
             provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>(),
-            provider.GetRequiredService<IFrameTimingRecorder>()));
+            // PixelyAppBuilder.Build() registers the recorder; a provider built without it records nothing.
+            provider.GetService<IFrameTimingRecorder>() ?? NullFrameTimingRecorder.Instance));
     }
 }

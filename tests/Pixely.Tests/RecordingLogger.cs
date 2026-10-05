@@ -8,8 +8,16 @@ internal sealed class RecordingLogger : ILogger
 
     public IEnumerable<string> Messages => Entries.Select(entry => entry.Message);
 
+    // Set when the factory that handed the logger out is disposed, after which a real logger drops what it is given.
+    public bool IsClosed { get; set; }
+
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
     {
+        if (IsClosed)
+        {
+            throw new ObjectDisposedException(nameof(RecordingLogger), "Logged after its logger factory was disposed.");
+        }
+
         Entries.Add((logLevel, formatter(state, exception)));
     }
 

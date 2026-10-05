@@ -6,7 +6,7 @@ using SDL;
 
 namespace Pixely.App;
 
-// Writes FrameTimings to the log: the GPU device at startup, each swapchain change, and the frames of every period. Registered
+// Writes FrameTimings to the log: the GPU device at startup, each swapchain change, and the frames of every period. Created
 // only while PixelyConfig.EnableDiagnostics is on. See docs/diagnostics.md for what the numbers mean.
 internal sealed class PerformanceReport : IUpdatable, IDisposable
 {
@@ -18,7 +18,8 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
     private readonly ILogger? _logger;
     private readonly GpuDevice? _gpuDevice;
     private readonly double[] _sortedTimes = new double[FrameTimings.Capacity];
-    private int _periodStartGen0Collections = GC.CollectionCount(0);
+    private bool _hasGen0Baseline;
+    private int _periodStartGen0Collections;
 
     internal PerformanceReport(FrameTimings timings, ILogger? logger, GpuDevice? gpuDevice)
     {
@@ -35,22 +36,30 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
 
     public void Update()
     {
+        // Taken on the first frame rather than at construction, so the collections of building the app and loading its content
+        // are not counted against the first period.
+        if (!_hasGen0Baseline)
+        {
+            _periodStartGen0Collections = GC.CollectionCount(0);
+            _hasGen0Baseline = true;
+        }
+
         WriteSwapchainChanges();
         if (_timings.Duration >= PeriodSeconds || _timings.IsFull)
         {
-            WritePeriod(true);
+            WritePeriod();
         }
     }
 
-    // Reports the frames since the last report, so a run shorter than a period still reports. The provider disposes this before
-    // the logger factory and the GPU device it was created from, but after the stages and the services created after it, which
-    // have released their GPU memory by then, so the GPU memory is left out.
+    // Reports the frames since the last report, so a run shorter than a period still reports. Build() registers this last, so
+    // the root provider disposes it before its own services, among them the logger factory and the GPU device. Stages are
+    // disposed before it, so their GPU memory is no longer counted.
     public void Dispose()
     {
         WriteSwapchainChanges();
         if (_timings.Count > 0)
         {
-            WritePeriod(false);
+            WritePeriod();
         }
     }
 
@@ -69,7 +78,7 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
         _timings.ClearSwapchainChanges();
     }
 
-    private void WritePeriod(bool withGpuMemory)
+    private void WritePeriod()
     {
         int gen0Collections = GC.CollectionCount(0) - _periodStartGen0Collections;
         StringBuilder builder = new();
@@ -79,7 +88,7 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
         AppendTimes(builder, ", render ", _timings.RenderTimes);
         AppendTimes(builder, ", swapchain wait ", _timings.SwapchainWaitTimes);
         builder.Append(CultureInfo.InvariantCulture, $"; gen0 collections {(double)gen0Collections / _timings.Count:F2} per frame");
-        if (withGpuMemory && _gpuDevice != null)
+        if (_gpuDevice != null)
         {
             GpuMemoryStats memory = _gpuDevice.MemoryStats;
             builder.Append($"; GPU memory {FormatBytes(memory.TotalBytes)}, textures {FormatBytes(memory.TextureBytes)}");

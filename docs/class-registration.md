@@ -486,7 +486,7 @@ A throwing `OnDisposing` callback, service `Dispose()`, or child provider does n
 ## Lifecycle
 
 1. **Registration** — call `AddSingleton`, `AddTransient`, `AddAlias`, `OnBuilt`, `OnActivated`, `OnDisposing` on `ServiceCollection`.
-2. **`BuildServiceProvider`** — singleton services are instantiated in dependency order; `OnActivated` callbacks fire per singleton instance.
+2. **`BuildServiceProvider`** — singleton services are instantiated type by type, in the order each service type was first registered, and in registration order within a type. A singleton that another one depends on is created first, when it is first needed. `OnActivated` callbacks fire per singleton instance.
 3. **`OnBuilt` callbacks** — fire in registration order after all singleton services exist.
 4. **Freeze** — the provider becomes immutable; build-time resolvers are cleared.
 5. **Runtime resolution** — `GetRequiredService`, `GetService`, `GetServices` serve singletons from frozen arrays and construct transients on demand.
