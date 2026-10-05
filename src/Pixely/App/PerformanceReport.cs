@@ -18,7 +18,8 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
     private readonly ILogger? _logger;
     private readonly GpuDevice? _gpuDevice;
     private readonly double[] _sortedTimes = new double[FrameTimings.Capacity];
-    private int _periodStartGen0Collections = GC.CollectionCount(0);
+    private bool _hasGen0Baseline;
+    private int _periodStartGen0Collections;
 
     internal PerformanceReport(FrameTimings timings, ILogger? logger, GpuDevice? gpuDevice)
     {
@@ -35,6 +36,14 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
 
     public void Update()
     {
+        // Taken on the first frame rather than at construction, so the collections of building the app and loading its content
+        // are not counted against the first period.
+        if (!_hasGen0Baseline)
+        {
+            _periodStartGen0Collections = GC.CollectionCount(0);
+            _hasGen0Baseline = true;
+        }
+
         WriteSwapchainChanges();
         if (_timings.Duration >= PeriodSeconds || _timings.IsFull)
         {

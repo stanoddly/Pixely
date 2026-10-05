@@ -4,7 +4,7 @@ Pixely can report where a frame's time goes, which GPU device it runs on, and ho
 
 ## Turning it on
 
-Set `PIXELY_DIAGNOSTICS` to `1` or `true`, or register `new PixelyConfig(EnableDiagnostics: true)`. The variable overrides the configured value, like the other variables in [headless.md](headless.md#environment-variables). Diagnostics are off by default. When they are off, nothing is created and each frame pays only a few null checks.
+Set `PIXELY_DIAGNOSTICS` to `1` or `true`, or register `new PixelyConfig(EnableDiagnostics: true)`. The variable overrides the configured value, like the other variables in [headless.md](headless.md#environment-variables). Diagnostics are off by default. When they are off, each frame calls a recorder that does nothing, and no report is created.
 
 The report is written to the logger category `Pixely.Diagnostics` at the `Information` level when the app registers a logger factory (see [logging.md](logging.md)), and to standard output otherwise.
 
