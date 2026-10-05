@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Pixely.App;
+using Pixely.DependencyInjection;
+using Pixely.Gpu;
 using SDL;
 
 namespace Pixely.Tests;
@@ -8,31 +10,98 @@ namespace Pixely.Tests;
 [NonParallelizable]
 public class PixelyAppDiagnosticsTests
 {
-    // The logger factory stands in for the GPU device, which a test cannot create without a GPU: both are services the report
-    // resolves, so registering diagnostics must not create either ahead of the app's own services.
+    private static readonly string[] ConfigVariables =
+    [
+        PixelyConfigEnvironment.GpuBackendVariable,
+        PixelyConfigEnvironment.HeadlessVariable,
+        PixelyConfigEnvironment.SdlLoggingVariable,
+        PixelyConfigEnvironment.GpuValidationVariable,
+        PixelyConfigEnvironment.PreferLowPowerGpuVariable,
+        PixelyConfigEnvironment.DiagnosticsVariable
+    ];
+
+    private readonly Dictionary<string, string?> _savedVariables = new();
+
+    // The variables override the config each test builds with, so they are cleared for the test and restored after it.
+    [SetUp]
+    public void ClearConfigVariables()
+    {
+        foreach (string variable in ConfigVariables)
+        {
+            _savedVariables[variable] = Environment.GetEnvironmentVariable(variable);
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    [TearDown]
+    public void RestoreConfigVariables()
+    {
+        foreach ((string variable, string? value) in _savedVariables)
+        {
+            Environment.SetEnvironmentVariable(variable, value);
+        }
+    }
+
+    // The report resolves the logger factory and the GPU device, so registering diagnostics must not create either ahead of the
+    // app's own services. The device factory returns no device, so no GPU is needed, but still records when it runs.
     [TestCase(false)]
     [TestCase(true)]
     public void Build_KeepsTheCreationOrderOfTheAppsServices(bool enableDiagnostics)
     {
-        List<object> created = new();
-        object appService = new();
-        RecordingLoggerFactory loggerFactory = new(new RecordingLogger());
+        List<string> created = new();
         PixelyAppBuilder builder = CreateBuilder(new PixelyConfig(EnableDiagnostics: enableDiagnostics));
-        builder.OnActivated((instance, _) => created.Add(instance));
-        builder.AddSingleton<object>(_ => appService);
-        builder.AddSingleton<ILoggerFactory>(_ => loggerFactory);
+        builder.AddSingleton<AppService>(_ =>
+        {
+            created.Add("app service");
+            return new AppService();
+        });
+        builder.AddSingleton<ILoggerFactory>(_ =>
+        {
+            created.Add("logger factory");
+            return new RecordingLoggerFactory(new RecordingLogger());
+        });
+        builder.AddSingleton<GpuDevice>(_ =>
+        {
+            created.Add("GPU device");
+            return null;
+        });
 
         using IPixelyApp app = builder.Build();
 
-        Assert.That(created.IndexOf(appService), Is.LessThan(created.IndexOf(loggerFactory)));
+        Assert.That(created, Is.EqualTo(new[] { "app service", "logger factory", "GPU device" }));
     }
 
+    [Test]
+    public void Build_WithoutDiagnostics_RecordsNothingAndReportsNothing()
+    {
+        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig()).Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(app.ServiceProvider.GetRequiredService<IFrameTimingRecorder>(), Is.SameAs(NullFrameTimingRecorder.Instance));
+            Assert.That(app.ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>().OfType<PerformanceReport>(), Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Build_WithDiagnostics_RecordsFrameTimingsAndUpdatesTheReport()
+    {
+        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig(EnableDiagnostics: true)).Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(app.ServiceProvider.GetRequiredService<IFrameTimingRecorder>(), Is.SameAs(app.ServiceProvider.GetRequiredService<FrameTimings>()));
+            Assert.That(app.ServiceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>().OfType<PerformanceReport>().Count(), Is.EqualTo(1));
+        });
+    }
+
+    // The recording logger throws once its factory is disposed, so the final report must come before the logger factory goes.
     [Test]
     public void RunFrame_RecordsTheFrameAndDisposeReportsIt()
     {
         long now = 0;
         RecordingLogger logger = new();
-        // Diagnostics stay off, so Build() registers no FrameTimings of its own and this one, on a fake clock, is used.
+        // Diagnostics stay off, so the FrameTimings that Build() registers comes back null and this one, on a fake clock, is used.
         FrameTimings timings = new(() => now, FrameTimingsTests.Frequency);
         PixelyAppBuilder builder = CreateBuilder(new PixelyConfig());
         builder.AddSingleton<ILoggerFactory>(_ => new RecordingLoggerFactory(logger));
@@ -56,6 +125,8 @@ public class PixelyAppDiagnosticsTests
         builder.AddSingleton(config);
         return builder;
     }
+
+    private sealed class AppService;
 
     private sealed class ClockUpdatable(Action advance) : IUpdatable
     {

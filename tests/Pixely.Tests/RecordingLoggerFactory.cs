@@ -16,5 +16,6 @@ internal sealed class RecordingLoggerFactory(RecordingLogger logger) : ILoggerFa
 
     public void Dispose()
     {
+        logger.IsClosed = true;
     }
 }

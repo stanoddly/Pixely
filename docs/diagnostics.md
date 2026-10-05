@@ -37,7 +37,7 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 | `render` | Every render coordinator, without the swapchain wait: recording commands, uploads and submits. |
 | `swapchain wait` | Waiting for each window's swapchain texture, added up over the windows. |
 | `gen0 collections` | Garbage collections of generation 0, per frame. |
-| `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. The report on dispose leaves it out, because stages and windows have released theirs by then. |
+| `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. In the report on dispose, stages have already released theirs. |
 
 ## Reading the numbers
 
