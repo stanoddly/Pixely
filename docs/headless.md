@@ -83,9 +83,9 @@ builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar")
 
 An agent usually needs no code change for this: `PIXELY_HEADLESS=1` switches any app to headless mode, see [Environment variables](#environment-variables).
 
-`screenshot <path>` writes the last rendered frame as a PNG; the file exists once the command's frame has run. A path that cannot be written, or a screenshot before the first frame has rendered, throws out of the frame loop. Commands run before that frame's render, so a screenshot right after the commands it should show is one frame too early; put `wait 1;` before it. The capture waits for the GPU, so that frame takes longer.
+`screenshot <path>` writes the last rendered frame as a PNG; the file exists once the command's frame has run. Missing directories of the path are created. A path that still cannot be written, such as one whose parent is a file, throws out of the frame loop. So does a screenshot before the first frame has rendered. Commands run before that frame's render, so a screenshot right after the commands it should show is one frame too early; put `wait 1;` before it. The capture waits for the GPU, so that frame takes longer.
 
-The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar, non-indexed `Image` as a PNG; `Build()` registers the SDL one unless the app registered its own.
+The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`, and `IImageWriter` saves a tightly packed, non-planar, non-indexed `Image` as a PNG, creating missing directories; `Build()` registers the SDL one unless the app registered its own.
 
 ### Environment variables
 

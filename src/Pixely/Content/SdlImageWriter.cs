@@ -20,6 +20,12 @@ internal class SdlImageWriter : IImageWriter
             throw new NotSupportedException($"Only tightly packed images in a non-planar, non-indexed pixel format can be saved, not {image.PixelFormat} with {pixels.Length} bytes for {width}x{height}.");
         }
 
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (directory != null)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
         fixed (byte* pixelsPointer = pixels)
         {
             Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurfaceFrom(width, height, format, (IntPtr)pixelsPointer, pitch);
