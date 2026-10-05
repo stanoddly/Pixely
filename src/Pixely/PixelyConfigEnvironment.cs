@@ -1,6 +1,6 @@
 namespace Pixely;
 
-/// <summary>Overrides <see cref="PixelyConfig"/> from environment variables so automation can switch an app to headless mode, another GPU backend or the low-power GPU without changing its code.</summary>
+/// <summary>Overrides <see cref="PixelyConfig"/> from environment variables so automation can switch an app to headless mode, another GPU backend or the low-power GPU, or turn on diagnostics, without changing its code.</summary>
 internal static class PixelyConfigEnvironment
 {
     internal const string GpuBackendVariable = "PIXELY_GRAPHICS";
@@ -8,6 +8,7 @@ internal static class PixelyConfigEnvironment
     internal const string SdlLoggingVariable = "PIXELY_SDL_LOGGING";
     internal const string GpuValidationVariable = "PIXELY_GPU_VALIDATION";
     internal const string PreferLowPowerGpuVariable = "PIXELY_PREFER_LOW_POWER_GPU";
+    internal const string DiagnosticsVariable = "PIXELY_DIAGNOSTICS";
 
     public static void Apply(PixelyConfig config, Func<string, string?> getVariable)
     {
@@ -16,6 +17,7 @@ internal static class PixelyConfigEnvironment
         config.EnableSdlLogging = ResolveBoolean(config.EnableSdlLogging, SdlLoggingVariable, getVariable(SdlLoggingVariable));
         config.EnableGpuValidation = ResolveBoolean(config.EnableGpuValidation, GpuValidationVariable, getVariable(GpuValidationVariable));
         config.PreferLowPowerGpu = ResolveBoolean(config.PreferLowPowerGpu, PreferLowPowerGpuVariable, getVariable(PreferLowPowerGpuVariable));
+        config.EnableDiagnostics = ResolveBoolean(config.EnableDiagnostics, DiagnosticsVariable, getVariable(DiagnosticsVariable));
     }
 
     internal static GpuBackend ResolveGpuBackend(GpuBackend configuredBackend, string? environmentBackend)

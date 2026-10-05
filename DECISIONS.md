@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-05: Performance diagnostics are logged, measured at three points, and count no draws
+
+With `PIXELY_DIAGNOSTICS`, `PixelyApp.RunFrame` and `RenderCoordinator<T>` record the update, the render and the swapchain wait of every frame in `FrameTimings`, through `IFrameTimingRecorder`. `PerformanceReport`, an updatable, logs the average, 95th percentile and maximum of each every 5 seconds, together with gen0 collections and GPU memory, and the GPU device at startup and each window's swapchain. Without diagnostics the recorder is `NullFrameTimingRecorder` and no report is registered. This replaces `PerformanceTracker`, which Pixely never registered and which read the frame clock, so in headless mode it reported the fixed step.
+
+- The numbers must be readable on a kiosk compositor, where the screen is the game, so they go to the log instead of an overlay.
+- .NET metrics with `dotnet-counters` would give percentiles and gen0 collections for free, but a NativeAOT app needs `EventSourceSupport` at build time. Diagnostics must turn on in the shipped build with an environment variable.
+- SDL GPU has no timestamp queries, so the swapchain wait stands in for GPU time, and timing each renderer would measure only command recording.
+- Recording and reporting are separate, so the callers depend on a recorder that does nothing while diagnostics are off instead of checking for null, and another reader, such as an overlay, can use the same timings.
+- Counting draws, binds, render passes and uploaded bytes needs hooks in `RenderPass`, `CommandBuffer` and `CopyPass`. The time split already tells a CPU-bound frame from a GPU-bound one, so they are left out.
+
+Cost: the swapchain wait of a custom render coordinator, or of a `RenderCoordinator<T>` the app creates itself, counts as render time. Only the root provider's GPU device is reported. Reports end after 4096 frames at most, so a loop faster than about 800 frames per second reports more often than every 5 seconds. The report is written during the next frame's update, so that update also counts writing it.
+
 ## 2026-10-02: Brotli decompression in the page is opt-in
 
 With `PixelyBrowserBrotli=true`, the default `main.js` installs a resource loader that fetches the `.br` copy of `dotnet.native.wasm`, of each assembly and of the ICU data and decompresses it in the page. The page uses `DecompressionStream` where it decodes Brotli and google/brotli's JavaScript decoder from jsDelivr elsewhere. Without the property nothing changes.

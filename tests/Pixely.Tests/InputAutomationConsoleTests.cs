@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Pipes;
+using Pixely.App;
 using Pixely.Content;
 using Pixely.Input;
 
@@ -144,7 +145,7 @@ public sealed class InputAutomationConsoleTests
 
         AppControl appControl = new();
         InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
-        return new Fixture(new InputAutomationConsole(interpreter, input, appControl), presses, appControl);
+        return new Fixture(new InputAutomationConsole(interpreter, input, appControl, NullFrameTimingRecorder.Instance), presses, appControl);
     }
 
     private sealed record Fixture(InputAutomationConsole Console, ConcurrentQueue<Scancode> Presses, AppControl AppControl);

@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using System.Text;
+using Pixely.App;
 
 namespace Pixely.Input;
 
@@ -14,14 +15,17 @@ internal sealed class InputAutomationConsole : IUpdatable
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
     private readonly AppControl _appControl;
+    private readonly IFrameTimingRecorder _frameTimingRecorder;
     private readonly StringBuilder _command = new();
     private int _heldFrames;
 
-    internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl)
+    internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl,
+        IFrameTimingRecorder frameTimingRecorder)
     {
         _interpreter = interpreter;
         _input = input;
         _appControl = appControl;
+        _frameTimingRecorder = frameTimingRecorder;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
@@ -36,7 +40,10 @@ internal sealed class InputAutomationConsole : IUpdatable
         // After a quit the frame is the last one, so nothing after it is read.
         while (_heldFrames == 0 && !_appControl.QuitRequested)
         {
-            if (ReadCommand() is not { } command)
+            _frameTimingRecorder.BeginInputWait();
+            string? command = ReadCommand();
+            _frameTimingRecorder.EndInputWait();
+            if (command is null)
             {
                 _appControl.Quit();
                 return;
