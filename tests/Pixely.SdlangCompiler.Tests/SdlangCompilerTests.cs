@@ -817,9 +817,14 @@ public class SdlangCompilerTests
         File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs.Replace("SV_VertexID", "SV_StartVertexLocation"));
         Assert.Throws<ShaderCompilationException>(() => compiler.Compile([shaderPath], force: false));
 
+        // A skipped compile leaves the metadata's timestamp alone, so the outputs are the cached ones, not a fresh compile.
+        string metadataPath = Path.Combine(generatedDirectory, "restored.metadata.json");
+        DateTime metadataWriteTime = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(metadataPath, metadataWriteTime);
         File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs);
         compiler.Compile([shaderPath], force: false);
 
+        Assert.That(File.GetLastWriteTimeUtc(metadataPath), Is.EqualTo(metadataWriteTime));
         Assert.That(HashGeneratedFiles(generatedDirectory), Is.EquivalentTo(originalOutputs));
     }
 

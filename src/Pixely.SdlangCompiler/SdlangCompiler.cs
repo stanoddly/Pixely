@@ -1829,8 +1829,8 @@ public class SdlangCompiler
     }
 
     // Every target compiles into the temporary directory first, so a failed target leaves the previous outputs untouched.
-    // The metadata makes the cache valid, so it goes before the outputs change and the caller writes it after they are
-    // all in place. A build interrupted in between then finds no metadata and recompiles.
+    // The metadata makes the cache valid, so this deletes it before the outputs change and the caller writes it after they
+    // are all in place. A build interrupted in between then finds no metadata and recompiles.
     private static void ReplaceGeneratedOutputs(
         DirectoryInfo tempDir,
         DirectoryInfo outputDir,
