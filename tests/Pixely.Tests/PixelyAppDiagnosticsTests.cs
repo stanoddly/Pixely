@@ -104,7 +104,8 @@ public class PixelyAppDiagnosticsTests
         // Diagnostics stay off, so the FrameTimings that Build() registers comes back null and this one, on a fake clock, is used.
         FrameTimings timings = new(() => now, FrameTimingsTests.Frequency);
         PixelyAppBuilder builder = CreateBuilder(new PixelyConfig());
-        builder.AddSingleton<ILoggerFactory>(_ => new RecordingLoggerFactory(logger));
+        // Only the report's category, so SDL's messages, such as those it logs on quit, cannot come after the report.
+        builder.AddSingleton<ILoggerFactory>(_ => new RecordingLoggerFactory(logger, PerformanceReport.LoggerCategoryName));
         builder.AddSingleton<FrameTimings>(_ => timings);
         builder.AddSingleton<IUpdatable>(_ => new ClockUpdatable(() => now += 200));
         IPixelyApp app = builder.Build();
