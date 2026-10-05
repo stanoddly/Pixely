@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-05: Every draw starts at vertex 0 and instance 0
+
+`RenderPass` has no first instance or vertex offset, and the compiler maps `SV_InstanceID` and `SV_VertexID` to Slang's Vulkan semantics for SPIR-V and Metal. Pixely no longer requests Vulkan's `shaderDrawParameters`.
+
+- Slang compiles `SV_InstanceID` and `SV_VertexID` as Direct3D defines them. For SPIR-V it subtracts `BaseInstance` and `BaseVertex`, which needs `shaderDrawParameters`, and Slang has no option to turn that off.
+- SDL skips every Vulkan device that lacks a requested feature. The Raspberry Pi 5's V3D driver lacks this one, so SDL picked llvmpipe, Mesa's CPU renderer.
+- WGSL never subtracts, so a non-zero start already gave different IDs in the browser.
+- The Vulkan semantics read the plain index, so with every draw starting at 0 they equal the Direct3D ones. DXC rejects them, so the Direct3D 12 and WGSL compiles keep the original semantics.
+- The slangc options are part of the source hash, so outputs compiled before this change are compiled again.
+
+Cost: a shader that needs a start reads it from a uniform, and a draw over a later vertex range needs its own indices. The shader metadata no longer records whether a vertex shader reads either ID.
+
 ## 2026-10-05: Performance diagnostics are logged, measured at three points, and count no draws
 
 With `PIXELY_DIAGNOSTICS`, `PixelyApp.RunFrame` and `RenderCoordinator<T>` record the update, the render and the swapchain wait of every frame in `FrameTimings`, through `IFrameTimingRecorder`. `PerformanceReport`, an updatable, logs the average, 95th percentile and maximum of each every 5 seconds, together with gen0 collections and GPU memory, and the GPU device at startup and each window's swapchain. Without diagnostics the recorder is `NullFrameTimingRecorder` and no report is registered. This replaces `PerformanceTracker`, which Pixely never registered and which read the frame clock, so in headless mode it reported the fixed step.

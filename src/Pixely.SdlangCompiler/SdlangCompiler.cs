@@ -27,7 +27,6 @@ internal record struct ResourceBinding(string Name, ResourceType Type, int Space
 internal sealed record ShaderReflection(
     ShaderStageDto Stage,
     ShaderBindingLayout BindingLayout,
-    ShaderSystemValueInputs SystemValueInputs,
     uint ThreadCountX,
     uint ThreadCountY,
     uint ThreadCountZ,
@@ -107,6 +106,7 @@ public class SdlangCompiler
     private static string CalculateSourceHash(FileInfo filePath, IEnumerable<string> sourceDependencies)
     {
         using IncrementalHash sourceHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        sourceHash.AppendData(CommandLineOptionsHash);
         Span<byte> pathLength = stackalloc byte[sizeof(int)];
 
         foreach (string sourceDependency in sourceDependencies)
@@ -157,15 +157,28 @@ public class SdlangCompiler
         "-fvk-u-shift", "0", "all"
     ];
 
+    // Slang compiles SV_InstanceID and SV_VertexID as Direct3D defines them, so for SPIR-V and Metal it subtracts the draw's
+    // first instance and vertex, and SPIR-V needs Vulkan's shaderDrawParameters to read them. Every draw starts at 0, so the
+    // Vulkan semantics read the plain index. DXC rejects them and WGSL never subtracts.
+    private static readonly string[] VulkanSystemValueDefines =
+    [
+        "-DSV_InstanceID=SV_VulkanInstanceID",
+        "-DSV_VertexID=SV_VulkanVertexID"
+    ];
+
     // Slang exports every SPIR-V entry point as "main" unless told to keep the source name. Keeping it makes
     // the generated entry point the source entry point for every target.
     private static readonly Dictionary<ShaderFormatDto, List<string>> CommandLineOptions = new()
     {
-        { ShaderFormatDto.SpirV, ["-fvk-use-entrypoint-name"] },
+        { ShaderFormatDto.SpirV, ["-fvk-use-entrypoint-name", .. VulkanSystemValueDefines] },
         { ShaderFormatDto.Dxil, ["-profile", "sm_6_0"] },
-        { ShaderFormatDto.Msl, [] },
+        { ShaderFormatDto.Msl, [.. VulkanSystemValueDefines] },
         { ShaderFormatDto.Wgsl, [] }
     };
+
+    // Part of every source hash, so outputs that other options produced are compiled again.
+    private static readonly byte[] CommandLineOptionsHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n",
+        VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString()))))));
 
     private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
         FileInfo filePath,
@@ -1158,7 +1171,6 @@ public class SdlangCompiler
             }
         }
 
-        ShaderSystemValueInputs systemValueInputs = AnalyzeSystemValueInputs(selectedEntryPoint);
         ShaderUniformSlotSizes shaderUniformSlots = new();
 
         byte samplers = 0;
@@ -1274,7 +1286,7 @@ public class SdlangCompiler
             shaderUniformSlots,
             BuildStorageBufferElementSizes(storageBufferElementSizesByRegisterIndex, readOnlyTextureCount),
             BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesByRegisterIndex, readWriteStorageTextures));
-        return new ShaderReflection(stage, shaderBindingLayout, systemValueInputs, threadCountX, threadCountY, threadCountZ, resourceBindings);
+        return new ShaderReflection(stage, shaderBindingLayout, threadCountX, threadCountY, threadCountZ, resourceBindings);
     }
 
     internal static HashSet<string> GetUsedParameterNames(JsonElement entryPoint)
@@ -1322,56 +1334,6 @@ public class SdlangCompiler
         }
 
         return usedParameterNames;
-    }
-
-    private static ShaderSystemValueInputs AnalyzeSystemValueInputs(JsonElement entryPoint)
-    {
-        bool usesVertexId = false;
-        bool usesInstanceId = false;
-
-        AnalyzeSystemValueInputs(entryPoint, ref usesVertexId, ref usesInstanceId, 0);
-
-        return new ShaderSystemValueInputs(usesVertexId, usesInstanceId);
-    }
-
-    private static void AnalyzeSystemValueInputs(
-        JsonElement element,
-        ref bool usesVertexId,
-        ref bool usesInstanceId,
-        int depth)
-    {
-        if (depth > MaxReflectionTraversalDepth)
-        {
-            throw new ShaderCompilationException("Slang reflection JSON exceeds the maximum supported nesting depth.");
-        }
-
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            if (element.TryGetProperty("semanticName", out JsonElement semanticNameElement))
-            {
-                string? semanticName = semanticNameElement.GetString();
-                if (string.Equals(semanticName, "SV_VERTEXID", StringComparison.OrdinalIgnoreCase))
-                {
-                    usesVertexId = true;
-                }
-                else if (string.Equals(semanticName, "SV_INSTANCEID", StringComparison.OrdinalIgnoreCase))
-                {
-                    usesInstanceId = true;
-                }
-            }
-
-            foreach (JsonProperty property in element.EnumerateObject())
-            {
-                AnalyzeSystemValueInputs(property.Value, ref usesVertexId, ref usesInstanceId, depth + 1);
-            }
-        }
-        else if (element.ValueKind == JsonValueKind.Array)
-        {
-            foreach (JsonElement item in element.EnumerateArray())
-            {
-                AnalyzeSystemValueInputs(item, ref usesVertexId, ref usesInstanceId, depth + 1);
-            }
-        }
     }
 
     private static (int space, int index) GetBindingInfo(JsonElement param)
@@ -1487,7 +1449,6 @@ public class SdlangCompiler
         DirectoryInfo outputDir,
         string filenameWithoutExt,
         ShaderBindingLayout vertexBindingLayout,
-        ShaderSystemValueInputs vertexSystemValueInputs,
         List<ShaderInstanceDto> vertexShaders,
         ShaderBindingLayout fragmentBindingLayout,
         List<ShaderInstanceDto> fragmentShaders,
@@ -1497,10 +1458,9 @@ public class SdlangCompiler
         FileInfo metadataFile = new FileInfo(Path.Combine(outputDir.FullName, $"{filenameWithoutExt}.metadata.json"));
         GraphicsShaderProgramMetadataDto metadata = new GraphicsShaderProgramMetadataDto
         {
-            Vertex = new GraphicsVertexShaderStageMetadataDto
+            Vertex = new GraphicsShaderStageMetadataDto
             {
                 BindingLayout = vertexBindingLayout,
-                SystemValueInputs = vertexSystemValueInputs,
                 Shaders = vertexShaders
             },
             Fragment = new GraphicsShaderStageMetadataDto
@@ -1842,7 +1802,6 @@ public class SdlangCompiler
                 outputDir,
                 filenameWithoutExt,
                 vertexReflection.BindingLayout,
-                vertexReflection.SystemValueInputs,
                 vertexShaders,
                 fragmentReflection.BindingLayout,
                 fragmentShaders,

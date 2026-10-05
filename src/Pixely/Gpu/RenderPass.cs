@@ -287,18 +287,13 @@ public class RenderPass : IDisposable
 
     public void DrawPrimitiveInstanced(uint instanceCount)
     {
-        DrawPrimitiveInstanced(instanceCount, 0);
-    }
-
-    public void DrawPrimitiveInstanced(uint instanceCount, uint firstInstance)
-    {
         ThrowIfDisposed();
 
-        _validator.OnDrawPrimitive(this, firstInstance);
+        _validator.OnDrawPrimitive(this);
 
         unsafe
         {
-            SDL3.SDL_DrawGPUPrimitives(_nativePointer, _verticesCount, instanceCount, 0, firstInstance);
+            SDL3.SDL_DrawGPUPrimitives(_nativePointer, _verticesCount, instanceCount, 0, 0);
         }
     }
 
@@ -308,42 +303,27 @@ public class RenderPass : IDisposable
         DrawIndexedPrimitive(indexCount);
     }
 
-    public void DrawIndexedPrimitive(uint indexCount, uint firstIndex = 0, int vertexOffset = 0)
+    public void DrawIndexedPrimitive(uint indexCount, uint firstIndex = 0)
     {
-        DrawIndexedPrimitiveInstanced(indexCount, 1, firstIndex, vertexOffset, 0);
+        DrawIndexedPrimitiveInstanced(indexCount, 1, firstIndex);
     }
 
     public void DrawIndexedPrimitiveInstanced(uint instanceCount)
     {
-        DrawIndexedPrimitiveInstanced(instanceCount, 0);
+        DrawIndexedPrimitiveInstanced(_indexCount, instanceCount, 0);
     }
 
-    public void DrawIndexedPrimitiveInstanced(uint instanceCount, uint firstInstance)
-    {
-        uint indexCount = _indexCount;
-        DrawIndexedPrimitiveInstanced(indexCount, instanceCount, 0, 0, firstInstance);
-    }
-
-    public void DrawIndexedPrimitiveInstanced(
-        uint indexCount,
-        uint instanceCount,
-        uint firstIndex,
-        int vertexOffset,
-        uint firstInstance)
+    // Every draw starts at vertex 0 and instance 0, so SV_VertexID and SV_InstanceID count from 0 on every backend
+    // without Vulkan's shaderDrawParameters.
+    public void DrawIndexedPrimitiveInstanced(uint indexCount, uint instanceCount, uint firstIndex)
     {
         ThrowIfDisposed();
 
-        _validator.OnDrawIndexedPrimitive(this, indexCount, firstIndex, vertexOffset, firstInstance);
+        _validator.OnDrawIndexedPrimitive(this, indexCount, firstIndex);
 
         unsafe
         {
-            SDL3.SDL_DrawGPUIndexedPrimitives(
-                _nativePointer,
-                indexCount,
-                instanceCount,
-                firstIndex,
-                vertexOffset,
-                firstInstance);
+            SDL3.SDL_DrawGPUIndexedPrimitives(_nativePointer, indexCount, instanceCount, firstIndex, 0, 0);
         }
     }
 

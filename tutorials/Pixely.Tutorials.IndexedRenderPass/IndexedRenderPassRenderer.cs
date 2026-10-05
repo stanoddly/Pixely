@@ -41,16 +41,15 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
         renderPass.BindVertexBuffer(_vertexBuffer);
         renderPass.BindIndexBuffer(_indexBuffer);
 
-        renderPass.DrawIndexedPrimitive(3, 0, 0);
-        renderPass.DrawIndexedPrimitive(3, 3, 0);
-        // Reuses the same six index values against the second quad's vertex range.
-        renderPass.DrawIndexedPrimitive(6, 0, 4);
+        renderPass.DrawIndexedPrimitive(3, 0);
+        renderPass.DrawIndexedPrimitive(3, 3);
+        renderPass.DrawIndexedPrimitive(6, 6);
 
         renderPass.BindGraphicsPipeline(_instancedPipeline);
         renderPass.BindVertexBuffer(_vertexBuffer);
         renderPass.BindVertexStorageBuffer(_instanceOffsets);
         renderPass.BindFragmentStorageBuffer(_instanceTints);
-        renderPass.DrawIndexedPrimitiveInstanced(6, 3, 0, 8, 0);
+        renderPass.DrawIndexedPrimitiveInstanced(6, 3, 12);
     }
 
     public static IndexedRenderPassRenderer Create(
@@ -79,7 +78,13 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
         ushort[] indices =
         [
             0, 2, 1,
-            2, 3, 1
+            2, 3, 1,
+
+            4, 6, 5,
+            6, 7, 5,
+
+            8, 10, 9,
+            10, 11, 9
         ];
 
         Vector4[] instanceOffsets =

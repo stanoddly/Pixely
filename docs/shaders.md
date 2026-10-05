@@ -267,6 +267,20 @@ struct Input
 
 The order of `TEXCOORD` semantics must match the order of fields in the C# vertex struct.
 
+## Vertex and Instance IDs
+
+Every draw starts at vertex 0 and instance 0, so `SV_VertexID` and `SV_InstanceID` count from 0 on every backend. `RenderPass` has no first instance or vertex offset. Only indexed draws can start later, at `firstIndex`, which no built-in reads.
+
+A shader that needs a start reads it from a uniform:
+
+```hlsl
+output.Tile = tiles[start + input.InstanceID];
+```
+
+A draw over a later range of the vertex buffer uses indices that point into that range.
+
+The compiler maps `SV_VertexID` and `SV_InstanceID` to `SV_VulkanVertexID` and `SV_VulkanInstanceID` for SPIR-V and Metal. Slang would otherwise subtract the draw's first vertex and instance, which SPIR-V can read only with Vulkan's `shaderDrawParameters`. Some drivers lack it, such as the Raspberry Pi 5's, so Pixely does not request it. Shaders write `SV_VertexID` and `SV_InstanceID`: DXC rejects the Vulkan semantics, so a shader that declares them fails the Direct3D 12 compile.
+
 ## Multiple Render Targets (MRT)
 
 Fragment shader with multiple outputs for deferred rendering:
@@ -307,7 +321,6 @@ For each graphics shader program, the build generates one `.metadata.json` file:
   "kind": "Graphics",
   "vertex": {
     "bindingLayout": {},
-    "systemValueInputs": {},
     "shaders": [
       {
         "format": "SpirV",
@@ -345,7 +358,7 @@ Three limits. The reflection classifies every read-only texture as sampled, so a
 ## Notes
 
 - Graphics programs use the fixed source entry points `vertexMain` and `fragmentMain`; compute shaders use `computeMain`
-- Shader compilation is cached based on the source hash, Slang version, and expected target formats
+- Shader compilation is cached based on the source hash, which also covers the slangc options, the Slang version, and expected target formats
 - SPIR-V is used by Vulkan, DXIL by Direct3D 12, and MSL by Metal
 - Always use explicit register bindings for constant buffers
 - Space3 is used for fragment constant buffers by convention

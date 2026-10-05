@@ -191,7 +191,7 @@ public class GraphicsPipelineBuilder
         {
             throw new NotSupportedException(
                 "SDL GPU currently requires vertex buffer instance_step_rate to be 0. " +
-                "Use SV_InstanceID with storage buffers for instancing, and keep firstInstance at 0 when the shader depends on SV_InstanceID.");
+                "Use SV_InstanceID with storage buffers for instancing.");
         }
 
         uint bufferSlot = (uint)_info.SdlGpuVertexBufferDescriptions.Count;
