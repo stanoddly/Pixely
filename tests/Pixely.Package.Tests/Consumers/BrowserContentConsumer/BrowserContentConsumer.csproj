@@ -28,6 +28,9 @@
         <ProjectReference Include="..\BrowserContentLibrary\BrowserContentLibrary.csproj" Condition="'$(BrowserContentConsumerLibraryAsset)' == 'true'" />
     </ItemGroup>
 
+    <!-- Several items at once, from a file PackageIntegrationTests writes, so no property function has to split a list of target paths. -->
+    <Import Project="$(BrowserContentConsumerExtraItems)" Condition="'$(BrowserContentConsumerExtraItems)' != ''" />
+
     <!-- The browser branch of the Nerudova policy: zipped on every build, so a file deleted from Content leaves the archive. -->
     <Target Name="PackageBrowserContent" Condition="'$(BrowserContentConsumerArchive)' != 'false'">
         <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/Content" DestinationFile="$(IntermediateOutputPath)Content.pk3" Overwrite="true" />
