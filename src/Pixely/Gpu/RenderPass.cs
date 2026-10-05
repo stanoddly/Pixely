@@ -313,8 +313,8 @@ public class RenderPass : IDisposable
         DrawIndexedPrimitiveInstanced(_indexCount, instanceCount, 0);
     }
 
-    // Every draw starts at vertex 0 and instance 0, so SV_VertexID and SV_InstanceID count from 0 on every backend
-    // without Vulkan's shaderDrawParameters.
+    // Draws have no base vertex or first instance, so SV_VertexID and SV_InstanceID agree on every backend without
+    // Vulkan's shaderDrawParameters.
     public void DrawIndexedPrimitiveInstanced(uint indexCount, uint instanceCount, uint firstIndex)
     {
         ThrowIfDisposed();

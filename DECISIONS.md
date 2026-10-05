@@ -2,7 +2,7 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-10-05: Every draw starts at vertex 0 and instance 0
+## 2026-10-05: Draws have no base vertex or first instance
 
 `RenderPass` has no first instance or vertex offset, and the compiler maps `SV_InstanceID` and `SV_VertexID` to Slang's Vulkan semantics for SPIR-V and Metal. Pixely no longer requests Vulkan's `shaderDrawParameters`.
 
@@ -11,6 +11,7 @@ Design decisions with the constraints that decided them and their known costs, n
 - WGSL never subtracts, so a non-zero start already gave different IDs in the browser.
 - The Vulkan semantics read the plain index, so with every draw starting at 0 they equal the Direct3D ones. DXC rejects them, so the Direct3D 12 and WGSL compiles keep the original semantics.
 - The slangc options are part of the source hash, so outputs compiled before this change are compiled again.
+- The defines match only the exact spelling, while Slang reads semantics in any case. A SPIR-V output that still declares the `DrawParameters` capability fails the build, which also catches the base vertex, base instance and draw index semantics.
 
 Cost: a shader that needs a start reads it from a uniform, and a draw over a later vertex range needs its own indices. The shader metadata no longer records whether a vertex shader reads either ID.
 

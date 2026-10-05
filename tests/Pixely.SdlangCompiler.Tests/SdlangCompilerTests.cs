@@ -786,6 +786,20 @@ public class SdlangCompilerTests
         Assert.That(metal, Does.Not.Contain("base_instance").And.Not.Contain("base_vertex"));
     }
 
+    [TestCase("sv_vertexid")]
+    [TestCase("SV_VertexId")]
+    [TestCase("SV_StartVertexLocation")]
+    public void CompileShader_VertexShaderReadingDrawParameters_Throws(string vertexIdSemantic)
+    {
+        string shaderPath = Path.Combine(_testDir, "draw_parameters.slang");
+        File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs.Replace("SV_VertexID", vertexIdSemantic));
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        ShaderCompilationException? exception = Assert.Throws<ShaderCompilationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(exception.Message, Does.Contain("shaderDrawParameters"));
+    }
+
     [Test]
     public void CompileShader_ValidVertexShaderWithBindings_Succeeds()
     {

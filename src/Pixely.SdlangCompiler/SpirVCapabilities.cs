@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Pixely.SdlangCompiler.Tests;
+namespace Pixely.SdlangCompiler;
 
 /// <summary>Reads the capabilities a SPIR-V module declares.</summary>
 internal static class SpirVCapabilities

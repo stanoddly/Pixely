@@ -269,7 +269,7 @@ The order of `TEXCOORD` semantics must match the order of fields in the C# verte
 
 ## Vertex and Instance IDs
 
-Every draw starts at vertex 0 and instance 0, so `SV_VertexID` and `SV_InstanceID` count from 0 on every backend. `RenderPass` has no first instance or vertex offset. Only indexed draws can start later, at `firstIndex`, which no built-in reads.
+Draws have no first instance or vertex offset. `SV_InstanceID` counts from 0 in every draw. `SV_VertexID` counts from 0 in a non-indexed draw. In an indexed draw it is the index value read from the index buffer, whatever `firstIndex` is.
 
 A shader that needs a start reads it from a uniform:
 
@@ -279,7 +279,7 @@ output.Tile = tiles[start + input.InstanceID];
 
 A draw over a later range of the vertex buffer uses indices that point into that range.
 
-The compiler maps `SV_VertexID` and `SV_InstanceID` to `SV_VulkanVertexID` and `SV_VulkanInstanceID` for SPIR-V and Metal. Slang would otherwise subtract the draw's first vertex and instance, which SPIR-V can read only with Vulkan's `shaderDrawParameters`. Some drivers lack it, such as the Raspberry Pi 5's, so Pixely does not request it. Shaders write `SV_VertexID` and `SV_InstanceID`: DXC rejects the Vulkan semantics, so a shader that declares them fails the Direct3D 12 compile.
+The compiler maps `SV_VertexID` and `SV_InstanceID` to `SV_VulkanVertexID` and `SV_VulkanInstanceID` for SPIR-V and Metal. Slang would otherwise subtract the draw's first vertex and instance, which SPIR-V can read only with Vulkan's `shaderDrawParameters`. Some drivers lack it, such as the Raspberry Pi 5's, so Pixely does not request it. Shaders write `SV_VertexID` and `SV_InstanceID` in exactly this case, because the mapping matches only this spelling. DXC rejects the Vulkan semantics, so a shader that declares them fails the Direct3D 12 compile. A SPIR-V output that still needs `shaderDrawParameters` fails the build, for example from another spelling or from reading `SV_StartVertexLocation`, `SV_StartInstanceLocation` or `SV_DrawIndex`.
 
 ## Multiple Render Targets (MRT)
 

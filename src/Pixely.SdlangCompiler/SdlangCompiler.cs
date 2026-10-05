@@ -45,7 +45,6 @@ public class ShaderBindingValidationException(string message) : Exception(messag
 public class SdlangCompiler
 {
     private const string GeneratedShaderDirectory = ".generated";
-    private const int MaxReflectionTraversalDepth = 64;
     private static readonly string SlangVersion = GetSlangVersion();
     private static readonly ShaderFormatDto[] AdditionalTargetFormats =
         [ShaderFormatDto.Dxil, ShaderFormatDto.Msl, ShaderFormatDto.Wgsl];
@@ -158,8 +157,8 @@ public class SdlangCompiler
     ];
 
     // Slang compiles SV_InstanceID and SV_VertexID as Direct3D defines them, so for SPIR-V and Metal it subtracts the draw's
-    // first instance and vertex, and SPIR-V needs Vulkan's shaderDrawParameters to read them. Every draw starts at 0, so the
-    // Vulkan semantics read the plain index. DXC rejects them and WGSL never subtracts.
+    // first instance and vertex, and SPIR-V needs Vulkan's shaderDrawParameters to read them. Draws have no base vertex or
+    // first instance, so the Vulkan semantics read the same index. DXC rejects them and WGSL never subtracts.
     private static readonly string[] VulkanSystemValueDefines =
     [
         "-DSV_InstanceID=SV_VulkanInstanceID",
@@ -239,7 +238,11 @@ public class SdlangCompiler
         }
 
         ExecuteSlang(args, $"{format} shader compilation");
-        if (format == ShaderFormatDto.Msl)
+        if (format == ShaderFormatDto.SpirV)
+        {
+            ThrowIfReadsDrawParameters(outputFile, filePath, entryPoint);
+        }
+        else if (format == ShaderFormatDto.Msl)
         {
             NormalizeMetalBufferBindings(outputFile);
         }
@@ -249,6 +252,18 @@ public class SdlangCompiler
         }
 
         return new ShaderInstanceDto(format, outputFile.Name, entryPoint);
+    }
+
+    // The system value defines match only the exact spelling, while Slang reads semantics in any case, and the base vertex,
+    // base instance and draw index need shaderDrawParameters as well, which Pixely does not request.
+    private static void ThrowIfReadsDrawParameters(FileInfo outputFile, FileInfo filePath, string entryPoint)
+    {
+        if (SpirVCapabilities.Read(outputFile.FullName).Contains(SpirVCapabilities.DrawParameters))
+        {
+            throw new ShaderCompilationException(
+                $"Entry point '{entryPoint}' in {filePath.Name} reads the draw's base vertex, base instance or draw index, " +
+                "which needs Vulkan's shaderDrawParameters. Write SV_VertexID and SV_InstanceID in exactly this case.");
+        }
     }
 
     private ShaderSourceKind DiscoverShader(
