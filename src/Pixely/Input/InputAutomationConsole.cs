@@ -15,17 +15,17 @@ internal sealed class InputAutomationConsole : IUpdatable
     private readonly InputAutomationCommandInterpreter _interpreter;
     private readonly TextReader _input;
     private readonly AppControl _appControl;
-    private readonly PerformanceDiagnostics? _diagnostics;
+    private readonly IFrameTimingRecorder _frameTimingRecorder;
     private readonly StringBuilder _command = new();
     private int _heldFrames;
 
     internal InputAutomationConsole(InputAutomationCommandInterpreter interpreter, TextReader input, AppControl appControl,
-        PerformanceDiagnostics? diagnostics = null)
+        IFrameTimingRecorder frameTimingRecorder)
     {
         _interpreter = interpreter;
         _input = input;
         _appControl = appControl;
-        _diagnostics = diagnostics;
+        _frameTimingRecorder = frameTimingRecorder;
     }
 
     public int UpdateOrder => UpdateOrders.Input;
@@ -40,9 +40,9 @@ internal sealed class InputAutomationConsole : IUpdatable
         // After a quit the frame is the last one, so nothing after it is read.
         while (_heldFrames == 0 && !_appControl.QuitRequested)
         {
-            _diagnostics?.BeginInputWait();
+            _frameTimingRecorder.BeginInputWait();
             string? command = ReadCommand();
-            _diagnostics?.EndInputWait();
+            _frameTimingRecorder.EndInputWait();
             if (command is null)
             {
                 _appControl.Quit();

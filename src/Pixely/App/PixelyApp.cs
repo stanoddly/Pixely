@@ -18,7 +18,7 @@ public class PixelyApp : IPixelyApp
     private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
     private readonly ServiceRegistry<IUpdatable> _updatables;
     private readonly StageManager _stageManager;
-    private readonly PerformanceDiagnostics? _diagnostics;
+    private readonly IFrameTimingRecorder _frameTimingRecorder;
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
@@ -28,7 +28,7 @@ public class PixelyApp : IPixelyApp
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
         ServiceRegistry<IUpdatable> updatables,
         StageManager stageManager,
-        PerformanceDiagnostics? diagnostics)
+        IFrameTimingRecorder frameTimingRecorder)
     {
         ServiceProvider = serviceProvider;
         _frameClock = frameClock;
@@ -37,7 +37,7 @@ public class PixelyApp : IPixelyApp
         _renderCoordinators = renderCoordinators;
         _updatables = updatables;
         _stageManager = stageManager;
-        _diagnostics = diagnostics;
+        _frameTimingRecorder = frameTimingRecorder;
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -58,7 +58,7 @@ public class PixelyApp : IPixelyApp
     // requestAnimationFrame, calls this instead of Run, which never yields to its caller.
     public bool RunFrame()
     {
-        _diagnostics?.BeginFrame();
+        _frameTimingRecorder.BeginFrame();
         // start the frame before applying queued stage transitions
         _frameClock.StartFrame();
         _stageManager.ApplyPendingTransition();
@@ -66,7 +66,7 @@ public class PixelyApp : IPixelyApp
         _eventService.Process();
 
         Update(_updatables);
-        _diagnostics?.EndUpdate();
+        _frameTimingRecorder.EndUpdate();
 
         if (_appControl.QuitRequested)
         {
@@ -75,7 +75,7 @@ public class PixelyApp : IPixelyApp
 
         // finally render
         bool drawn = Render(_renderCoordinators);
-        _diagnostics?.EndRender();
+        _frameTimingRecorder.EndRender();
 #if !BROWSER
         // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
@@ -89,7 +89,7 @@ public class PixelyApp : IPixelyApp
             }
         }
 #endif
-        _diagnostics?.EndFrame();
+        _frameTimingRecorder.EndFrame();
 
         return true;
     }

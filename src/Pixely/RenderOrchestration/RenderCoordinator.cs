@@ -21,7 +21,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     private readonly IRenderCoordinatorGpu _gpu;
     private readonly RenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
-    private readonly PerformanceDiagnostics? _diagnostics;
+    private readonly IFrameTimingRecorder _frameTimingRecorder;
 
     public RenderCoordinator(
         Window window,
@@ -29,7 +29,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         GpuMemorySystem gpuMemorySystem,
         RenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers)
-        : this(window, new RenderCoordinatorGpu(gpuDevice, gpuMemorySystem), renderContextProvider, renderers)
+        : this(window, new RenderCoordinatorGpu(gpuDevice, gpuMemorySystem), renderContextProvider, renderers, NullFrameTimingRecorder.Instance)
     {
     }
 
@@ -38,13 +38,13 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         IRenderCoordinatorGpu gpu,
         RenderContextProvider<TRenderContext> renderContextProvider,
         ServiceRegistry<IRenderer<TRenderContext>> renderers,
-        PerformanceDiagnostics? diagnostics = null)
+        IFrameTimingRecorder frameTimingRecorder)
     {
         _window = window;
         _gpu = gpu;
         _renderContextProvider = renderContextProvider;
         _renderers = renderers;
-        _diagnostics = diagnostics;
+        _frameTimingRecorder = frameTimingRecorder;
     }
 
     public bool Execute()
@@ -75,7 +75,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         CommandBuffer commandBuffer = _gpu.AcquireCommandBuffer();
         bool hasTexture;
         SwapchainTexture swapchainTexture;
-        _diagnostics?.BeginSwapchainWait();
+        _frameTimingRecorder.BeginSwapchainWait();
         try
         {
             hasTexture = _window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture);
@@ -85,7 +85,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             _gpu.Cancel(commandBuffer);
             throw;
         }
-        _diagnostics?.EndSwapchainWait();
+        _frameTimingRecorder.EndSwapchainWait();
 
         if (!hasTexture)
         {
@@ -100,7 +100,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             return false;
         }
 
-        _diagnostics?.OnSwapchainAcquired(_window, swapchainTexture);
+        _frameTimingRecorder.OnSwapchainAcquired(_window, swapchainTexture);
 
         // A frame nobody sees, such as one of a hidden or minimized window on Metal or D3D12, is submitted without a context.
         bool isRenderable = false;

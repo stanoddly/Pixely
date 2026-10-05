@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using Pixely.Content;
 using Pixely.DependencyInjection;
+using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
@@ -25,6 +27,13 @@ public class PixelyAppBuilder : ServiceCollection
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<BasicRenderContext>>(static renderer => renderer.RenderOrder);
         AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
+
+        // Diagnostics, see docs/diagnostics.md. While they are off, the frame records its timings to a recorder that does
+        // nothing and nothing reports them.
+        AddSingleton<FrameTimings>(static (PixelyConfig? config) => config is { EnableDiagnostics: true } ? new FrameTimings() : null);
+        AddSingleton<IFrameTimingRecorder>(static (FrameTimings? timings) => timings ?? (IFrameTimingRecorder)NullFrameTimingRecorder.Instance);
+        AddSingleton<PerformanceReport>(static (FrameTimings? timings, ILoggerFactory? loggerFactory, GpuDevice? gpuDevice) =>
+            timings is null ? null : new PerformanceReport(timings, loggerFactory?.CreateLogger(PerformanceReport.LoggerCategoryName), gpuDevice));
     }
 
     public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)
@@ -80,8 +89,6 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
-        AddSingleton<PerformanceDiagnostics, PixelyFactory>();
-
         AddSingleton<PixelyFrameClock, PixelyFactory>();
         AddAlias<FrameClock, PixelyFrameClock>();
 
@@ -106,6 +113,6 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
             serviceProvider.GetRequiredService<StageManager>(),
-            serviceProvider.GetService<PerformanceDiagnostics>());
+            serviceProvider.GetRequiredService<IFrameTimingRecorder>());
     }
 }

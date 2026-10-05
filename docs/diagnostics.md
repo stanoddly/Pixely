@@ -37,7 +37,7 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 | `render` | Every render coordinator, without the swapchain wait: recording commands, uploads and submits. |
 | `swapchain wait` | Waiting for each window's swapchain texture, added up over the windows. |
 | `gen0 collections` | Garbage collections of generation 0, per frame. |
-| `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. |
+| `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. The report on dispose leaves it out, because stages and windows have released theirs by then. |
 
 ## Reading the numbers
 
@@ -46,5 +46,6 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 - The frame time also includes the 16 ms wait of a frame that no window drew, and, in the browser, the time until the next animation frame.
 - In headless mode, the time the app blocks on standard input for its next command is left out of the frame and the update.
 - Only the render coordinator that `UseWindowRendering` or `UseDefaultRendering` registers measures the swapchain wait. A `RenderCoordinator<T>` an app creates itself, or a [custom render coordinator](custom-render-coordinators.md), adds its wait to `render`.
+- The report is written during the update of the frame after a period ends, so that frame's update also counts writing it.
 - In the browser, `performance.now()` is coarsened unless the page is cross-origin isolated, so times below a millisecond can read as 0 or jump in steps.
 - Only the root provider's GPU device is reported. A stage that registers its own device is not.

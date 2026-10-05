@@ -322,53 +322,51 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void Execute_WithDiagnostics_CountsOnlyTheAcquireAsSwapchainWait()
+    public void Execute_WithFrameTimings_CountsOnlyTheAcquireAsSwapchainWait()
     {
-        RecordingLogger logger = new();
         long now = 0;
-        // One timestamp tick is one second, so the five-tick frame ends a report period.
-        PerformanceDiagnostics diagnostics = new(logger, null, () => now, 1);
+        FrameTimings timings = new(() => now, 1);
         RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(new List<string>(), new TestRenderContextSource(),
-            new ActionRenderer(() => now += 1), diagnostics: diagnostics, acquiring: () => now += 4);
+            new ActionRenderer(() => now += 1), frameTimingRecorder: timings, acquiring: () => now += 4);
 
-        diagnostics.BeginFrame();
-        diagnostics.EndUpdate();
+        timings.BeginFrame();
+        timings.EndUpdate();
         coordinator.Execute();
-        diagnostics.EndRender();
-        diagnostics.EndFrame();
+        timings.EndRender();
+        timings.EndFrame();
 
         Assert.Multiple(() =>
         {
-            Assert.That(logger.Messages.First(), Is.EqualTo("Swapchain of view 0: 640x480, B8G8R8A8Unorm, present mode vsync"));
-            Assert.That(logger.Messages.Last(), Does.Contain(", render 1000.00/1000.00/1000.00, swapchain wait 4000.00/4000.00/4000.00;"));
+            Assert.That(timings.SwapchainWaitTimes.ToArray(), Is.EqualTo(new[] { 4.0 }));
+            Assert.That(timings.RenderTimes.ToArray(), Is.EqualTo(new[] { 1.0 }));
+            Assert.That(timings.SwapchainChanges, Is.EqualTo(new[] { new SwapchainState(default, new ShortSize(640, 480), TextureFormat.B8G8R8A8Unorm, false) }));
         });
     }
 
     [Test]
-    public void Execute_WithDiagnosticsWhenNoTextureComesBack_ReportsNoSwapchain()
+    public void Execute_WithFrameTimingsWhenNoTextureComesBack_RecordsNoSwapchain()
     {
-        RecordingLogger logger = new();
-        PerformanceDiagnostics diagnostics = new(logger, null, () => 0, 1);
+        FrameTimings timings = new(() => 0, 1);
         RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(new List<string>(), new TestRenderContextSource(), hasTexture: false,
-            diagnostics: diagnostics);
+            frameTimingRecorder: timings);
 
         coordinator.Execute();
 
-        Assert.That(logger.Messages, Is.Empty);
+        Assert.That(timings.SwapchainChanges, Is.Empty);
     }
 
     [Test]
-    public void UseWindowRendering_PassesRegisteredDiagnosticsToTheCoordinator()
+    public void UseWindowRendering_PassesTheRegisteredFrameTimingRecorderToTheCoordinator()
     {
-        PerformanceDiagnostics diagnostics = new(null, null);
+        FrameTimings timings = new();
         PixelyAppBuilder builder = CreateBuilder(new List<string>());
-        builder.AddSingleton(diagnostics);
+        builder.AddSingleton<IFrameTimingRecorder>(timings);
         ServiceProvider provider = builder.BuildServiceProvider();
 
         IRenderCoordinator coordinator = provider.GetRequiredService<IRenderCoordinator>();
 
-        FieldInfo field = coordinator.GetType().GetField("_diagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Assert.That(field.GetValue(coordinator), Is.SameAs(diagnostics));
+        FieldInfo field = coordinator.GetType().GetField("_frameTimingRecorder", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.That(field.GetValue(coordinator), Is.SameAs(timings));
     }
 
     private static RenderCoordinator<TestRenderContext> CreateCoordinator(
@@ -377,7 +375,7 @@ public class RenderCoordinatorTests
         IRenderer<TestRenderContext>? renderer = null,
         bool renderable = true,
         bool hasTexture = true,
-        PerformanceDiagnostics? diagnostics = null,
+        IFrameTimingRecorder? frameTimingRecorder = null,
         Action? acquiring = null)
     {
         PixelyAppBuilder builder = CreateBuilder(calls, renderContextSource);
@@ -392,7 +390,7 @@ public class RenderCoordinatorTests
             new RecordingGpu(calls),
             renderContextSource,
             provider.GetRequiredService<ServiceRegistry<IRenderer<TestRenderContext>>>(),
-            diagnostics);
+            frameTimingRecorder ?? NullFrameTimingRecorder.Instance);
     }
 
     // Records the coordinator's GPU calls in order. The command buffer is a token the test contexts never use.

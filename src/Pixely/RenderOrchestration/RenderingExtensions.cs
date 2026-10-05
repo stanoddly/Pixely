@@ -47,6 +47,6 @@ public static class RenderingExtensions
             new RenderCoordinatorGpu(provider.GetRequiredService<GpuDevice>(), provider.GetRequiredService<GpuMemorySystem>()),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>(),
             provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>(),
-            provider.GetService<PerformanceDiagnostics>()));
+            provider.GetRequiredService<IFrameTimingRecorder>()));
     }
 }

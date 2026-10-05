@@ -247,12 +247,6 @@ public partial class PixelyFactory: IDisposable
         return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameClock) : null;
     }
 
-    // Diagnostics exist only with PixelyConfig.EnableDiagnostics; a null result registers nothing.
-    internal PerformanceDiagnostics? CreatePerformanceDiagnostics(GpuDevice? gpuDevice, ILoggerFactory? loggerFactory)
-    {
-        return _config.EnableDiagnostics ? new PerformanceDiagnostics(loggerFactory?.CreateLogger(PerformanceDiagnostics.LoggerCategoryName), gpuDevice) : null;
-    }
-
     public PixelyFrameClock CreateFrameClock()
     {
 #if BROWSER
@@ -272,7 +266,7 @@ public partial class PixelyFactory: IDisposable
 
     [UnsupportedOSPlatform("browser")]
     internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter,
-        AppControl appControl, PerformanceDiagnostics? diagnostics)
+        AppControl appControl, IFrameTimingRecorder frameTimingRecorder)
     {
         if (inputAutomation is null || imageWriter is null)
         {
@@ -281,7 +275,7 @@ public partial class PixelyFactory: IDisposable
 
         InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, appControl);
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl, diagnostics);
+        return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl, frameTimingRecorder);
     }
 
     internal EventService CreateEventService(
