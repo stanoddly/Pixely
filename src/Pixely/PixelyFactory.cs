@@ -315,13 +315,3 @@ public partial class PixelyFactory: IDisposable
         _initialized = false;
     }
 }
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct VkPhysicalDeviceShaderDrawParametersFeatures
-{
-    public const uint StructureType = 1000063000;
-
-    public uint sType;
-    public IntPtr pNext;
-    public uint shaderDrawParameters;
-}

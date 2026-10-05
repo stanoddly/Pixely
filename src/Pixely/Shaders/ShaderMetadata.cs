@@ -76,7 +76,6 @@ public class ShaderInstance
 internal sealed class GraphicsShaderStageMetadata
 {
     public required ShaderBindingLayout BindingLayout { get; init; }
-    public ShaderSystemValueInputs SystemValueInputs { get; init; }
     public required List<ShaderInstance> Shaders { get; init; }
 }
 

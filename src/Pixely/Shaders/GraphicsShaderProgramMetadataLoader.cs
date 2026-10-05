@@ -36,7 +36,6 @@ internal sealed class GraphicsShaderProgramMetadataLoader
             Vertex = new GraphicsShaderStageMetadata
             {
                 BindingLayout = dto.Vertex.BindingLayout,
-                SystemValueInputs = dto.Vertex.SystemValueInputs,
                 Shaders = ConvertShaderInstances(dto.Vertex.Shaders)
             },
             Fragment = new GraphicsShaderStageMetadata

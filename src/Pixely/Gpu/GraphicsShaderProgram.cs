@@ -9,16 +9,11 @@ internal sealed class GraphicsShader
 {
     internal Pointer<SDL_GPUShader> Pointer { get; set; }
     internal ShaderBindingLayout BindingLayout { get; }
-    internal ShaderSystemValueInputs SystemValueInputs { get; }
 
-    internal GraphicsShader(
-        Pointer<SDL_GPUShader> pointer,
-        ShaderBindingLayout bindingLayout,
-        ShaderSystemValueInputs systemValueInputs)
+    internal GraphicsShader(Pointer<SDL_GPUShader> pointer, ShaderBindingLayout bindingLayout)
     {
         Pointer = pointer;
         BindingLayout = bindingLayout;
-        SystemValueInputs = systemValueInputs;
     }
 }
 

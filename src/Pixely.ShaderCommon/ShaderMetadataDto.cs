@@ -60,22 +60,15 @@ public record GraphicsShaderStageMetadataDto
     public required List<ShaderInstanceDto> Shaders { get; init; }
 }
 
-public record GraphicsVertexShaderStageMetadataDto : GraphicsShaderStageMetadataDto
-{
-    public ShaderSystemValueInputs SystemValueInputs { get; init; }
-}
-
 public record GraphicsShaderProgramMetadataDto
 {
     public ShaderKindDto Kind { get; init; } = ShaderKindDto.Graphics;
-    public required GraphicsVertexShaderStageMetadataDto Vertex { get; init; }
+    public required GraphicsShaderStageMetadataDto Vertex { get; init; }
     public required GraphicsShaderStageMetadataDto Fragment { get; init; }
     public required string SourceHash { get; init; }
     public List<string>? SourceDependencies { get; init; }
     public string? SlangVersion { get; init; }
 }
-
-public readonly record struct ShaderSystemValueInputs(bool UsesVertexId, bool UsesInstanceId);
 
 public record ComputeShaderMetadataDto
 {

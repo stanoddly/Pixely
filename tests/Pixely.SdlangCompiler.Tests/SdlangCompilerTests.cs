@@ -494,8 +494,6 @@ public class SdlangCompilerTests
         AssertGraphicsGeneratedTargets(metadata, "test_shader");
         Assert.That(metadata.SourceHash, Is.Not.Empty);
         Assert.That(metadata.SourceDependencies, Is.EqualTo(new[] { "test_shader.slang" }));
-        Assert.That(metadata.Vertex.SystemValueInputs.UsesVertexId, Is.False);
-        Assert.That(metadata.Vertex.SystemValueInputs.UsesInstanceId, Is.False);
 
         using JsonDocument document = JsonDocument.Parse(json);
         Assert.That(document.RootElement.GetProperty("vertex").TryGetProperty("entryPoint", out JsonElement _), Is.False);
@@ -772,7 +770,7 @@ public class SdlangCompilerTests
     }
 
     [Test]
-    public void CompileShader_VertexShaderWithSystemValueInputs_CreatesSystemValueMetadata()
+    public void CompileShader_VertexShaderWithSystemValueInputs_ReadsIndicesWithoutDrawParameters()
     {
         string shaderPath = Path.Combine(_testDir, "system_values.slang");
         File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs);
@@ -780,16 +778,26 @@ public class SdlangCompilerTests
         SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
         compiler.Compile([shaderPath], force: true);
 
-        string metadataPath = Path.Combine(_testDir, ".generated", "system_values.metadata.json");
-        string json = File.ReadAllText(metadataPath);
+        string generatedDirectory = Path.Combine(_testDir, ".generated");
+        HashSet<int> capabilities = SpirVCapabilities.Read(Path.Combine(generatedDirectory, "system_values.vertex.spv"));
+        string metal = File.ReadAllText(Path.Combine(generatedDirectory, "system_values.vertex.metal"));
 
-        GraphicsShaderProgramMetadataDto? metadata = JsonSerializer.Deserialize(
-            json,
-            ShaderMetadataJsonContext.Default.GraphicsShaderProgramMetadataDto);
+        Assert.That(capabilities, Does.Not.Contain(SpirVCapabilities.DrawParameters));
+        Assert.That(metal, Does.Not.Contain("base_instance").And.Not.Contain("base_vertex"));
+    }
 
-        Assert.That(metadata, Is.Not.Null);
-        Assert.That(metadata.Vertex.SystemValueInputs.UsesVertexId, Is.True);
-        Assert.That(metadata.Vertex.SystemValueInputs.UsesInstanceId, Is.True);
+    [TestCase("sv_vertexid")]
+    [TestCase("SV_VertexId")]
+    [TestCase("SV_StartVertexLocation")]
+    public void CompileShader_VertexShaderReadingDrawParameters_Throws(string vertexIdSemantic)
+    {
+        string shaderPath = Path.Combine(_testDir, "draw_parameters.slang");
+        File.WriteAllText(shaderPath, VertexShaderWithSystemValueInputs.Replace("SV_VertexID", vertexIdSemantic));
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        ShaderCompilationException? exception = Assert.Throws<ShaderCompilationException>(() => compiler.Compile([shaderPath], force: true));
+
+        Assert.That(exception.Message, Does.Contain("shaderDrawParameters"));
     }
 
     [Test]

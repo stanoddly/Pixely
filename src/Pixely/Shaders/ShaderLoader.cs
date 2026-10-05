@@ -84,7 +84,6 @@ public class ShaderLoader : IShaderLoader
                     directory,
                     shaderInstance,
                     metadata.BindingLayout,
-                    metadata.SystemValueInputs,
                     stage);
             }
         }
@@ -97,7 +96,6 @@ public class ShaderLoader : IShaderLoader
         string directory,
         ShaderInstance shaderInstance,
         ShaderBindingLayout bindingLayout,
-        ShaderSystemValueInputs systemValueInputs,
         SDL_GPUShaderStage stage)
     {
         string path = VirtualPath.Combine(directory, shaderInstance.Filename);
@@ -140,7 +138,7 @@ public class ShaderLoader : IShaderLoader
                         SDL3.SDL_GetError());
                 }
 
-                return new GraphicsShader(pointer, bindingLayout, systemValueInputs);
+                return new GraphicsShader(pointer, bindingLayout);
             }
         }
     }

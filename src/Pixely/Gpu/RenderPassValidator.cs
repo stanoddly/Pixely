@@ -159,24 +159,14 @@ internal struct RenderPassValidator
         }
     }
 
-    public void OnDrawPrimitive(RenderPass renderPass, uint firstInstance)
+    public void OnDrawPrimitive(RenderPass renderPass)
     {
         ValidateDrawState(renderPass);
-        // SDL's first_vertex restriction is safe here because DrawPrimitive currently
-        // hardcodes first_vertex to 0 in RenderPass.DrawPrimitiveInstanced.
-        ValidateSystemValueInputs(firstInstance);
     }
 
-    public void OnDrawIndexedPrimitive(
-        RenderPass renderPass,
-        uint indexCount,
-        uint firstIndex,
-        int vertexOffset,
-        uint firstInstance)
+    public void OnDrawIndexedPrimitive(RenderPass renderPass, uint indexCount, uint firstIndex)
     {
         ValidateDrawState(renderPass);
-        ValidateSystemValueInputs(firstInstance);
-        ValidateVertexOffset(vertexOffset);
 
         if (_indexCount is not uint boundIndexCount)
         {
@@ -266,41 +256,5 @@ internal struct RenderPassValidator
             3 => sizes with { Slot3 = elementSize },
             _ => sizes
         };
-    }
-
-    private void ValidateSystemValueInputs(uint firstInstance)
-    {
-        if (_graphicsPipeline == null)
-        {
-            return;
-        }
-
-        if (_graphicsPipeline.ShaderProgram.VertexShader.SystemValueInputs.UsesInstanceId && firstInstance != 0)
-        {
-            // SDL GPU: "first_vertex and first_instance parameters are NOT compatible
-            // with built-in vertex/instance ID variables in shaders".
-            // https://wiki.libsdl.org/SDL3/SDL_DrawGPUIndexedPrimitives
-            throw new InvalidOperationException(
-                "firstInstance must be 0 when the bound vertex shader uses SV_InstanceID. " +
-                "SDL GPU does not define built-in instance IDs consistently for non-zero firstInstance values.");
-        }
-    }
-
-    private void ValidateVertexOffset(int vertexOffset)
-    {
-        if (_graphicsPipeline == null)
-        {
-            return;
-        }
-
-        if (_graphicsPipeline.ShaderProgram.VertexShader.SystemValueInputs.UsesVertexId && vertexOffset != 0)
-        {
-            // SDL GPU: "first_vertex and first_instance parameters are NOT compatible
-            // with built-in vertex/instance ID variables in shaders".
-            // https://wiki.libsdl.org/SDL3/SDL_DrawGPUIndexedPrimitives
-            throw new InvalidOperationException(
-                "vertexOffset must be 0 when the bound vertex shader uses SV_VertexID. " +
-                "SDL GPU does not define built-in vertex IDs consistently for non-zero vertex offset values.");
-        }
     }
 }
