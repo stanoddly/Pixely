@@ -23,7 +23,7 @@ work relative to them instead of guessing.
 
 | Constant | Value | Runs there |
 | --- | --- | --- |
-| `UpdateOrders.Diagnostics` | -20 000 | `PerformanceTracker` |
+| `UpdateOrders.Diagnostics` | -20 000 | nothing by default, the band for a game's frame instrumentation |
 | `UpdateOrders.Input` | -10 000 | `InputAutomationConsole` (with `PixelyConfig.Headless`) |
 | `UpdateOrders.Default` | 0 | `TimerSystem`, `UpdateSystem` |
 | `UpdateOrders.Ui` | 10 000 | `UiUpdateSystem<T>` (Pixely.Ui) |

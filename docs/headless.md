@@ -68,7 +68,7 @@ In headless mode game time does not follow the real clock. The first frame has a
 
 `wait <frames>` runs that many frames before the commands after it, as fast as the machine can: frames are not paced to the real clock. `wait 30` is one second of game time however long it takes. `wait 0` does nothing. Real time still passes while frames run and while the app waits for input, so work that follows the real clock, such as content loading on a background thread, can finish in a different frame from run to run; a scenario waits for it with a larger `wait`.
 
-While the app waits for input it does not process SDL events. The windows are hidden, so nothing on the desktop waits for them. `PerformanceTracker` reads `TimeDelta`, so in headless mode it reports the fixed step rather than the real frame time.
+While the app waits for input it does not process SDL events. The windows are hidden, so nothing on the desktop waits for them.
 
 Synthetic input carries the `ElapsedNanoseconds` of the frame that runs it as its `Timestamp`, so every synthetic event of one frame has the same timestamp and handlers tell them apart only by order. Events that come from SDL keep SDL's clock, so their timestamps cannot be compared with synthetic ones.
 
@@ -98,6 +98,7 @@ The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`
 | `PIXELY_PREFER_LOW_POWER_GPU` | `PixelyConfig.PreferLowPowerGpu` | `1`, `true`, `0`, `false` |
 | `PIXELY_SDL_LOGGING` | `PixelyConfig.EnableSdlLogging` | `1`, `true`, `0`, `false` |
 | `PIXELY_GPU_VALIDATION` | `PixelyConfig.EnableGpuValidation` | `1`, `true`, `0`, `false` |
+| `PIXELY_DIAGNOSTICS` | `PixelyConfig.EnableDiagnostics` (see diagnostics.md) | `1`, `true`, `0`, `false` |
 
 Values are trimmed and matched case-insensitively. An unset, empty, or whitespace-only variable leaves the configured value in effect. Any other value stops `Build()` with an `InvalidOperationException` that names the variable and lists the accepted values.
 

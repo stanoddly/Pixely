@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
+using Pixely.App;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
@@ -244,6 +245,12 @@ public partial class PixelyFactory: IDisposable
         TextInputService textInputService, GamepadService gamepadService, FrameClock frameClock)
     {
         return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameClock) : null;
+    }
+
+    // Diagnostics exist only with PixelyConfig.EnableDiagnostics; a null result registers nothing.
+    internal PerformanceDiagnostics? CreatePerformanceDiagnostics(GpuDevice? gpuDevice, ILoggerFactory? loggerFactory)
+    {
+        return _config.EnableDiagnostics ? new PerformanceDiagnostics(loggerFactory?.CreateLogger(PerformanceDiagnostics.LoggerCategoryName), gpuDevice) : null;
     }
 
     public PixelyFrameClock CreateFrameClock()

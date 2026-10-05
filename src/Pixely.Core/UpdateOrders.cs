@@ -7,7 +7,7 @@ namespace Pixely;
 /// </summary>
 public static class UpdateOrders
 {
-    /// <summary>Frame instrumentation, before anything the frame does. Used by <c>PerformanceTracker</c>.</summary>
+    /// <summary>Frame instrumentation, before anything the frame does. Pixely's own diagnostics measure the frame outside the updatables.</summary>
     public const int Diagnostics = -20_000;
 
     /// <summary>Synthetic input from outside the process, after the frame's real events and before the game reads input. Used by <c>InputAutomationConsole</c>.</summary>

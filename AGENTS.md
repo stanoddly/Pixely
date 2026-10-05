@@ -24,6 +24,7 @@
 - `docs/sprites.md` - Sprite and animated sprite JSON files, the loaders and their cache, mirroring with `flip`
 - `docs/peach-architecture.md` - Peach architecture for games built on Pixely: project layout, Game/Frontend boundary, stages, systems, AI and scenario projects; shipped in the package under `docs/` and enforced by Pixely.Fitness
 - `docs/fitness.md` - Pixely.Fitness: PeachArchitectureOptions, evaluating and asserting a FitnessReport from a game's tests, the Pixely conventions rule set, adding other rule sets
+- `docs/diagnostics.md` - Performance diagnostics: `PIXELY_DIAGNOSTICS` and `PixelyConfig.EnableDiagnostics`, the GPU device and swapchain report, the periodic split of frame time into update, render and swapchain wait, gen0 collections and GPU memory, how to read the numbers
 - `docs/logging.md` - Pixely.Logging: registering ZLogger through the service collection, the application logger, logging calls, shutdown and durability
 - `docs/window-rendering.md` - Single- and multi-window rendering: ViewScope, UseDefaultRendering, custom render contexts and window providers, scoped input, activating mouse clicks
 

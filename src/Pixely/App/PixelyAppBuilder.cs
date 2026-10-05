@@ -80,6 +80,8 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
+        AddSingleton<PerformanceDiagnostics, PixelyFactory>();
+
         AddSingleton<PixelyFrameClock, PixelyFactory>();
         AddAlias<FrameClock, PixelyFrameClock>();
 
@@ -103,6 +105,7 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<AppControl>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
-            serviceProvider.GetRequiredService<StageManager>());
+            serviceProvider.GetRequiredService<StageManager>(),
+            serviceProvider.GetService<PerformanceDiagnostics>());
     }
 }

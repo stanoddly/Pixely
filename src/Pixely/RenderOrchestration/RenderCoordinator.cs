@@ -1,3 +1,4 @@
+using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 
@@ -20,6 +21,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     private readonly IRenderCoordinatorGpu _gpu;
     private readonly RenderContextProvider<TRenderContext> _renderContextProvider;
     private readonly ServiceRegistry<IRenderer<TRenderContext>> _renderers;
+    private readonly PerformanceDiagnostics? _diagnostics;
 
     public RenderCoordinator(
         Window window,
@@ -35,12 +37,14 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         Window window,
         IRenderCoordinatorGpu gpu,
         RenderContextProvider<TRenderContext> renderContextProvider,
-        ServiceRegistry<IRenderer<TRenderContext>> renderers)
+        ServiceRegistry<IRenderer<TRenderContext>> renderers,
+        PerformanceDiagnostics? diagnostics = null)
     {
         _window = window;
         _gpu = gpu;
         _renderContextProvider = renderContextProvider;
         _renderers = renderers;
+        _diagnostics = diagnostics;
     }
 
     public bool Execute()
@@ -71,6 +75,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         CommandBuffer commandBuffer = _gpu.AcquireCommandBuffer();
         bool hasTexture;
         SwapchainTexture swapchainTexture;
+        _diagnostics?.BeginSwapchainWait();
         try
         {
             hasTexture = _window.TryWaitAndAcquireSwapchainTexture(commandBuffer, out swapchainTexture);
@@ -80,6 +85,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             _gpu.Cancel(commandBuffer);
             throw;
         }
+        _diagnostics?.EndSwapchainWait();
 
         if (!hasTexture)
         {
@@ -93,6 +99,8 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 #endif
             return false;
         }
+
+        _diagnostics?.OnSwapchainAcquired(_window, swapchainTexture);
 
         // A frame nobody sees, such as one of a hidden or minimized window on Metal or D3D12, is submitted without a context.
         bool isRenderable = false;

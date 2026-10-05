@@ -1,3 +1,4 @@
+using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 
@@ -43,9 +44,9 @@ public static class RenderingExtensions
         services.AddRegistry<IRenderer<TRenderContext>>(static renderer => renderer.RenderOrder);
         services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(
             provider.GetWindow(viewScope),
-            provider.GetRequiredService<GpuDevice>(),
-            provider.GetRequiredService<GpuMemorySystem>(),
+            new RenderCoordinatorGpu(provider.GetRequiredService<GpuDevice>(), provider.GetRequiredService<GpuMemorySystem>()),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>(),
-            provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>()));
+            provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>(),
+            provider.GetService<PerformanceDiagnostics>()));
     }
 }
