@@ -102,6 +102,9 @@ public class SdlangCompiler
         }
     }
 
+    // TODO: the hash reads the sources after slangc compiled them, so a source saved during the compile records its new hash next to
+    // outputs of the old content, and the next build skips it. Hash before compiling and fail when the hash after differs; the
+    // dependency list is known only after slangc runs, so the hash before covers only the main source.
     private static string CalculateSourceHash(FileInfo filePath, IEnumerable<string> sourceDependencies)
     {
         using IncrementalHash sourceHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
