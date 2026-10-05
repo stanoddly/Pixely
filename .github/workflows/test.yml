@@ -30,10 +30,16 @@ jobs:
 
   # Runs beside the validation instead of after it. The browser test that relinks the runtime needs the wasm-tools workload and
   # skips here; it runs on the Ubuntu package-consumer lane after the merge, where the other platforms are covered as well.
+  # The tests run one at a time, so two jobs share them through PIXELY_PACKAGE_TEST_SHARD; each job packs Pixely itself.
   package-integration:
     if: github.event.pull_request.draft == false
+    name: package-integration (${{ matrix.shard }}/2)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
 
@@ -47,4 +53,6 @@ jobs:
         run: dotnet build tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj -p:TreatWarningsAsErrors=true
 
       - name: Run package integration tests against the repository build
-        run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' -p:TreatWarningsAsErrors=true
+        run: dotnet test tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj --no-build --filter 'TestCategory=PackageIntegration' --logger 'console;verbosity=normal' -p:TreatWarningsAsErrors=true
+        env:
+          PIXELY_PACKAGE_TEST_SHARD: ${{ matrix.shard }}/2

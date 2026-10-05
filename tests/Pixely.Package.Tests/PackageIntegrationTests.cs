@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using NUnit.Framework.Interfaces;
 
 namespace Pixely.Package.Tests;
 
@@ -107,6 +108,33 @@ public class PackageIntegrationTests
             $"--property:PackageVersion={_packageVersion}",
             $"--property:Version={_packageVersion}",
             "--nologo");
+    }
+
+    // CI splits the tests between jobs with PIXELY_PACKAGE_TEST_SHARD, such as 1/2 for the first of two: the test methods, ordered by
+    // name, are dealt out in turn, which spreads the slow browser tests that share a prefix. A test filter cannot take the rest of a
+    // split: a negated filter does not select an explicit test.
+    [SetUp]
+    public void SkipTestOfAnotherShard()
+    {
+        string? shard = Environment.GetEnvironmentVariable("PIXELY_PACKAGE_TEST_SHARD");
+        if (shard is null)
+        {
+            return;
+        }
+
+        string[] parts = shard.Split('/');
+        Assert.That(parts, Has.Length.EqualTo(2), "PIXELY_PACKAGE_TEST_SHARD is <index>/<count>, such as 1/2.");
+        int index = int.Parse(parts[0]);
+        int count = int.Parse(parts[1]);
+        Assert.That(index, Is.InRange(1, count), "PIXELY_PACKAGE_TEST_SHARD is <index>/<count>, such as 1/2.");
+        string[] methods = typeof(PackageIntegrationTests).GetMethods()
+            .Where(method => method.GetCustomAttributes(inherit: false).Any(attribute => attribute is ISimpleTestBuilder or ITestBuilder))
+            .Select(method => method.Name).Order(StringComparer.Ordinal).ToArray();
+        int position = Array.IndexOf(methods, TestContext.CurrentContext.Test.MethodName);
+        if (position % count != index - 1)
+        {
+            Assert.Ignore($"Runs in shard {position % count + 1}/{count}.");
+        }
     }
 
     [OneTimeTearDown]
@@ -411,7 +439,9 @@ public class PackageIntegrationTests
 
     // One browser publish covers the layout, the consumer's own asset replacing a default, PixelyBrowserBrotli, a referenced library
     // staying a library and, under node, the generated default OnException rethrowing from the async Main (the fixture is compiled
-    // without a handler).
+    // without a handler). The publish is the one command a consumer runs, with --runtime and its implicit restore: the SDK switches the
+    // framework after the project body, restore reads the switched value, and the browser build of Pixely, not the desktop one, is what
+    // the app references.
     [Test]
     public async Task HostedConsumerPublishesABrowserBundle()
     {
@@ -423,15 +453,26 @@ public class PackageIntegrationTests
         string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
         Directory.CreateDirectory(consumerWwwroot);
         File.WriteAllText(Path.Combine(consumerWwwroot, "main.js"), "// consumer bootstrap\n");
+        WriteConsumerConfiguration(consumerDirectory);
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", defineConstants: "HOSTED_CONSUMER_NO_HANDLER", properties: ["HostedConsumerReferencesLibrary=true", "PixelyBrowserBrotli=true"]);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        await RunConsumerDotnetAsync(consumerDirectory, "publish", projectPath, "--configuration", "Release", "--runtime", "browser-wasm", "--property:UseAppHost=false", $"--property:PixelyPackageVersion={_packageVersion}",
+            "--property:DefineConstants=HOSTED_CONSUMER_NO_HANDLER", "--property:HostedConsumerReferencesLibrary=true", "--property:PixelyBrowserBrotli=true", "--nologo");
         string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0-browser", "browser-wasm", "PixelyProgram.g.cs");
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        using JsonDocument assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json")));
+        string[] targets = assets.RootElement.GetProperty("targets").EnumerateObject().Select(target => target.Name).ToArray();
+        using ZipArchive package = ZipFile.OpenRead(_packagePath);
+        byte[] browserPixely = ReadPackageEntryBytes(package, $"{BrowserLibFolder}/Pixely.dll");
+        byte[] referencedPixely = File.ReadAllBytes(Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "Pixely.dll"));
         // Without the guard the library's restore pulls the WebAssembly pack, whose props turn it into an exe (CS5001) in the reference build,
         // and the WebAssembly props' SelfContained and PublishTrimmed pull the Mono browser runtime pack and ILLink into its restore.
         string libraryAssets = File.ReadAllText(Path.Combine(libraryDirectory, "obj", "project.assets.json"));
         Assert.Multiple(() =>
         {
+            Assert.That(targets, Is.EquivalentTo(["net11.0-browser", "net11.0-browser/browser-wasm"]));
+            Assert.That(referencedPixely.AsSpan().SequenceEqual(browserPixely), Is.True, "The app referenced the desktop build of Pixely.");
+            Assert.That(Directory.Exists(Path.Combine(consumerDirectory, "bin", "Release", "net11.0")), Is.False);
             Assert.That(File.ReadAllText(generatedFile), Does.Contain("[global::System.Runtime.Versioning.SupportedOSPlatform(\"browser\")]")
                 .And.Contain("private static async global::System.Threading.Tasks.Task<int> Main()")
                 .And.Contain("return await global::Pixely.App.BrowserHost.RunAsync(app);")
@@ -696,17 +737,51 @@ public class PackageIntegrationTests
     }
 
     // The fixture zips its Content tree, generated shaders included, into a PixelyBrowserVfsFile; UseDefaultContent's loader finds it at
-    // /Content.pk3. The CoreCLR runtime would relink by default in a trimmed publish, which the managed-only fixture does not need.
-    [TestCase(true)]
-    [TestCase(false)]
-    public async Task BrowserPublishLoadsContentArchiveThroughDefaultContent(bool useMonoRuntime)
+    // /Content.pk3. A second publish after a change and a deletion in Content replaces the archive.
+    [Test]
+    public async Task BrowserPublishLoadsAndReplacesContentArchiveThroughDefaultContent()
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string greetingPath = Path.Combine(consumerDirectory, "Content", "greeting.txt");
+        string greeting = File.ReadAllText(greetingPath);
+        string removedPath = Path.Combine(consumerDirectory, "Content", "removed.txt");
+        try
+        {
+            File.WriteAllText(removedPath, "Removed before the second publish\n");
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            string wwwroot = GetPublishedWwwroot(consumerDirectory);
+            string archivePath = Path.Combine(wwwroot, "Content.pk3");
+            Assert.Multiple(() =>
+            {
+                Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Contain(BrowserContentArchiveBootEntry));
+                Assert.That(ReadArchiveEntries(archivePath), Does.Contain(BrowserContentGeneratedShader).And.Contain("removed.txt"));
+            });
+            AssertBrowserContentLoaded(await RunBrowserBundleAsync(wwwroot, environment: null));
+
+            File.WriteAllText(greetingPath, "Hello from the changed archive\n");
+            File.Delete(removedPath);
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
+            Assert.That(ReadArchiveEntries(archivePath), Does.Not.Contain("removed.txt"));
+            Assert.That(await RunBrowserBundleAsync(wwwroot, environment: null), Does.Contain("RESULT greeting Hello from the changed archive"));
+        }
+        finally
+        {
+            File.WriteAllText(greetingPath, greeting);
+            File.Delete(removedPath);
+        }
+    }
+
+    // The CoreCLR runtime would relink by default in a trimmed publish, which the managed-only fixture does not need.
+    [Test]
+    public async Task CoreClrBrowserPublishLoadsContentArchiveThroughDefaultContent()
     {
         RequireNode();
         string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
         DeleteConsumerOutputs("BrowserContentConsumer");
 
-        string[] properties = useMonoRuntime ? [] : ["UseMonoRuntime=false", "WasmBuildNative=false"];
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: properties);
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["UseMonoRuntime=false", "WasmBuildNative=false"]);
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         Assert.Multiple(() =>
         {
@@ -765,48 +840,6 @@ public class PackageIntegrationTests
             Assert.That(Directory.Exists(Path.Combine(intermediateDirectory, "pixely-browser-vfs")), Is.False);
             Assert.That(File.Exists(hookMarkerPath), Is.False);
         });
-    }
-
-    [Test]
-    public async Task BrowserPublishReplacesChangedContentArchive()
-    {
-        RequireNode();
-        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
-        DeleteConsumerOutputs("BrowserContentConsumer");
-        string greetingPath = Path.Combine(consumerDirectory, "Content", "greeting.txt");
-        string greeting = File.ReadAllText(greetingPath);
-        try
-        {
-            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
-            File.WriteAllText(greetingPath, "Hello from the changed archive\n");
-            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
-            Assert.That(await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null), Does.Contain("RESULT greeting Hello from the changed archive"));
-        }
-        finally
-        {
-            File.WriteAllText(greetingPath, greeting);
-        }
-    }
-
-    [Test]
-    public async Task BrowserPublishDropsDeletedContentFile()
-    {
-        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
-        DeleteConsumerOutputs("BrowserContentConsumer");
-        string removedPath = Path.Combine(consumerDirectory, "Content", "removed.txt");
-        try
-        {
-            File.WriteAllText(removedPath, "Removed before the second publish\n");
-            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
-            Assert.That(ReadArchiveEntries(Path.Combine(GetPublishedWwwroot(consumerDirectory), "Content.pk3")), Does.Contain("removed.txt"));
-            File.Delete(removedPath);
-            await PublishConsumerAsync(consumerDirectory, "browser-wasm");
-            Assert.That(ReadArchiveEntries(Path.Combine(GetPublishedWwwroot(consumerDirectory), "Content.pk3")), Does.Not.Contain("removed.txt"));
-        }
-        finally
-        {
-            File.Delete(removedPath);
-        }
     }
 
     // The nested publish of a relinked runtime and a publish without build skip ComputeWasmVfs and reload the build manifest, which keeps
@@ -887,49 +920,54 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("error PIXELY0010").And.Contain("missing.txt"));
     }
 
+    // The first failing check stops the target, so each build holds the target paths of one check, whose error names every path it rejects.
     // Content.pk3 duplicates the archive, content.pk3 too because MSBuild batches ignoring case; index.html is the default page's asset,
     // with no wwwroot file; the module initializer takes the mandatory fingerprint expression #[.{fingerprint}]!. A quote would break a
-    // property function. Content.pk3/x.pak and index.html/x.pak need a file as a folder, css a folder as a file.
-    [TestCase("/abs.pak")]
-    [TestCase("C:/abs.pak")]
-    [TestCase("../up.pak")]
-    [TestCase("a/./b.pak")]
-    [TestCase("a//b.pak")]
-    [TestCase("a\\b.pak")]
-    [TestCase("dir/")]
-    [TestCase("*.pak")]
-    [TestCase("a?.pak")]
-    [TestCase("[ab].pak")]
-    [TestCase("_framework/x.pak")]
-    [TestCase("_content/x.pak")]
-    [TestCase("_Framework/x.pak")]
-    [TestCase("_framework")]
-    [TestCase("Bob's.pak")]
-    [TestCase("Content.pk3/x.pak")]
-    [TestCase("index.html/x.pak")]
-    [TestCase("css", "css/site.css")]
-    [TestCase("Content.pk3")]
-    [TestCase("content.pk3")]
-    [TestCase("index.html")]
-    [TestCase("static.txt", "static.txt")]
-    [TestCase("x.lib.module.js", "x.lib.module.js")]
-    [TestCase("linked.txt", null, true)]
-    public async Task BrowserBuildRejectsInvalidTargetPath(string targetPath, string? wwwrootFile = null, bool linkedAsset = false)
+    // property function. Content.pk3/x.pak needs the archive as a folder, css/site.css the file css as a folder, and index.html/x.pak the
+    // default page as a folder. _framework/x.pak is not in the pattern build: batching ignores case, so it would share a batch with
+    // _Framework/x.pak, whose rejection implies its own.
+    private static readonly TestCaseData[] InvalidTargetPathBuilds =
+    [
+        new TestCaseData(new[] { "/abs.pak", "C:/abs.pak", "../up.pak", "a/./b.pak", "a//b.pak", "a\\b.pak", "dir/", "*.pak", "a?.pak", "[ab].pak", "_content/x.pak", "_Framework/x.pak", "_framework", "Bob's.pak" },
+            null, Array.Empty<string>(), false).SetArgDisplayNames("pattern"),
+        new TestCaseData(new[] { "Content.pk3", "content.pk3" }, null, Array.Empty<string>(), false).SetArgDisplayNames("duplicate"),
+        new TestCaseData(new[] { "index.html", "static.txt", "x.lib.module.js", "linked.txt" }, null, new[] { "static.txt", "x.lib.module.js" }, true).SetArgDisplayNames("static web asset"),
+        new TestCaseData(new[] { "Content.pk3/x.pak", "css" }, new[] { "Content.pk3", "css" }, new[] { "css/site.css" }, false).SetArgDisplayNames("file needed as a folder"),
+        new TestCaseData(new[] { "index.html/x.pak" }, new[] { "index.html" }, Array.Empty<string>(), false).SetArgDisplayNames("static web asset needed as a folder")
+    ];
+
+    [TestCaseSource(nameof(InvalidTargetPathBuilds))]
+    public async Task BrowserBuildRejectsInvalidTargetPath(string[] targetPaths, string[]? rejectedPaths, string[] wwwrootFiles, bool linkedAsset)
     {
         string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
         DeleteConsumerOutputs("BrowserContentConsumer");
-        if (wwwrootFile is not null)
+        foreach (string wwwrootFile in wwwrootFiles)
         {
             string wwwrootPath = Path.Combine(consumerDirectory, "wwwroot", wwwrootFile);
             Directory.CreateDirectory(Path.GetDirectoryName(wwwrootPath)!);
             File.WriteAllText(wwwrootPath, "// wwwroot fixture\n");
         }
+        string itemsPath = Path.Combine(_testArtifactsDirectory, "extra-items.props");
+        File.WriteAllText(itemsPath, $"""
+            <Project>
+              <ItemGroup>
+            {string.Concat(targetPaths.Select(targetPath => $"    <PixelyBrowserVfsFile Include=\"Extras\\first.txt\" TargetPath=\"{SecurityElement.Escape(targetPath)}\" />\n"))}  </ItemGroup>
+            </Project>
+            """);
 
         try
         {
-            string[] properties = linkedAsset ? [$"BrowserContentConsumerExtraFile={targetPath}", "BrowserContentConsumerLinkedAsset=true"] : [$"BrowserContentConsumerExtraFile={targetPath}"];
+            string[] properties = linkedAsset ? [$"BrowserContentConsumerExtraItems={itemsPath}", "BrowserContentConsumerLinkedAsset=true"] : [$"BrowserContentConsumerExtraItems={itemsPath}"];
             string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: properties);
-            Assert.That(output, Does.Contain("error PIXELY0011"));
+            string[] errors = output.Split('\n').Where(line => line.Contains("error PIXELY0011:", StringComparison.Ordinal)).Select(line => line[(line.IndexOf("error PIXELY0011:", StringComparison.Ordinal) + "error PIXELY0011:".Length)..]).Distinct().ToArray();
+            Assert.That(errors, Has.Length.EqualTo(1), output);
+            Assert.Multiple(() =>
+            {
+                foreach (string rejectedPath in rejectedPaths ?? targetPaths)
+                {
+                    Assert.That(errors[0], Does.Contain(rejectedPath));
+                }
+            });
         }
         finally
         {
@@ -1028,32 +1066,6 @@ public class PackageIntegrationTests
 
         string output = await BuildConsumerAsync(consumerDirectory, expectSuccess: false, properties: ["HostedConsumerBodyRuntimeIdentifier=true"]);
         Assert.That(output, Does.Contain("error PIXELY0004").And.Contain("pass -r browser-wasm on the command line"));
-    }
-
-    // The one command a consumer runs, with its implicit restore: the SDK switches the framework after the project body, restore
-    // reads the switched value, and the browser build of Pixely, not the desktop one, is what the app references.
-    [Test]
-    public async Task BrowserPublishWithImplicitRestoreSelectsTheBrowserFramework()
-    {
-        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
-        DeleteConsumerOutputs("HostedConsumer");
-        WriteConsumerConfiguration(consumerDirectory);
-
-        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
-        await RunConsumerDotnetAsync(consumerDirectory, "publish", projectPath, "--configuration", "Release", "--runtime", "browser-wasm", "--property:UseAppHost=false", $"--property:PixelyPackageVersion={_packageVersion}", "--nologo");
-
-        using JsonDocument assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json")));
-        string[] targets = assets.RootElement.GetProperty("targets").EnumerateObject().Select(target => target.Name).ToArray();
-        using ZipArchive package = ZipFile.OpenRead(_packagePath);
-        byte[] browserPixely = ReadPackageEntryBytes(package, $"{BrowserLibFolder}/Pixely.dll");
-        byte[] referencedPixely = File.ReadAllBytes(Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "Pixely.dll"));
-        Assert.Multiple(() =>
-        {
-            Assert.That(targets, Is.EquivalentTo(["net11.0-browser", "net11.0-browser/browser-wasm"]));
-            Assert.That(referencedPixely.AsSpan().SequenceEqual(browserPixely), Is.True, "The app referenced the desktop build of Pixely.");
-            Assert.That(File.Exists(Path.Combine(GetPublishedWwwroot(consumerDirectory), "_framework", "dotnet.js")), Is.True);
-            Assert.That(Directory.Exists(Path.Combine(consumerDirectory, "bin", "Release", "net11.0")), Is.False);
-        });
     }
 
     // A project that lists net11.0-browser itself is not switched: its browser inner build is selected with -f, and its desktop
@@ -1267,57 +1279,37 @@ public class PackageIntegrationTests
         // Fixtures consume the package, never the repository sources.
         Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
         WriteConsumerConfiguration(consumerDirectory);
-        List<string> restoreArguments =
-        [
-            "restore",
-            projectPath,
-            $"--property:PixelyPackageVersion={_packageVersion}",
-            "--nologo"
-        ];
-        List<string> buildArguments =
-        [
-            command,
-            projectPath,
-            "--configuration",
-            "Release",
-            "--no-restore",
-            $"--property:PixelyPackageVersion={_packageVersion}",
-            "--nologo"
-        ];
+        // The implicit restore saves a separate restore process per command, and its warnings (NU*) appear in the same output.
+        List<string> arguments = [command, projectPath, "--configuration", "Release", $"--property:PixelyPackageVersion={_packageVersion}", "--nologo"];
         if (noBuild)
         {
-            buildArguments.Add("--no-build");
+            arguments.Add("--no-build");
         }
         if (runtimeIdentifier is not null)
         {
-            restoreArguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
-            restoreArguments.Add("--property:UseAppHost=false");
-            buildArguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
-            buildArguments.Add("--property:UseAppHost=false");
+            arguments.Add($"--property:RuntimeIdentifier={runtimeIdentifier}");
+            arguments.Add("--property:UseAppHost=false");
         }
         if (defineConstants is not null)
         {
-            buildArguments.Add($"--property:DefineConstants={defineConstants}");
+            arguments.Add($"--property:DefineConstants={defineConstants}");
         }
         foreach (string property in properties ?? [])
         {
-            restoreArguments.Add($"--property:{property}");
-            buildArguments.Add($"--property:{property}");
+            arguments.Add($"--property:{property}");
         }
 
-        // Restore warnings (NU*) only appear in the restore output, so callers get both outputs.
-        string restoreOutput = await RunConsumerDotnetAsync(consumerDirectory, restoreArguments.ToArray());
         if (!expectSuccess)
         {
-            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, buildArguments.ToArray());
+            (int exitCode, string failedOutput) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, arguments.ToArray());
             Assert.That(exitCode, Is.Not.EqualTo(0), failedOutput);
-            return restoreOutput + failedOutput;
+            return failedOutput;
         }
 
-        string buildOutput = await RunConsumerDotnetAsync(consumerDirectory, buildArguments.ToArray());
+        string output = await RunConsumerDotnetAsync(consumerDirectory, arguments.ToArray());
         // MSB4011 would mean the SDK and buildTransitive/Pixely.targets both imported the version props.
-        Assert.That(restoreOutput + buildOutput, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
-        return restoreOutput + buildOutput;
+        Assert.That(output, Does.Not.Contain("Downloading Slang").And.Not.Contain("MSB4011"));
+        return output;
     }
 
     private string GetSlangVersion()
