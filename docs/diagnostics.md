@@ -13,8 +13,10 @@ The report is written to the logger category `Pixely.Diagnostics` at the `Inform
 At startup, the GPU device, when the root provider registers one:
 
 ```text
-GPU device: AMD Radeon Graphics (RADV REMBRANDT), backend vulkan, driver radv 26.2.3
+GPU device: AMD Radeon Graphics (RADV REMBRANDT), backend vulkan, driver radv 26.2.3, upload wait off
 ```
+
+`upload wait` says whether `GpuMemorySystem.Submit()` waits for the uploads to finish on the GPU (see [window-rendering.md](window-rendering.md#waiting-for-uploads)). It is left out when the app has no `GpuMemorySystem`.
 
 For each window, its swapchain on the first frame and whenever its size or format changes:
 
@@ -34,7 +36,7 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 | --- | --- |
 | `frame` | From the end of the previous frame to the end of this one, without the headless input wait. |
 | `update` | Stage transitions, SDL events and every `IUpdatable`, without the headless input wait. |
-| `render` | Every render coordinator, without the swapchain wait: recording commands, uploads and submits. |
+| `render` | Every render coordinator, without the swapchain wait: recording commands, uploads and submits, and the upload wait when it is on. |
 | `swapchain wait` | Waiting for each window's swapchain texture, added up over the windows. |
 | `gen0 collections` | Garbage collections of generation 0, per frame. |
 | `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. In the report on dispose, stages have already released theirs. |
@@ -42,6 +44,7 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 ## Reading the numbers
 
 - SDL GPU has no timestamp queries, so the swapchain wait stands in for GPU time. A long wait means the GPU or the display limits the frame rate. A long update or render means the CPU does.
+- With the upload wait on, `render` also includes waiting for the GPU to finish the frame's uploads, so a long render can mean the GPU is busy too.
 - With vsync, the frame rate snaps to the display's rate divided by a whole number, for example 60, 30 or 20 on a 60 Hz display. A frame that misses a refresh by a little takes two.
 - The frame time also includes the 16 ms wait of a frame that no window drew, and, in the browser, the time until the next animation frame.
 - In headless mode, the time the app blocks on standard input for its next command is left out of the frame and the update.

@@ -16,7 +16,7 @@ public static class GpuExtensions
         }
 
         services.AddSingleton<GpuDevice, PixelyFactory>();
-        services.AddSingleton<GpuMemorySystem>();
+        services.AddSingleton<GpuMemorySystem, PixelyFactory>();
 
         services.AddSingleton<ShaderLoader>();
         services.AddAlias<IShaderLoader, ShaderLoader>();

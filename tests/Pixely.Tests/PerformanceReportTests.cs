@@ -11,7 +11,7 @@ public class PerformanceReportTests
         RecordingLogger logger = new();
         long now = 0;
         FrameTimings timings = new(() => now, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
 
         for (int frame = 0; frame < 4; frame++)
         {
@@ -29,7 +29,7 @@ public class PerformanceReportTests
         RecordingLogger logger = new();
         long now = 0;
         FrameTimings timings = new(() => now, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
 
         for (int frame = 0; frame < 5; frame++)
         {
@@ -53,7 +53,7 @@ public class PerformanceReportTests
         RecordingLogger logger = new();
         long now = 0;
         FrameTimings timings = new(() => now, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
 
         for (int frame = 0; frame < 19; frame++)
         {
@@ -72,7 +72,7 @@ public class PerformanceReportTests
         RecordingLogger logger = new();
         long now = 0;
         FrameTimings timings = new(() => now, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
 
         for (int frame = 0; frame < FrameTimings.Capacity; frame++)
         {
@@ -90,7 +90,7 @@ public class PerformanceReportTests
         RecordingLogger logger = new();
         long now = 0;
         FrameTimings timings = new(() => now, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
         RunFrame(timings, ref now, update: 200, waits: [500], recording: 300);
         RunFrame(timings, ref now, update: 200, waits: [500], recording: 300);
 
@@ -103,7 +103,7 @@ public class PerformanceReportTests
     public void Dispose_WithoutFramesSinceTheLastReport_ReportsNothing()
     {
         RecordingLogger logger = new();
-        PerformanceReport report = new(new FrameTimings(() => 0, Frequency), logger, null);
+        PerformanceReport report = new(new FrameTimings(() => 0, Frequency), logger, null, null);
 
         report.Dispose();
 
@@ -115,7 +115,7 @@ public class PerformanceReportTests
     {
         RecordingLogger logger = new();
         FrameTimings timings = new(() => 0, Frequency);
-        PerformanceReport report = new(timings, logger, null);
+        PerformanceReport report = new(timings, logger, null, null);
         timings.OnSwapchainAcquired(UninitializedWindow<SwapchainWindow>(), Swapchain(1920, 1080));
         timings.OnSwapchainAcquired(UninitializedWindow<OffscreenWindow>(), Swapchain(800, 600));
 
@@ -127,5 +127,13 @@ public class PerformanceReportTests
             "Swapchain of view 0: 1920x1080, B8G8R8A8Unorm, present mode vsync",
             "Swapchain of view 0: 800x600, B8G8R8A8Unorm, offscreen"
         }));
+    }
+
+    [TestCase(true, "GPU device: V3D 7.1.10.2, backend vulkan, driver V3DV Mesa Mesa 25.0.7, upload wait on")]
+    [TestCase(false, "GPU device: V3D 7.1.10.2, backend vulkan, driver V3DV Mesa Mesa 25.0.7, upload wait off")]
+    [TestCase(null, "GPU device: V3D 7.1.10.2, backend vulkan, driver V3DV Mesa Mesa 25.0.7")]
+    public void FormatDevice_ReportsTheUploadWaitOnlyWithAGpuMemorySystem(bool? waitsForUploads, string expected)
+    {
+        Assert.That(PerformanceReport.FormatDevice("V3D 7.1.10.2", "vulkan", "V3DV Mesa", "Mesa 25.0.7", waitsForUploads), Is.EqualTo(expected));
     }
 }

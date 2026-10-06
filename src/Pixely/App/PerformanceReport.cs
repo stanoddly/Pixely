@@ -21,14 +21,15 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
     private bool _hasGen0Baseline;
     private int _periodStartGen0Collections;
 
-    internal PerformanceReport(FrameTimings timings, ILogger? logger, GpuDevice? gpuDevice)
+    // Waits for uploads is the GPU memory system's, null without one.
+    internal PerformanceReport(FrameTimings timings, ILogger? logger, GpuDevice? gpuDevice, bool? waitsForUploads)
     {
         _timings = timings;
         _logger = logger;
         _gpuDevice = gpuDevice;
         if (gpuDevice != null)
         {
-            Write(DescribeDevice(gpuDevice));
+            Write(DescribeDevice(gpuDevice, waitsForUploads));
         }
     }
 
@@ -116,7 +117,7 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
         builder.Append(CultureInfo.InvariantCulture, $"{total / sorted.Length * 1000:F2}/{percentile95 * 1000:F2}/{sorted[^1] * 1000:F2}");
     }
 
-    private static string DescribeDevice(GpuDevice gpuDevice)
+    private static string DescribeDevice(GpuDevice gpuDevice, bool? waitsForUploads)
     {
         SDL_PropertiesID properties;
         unsafe
@@ -125,9 +126,19 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
         }
 
         string name = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown") ?? "unknown";
-        string driverName = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, "unknown") ?? "unknown";
         string driverVersion = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING, "unknown") ?? "unknown";
-        return $"GPU device: {name}, backend {gpuDevice.Driver}, driver {driverName} {driverVersion}";
+        return FormatDevice(name, gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", driverVersion, waitsForUploads);
+    }
+
+    internal static string FormatDevice(string name, string backend, string driverName, string driverVersion, bool? waitsForUploads)
+    {
+        string uploadWait = waitsForUploads switch
+        {
+            true => ", upload wait on",
+            false => ", upload wait off",
+            null => ""
+        };
+        return $"GPU device: {name}, backend {backend}, driver {driverName} {driverVersion}{uploadWait}";
     }
 
     private static string FormatBytes(long bytes)

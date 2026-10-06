@@ -16,7 +16,8 @@ public class PixelyConfigEnvironmentTests
     [TestCase("   ")]
     public void Apply_WithoutVariables_KeepsConfig(string? value)
     {
-        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true, PreferLowPowerGpu: true, EnableDiagnostics: true);
+        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true, PreferLowPowerGpu: true, EnableDiagnostics: true,
+            UploadWait: UploadWait.On);
         PixelyConfig original = config with { };
         Func<string, string?> variables = Variables(
             (PixelyConfigEnvironment.GpuBackendVariable, value),
@@ -24,7 +25,8 @@ public class PixelyConfigEnvironmentTests
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
             (PixelyConfigEnvironment.GpuValidationVariable, value),
             (PixelyConfigEnvironment.PreferLowPowerGpuVariable, value),
-            (PixelyConfigEnvironment.DiagnosticsVariable, value));
+            (PixelyConfigEnvironment.DiagnosticsVariable, value),
+            (PixelyConfigEnvironment.UploadWaitVariable, value));
 
         PixelyConfigEnvironment.Apply(config, variables);
 
@@ -54,6 +56,29 @@ public class PixelyConfigEnvironmentTests
 
         Assert.That(exception.Message, Does.Contain("PIXELY_GRAPHICS"));
         Assert.That(exception.Message, Does.Contain("opengl"));
+    }
+
+    [TestCase("automatic", UploadWait.Off, UploadWait.Automatic)]
+    [TestCase("on", UploadWait.Off, UploadWait.On)]
+    [TestCase("off", UploadWait.On, UploadWait.Off)]
+    [TestCase(" OFF ", UploadWait.On, UploadWait.Off)]
+    public void Apply_WithSupportedUploadWait_OverridesUploadWait(string value, UploadWait configured, UploadWait expected)
+    {
+        PixelyConfig config = new(UploadWait: configured);
+
+        PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.UploadWaitVariable, value)));
+
+        Assert.That(config.UploadWait, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Apply_WithUnsupportedUploadWait_Throws()
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => PixelyConfigEnvironment.Apply(new PixelyConfig(), Variables((PixelyConfigEnvironment.UploadWaitVariable, "1"))))!;
+
+        Assert.That(exception.Message, Does.Contain("PIXELY_UPLOAD_WAIT"));
+        Assert.That(exception.Message, Does.Contain("'1'"));
     }
 
     [TestCase("1", true)]

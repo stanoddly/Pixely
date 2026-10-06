@@ -194,6 +194,21 @@ public partial class PixelyFactory: IDisposable
         }
     }
 
+    internal GpuMemorySystem CreateGpuMemorySystem(GpuDevice gpuDevice)
+    {
+#if BROWSER
+        // Waiting needs a fence wait, which the browser build cannot do (GpuDevice.WaitForFences).
+        if (_config.UploadWait == UploadWait.On)
+        {
+            throw new PixelyInitializationException("UploadWait.On is not supported in the browser.");
+        }
+
+        return new GpuMemorySystem(gpuDevice, false);
+#else
+        return new GpuMemorySystem(gpuDevice, GpuMemorySystem.ShouldWaitForUploads(_config.UploadWait, gpuDevice.NativeDriverName));
+#endif
+    }
+
     private static unsafe GpuDevice CreateGpuDeviceFromProperties(SDL_PropertiesID props)
     {
         Pointer<SDL_GPUDevice> device = SDL3.SDL_CreateGPUDeviceWithProperties(props);

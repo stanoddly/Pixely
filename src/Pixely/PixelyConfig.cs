@@ -9,6 +9,15 @@ public enum GpuBackend
     WebGpu
 }
 
+// Whether GpuMemorySystem.Submit() waits for the uploads to finish on the GPU before the frame is submitted. Automatic waits only
+// on the Raspberry Pi's V3DV driver, whose binning can read a buffer before its upload has finished (docs/window-rendering.md).
+public enum UploadWait
+{
+    Automatic,
+    On,
+    Off
+}
+
 // The settable properties are overridden from PIXELY_* environment variables by PixelyAppBuilder, see PixelyConfigEnvironment.
 #if DEBUG
 public sealed record PixelyConfig(
@@ -20,7 +29,8 @@ public sealed record PixelyConfig(
     bool DeliverActivatingMouseClicks = true,
     bool Headless = false,
     bool PreferLowPowerGpu = false,
-    bool EnableDiagnostics = false)
+    bool EnableDiagnostics = false,
+    UploadWait UploadWait = UploadWait.Automatic)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
@@ -28,6 +38,7 @@ public sealed record PixelyConfig(
     public bool Headless { get; internal set; } = Headless;
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
+    public UploadWait UploadWait { get; internal set; } = UploadWait;
 }
 #else
 public sealed record PixelyConfig(
@@ -39,7 +50,8 @@ public sealed record PixelyConfig(
     bool DeliverActivatingMouseClicks = true,
     bool Headless = false,
     bool PreferLowPowerGpu = false,
-    bool EnableDiagnostics = false)
+    bool EnableDiagnostics = false,
+    UploadWait UploadWait = UploadWait.Automatic)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
@@ -47,5 +59,6 @@ public sealed record PixelyConfig(
     public bool Headless { get; internal set; } = Headless;
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
+    public UploadWait UploadWait { get; internal set; } = UploadWait;
 }
 #endif

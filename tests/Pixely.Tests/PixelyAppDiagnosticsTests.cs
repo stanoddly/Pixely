@@ -17,7 +17,8 @@ public class PixelyAppDiagnosticsTests
         PixelyConfigEnvironment.SdlLoggingVariable,
         PixelyConfigEnvironment.GpuValidationVariable,
         PixelyConfigEnvironment.PreferLowPowerGpuVariable,
-        PixelyConfigEnvironment.DiagnosticsVariable
+        PixelyConfigEnvironment.DiagnosticsVariable,
+        PixelyConfigEnvironment.UploadWaitVariable
     ];
 
     private readonly Dictionary<string, string?> _savedVariables = new();

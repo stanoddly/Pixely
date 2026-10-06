@@ -22,6 +22,9 @@ public class GpuDevice : IDisposable
 
     public string Driver { get; }
 
+    // The graphics driver's own name, such as radv or V3DV Mesa, where Driver is SDL's backend. SDL may not report one.
+    internal string? NativeDriverName { get; }
+
     public GpuMemoryStats MemoryStats
     {
         get
@@ -49,6 +52,14 @@ public class GpuDevice : IDisposable
             Driver = Marshal.PtrToStringUTF8((IntPtr)driver) ??
                      throw new PixelyInitializationException("SDL_GetGPUDeviceDriver returned null");
         }
+
+        SDL_PropertiesID properties;
+        unsafe
+        {
+            properties = SDL3.SDL_GetGPUDeviceProperties(sdlGpuDevice);
+        }
+
+        NativeDriverName = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, null);
     }
 
     public ShaderFormats GetSupportedShaderFormats()

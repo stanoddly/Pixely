@@ -99,6 +99,7 @@ The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`
 | `PIXELY_SDL_LOGGING` | `PixelyConfig.EnableSdlLogging` | `1`, `true`, `0`, `false` |
 | `PIXELY_GPU_VALIDATION` | `PixelyConfig.EnableGpuValidation` | `1`, `true`, `0`, `false` |
 | `PIXELY_DIAGNOSTICS` | `PixelyConfig.EnableDiagnostics` (see diagnostics.md) | `1`, `true`, `0`, `false` |
+| `PIXELY_UPLOAD_WAIT` | `PixelyConfig.UploadWait` (see window-rendering.md) | `automatic`, `on`, `off` |
 
 Values are trimmed and matched case-insensitively. An unset, empty, or whitespace-only variable leaves the configured value in effect. Any other value stops `Build()` with an `InvalidOperationException` that names the variable and lists the accepted values.
 
