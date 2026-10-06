@@ -14,11 +14,19 @@ public class GpuMemorySystem: ICopyPass
     private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
     private CopyPass? _copyPass;
 
-    public GpuMemorySystem(GpuDevice gpuDevice)
+    public GpuMemorySystem(GpuDevice gpuDevice) : this(gpuDevice, false)
+    {
+    }
+
+    internal GpuMemorySystem(GpuDevice gpuDevice, bool waitsForUploads)
     {
         _gpuDevice = gpuDevice;
         _uploadTransferBuffer = new UploadTransferBuffer(gpuDevice);
+        WaitsForUploads = waitsForUploads;
     }
+
+    // Whether Submit() returns only once the uploads have finished on the GPU, see PixelyConfig.UploadWait.
+    internal bool WaitsForUploads { get; }
 
     public bool IsEmpty => _copyPass == null || _copyPass.IsEmpty;
 
@@ -116,6 +124,20 @@ public class GpuMemorySystem: ICopyPass
         _uploadTransferBuffer.Dispose();
     }
 
+    // The V3DV driver of the Raspberry Pi 5 bins a draw, sorting its triangles into screen tiles, before an upload submitted ahead
+    // of it has finished, although SDL ends the copy with the barrier Vulkan requires. A buffer updated every frame then leaves
+    // holes in the tiles its triangles have moved into. Automatic waits there only: elsewhere a wait just stalls the CPU.
+    internal static bool ShouldWaitForUploads(UploadWait uploadWait, string? nativeDriverName)
+    {
+        return uploadWait switch
+        {
+            UploadWait.Automatic => nativeDriverName != null && nativeDriverName.StartsWith("V3DV", StringComparison.Ordinal),
+            UploadWait.On => true,
+            UploadWait.Off => false,
+            _ => throw new ArgumentOutOfRangeException(nameof(uploadWait), uploadWait, "Unknown upload wait")
+        };
+    }
+
     /// <summary>
     /// Submits the uploads recorded since the last submit. Uploads run only once this is called: a command buffer submitted
     /// earlier that reads a buffer updated since the last submit reads undefined contents. Render coordinators call this
@@ -123,6 +145,8 @@ public class GpuMemorySystem: ICopyPass
     /// no swapchain texture: there the uploads wait for the next drawn frame. Call it yourself before submitting any
     /// other command buffer that reads updated buffers. An app without window rendering must always call it itself: until
     /// then every update of a buffer cycles it into a new copy, because the unsubmitted uploads keep the earlier copies in use.
+    /// With <see cref="PixelyConfig.UploadWait"/> on, which is the default on the Raspberry Pi's V3DV driver, it returns only
+    /// once the uploads have finished on the GPU.
     /// </summary>
     public void Submit()
     {
@@ -135,6 +159,26 @@ public class GpuMemorySystem: ICopyPass
         _copyPass = null;
         Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = _sdlCommandBuffer;
         _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+
+#if !BROWSER
+        // The fence signals once the uploads have finished, so the frame submitted after this cannot start before them.
+        if (WaitsForUploads)
+        {
+            Pointer<SDL_GPUFence> sdlFence;
+            unsafe
+            {
+                sdlFence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(sdlCommandBuffer);
+            }
+
+            SdlError.ThrowOnNull(sdlFence, "SDL_SubmitGPUCommandBufferAndAcquireFence");
+            using (GpuFence fence = new(_gpuDevice, sdlFence))
+            {
+                _gpuDevice.WaitForFences([fence]);
+            }
+
+            return;
+        }
+#endif
 
         unsafe
         {

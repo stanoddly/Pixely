@@ -73,6 +73,27 @@ fall to the app:
 - `AddWindow` still claims the window for the device, but nothing requests its swapchain texture. SDL's Vulkan backend
   then frees finished GPU work only on a fence wait, so the app must also wait on a `GpuFence` regularly.
 
+## Waiting for uploads
+
+Render coordinators submit the frame's uploads before the frame's command buffer. On the Raspberry Pi 5's V3DV driver that
+is not enough. Its GPU first sorts each draw's triangles into the 64×64 px screen tiles they cover ("binning"), and it can
+do that before the uploads submitted ahead of the draw have finished. Geometry that a vertex shader reads from a buffer
+updated every frame then has holes in the tiles its triangles have moved into. SDL ends the copy with the barrier Vulkan
+requires, so this is a driver bug.
+
+`PixelyConfig.UploadWait` works around it. When the wait is on, `GpuMemorySystem.Submit()` submits the uploads with a
+fence and waits for it, so the frame is submitted only after the uploads have finished. The CPU then waits for the GPU's
+copies every frame, and the copies no longer overlap with the work submitted before them.
+
+| Value | Wait |
+| --- | --- |
+| `Automatic` (default) | On when the graphics driver's name starts with `V3DV`, off everywhere else. Off in the browser. |
+| `On` | Always. In the browser, `Build()` of an app with the GPU device fails with `PixelyInitializationException`, because it cannot wait on a fence. |
+| `Off` | Never. |
+
+`PIXELY_UPLOAD_WAIT` overrides it (see [headless.md](headless.md#environment-variables)), for example to check whether a
+newer Mesa still needs the wait. The diagnostics' `GPU device:` line says whether it is on (see [diagnostics.md](diagnostics.md)).
+
 ## The browser
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.

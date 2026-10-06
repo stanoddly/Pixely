@@ -97,13 +97,14 @@ public class PixelyAppBuilder : ServiceCollection
             AddSingleton<IImageLoader, SdlImageLoader>();
         }
 
-        // Diagnostics, see docs/diagnostics.md. Registered last, and the report resolves the logger factory and the GPU device only
-        // while diagnostics are on, so they change neither when the app's services are created nor when they are disposed. While
-        // they are off, the frame records its timings to a recorder that does nothing and no report is created.
+        // Diagnostics, see docs/diagnostics.md. Registered last, and the report resolves the logger factory, the GPU device and the
+        // GPU memory system only while diagnostics are on, so they change neither when the app's services are created nor when they
+        // are disposed. While they are off, the frame records its timings to a recorder that does nothing and no report is created.
         AddSingleton<FrameTimings>(static provider => provider.GetRequiredService<PixelyConfig>().EnableDiagnostics ? new FrameTimings() : null);
         AddSingleton<IFrameTimingRecorder>(static provider => provider.GetService<FrameTimings>() ?? (IFrameTimingRecorder)NullFrameTimingRecorder.Instance);
         AddSingleton<PerformanceReport>(static provider => provider.GetService<FrameTimings>() is { } timings
-            ? new PerformanceReport(timings, provider.GetService<ILoggerFactory>()?.CreateLogger(PerformanceReport.LoggerCategoryName), provider.GetService<GpuDevice>())
+            ? new PerformanceReport(timings, provider.GetService<ILoggerFactory>()?.CreateLogger(PerformanceReport.LoggerCategoryName), provider.GetService<GpuDevice>(),
+                provider.GetService<GpuMemorySystem>()?.WaitsForUploads)
             : null);
 
         ServiceProvider serviceProvider = BuildServiceProvider();
