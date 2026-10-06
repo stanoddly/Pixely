@@ -8,7 +8,7 @@ With `PixelyConfig.UploadWait` on, `GpuMemorySystem.Submit()` submits the upload
 
 - On the Raspberry Pi 5 (V3DV, Mesa 25.0.7 and 26.1.6), geometry read from a storage buffer updated every frame had holes on the 64 px tile grid: binning ran before the upload finished. SDL ends the copy with the transfer write to shader read barrier, so it is a driver bug, but Pixely still has to draw correctly there.
 - Of the measured workarounds, only waiting before the frame's command buffer fixed both Mesa versions (0 of 30 damaged frames, against 6 to 30 without it). Waiting at the start of each frame left 24 of 30 on Mesa 25.0.7. Turning binning off with `V3D_DEBUG=cl_nobin` dropped from about 50 to 20 fps. The wait cost no measurable frame rate on the Pi.
-- The measurement waited for the whole GPU to go idle. The fence signals once the uploads have finished, which is what the frame needs, so it waits for no other work.
+- The measurement waited for the whole GPU to go idle. The fence covers the upload submission, which is what the frame needs, so it does not wait for the whole GPU to go idle.
 - Elsewhere the wait only stops the uploads from overlapping with the work before them, so it is not on by default for every driver.
 - Mesa reports `V3DV Mesa` as the driver name and the version separately, so the match covers every Mesa version until the bug is fixed. The variable lets a newer Mesa be checked without a rebuild.
 - The browser cannot wait on a fence, and V3DV is never its driver, so `On` fails there and `Automatic` is off.

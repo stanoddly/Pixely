@@ -88,7 +88,7 @@ copies every frame, and the copies no longer overlap with the work submitted bef
 | Value | Wait |
 | --- | --- |
 | `Automatic` (default) | On when the graphics driver's name starts with `V3DV`, off everywhere else. Off in the browser. |
-| `On` | Always. In the browser `Build()` fails with `PixelyInitializationException`, because it cannot wait on a fence. |
+| `On` | Always. In the browser, `Build()` of an app with the GPU device fails with `PixelyInitializationException`, because it cannot wait on a fence. |
 | `Off` | Never. |
 
 `PIXELY_UPLOAD_WAIT` overrides it (see [headless.md](headless.md#environment-variables)), for example to check whether a

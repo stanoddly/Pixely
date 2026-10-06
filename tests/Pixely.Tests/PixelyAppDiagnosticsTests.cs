@@ -43,8 +43,8 @@ public class PixelyAppDiagnosticsTests
         }
     }
 
-    // The report resolves the logger factory and the GPU device, so registering diagnostics must not create either ahead of the
-    // app's own services. The device factory returns no device, so no GPU is needed, but still records when it runs.
+    // The report resolves the logger factory, the GPU device and the GPU memory system, so registering diagnostics must not create
+    // any of them ahead of the app's own services. The GPU factories return null, so no GPU is needed, but still record when they run.
     [TestCase(false)]
     [TestCase(true)]
     public void Build_KeepsTheCreationOrderOfTheAppsServices(bool enableDiagnostics)
@@ -66,10 +66,15 @@ public class PixelyAppDiagnosticsTests
             created.Add("GPU device");
             return null;
         });
+        builder.AddSingleton<GpuMemorySystem>(_ =>
+        {
+            created.Add("GPU memory system");
+            return null;
+        });
 
         using IPixelyApp app = builder.Build();
 
-        Assert.That(created, Is.EqualTo(new[] { "app service", "logger factory", "GPU device" }));
+        Assert.That(created, Is.EqualTo(new[] { "app service", "logger factory", "GPU device", "GPU memory system" }));
     }
 
     [Test]

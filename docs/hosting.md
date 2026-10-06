@@ -304,9 +304,9 @@ Not supported in the browser, each throwing `PlatformNotSupportedException`: `Gp
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
 stack under a managed frame). Headless mode (`PixelyConfig.Headless`, `PIXELY_HEADLESS`) reads
 commands from standard input and frames back through that download, so a headless app fails at
-`Build()` with `PixelyInitializationException` in the browser. So does `UploadWait.On`
-(`PIXELY_UPLOAD_WAIT=on`), which waits on a fence after each upload submit; `UploadWait.Automatic`
-never waits there. The swapchain is acquired
+`Build()` with `PixelyInitializationException` in the browser. So does an app with the GPU device
+(`UseGpu()`, which rendering registers) and `UploadWait.On` (`PIXELY_UPLOAD_WAIT=on`), which waits on a
+fence after each upload submit; `UploadWait.Automatic` never waits there. The swapchain is acquired
 with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no texture ready is skipped;
 `requestAnimationFrame` paces the frames anyway.
 
