@@ -69,6 +69,7 @@
     <Project Path="tutorials/Pixely.Tutorials.WindowDragging/Pixely.Tutorials.WindowDragging.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.StageSwitching/Pixely.Tutorials.StageSwitching.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.MouseWindowPresence/Pixely.Tutorials.MouseWindowPresence.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.Cursor/Pixely.Tutorials.Cursor.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.MultiWindow/Pixely.Tutorials.MultiWindow.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.MultiWindowTextInput/Pixely.Tutorials.MultiWindowTextInput.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Audio/Pixely.Tutorials.Audio.csproj" />

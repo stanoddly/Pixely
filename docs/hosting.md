@@ -217,6 +217,8 @@ trims, so `dotnet build -r browser-wasm` and `dotnet run -r browser-wasm` put ev
 SDL bindings in the table, and an archive built from an older SDL than the bindings target fails
 the link on the calls it lacks; set `WasmAllowUndefinedSymbols` to `true` for those commands.
 
+`ICursorService` (`docs/cursors.md`) calls `SDL_CreateAnimatedCursor`, so a custom `SDL3.a` must be built from SDL 3.4.0 or later.
+
 Getting the archives: Emscripten has ports for SDL3 (3.4.2 in the Emscripten .NET 11 bundles, so
 `SDL_WINDOW_FILL_DOCUMENT` works) and `sdl3_ttf`, but a port is fetched and compiled into the
 Emscripten cache at link time and the workload's cache is frozen, so `--use-port=sdl3` fails in a
