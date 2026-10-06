@@ -13,12 +13,7 @@ internal class SdlImageWriter : IImageWriter
         (ushort width, ushort height) = image.Size;
         ReadOnlySpan<byte> pixels = image.Data;
         SDL_PixelFormat format = (SDL_PixelFormat)image.PixelFormat;
-        int pitch = width * SDL3.SDL_BYTESPERPIXEL(format);
-        // An indexed image would need a palette, which Image does not carry, and a FourCC image has planes the pitch does not describe.
-        if (pitch == 0 || SDL3.SDL_ISPIXELFORMAT_INDEXED(format) || SDL3.SDL_ISPIXELFORMAT_FOURCC(format) || pixels.Length != (long)pitch * height)
-        {
-            throw new NotSupportedException($"Only tightly packed images in a non-planar, non-indexed pixel format can be saved, not {image.PixelFormat} with {pixels.Length} bytes for {width}x{height}.");
-        }
+        int pitch = ImageSurfaces.GetPackedPitch(image);
 
         string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (directory != null)

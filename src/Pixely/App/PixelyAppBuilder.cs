@@ -60,6 +60,9 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<MouseService, PixelyFactory>();
         AddAlias<IMouseService, MouseService>();
 
+        AddSingleton<CursorService, PixelyFactory>();
+        AddAlias<ICursorService, CursorService>();
+
         AddSingleton<TextInputService, PixelyFactory>();
         AddAlias<ITextInputService, TextInputService>();
 

@@ -248,6 +248,13 @@ public partial class PixelyFactory: IDisposable
         return new MouseService(windowRegistry);
     }
 
+    internal CursorService CreateCursorService()
+    {
+        EnsureSdlInitialized();
+
+        return new CursorService();
+    }
+
     internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
     {
         EnsureSdlInitialized();
