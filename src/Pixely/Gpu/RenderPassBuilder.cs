@@ -15,6 +15,8 @@ public ref struct RenderPassBuilder
 
     private readonly CommandBuffer _commandBuffer;
     private ColorTargetBuffer _colorTargets;
+    private ResolveTextureBuffer _resolveTextures;
+    private bool _hasResolveTextures;
     private int _colorTargetCount;
     private ColorTargetSettingsBuffer _colorTargetSettings;
     private int _colorTargetSettingsCount;
@@ -51,6 +53,31 @@ public ref struct RenderPassBuilder
         ThrowIfColorTargetsFull();
         _colorTargets[_colorTargetCount++] = texture;
         _colorTargetSettings[_colorTargetSettingsCount++] = settings;
+        return ref this;
+    }
+
+    /// <summary>
+    /// Adds a multisampled color target that resolves into <paramref name="resolveTexture"/>, a texture with one sample, the same
+    /// format and the same size. Its settings need the store operation <see cref="StoreOperation.Resolve"/> or <see cref="StoreOperation.ResolveAndStore"/>.
+    /// </summary>
+    [UnscopedRef]
+    public ref RenderPassBuilder AddColorTarget(Texture texture, Texture resolveTexture)
+    {
+        ArgumentNullException.ThrowIfNull(resolveTexture);
+        AddColorTarget(texture);
+        _resolveTextures[_colorTargetCount - 1] = resolveTexture;
+        _hasResolveTextures = true;
+        return ref this;
+    }
+
+    /// <inheritdoc cref="AddColorTarget(Texture, Texture)"/>
+    [UnscopedRef]
+    public ref RenderPassBuilder AddColorTarget(Texture texture, Texture resolveTexture, ColorTargetSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(resolveTexture);
+        AddColorTarget(texture, settings);
+        _resolveTextures[_colorTargetCount - 1] = resolveTexture;
+        _hasResolveTextures = true;
         return ref this;
     }
 
@@ -111,9 +138,12 @@ public ref struct RenderPassBuilder
 
         ReadOnlySpan<Texture> colorTargets = ((ReadOnlySpan<Texture>)_colorTargets)[.._colorTargetCount];
         ReadOnlySpan<ColorTargetSettings> colorTargetSettings = ((ReadOnlySpan<ColorTargetSettings>)_colorTargetSettings)[.._colorTargetCount];
-        RenderPass renderPass = _commandBuffer.CreateRenderPass(colorTargets, colorTargetSettings, _depthBuffer, _depthBufferSettings);
+        ReadOnlySpan<Texture?> resolveTextures = _hasResolveTextures ? ((ReadOnlySpan<Texture?>)_resolveTextures)[.._colorTargetCount] : default;
+        RenderPass renderPass = _commandBuffer.CreateRenderPass(colorTargets, colorTargetSettings, _depthBuffer, _depthBufferSettings, resolveTextures);
 
         _colorTargets = default;
+        _resolveTextures = default;
+        _hasResolveTextures = false;
         _colorTargetCount = 0;
         _colorTargetSettings = default;
         _colorTargetSettingsCount = 0;
@@ -136,6 +166,12 @@ public ref struct RenderPassBuilder
     private struct ColorTargetBuffer
     {
         private Texture _element;
+    }
+
+    [InlineArray(MaxColorTargets)]
+    private struct ResolveTextureBuffer
+    {
+        private Texture? _element;
     }
 
     [InlineArray(MaxColorTargets)]

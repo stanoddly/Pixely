@@ -14,14 +14,6 @@ public enum PrimitiveType
     PointList = SDL_GPUPrimitiveType.SDL_GPU_PRIMITIVETYPE_POINTLIST
 }
 
-public enum SampleCount
-{
-    Count1 = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_1,
-    Count2 = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_2,
-    Count4 = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_4,
-    Count8 = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_8
-}
-
 public enum CompareOperation
 {
     Invalid = SDL_GPUCompareOp.SDL_GPU_COMPAREOP_INVALID,
@@ -247,7 +239,11 @@ public class GraphicsPipelineBuilder
 
     public GraphicsPipelineBuilder EnableMultiSampling(SampleCount sampleCount, UInt32? mask = null)
     {
-        // TODO: check the value with SDL_GPUTextureSupportsSampleCount
+        if (sampleCount is < SampleCount.Count1 or > SampleCount.Count8)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sampleCount), sampleCount, $"'{sampleCount}' is not a {nameof(SampleCount)}.");
+        }
+
         _info.SdlGpuMultisampleState = _info.SdlGpuMultisampleState with
         {
             sample_count = (SDL_GPUSampleCount)sampleCount,
@@ -417,7 +413,18 @@ public class GraphicsPipelineBuilder
         {
             throw new InvalidOperationException("Fragment shader has null pointer.");
         }
-        
+
+        SampleCount sampleCount = (SampleCount)_info.SdlGpuMultisampleState.sample_count;
+        foreach (SDL_GPUColorTargetDescription description in sdlGpuColorTargetDescriptions)
+        {
+            ThrowIfSampleCountUnsupported((TextureFormat)description.format, sampleCount);
+        }
+
+        if (_info.DepthBufferFormat is { } depthBufferFormat)
+        {
+            ThrowIfSampleCountUnsupported((TextureFormat)depthBufferFormat, sampleCount);
+        }
+
         unsafe
         {
             fixed (SDL_GPUColorTargetDescription* sdlGpuColorTargetDescriptionsPointer = sdlGpuColorTargetDescriptions)
@@ -472,12 +479,21 @@ public class GraphicsPipelineBuilder
                     pipeline,
                     [.. _info.VertexBufferTypeIds],
                     shaderProgram,
-                    _info.DepthBufferFormat ?? DepthBufferFormat.None);
+                    _info.DepthBufferFormat ?? DepthBufferFormat.None,
+                    sampleCount);
                 _info.Reset();
                 
                 _gpuDevice.RegisterGraphicsPipeline(graphicsPipeline);
                 return graphicsPipeline;
             }
+        }
+    }
+
+    private void ThrowIfSampleCountUnsupported(TextureFormat format, SampleCount sampleCount)
+    {
+        if (!_gpuDevice.IsSampleCountSupported(format, sampleCount))
+        {
+            throw new InvalidOperationException($"Sample count '{sampleCount}' is not supported for the target format '{format}' on this GPU.");
         }
     }
 }

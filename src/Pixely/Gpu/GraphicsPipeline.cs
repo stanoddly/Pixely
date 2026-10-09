@@ -23,19 +23,22 @@ public class GraphicsPipeline: IDisposable
 
     public GraphicsShaderProgram ShaderProgram { get; }
     public DepthBufferFormat DepthBufferFormat { get; }
+    public SampleCount SampleCount { get; }
 
     internal GraphicsPipeline(
         GpuDevice gpuDevice,
         Pointer<SDL_GPUGraphicsPipeline> pointer,
         ImmutableArray<VertexTypeId> vertexBufferTypeIds,
         GraphicsShaderProgram shaderProgram,
-        DepthBufferFormat depthBufferFormat)
+        DepthBufferFormat depthBufferFormat,
+        SampleCount sampleCount)
     {
         _gpuDevice = gpuDevice;
         Pointer = pointer;
         VertexBufferTypeIds = vertexBufferTypeIds;
         ShaderProgram = shaderProgram;
         DepthBufferFormat = depthBufferFormat;
+        SampleCount = sampleCount;
     }
 
 

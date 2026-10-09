@@ -52,7 +52,7 @@ public sealed class TextSpriteAssetTests
     private sealed class TestTexture : Texture
     {
         internal TestTexture(Pointer<SDL_GPUTexture> pointer)
-            : base(pointer, new ShortSize(16, 10), TextureFormat.R8G8B8A8Unorm, 640)
+            : base(pointer, new ShortSize(16, 10), TextureFormat.R8G8B8A8Unorm, 640, TextureUsage.Sampler)
         {
         }
 

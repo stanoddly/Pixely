@@ -52,6 +52,13 @@ internal struct RenderPassValidator
                 $"Ensure the depth buffer format passed to EnableDepthTesting matches the format of the depth buffer texture used in the render pass.");
         }
 
+        if (renderPass.SampleCount != graphicsPipeline.SampleCount)
+        {
+            throw new InvalidOperationException(
+                $"Sample count mismatch: the render pass's attachments have {renderPass.SampleCount} but the pipeline was created with {graphicsPipeline.SampleCount}. " +
+                $"Pass the attachments' sample count to EnableMultiSampling.");
+        }
+
         // Reset slot bindings when pipeline changes
         _slot0Type = VertexTypeId.Null;
         _slot1Type = VertexTypeId.Null;

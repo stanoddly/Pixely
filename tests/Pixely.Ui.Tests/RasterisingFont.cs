@@ -31,7 +31,7 @@ internal sealed class RasterisingFont : IFont
     /// <summary>A texture with no native handle: nothing in a paint pass dereferences it.</summary>
     private sealed class TestTexture : Texture
     {
-        internal TestTexture() : base(Pointer<SDL_GPUTexture>.Null, new ShortSize(256, 256), TextureFormat.R8G8B8A8Unorm, 0)
+        internal TestTexture() : base(Pointer<SDL_GPUTexture>.Null, new ShortSize(256, 256), TextureFormat.R8G8B8A8Unorm, 0, TextureUsage.Sampler)
         {
         }
 

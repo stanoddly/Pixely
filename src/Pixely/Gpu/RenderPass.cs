@@ -22,6 +22,11 @@ public class RenderPass : IDisposable
     public DepthBufferFormat DepthBufferFormat { get; }
 
     /// <summary>
+    /// The sample count every attachment of this pass has, which the pipelines it binds must also have.
+    /// </summary>
+    public SampleCount SampleCount { get; }
+
+    /// <summary>
     /// The area every attachment of this pass covers, which is the smallest of them.
     /// It is what <see cref="SetScissor"/> clips to and what <see cref="ClearScissor"/> restores.
     /// </summary>
@@ -31,10 +36,12 @@ public class RenderPass : IDisposable
         CommandBuffer commandBuffer,
         Pointer<SDL_GPURenderPass> nativePointer,
         DepthBufferFormat depthBufferFormat,
+        SampleCount sampleCount,
         ShortSize targetSize)
     {
         _nativePointer = nativePointer;
         DepthBufferFormat = depthBufferFormat;
+        SampleCount = sampleCount;
         TargetSize = targetSize;
         _validator = RenderPassValidator.Create(commandBuffer);
     }
