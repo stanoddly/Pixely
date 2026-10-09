@@ -69,6 +69,14 @@ Add color targets in the order they appear in fragment shader outputs. Each `Add
 
 **Use Reverse-Z** for significantly better depth precision across all depth ranges.
 
+## Multisampling
+
+```csharp
+.EnableMultiSampling(SampleCount.Count4)
+```
+
+The count must equal the sample count of the render pass's attachments. See `docs/multisampling.md`.
+
 ## Complete Example
 
 ```csharp

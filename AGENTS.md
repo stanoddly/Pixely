@@ -14,6 +14,7 @@
 - `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages)
 - `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies, `Content.pk3` in the browser's file system with `PixelyBrowserVfsFile`
 - `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
+- `docs/multisampling.md` - Multisample anti-aliasing: sample counts and what each backend supports, multisampled textures and their limits, resolving a color target in a render pass, matching depth buffers and pipelines
 - `docs/subrenderers.md` - Composing multiple renderers within IRenderer<T> (ordering members, IEnumerable injection)
 - `docs/ui.md` - Pixely.Ui retained UI: elements, sizing and layouts, scrolling, views and view models, pointer, wheel and focus routing, text fields, styling
 - `docs/path-finding-grids.md` - Pixely.PathFinding.Grids: grid geometry, clearance-based agent footprints, connectivity and the corner rule, overlays, the admissible grid heuristic

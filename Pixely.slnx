@@ -44,6 +44,7 @@
     <Project Path="tutorials/Pixely.Tutorials.TaskbarIcon/Pixely.Tutorials.TaskbarIcon.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.EmbeddedContent/Pixely.Tutorials.EmbeddedContent.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.DepthOnly/Pixely.Tutorials.DepthOnly.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.Multisampling/Pixely.Tutorials.Multisampling.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Triangle/Pixely.Tutorials.Triangle.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Browser/Pixely.Tutorials.Browser.csproj" />

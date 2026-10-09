@@ -11,13 +11,17 @@ public abstract class Texture: IDisposable, IGpuMemorySized
     public TextureFormat Format { get; }
     public ShortSize Size { get; }
     public long SizeInBytes { get; }
+    public TextureUsage Usage { get; }
+    public SampleCount SampleCount { get; }
 
-    internal Texture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format, long sizeInBytes)
+    internal Texture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format, long sizeInBytes, TextureUsage usage, SampleCount sampleCount = SampleCount.Count1)
     {
         SdlGpuTexture = sdlGpuTexture;
         Size = size;
         Format = format;
         SizeInBytes = sizeInBytes;
+        Usage = usage;
+        SampleCount = sampleCount;
     }
 
     public Vector4 CalculateTextureRegionUVs(ShortRectangle sourceRectangle, SpriteFlip flip = SpriteFlip.None)
@@ -62,8 +66,9 @@ public class UserTexture: Texture
 {
     private readonly GpuDevice _gpuDevice;
 
-    internal UserTexture(GpuDevice gpuDevice, Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format)
-        : base(sdlGpuTexture, size, format, format.CalculateSizeInBytes(size.Width, size.Height))
+    // Every sample is stored, so a multisampled texture takes that many times the memory. SampleCount's values are SDL's, the base-2 logarithm of the count.
+    internal UserTexture(GpuDevice gpuDevice, Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format, TextureUsage usage, SampleCount sampleCount = SampleCount.Count1)
+        : base(sdlGpuTexture, size, format, format.CalculateSizeInBytes(size.Width, size.Height) << (int)sampleCount, usage, sampleCount)
     {
         _gpuDevice = gpuDevice;
     }
@@ -77,7 +82,8 @@ public class UserTexture: Texture
 // Aliases the backing texture's native handle without taking ownership of it.
 internal sealed class BorrowedTexture : Texture
 {
-    internal BorrowedTexture(Texture backingTexture) : base(backingTexture.SdlGpuTexture, backingTexture.Size, backingTexture.Format, backingTexture.SizeInBytes)
+    internal BorrowedTexture(Texture backingTexture)
+        : base(backingTexture.SdlGpuTexture, backingTexture.Size, backingTexture.Format, backingTexture.SizeInBytes, backingTexture.Usage, backingTexture.SampleCount)
     {
     }
 
@@ -89,8 +95,9 @@ internal sealed class BorrowedTexture : Texture
 
 public class SwapchainTexture : Texture
 {
-    internal SwapchainTexture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format)
-        : base(sdlGpuTexture, size, format, format.CalculateSizeInBytes(size.Width, size.Height))
+    // SDL creates a window's swapchain textures as color targets only.
+    internal SwapchainTexture(Pointer<SDL_GPUTexture> sdlGpuTexture, ShortSize size, TextureFormat format, TextureUsage usage = TextureUsage.ColorTarget)
+        : base(sdlGpuTexture, size, format, format.CalculateSizeInBytes(size.Width, size.Height), usage)
     {
     }
 

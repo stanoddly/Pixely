@@ -56,6 +56,10 @@ public class CommandBuffer: IDisposable
 #if BROWSER
         throw new PlatformNotSupportedException("Downloading a texture is not supported in the browser.");
 #else
+        if (texture.SampleCount != SampleCount.Count1)
+        {
+            throw new ArgumentException($"A texture with {texture.SampleCount} cannot be downloaded. Resolve it into a texture with one sample and download that.", nameof(texture));
+        }
 
         PixelFormat pixelFormat = texture.Format.ToPixelFormat();
         long layerSizeInBytes = texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height);
@@ -151,23 +155,46 @@ public class CommandBuffer: IDisposable
         }
     }
 
-    public RenderPass CreateRenderPass(ReadOnlySpan<Texture> colorTargets, ReadOnlySpan<ColorTargetSettings> colorTargetSettings, Texture? depthBuffer, DepthBufferSettings depthBufferSettings)
+    /// <summary>
+    /// Begins a render pass. <paramref name="resolveTextures"/> is either empty or has one entry per color target: the texture with one
+    /// sample that a multisampled color target resolves into, or null for a target that does not resolve.
+    /// </summary>
+    public RenderPass CreateRenderPass(
+        ReadOnlySpan<Texture> colorTargets,
+        ReadOnlySpan<ColorTargetSettings> colorTargetSettings,
+        Texture? depthBuffer,
+        DepthBufferSettings depthBufferSettings,
+        ReadOnlySpan<Texture?> resolveTextures = default)
     {
         ThrowIfDisposed();
-        
+
+        if (!resolveTextures.IsEmpty && resolveTextures.Length != colorTargets.Length)
+        {
+            throw new ArgumentException($"There are {resolveTextures.Length} resolve textures for {colorTargets.Length} color targets. Pass one per color target, or none.", nameof(resolveTextures));
+        }
+
+        SampleCount sampleCount = ValidateSampleCounts(colorTargets, depthBuffer);
+        if (depthBuffer != null)
+        {
+            ValidateDepthBufferStoreOperations(depthBufferSettings);
+        }
+
         Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
             
         for (int i = 0; i < colorTargets.Length; i++)
         {
             Texture colorTarget = colorTargets[i];
             ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
+            Texture? resolveTexture = resolveTextures.IsEmpty ? null : resolveTextures[i];
+            ValidateResolve(i, colorTarget, colorTargetSetting.StoreOperation, resolveTexture);
 
             colorTargetInfos[i] = new SDL_GPUColorTargetInfo
             {
                 texture = colorTarget.SdlGpuTexture,
                 clear_color = colorTargetSetting.ClearColorValue,
                 load_op = (SDL_GPULoadOp)colorTargetSetting.LoadOperation,
-                store_op = (SDL_GPUStoreOp)colorTargetSetting.StoreOperation
+                store_op = (SDL_GPUStoreOp)colorTargetSetting.StoreOperation,
+                resolve_texture = resolveTexture != null ? resolveTexture.SdlGpuTexture : Pointer<SDL_GPUTexture>.Null
             };
         }
         
@@ -187,7 +214,88 @@ public class CommandBuffer: IDisposable
             depthBufferPointer,
             depthBufferSettings,
             depthBufferFormat,
+            sampleCount,
             CalculateTargetSize(colorTargets, depthBuffer));
+    }
+
+    // Every backend needs the attachments of a pass to share one sample count, which the pass's pipelines must also have.
+    internal static SampleCount ValidateSampleCounts(ReadOnlySpan<Texture> colorTargets, Texture? depthBuffer)
+    {
+        SampleCount sampleCount = colorTargets.IsEmpty ? depthBuffer?.SampleCount ?? SampleCount.Count1 : colorTargets[0].SampleCount;
+
+        for (int i = 1; i < colorTargets.Length; i++)
+        {
+            if (colorTargets[i].SampleCount != sampleCount)
+            {
+                throw new InvalidOperationException(
+                    $"All attachments of a render pass need the same sample count, but color target 0 has {sampleCount} and color target {i} has {colorTargets[i].SampleCount}.");
+            }
+        }
+
+        if (depthBuffer != null && depthBuffer.SampleCount != sampleCount)
+        {
+            throw new InvalidOperationException(
+                $"All attachments of a render pass need the same sample count, but the color targets have {sampleCount} and the depth buffer has {depthBuffer.SampleCount}.");
+        }
+
+        return sampleCount;
+    }
+
+    // SDL has no resolve for depth-stencil targets.
+    internal static void ValidateDepthBufferStoreOperations(DepthBufferSettings settings)
+    {
+        if (settings.DepthBufferStoreOperation is StoreOperation.Resolve or StoreOperation.ResolveAndStore
+            || settings.StencilStoreOperation is StoreOperation.Resolve or StoreOperation.ResolveAndStore)
+        {
+            throw new InvalidOperationException(
+                $"A depth-stencil buffer cannot be resolved, but its store operations are {settings.DepthBufferStoreOperation} for depth and {settings.StencilStoreOperation} for stencil.");
+        }
+    }
+
+    internal static void ValidateResolve(int index, Texture colorTarget, StoreOperation storeOperation, Texture? resolveTexture)
+    {
+        bool resolves = storeOperation is StoreOperation.Resolve or StoreOperation.ResolveAndStore;
+
+        if (resolves && resolveTexture == null)
+        {
+            throw new InvalidOperationException($"Color target {index} has the store operation {storeOperation} but no resolve texture.");
+        }
+
+        if (resolveTexture == null)
+        {
+            return;
+        }
+
+        if (!resolves)
+        {
+            throw new InvalidOperationException(
+                $"Color target {index} has a resolve texture but the store operation {storeOperation}. Use {nameof(StoreOperation.Resolve)} or {nameof(StoreOperation.ResolveAndStore)}.");
+        }
+
+        if (colorTarget.SampleCount == SampleCount.Count1)
+        {
+            throw new InvalidOperationException($"Color target {index} has one sample, so there is nothing to resolve. Only a multisampled color target can be resolved.");
+        }
+
+        if ((resolveTexture.Usage & TextureUsage.ColorTarget) == 0)
+        {
+            throw new InvalidOperationException($"The resolve texture of color target {index} has the usage '{resolveTexture.Usage}', but a resolve texture needs {nameof(TextureUsage.ColorTarget)}.");
+        }
+
+        if (resolveTexture.SampleCount != SampleCount.Count1)
+        {
+            throw new InvalidOperationException($"The resolve texture of color target {index} has {resolveTexture.SampleCount}, but a resolve texture needs one sample.");
+        }
+
+        if (resolveTexture.Format != colorTarget.Format)
+        {
+            throw new InvalidOperationException($"The resolve texture of color target {index} has the format {resolveTexture.Format}, but the color target has {colorTarget.Format}.");
+        }
+
+        if (resolveTexture.Size != colorTarget.Size)
+        {
+            throw new InvalidOperationException($"The resolve texture of color target {index} is {resolveTexture.Size.Width}x{resolveTexture.Size.Height}, but the color target is {colorTarget.Size.Width}x{colorTarget.Size.Height}.");
+        }
     }
 
     // A pass can only safely address the area every attachment shares, so the scissor bounds
@@ -217,6 +325,7 @@ public class CommandBuffer: IDisposable
         Pointer<SDL_GPUTexture> depthBufferPointer,
         DepthBufferSettings depthBufferSettings,
         DepthBufferFormat depthBufferFormat,
+        SampleCount sampleCount,
         ShortSize targetSize)
     {
         ThrowIfDisposed();
@@ -255,7 +364,7 @@ public class CommandBuffer: IDisposable
                 }
             }
             
-            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, targetSize);
+            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, sampleCount, targetSize);
 
             return renderPass;
         }

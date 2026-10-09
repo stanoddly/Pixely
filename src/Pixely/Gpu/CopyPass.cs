@@ -356,7 +356,7 @@ internal sealed class CopyPass
                 throw;
             }
 
-            Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), TextureFormat.R8G8B8A8Unorm);
+            Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), TextureFormat.R8G8B8A8Unorm, TextureUsage.Sampler);
             _gpuDevice.RegisterTexture(texture);
             return texture;
         }
@@ -413,7 +413,7 @@ internal sealed class CopyPass
                 throw;
             }
 
-            TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, TextureFormat.R8G8B8A8Unorm);
+            TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, TextureFormat.R8G8B8A8Unorm, TextureUsage.Sampler);
             _gpuDevice.RegisterTexture(textureArray);
             return textureArray;
         }

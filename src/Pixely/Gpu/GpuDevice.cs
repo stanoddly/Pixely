@@ -164,75 +164,51 @@ public class GpuDevice : IDisposable
         }
     }
 
-    public Texture CreateDepthBufferTexture(ShortSize size, DepthBufferFormat format, bool sampler=false)
+    /// <summary>
+    /// Whether textures of the format can have the sample count on this device. <see cref="SampleCount.Count1"/> is always supported.
+    /// </summary>
+    public bool IsSampleCountSupported(TextureFormat format, SampleCount sampleCount)
     {
-        SDL_GPUTextureUsageFlags usage = SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-
-        if (sampler)
+        // SDL indexes its backends' tables with the value, so an undefined one must not reach it.
+        if (sampleCount is < SampleCount.Count1 or > SampleCount.Count8)
         {
-            usage |= SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            throw new ArgumentOutOfRangeException(nameof(sampleCount), sampleCount, $"'{sampleCount}' is not a {nameof(SampleCount)}.");
         }
 
+        // On Direct3D 12 the SDL that Pixely pins checks a depth format by its shader-view format, so it can report no multisampling for a depth
+        // format the GPU supports it for, such as Depth24Stencil8. Texture creation and pipeline building then reject that count.
+        // libsdl-org/SDL#16124, fixed by libsdl-org/SDL#16230 in a later SDL.
         unsafe
         {
-            if (SDL3.SDL_GPUTextureSupportsFormat(SdlGpuDevice, (SDL_GPUTextureFormat)format, SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D, usage) == false)
-            {
-                throw new ArgumentException($"Texture format '{format}' is not supported for usage '{(TextureUsage)usage}' on this GPU.", nameof(format));
-            }
-            SDL_GPUTextureCreateInfo info = new SDL_GPUTextureCreateInfo
-            {
-                usage = usage,
-                format = (SDL_GPUTextureFormat)format,
-                width = size.Width,
-                height = size.Height,
-                layer_count_or_depth = 1,
-                num_levels = 1,
-                sample_count = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_1
-            };
-
-            Pointer<SDL_GPUTexture> rawTexture = SDL3.SDL_CreateGPUTexture(SdlGpuDevice, &info);
-            SdlError.ThrowOnNull(rawTexture);
-
-            Texture texture = new UserTexture(this, rawTexture, size, (TextureFormat)format);
-            _textures.Add(texture);
-
-            return texture;
+            return sampleCount == SampleCount.Count1 || SDL3.SDL_GPUTextureSupportsSampleCount(SdlGpuDevice, (SDL_GPUTextureFormat)format, (SDL_GPUSampleCount)sampleCount);
         }
     }
 
-    public Texture CreateColorTargetTexture(ShortSize size, TextureFormat format)
+    /// <summary>
+    /// Creates a depth-stencil buffer. A multisampled one cannot be sampled, so <paramref name="sampler"/> must be false with a
+    /// <paramref name="sampleCount"/> above <see cref="SampleCount.Count1"/>.
+    /// </summary>
+    public Texture CreateDepthBufferTexture(ShortSize size, DepthBufferFormat format, bool sampler = false, SampleCount sampleCount = SampleCount.Count1)
     {
-        const SDL_GPUTextureUsageFlags usage = SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER;
-
-        unsafe
-        {
-            if (SDL3.SDL_GPUTextureSupportsFormat(SdlGpuDevice, (SDL_GPUTextureFormat)format, SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D, usage) == false)
-            {
-                throw new ArgumentException($"Texture format '{format}' is not supported for usage '{(TextureUsage)usage}' on this GPU.", nameof(format));
-            }
-
-            SDL_GPUTextureCreateInfo info = new SDL_GPUTextureCreateInfo
-            {
-                usage = usage,
-                format = (SDL_GPUTextureFormat)format,
-                width = size.Width,
-                height = size.Height,
-                layer_count_or_depth = 1,
-                num_levels = 1,
-                sample_count = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_1
-            };
-
-            Pointer<SDL_GPUTexture> rawTexture = SDL3.SDL_CreateGPUTexture(SdlGpuDevice, &info);
-            SdlError.ThrowOnNull(rawTexture);
-
-            Texture texture = new UserTexture(this, rawTexture, size, format);
-            _textures.Add(texture);
-
-            return texture;
-        }
+        TextureUsage usage = sampler ? TextureUsage.DepthStencilTarget | TextureUsage.Sampler : TextureUsage.DepthStencilTarget;
+        return CreateTexture(size, (TextureFormat)format, usage, sampleCount);
     }
 
-    public Texture CreateTexture(ShortSize size, TextureFormat format, TextureUsage usage)
+    /// <summary>
+    /// Creates a color target that can also be sampled. A multisampled one cannot be sampled, so with a <paramref name="sampleCount"/>
+    /// above <see cref="SampleCount.Count1"/> it is only a color target, for a render pass to resolve into a texture with one sample.
+    /// </summary>
+    public Texture CreateColorTargetTexture(ShortSize size, TextureFormat format, SampleCount sampleCount = SampleCount.Count1)
+    {
+        TextureUsage usage = sampleCount == SampleCount.Count1 ? TextureUsage.ColorTarget | TextureUsage.Sampler : TextureUsage.ColorTarget;
+        return CreateTexture(size, format, usage, sampleCount);
+    }
+
+    /// <summary>
+    /// Creates a 2D texture. A multisampled one, with a <paramref name="sampleCount"/> above <see cref="SampleCount.Count1"/>,
+    /// can only be a color or depth-stencil target.
+    /// </summary>
+    public Texture CreateTexture(ShortSize size, TextureFormat format, TextureUsage usage, SampleCount sampleCount = SampleCount.Count1)
     {
         unsafe
         {
@@ -243,6 +219,19 @@ public class GpuDevice : IDisposable
                 throw new ArgumentException($"Texture format '{format}' is not supported for usage '{usage}' on this GPU.", nameof(format));
             }
 
+            if (sampleCount != SampleCount.Count1)
+            {
+                if ((usage & ~(TextureUsage.ColorTarget | TextureUsage.DepthStencilTarget)) != 0)
+                {
+                    throw new ArgumentException($"A multisampled texture can only be a color or depth-stencil target, but the usage is '{usage}'.", nameof(usage));
+                }
+
+                if (!IsSampleCountSupported(format, sampleCount))
+                {
+                    throw new ArgumentException($"Sample count '{sampleCount}' is not supported for texture format '{format}' on this GPU.", nameof(sampleCount));
+                }
+            }
+
             SDL_GPUTextureCreateInfo info = new SDL_GPUTextureCreateInfo
             {
                 usage = sdlUsage,
@@ -251,13 +240,13 @@ public class GpuDevice : IDisposable
                 height = size.Height,
                 layer_count_or_depth = 1,
                 num_levels = 1,
-                sample_count = SDL_GPUSampleCount.SDL_GPU_SAMPLECOUNT_1
+                sample_count = (SDL_GPUSampleCount)sampleCount
             };
 
             Pointer<SDL_GPUTexture> rawTexture = SDL3.SDL_CreateGPUTexture(SdlGpuDevice, &info);
             SdlError.ThrowOnNull(rawTexture);
 
-            Texture texture = new UserTexture(this, rawTexture, size, format);
+            Texture texture = new UserTexture(this, rawTexture, size, format, usage, sampleCount);
             _textures.Add(texture);
 
             return texture;
