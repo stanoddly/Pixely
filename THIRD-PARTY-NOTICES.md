@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-Pixely depends on the build-time [`SlangDxcBundle.Toolchain`](https://www.nuget.org/packages/SlangDxcBundle.Toolchain) package produced by [`stanoddly/slang-dxc-bundle`](https://github.com/stanoddly/slang-dxc-bundle). Its binaries and third-party components are distributed under their respective licenses, not under Pixely's MIT license.
+Pixely depends on the build-time [`SlangDxcBundle.Toolchain`](https://www.nuget.org/packages/SlangDxcBundle.Toolchain) project SDK produced by [`stanoddly/slang-dxc-bundle`](https://github.com/stanoddly/slang-dxc-bundle), which restores one `SlangDxcBundle.Toolchain.<rid>` package for the build host. Their binaries and third-party components are distributed under their respective licenses, not under Pixely's MIT license.
 
-The complete license and notice files supplied with each distribution are retained in that package under:
+The complete license and notice files supplied with each distribution are retained in the platform package under:
 
 ```text
 tools/slang/<platform>/LICENSE

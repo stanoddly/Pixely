@@ -226,8 +226,9 @@ public class PackageIntegrationTests
             Assert.That(shaderTargets, Does.Not.Contain("Unzip"));
             Assert.That(shaderTargets, Does.Not.Contain("<Copy "));
             Assert.That(shaderTargets, Does.Not.Contain("chmod"));
-            Assert.That(shaderProps, Does.Contain("SlangDxcToolchainRoot"));
-            Assert.That(shaderTargets, Does.Contain("SlangDxcToolchainRoot"));
+            Assert.That(shaderProps, Does.Contain("Sdk=\"SlangDxcBundle.Toolchain\""));
+            Assert.That(shaderTargets, Does.Contain("Sdk=\"SlangDxcBundle.Toolchain\""));
+            Assert.That(shaderProps, Does.Contain("SlangDxcToolchainDirectory"));
             Assert.That(pixelyProps, Does.Not.Contain("tools\\slang"));
             Assert.That(pixelyProps, Does.Not.Contain("SlangObjDir"));
             Assert.That(pixelyProps, Does.Not.Contain("_OwnsSlangInstallation"));
@@ -310,7 +311,7 @@ public class PackageIntegrationTests
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         string generatedDirectory = Path.Combine(consumerDirectory, "Content", "shaders", ".generated");
         string shaderToolDirectory = Path.Combine(consumerDirectory, "obj", "Pixely.SdlangCompiler");
-        string slangDirectory = GetRestoredSlangDirectory(GetCurrentSlangPlatform());
+        string slangDirectory = GetRestoredSlangDirectory();
 
         Assert.Multiple(() =>
         {
@@ -1144,7 +1145,7 @@ public class PackageIntegrationTests
 
         string shaderToolDirectory = Path.Combine(consumerDirectory, "obj", "Pixely.SdlangCompiler");
         string generatedDirectory = Path.Combine(consumerDirectory, "Content", "shaders", ".generated");
-        string hostDirectory = GetRestoredSlangDirectory(GetCurrentSlangPlatform());
+        string hostDirectory = GetRestoredSlangDirectory();
         Assert.Multiple(() =>
         {
             Assert.That(Directory.Exists(hostDirectory), Is.True);
@@ -1174,7 +1175,7 @@ public class PackageIntegrationTests
         Assert.Multiple(() =>
         {
             Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
-            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
+            Assert.That(assetsFile, Does.Contain($"\"{GetToolchainHost().PackageId}/{GetToolchainVersion()}\""));
             Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
             Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
         });
@@ -1184,7 +1185,7 @@ public class PackageIntegrationTests
     }
 
     [TestCase("ShaderFreeConsumer", "Pixely")]
-    [TestCase("CentralConsumer", "Pixely and to SlangDxcBundle.Toolchain")]
+    [TestCase("CentralConsumer", "Pixely and SlangDxcBundle.Toolchain")]
     public async Task RedundantPackageReferenceIsReplacedByTheSdkPinWithAWarning(string consumer, string redundant)
     {
         string consumerDirectory = GetConsumerDirectory(consumer);
@@ -1194,10 +1195,10 @@ public class PackageIntegrationTests
         string assetsFile = File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json"));
         Assert.Multiple(() =>
         {
-            Assert.That(buildOutput, Does.Contain("warning PIXELY0001").And.Contain($"package reference to {redundant};"));
+            Assert.That(buildOutput, Does.Contain("warning PIXELY0001").And.Contain($"SDK provides {redundant};"));
             Assert.That(buildOutput, Does.Not.Contain("NU1504").And.Not.Contain("NU1010").And.Not.Contain("NETSDK1023"));
             Assert.That(assetsFile, Does.Contain($"\"Pixely/{_packageVersion}\""));
-            Assert.That(assetsFile, Does.Contain($"\"SlangDxcBundle.Toolchain/{GetSlangVersion()}\""));
+            Assert.That(assetsFile, Does.Contain($"\"{GetToolchainHost().PackageId}/{GetToolchainVersion()}\""));
             Assert.That(assetsFile, Does.Not.Contain("\"Pixely/0.0.0\""));
             Assert.That(assetsFile, Does.Not.Contain("\"SlangDxcBundle.Toolchain/1.0.0\""));
         });
@@ -1266,7 +1267,7 @@ public class PackageIntegrationTests
         Assert.Multiple(() =>
         {
             Assert.That(dependencies, Does.Contain("Pixely"));
-            Assert.That(dependencies, Does.Not.Contain("SlangDxcBundle.Toolchain"));
+            Assert.That(dependencies.Any(dependency => dependency.StartsWith("SlangDxcBundle.Toolchain", StringComparison.Ordinal)), Is.False);
         });
     }
 
@@ -1327,10 +1328,10 @@ public class PackageIntegrationTests
         return output;
     }
 
-    private string GetSlangVersion()
+    private string GetToolchainVersion()
     {
         return XDocument.Load(Path.Combine(_repositoryDirectory, "src", "Pixely.SdlangCompiler", "build", "Pixely.SdlangCompiler.props"))
-            .Descendants().Single(element => element.Name.LocalName == "SlangVersion").Value;
+            .Descendants().Single(element => element.Name.LocalName == "SlangDxcToolchainVersion").Value;
     }
 
     // The SDK resolver reads NuGet.Config from the project directory and NUGET_PACKAGES, not restore's --source or RestorePackagesPath.
@@ -1706,39 +1707,49 @@ public class PackageIntegrationTests
         return bytes.ToArray();
     }
 
-    private static string GetCurrentSlangPlatform()
+    // Mirrors the host detection of the SlangDxcBundle.Toolchain SDK; RuntimeInformation.RuntimeIdentifier can name a distribution instead.
+    private static (string PackageId, string SlangPlatform) GetToolchainHost()
     {
         Architecture architecture = RuntimeInformation.OSArchitecture;
         if (OperatingSystem.IsLinux() && architecture == Architecture.X64)
         {
-            return "linux-x86_64";
+            return ("SlangDxcBundle.Toolchain.linux-x64", "linux-x86_64");
         }
 
         if (OperatingSystem.IsLinux() && architecture == Architecture.Arm64)
         {
-            return "linux-aarch64";
+            return ("SlangDxcBundle.Toolchain.linux-arm64", "linux-aarch64");
         }
 
         if (OperatingSystem.IsWindows() && architecture == Architecture.X64)
         {
-            return "windows-x86_64";
+            return ("SlangDxcBundle.Toolchain.win-x64", "windows-x86_64");
+        }
+
+        if (OperatingSystem.IsMacOS() && architecture == Architecture.X64)
+        {
+            return ("SlangDxcBundle.Toolchain.osx-x64", "macos-x86_64");
         }
 
         if (OperatingSystem.IsMacOS() && architecture == Architecture.Arm64)
         {
-            return "macos-aarch64";
+            return ("SlangDxcBundle.Toolchain.osx-arm64", "macos-aarch64");
         }
 
         throw new PlatformNotSupportedException(
             $"Unsupported package-integration host: {RuntimeInformation.OSDescription} {architecture}.");
     }
 
-    private string GetRestoredSlangDirectory(string platform)
+    // Only the build host's platform package may be restored, whatever the target runtime.
+    private string GetRestoredSlangDirectory()
     {
-        string packageDirectory = Path.Combine(_packagesDirectory, "slangdxcbundle.toolchain");
-        string[] restoredPackageDirectories = Directory.Exists(packageDirectory) ? Directory.GetDirectories(packageDirectory) : [];
-        Assert.That(restoredPackageDirectories, Has.Length.EqualTo(1), $"Expected exactly one restored SlangDxcBundle.Toolchain package in {packageDirectory}.");
-        return Path.Combine(restoredPackageDirectories.Single(), "tools", "slang", platform);
+        (string packageId, string slangPlatform) = GetToolchainHost();
+        string[] restoredPackages = Directory.GetDirectories(_packagesDirectory)
+            .Select(directory => Path.GetFileName(directory))
+            .Where(name => name.StartsWith("slangdxcbundle.toolchain.", StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(restoredPackages, Is.EqualTo(new[] { packageId.ToLowerInvariant() }), $"Expected only the build host's toolchain package in {_packagesDirectory}.");
+        return Path.Combine(_packagesDirectory, packageId.ToLowerInvariant(), GetToolchainVersion(), "tools", "slang", slangPlatform);
     }
 
     private string GetConsumerDirectory(string name)
