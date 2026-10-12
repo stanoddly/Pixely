@@ -83,7 +83,7 @@ public sealed class ModelLoader : IModelLoader
 
     private ImmutableArray<ModelMaterial> UploadMaterials(ImmutableArray<MaterialData> materialData, ImmutableArray<ReadOnlyMemory<byte>> images, ResourceScope scope)
     {
-        // Materials that share an image share its texture. Images that alias the same bytes share one entry, which compares equal.
+        // Materials that share an image share its texture, and so do images with the same buffer view bytes, which compare equal.
         Dictionary<ReadOnlyMemory<byte>, Texture> textures = new();
         ImmutableArray<ModelMaterial>.Builder materials = ImmutableArray.CreateBuilder<ModelMaterial>(materialData.Length);
 

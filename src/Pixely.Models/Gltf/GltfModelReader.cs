@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Pixely.Gpu;
 
@@ -549,7 +550,7 @@ internal static class GltfModelReader
 
             if (!shared.SequentialIndices.TryGetValue(vertexCount, out indices))
             {
-                indices = CreateSequentialIndices(vertexCount);
+                indices = CreateSequentialIndices(vertexCount, name, accessors);
                 shared.SequentialIndices.Add(vertexCount, indices);
             }
         }
@@ -572,6 +573,7 @@ internal static class GltfModelReader
             CheckCount(name, "TEXCOORD_0", texCoords.Length / 2, vertexCount);
         }
 
+        accessors.Charge((long)vertexCount * Unsafe.SizeOf<PositionTextureNormalVertex>(), name);
         PositionTextureNormalVertex[] vertices = new PositionTextureNormalVertex[vertexCount];
         for (int vertex = 0; vertex < vertexCount; vertex++)
         {
@@ -593,6 +595,7 @@ internal static class GltfModelReader
         int vertexCount = joints.Length / 4;
         CheckCount(name, "WEIGHTS_0", weights.Length / 4, vertexCount);
 
+        accessors.Charge((long)vertexCount * Unsafe.SizeOf<SkinVertex>(), name);
         SkinVertex[] skin = new SkinVertex[vertexCount];
         int maxJoint = -1;
         for (int vertex = 0; vertex < vertexCount; vertex++)
@@ -647,14 +650,21 @@ internal static class GltfModelReader
             maxIndex = Math.Max(maxIndex, index);
         }
 
-        IndexArrays arrays = wide ? new IndexArrays(null, indices) : new IndexArrays(Array.ConvertAll(indices, index => (ushort)index), null);
-        return (arrays, maxIndex);
+        if (wide)
+        {
+            return (new IndexArrays(null, indices), maxIndex);
+        }
+
+        accessors.Charge(indices.Length * (long)sizeof(ushort), name);
+        return (new IndexArrays(Array.ConvertAll(indices, index => (ushort)index), null), maxIndex);
     }
 
-    private static IndexArrays CreateSequentialIndices(int vertexCount)
+    private static IndexArrays CreateSequentialIndices(int vertexCount, string name, AccessorReader accessors)
     {
         // 16-bit indices address 65,535 vertices, 0 to 65,534; 65,535 is the primitive restart value.
-        if (vertexCount <= ushort.MaxValue)
+        bool narrow = vertexCount <= ushort.MaxValue;
+        accessors.Charge((long)vertexCount * (narrow ? sizeof(ushort) : sizeof(uint)), name);
+        if (narrow)
         {
             ushort[] indices16 = new ushort[vertexCount];
             for (int i = 0; i < vertexCount; i++)
@@ -786,12 +796,14 @@ internal static class GltfModelReader
     }
 
     // Only images a material uses are read, so an unused image the loader cannot read, such as an external normal map, does not
-    // fail the load. Unused entries stay empty. Images that start at the same byte share one entry, so the loader decodes them once.
+    // fail the load. Unused entries stay empty. Images with the same buffer view bytes compare equal, and the loader decodes them
+    // once, so their pixels count once toward the total.
     private static ImmutableArray<ReadOnlyMemory<byte>> ReadImages(GltfRootDto root, ImmutableArray<MaterialData> materials, AccessorReader accessors)
     {
         GltfImageDto[] imageDtos = root.Images ?? [];
         ReadOnlyMemory<byte>[] images = new ReadOnlyMemory<byte>[imageDtos.Length];
-        Dictionary<long, ReadOnlyMemory<byte>> imagesByStart = new();
+        HashSet<ReadOnlyMemory<byte>> counted = new();
+        long totalPixels = 0;
 
         foreach (MaterialData material in materials)
         {
@@ -813,15 +825,17 @@ internal static class GltfModelReader
             }
 
             ReadOnlyMemory<byte> data = accessors.GetBufferView(bufferView, out _);
-            long start = root.BufferViews![bufferView].ByteOffset ?? 0;
-            if (!imagesByStart.TryGetValue(start, out ReadOnlyMemory<byte> shared))
+            (int width, int height) = ImageHeader.Check(data.Span, image.MimeType, $"images[{index}]");
+            if (counted.Add(data))
             {
-                ImageHeader.Check(data.Span, image.MimeType, $"images[{index}]");
-                shared = data;
-                imagesByStart.Add(start, shared);
+                totalPixels += (long)width * height;
+                if (totalPixels > ImageHeader.MaxTotalPixels)
+                {
+                    throw new InvalidDataException($"images[{index}]: the images together have more than {ImageHeader.MaxTotalPixels} pixels.");
+                }
             }
 
-            images[index] = shared;
+            images[index] = data;
         }
 
         return [.. images];
@@ -965,7 +979,9 @@ internal static class GltfModelReader
         // Key values are unit quaternions, repaired if an exporter left them slightly off. CUBICSPLINE tangents, the first and
         // third element of each keyframe, are derivatives and are never normalized. The repair writes a copy, because the
         // accessor reader shares its arrays.
-        float[] values = (float[])accessors.ReadFloats(output, AccessorUse.RotationOutput).Clone();
+        float[] source = accessors.ReadFloats(output, AccessorUse.RotationOutput);
+        accessors.Charge(source.Length * (long)sizeof(float), name);
+        float[] values = (float[])source.Clone();
         for (int element = 0; element < values.Length / 4; element++)
         {
             if (cubic && element % 3 != 1)

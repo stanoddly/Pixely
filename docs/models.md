@@ -53,7 +53,7 @@ The shader then reads slot 0 at `TEXCOORD0` to `TEXCOORD2` (position, texture co
 
 glTF base color textures are sRGB, so they are uploaded as `R8G8B8A8UnormSrgb` and sampling returns linear values. `BaseColorFactor` is linear too. Pixely's swapchain is not an sRGB format, so a shader that lights in linear space encodes its result to sRGB before writing it. The tutorial's `model_common.slang` shows how.
 
-Materials sharing an image share its texture, and so do images that start at the same byte of the file.
+Materials sharing an image share its texture, and so do images whose buffer views cover the same bytes.
 
 ## Poses and animation
 
@@ -106,8 +106,8 @@ Model files are untrusted data. The loader checks everything it uses: references
 
 Size arithmetic is checked, and allocations are bounded by the file's size:
 
-- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
-- An image is checked against its `mimeType` and its size is read from its PNG or JPEG header before it is decoded. Each side must be between 1 and 16,384 pixels, so a small file cannot make the decoder allocate more than 1 GiB per image. Whether the GPU accepts a texture that large depends on the device.
+- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together, the accessors and the vertex, skin and index arrays built from them, is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
+- An image is checked against its `mimeType` and its size is read from its PNG or JPEG header before it is decoded. Each side must be between 1 and 16,384 pixels, and the images of a model together at most 16,384 × 16,384 pixels, which decode to 1 GiB. A compressed image can be much smaller than its pixels, so a small file can still use that much: while the largest image uploads, its decoded pixels, its transfer buffer and its texture each take up to 1 GiB. Whether the GPU accepts a texture that large depends on the device.
 - 16-bit indices cannot be 65,535, which graphics APIs can read as a primitive restart. glTF forbids it too.
 
 Some faults are common in exported files and leave the data usable, so the loader repairs them instead of failing:

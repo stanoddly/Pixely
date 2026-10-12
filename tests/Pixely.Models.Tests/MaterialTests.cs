@@ -211,18 +211,50 @@ public class MaterialTests
     }
 
     [Test]
-    public void Read_ImagesStartingAtTheSameByte_ShareOneEntry()
+    public void Read_ImageAtTheSideLimit_IsRead()
     {
-        GlbBuilder builder = AddTexturedMaterial(sampler: null);
-        // A second buffer view over the start of the same bytes.
-        int view = builder.Add("bufferViews", new JsonObject { ["buffer"] = 0, ["byteOffset"] = 0, ["byteLength"] = 20 });
-        builder.Add("images", new JsonObject { ["bufferView"] = view, ["mimeType"] = "image/png" });
-        builder.Add("textures", new JsonObject { ["source"] = 1 });
-        builder.Add("materials", new JsonObject { ["pbrMetallicRoughness"] = new JsonObject { ["baseColorTexture"] = new JsonObject { ["index"] = 1 } } });
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Png(16384, 16384), "image/png");
+
+        Assert.That(builder.Read().Images[0].IsEmpty, Is.False);
+    }
+
+    [Test]
+    public void Read_ImagesTogetherLargerThanTheLimit_Throws()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Png(16384, 16384), "image/png");
+        AddTexturedMaterial(builder, builder.AddBufferView(ImageHeaders.Png(1, 1)), "image/png");
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_ImagesWithTheSameBufferView_ShareOneEntryAndCountOnce()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Png(16384, 16384), "image/png");
+        AddTexturedMaterial(builder, 0, "image/png");
 
         ModelData data = builder.Read();
 
         Assert.That(data.Images[1], Is.EqualTo(data.Images[0]));
+    }
+
+    [TestCase(20, "image/png")]
+    [TestCase(24, "image/jpeg")]
+    public void Read_ImageViewOverTheStartOfAnother_IsCheckedOnItsOwn(int byteLength, string mimeType)
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null);
+        int view = builder.Add("bufferViews", new JsonObject { ["buffer"] = 0, ["byteOffset"] = 0, ["byteLength"] = byteLength });
+        AddTexturedMaterial(builder, view, mimeType);
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    // Adds an image on the buffer view, a texture and a material that uses it.
+    private static void AddTexturedMaterial(GlbBuilder builder, int bufferView, string mimeType)
+    {
+        int image = builder.Add("images", new JsonObject { ["bufferView"] = bufferView, ["mimeType"] = mimeType });
+        int texture = builder.Add("textures", new JsonObject { ["source"] = image });
+        builder.Add("materials", new JsonObject { ["pbrMetallicRoughness"] = new JsonObject { ["baseColorTexture"] = new JsonObject { ["index"] = texture } } });
     }
 
     private static GlbBuilder AddTexturedMaterial(JsonObject? sampler, byte[]? image = null, string mimeType = "image/png")

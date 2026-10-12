@@ -17,11 +17,12 @@ internal enum AccessorUse
 }
 
 // Reads accessors into arrays (glTF 2.0, section 3.6). Every read checks the accessor against its use and its bytes against the
-// buffer view. Reads are cached, and the arrays they return together are limited to a multiple of the file length, so accessors
-// that alias the same bytes cannot multiply allocations. Callers must not modify the returned arrays.
+// buffer view. Reads are cached, and everything converted from the file, these arrays and the ones callers build from them and
+// Charge, is limited to a multiple of the file length, so accessors that alias the same bytes cannot multiply allocations.
+// Callers must not modify the returned arrays.
 internal sealed class AccessorReader
 {
-    // One byte of a normalized or integer component converts to a 4-byte float or uint, and an accessor can serve more than one use.
+    // One byte of a normalized or integer component converts to a 4-byte float or uint, which callers convert again into vertices.
     public const int ConversionBudgetFactor = 16;
 
     public const int Byte = 5120;
@@ -52,7 +53,7 @@ internal sealed class AccessorReader
         }
 
         ResolvedAccessor accessor = Resolve(accessorIndex, use);
-        float[] values = new float[Charge(accessorIndex, accessor)];
+        float[] values = new float[ChargeValues(accessorIndex, accessor)];
         _floats.Add((accessorIndex, use), values);
         if (accessor.Data.IsEmpty)
         {
@@ -99,7 +100,7 @@ internal sealed class AccessorReader
         }
 
         ResolvedAccessor accessor = Resolve(accessorIndex, use);
-        uint[] values = new uint[Charge(accessorIndex, accessor)];
+        uint[] values = new uint[ChargeValues(accessorIndex, accessor)];
         if (!accessor.Data.IsEmpty)
         {
             ReadOnlySpan<byte> data = accessor.Data.Span;
@@ -126,17 +127,22 @@ internal sealed class AccessorReader
         return result;
     }
 
-    // Takes the 4-byte values of the accessor out of the budget and returns their count.
-    private int Charge(int accessorIndex, ResolvedAccessor accessor)
+    // Takes bytes a caller converts from the file out of the budget.
+    public void Charge(long byteCount, string name)
     {
-        int count = checked(accessor.Count * accessor.ComponentCount);
-        long byteCount = count * 4L;
         if (byteCount > _remainingBudget)
         {
-            throw new InvalidDataException($"accessors[{accessorIndex}]: the file's accessors convert to more than {ConversionBudgetFactor} times the file's size.");
+            throw new InvalidDataException($"{name}: the data converted from the file exceeds {ConversionBudgetFactor} times the file's size.");
         }
 
         _remainingBudget -= byteCount;
+    }
+
+    // Takes the 4-byte values of the accessor out of the budget and returns their count.
+    private int ChargeValues(int accessorIndex, ResolvedAccessor accessor)
+    {
+        int count = checked(accessor.Count * accessor.ComponentCount);
+        Charge(count * 4L, $"accessors[{accessorIndex}]");
         return count;
     }
 

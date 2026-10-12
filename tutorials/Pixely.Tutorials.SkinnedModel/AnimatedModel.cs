@@ -85,7 +85,7 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
         {
             ModelAnimation animation = Model.Animations[0];
             float elapsed = (float)_frameClock.ElapsedTime.TotalSeconds;
-            // A single-keyframe animation has no duration to loop over.
+            // An animation whose keyframes are all at time 0 has no duration to loop over.
             float time = animation.Duration > 0 ? elapsed % animation.Duration : 0;
             _pose.Apply(animation, time);
         }

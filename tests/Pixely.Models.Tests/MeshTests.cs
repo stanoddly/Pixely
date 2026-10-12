@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using Pixely.Models.Gltf;
 
@@ -79,6 +80,33 @@ public class MeshTests
         {
             int texCoords = builder.AddAccessor(texCoordView, AccessorReader.Float, "VEC2", vertexCount);
             primitives.Add(new JsonObject { ["attributes"] = new JsonObject { ["POSITION"] = positions, ["NORMAL"] = normals, ["TEXCOORD_0"] = texCoords } });
+        }
+
+        builder.Add("meshes", new JsonObject { ["primitives"] = primitives });
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => builder.Read())!;
+        Assert.That(exception.Message, Does.Contain("times the file's size"));
+    }
+
+    [Test]
+    public void Read_AliasedPositionAndNormalPairs_StopAtTheConversionBudget()
+    {
+        // Sixteen position and sixteen normal accessors over two buffer views stay within the budget, but every one of their 256
+        // pairs builds its own vertex array.
+        const int vertexCount = 999;
+        GlbBuilder builder = new();
+        int positionView = builder.AddBufferView(new byte[vertexCount * 12]);
+        float[] normals = Enumerable.Repeat(new[] { 0f, 0f, 1f }, vertexCount).SelectMany(normal => normal).ToArray();
+        int normalView = builder.AddBufferView(MemoryMarshal.AsBytes<float>(normals));
+        int[] positionAccessors = Enumerable.Range(0, 16).Select(_ => builder.AddAccessor(positionView, AccessorReader.Float, "VEC3", vertexCount)).ToArray();
+        int[] normalAccessors = Enumerable.Range(0, 16).Select(_ => builder.AddAccessor(normalView, AccessorReader.Float, "VEC3", vertexCount)).ToArray();
+        JsonArray primitives = new();
+        foreach (int position in positionAccessors)
+        {
+            foreach (int normal in normalAccessors)
+            {
+                primitives.Add(new JsonObject { ["attributes"] = new JsonObject { ["POSITION"] = position, ["NORMAL"] = normal } });
+            }
         }
 
         builder.Add("meshes", new JsonObject { ["primitives"] = primitives });

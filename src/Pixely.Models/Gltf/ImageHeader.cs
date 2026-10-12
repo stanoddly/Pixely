@@ -6,18 +6,22 @@ namespace Pixely.Models.Gltf;
 // compressed image can declare a size that takes gigabytes to decode.
 internal static class ImageHeader
 {
-    // Decoding takes 4 bytes per pixel, so the largest image takes 1 GiB.
+    // Decoding takes 4 bytes per pixel, so the largest image takes 1 GiB, and so do all the images of a model together.
     public const int MaxSide = 16384;
+    public const long MaxTotalPixels = (long)MaxSide * MaxSide;
 
     private static ReadOnlySpan<byte> PngSignature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
-    public static void Check(ReadOnlySpan<byte> image, string mimeType, string name)
+    // Checks that the image is of its MIME type and of a size the loader accepts, and returns the size.
+    public static (int Width, int Height) Check(ReadOnlySpan<byte> image, string mimeType, string name)
     {
         (int width, int height) = mimeType == "image/png" ? ReadPngSize(image, name) : ReadJpegSize(image, name);
         if (width < 1 || height < 1 || width > MaxSide || height > MaxSide)
         {
             throw new InvalidDataException($"{name}: the image is {width}x{height} pixels; each side must be between 1 and {MaxSide}.");
         }
+
+        return (width, height);
     }
 
     // The signature is followed by the IHDR chunk: its length, its type, then the width and height as big-endian integers.
