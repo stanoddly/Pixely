@@ -37,5 +37,14 @@ public class CreateTextureValidationTests
         Assert.Throws<ArgumentException>(() => _copyPass.CreateTexture(image, TextureFormat.R8G8B8A8Unorm));
     }
 
+    [Test]
+    public void CreateTexture_SizeWhoseByteCountOverflowsInt_Throws()
+    {
+        // 32768 x 32768 x 4 bytes is 2^32, which wraps to 0 in int arithmetic and would match empty data.
+        RawImage image = new([], new ShortSize(32768, 32768), PixelFormat.Abgr8888);
+
+        Assert.Throws<ArgumentException>(() => _copyPass.CreateTexture(image, TextureFormat.R8G8B8A8Unorm));
+    }
+
     private static RawImage CreateImage(ushort width, ushort height) => new(new byte[width * height * 4], new ShortSize(width, height), PixelFormat.Abgr8888);
 }

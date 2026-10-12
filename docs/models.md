@@ -31,11 +31,11 @@ Every array is in file order, so an index means the same as in the file.
 | `Skins` | `ModelSkin`: joint node indices, inverse bind matrices, optional skeleton root |
 | `Animations` | `ModelAnimation`: channels that animate node translations, rotations and scales |
 
-A `ModelPrimitive` is an indexed triangle list with its own buffers, so every draw starts at vertex and index 0:
+A `ModelPrimitive` is an indexed triangle list, and every draw starts at vertex and index 0. Primitives that read the same accessors share their buffers:
 
 - `Vertices`: `PositionTextureNormalVertex`, for vertex buffer slot 0. Normals are unit length. A primitive without `TEXCOORD_0` has zero texture coordinates.
 - `Skin`: `SkinVertex`, four `ushort` joint indices and four weights that sum to 1, for vertex buffer slot 1. It is null for a primitive without `JOINTS_0`. The joint indices index the skin's `Joints`, not the model's nodes.
-- `Indices`: 16 or 32 bits, as the file stores them. 8-bit indices are widened to 16.
+- `Indices`: 16 or 32 bits, as the file stores them. 8-bit indices are widened to 16. A primitive without indices gets sequential ones, 16 bits wide up to 65,535 vertices.
 - `Material`: an index into `Materials`, or null for the glTF default material, `ModelMaterial.Default`.
 
 A pipeline for static primitives declares one vertex buffer and one for skinned primitives declares two:
@@ -53,7 +53,7 @@ The shader then reads slot 0 at `TEXCOORD0` to `TEXCOORD2` (position, texture co
 
 glTF base color textures are sRGB, so they are uploaded as `R8G8B8A8UnormSrgb` and sampling returns linear values. `BaseColorFactor` is linear too. Pixely's swapchain is not an sRGB format, so a shader that lights in linear space encodes its result to sRGB before writing it. The tutorial's `model_common.slang` shows how.
 
-Materials sharing an image share its texture.
+Materials sharing an image share its texture, and so do images that start at the same byte of the file.
 
 ## Poses and animation
 
@@ -75,7 +75,7 @@ gpuMemorySystem.UpdateStorageBuffer<Matrix4x4>(jointBuffer, joints);
 ```
 
 - `Reset` returns every node to the transform the file gives it. `Apply` only sets the components the animation animates, so without `Reset` a node keeps what an earlier animation set.
-- `Apply` clamps a time outside the animation to its first or last keyframe. Looping is the caller's choice. An animation whose channels all have one keyframe has a `Duration` of 0.
+- `Apply` clamps a time outside the animation to its first or last keyframe. Looping is the caller's choice. `Duration` is the last keyframe time over all channels, so it is 0 only when every keyframe is at time 0.
 - `LocalTransforms` can be edited directly, for example to turn a head toward a target after `Apply`.
 - `STEP`, `LINEAR` and `CUBICSPLINE` interpolation follow the glTF specification. Rotations interpolate along the shorter arc.
 
@@ -97,18 +97,26 @@ glTF is right-handed with +Y up, and a model's front faces +Z. Pixely does not c
 glTF front faces wind counter-clockwise, while Pixely's pipeline default is clockwise. A transform with a negative determinant mirrors the model and reverses its winding:
 
 - A static draw is mirrored when `world.GetDeterminant() < 0`. Draw it with `FrontFace.Clockwise`, otherwise with `FrontFace.CounterClockwise`.
-- A skinned draw has no single world matrix. When every joint matrix has a negative determinant it winds clockwise, when every one is positive counter-clockwise. When the signs differ, its triangles wind both ways and it needs `CullMode.None`.
+- A skinned draw has no single world matrix. When every joint matrix has a negative determinant it winds clockwise, when every one is positive counter-clockwise. When the signs differ, its triangles wind both ways and it needs `CullMode.None`. This is a heuristic: blending joints that turn very differently, such as half turns about different axes, can flip a triangle even when every sign agrees. A typical rig blends joints that are close, and an app that must be exact draws with `CullMode.None`.
 - A double-sided material needs `CullMode.None` in any case.
 
 ## Checks and repairs
 
-Model files are untrusted data. The loader checks everything it uses: references between objects, every accessor against its buffer view, component types for each use, finite numbers, index ranges, attribute counts, the node graph (one parent at most, no cycles), skins against the meshes they deform, and animation keyframes. Size arithmetic is checked, and a count can only allocate as much as the file holds. It is not a full conformance check; the [glTF Validator](https://github.khronos.org/glTF-Validator/) is.
+Model files are untrusted data. The loader checks everything it uses: references between objects, every accessor against its buffer view, component types for each use, finite numbers, index ranges, attribute counts, the node graph (one parent at most, no cycles), skins against the meshes they deform, and animation keyframes. It is not a full conformance check; the [glTF Validator](https://github.khronos.org/glTF-Validator/) is.
+
+Size arithmetic is checked, and allocations are bounded by the file's size:
+
+- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
+- An image is checked against its `mimeType` and its size is read from its PNG or JPEG header before it is decoded. Each side must be between 1 and 16,384 pixels, so a small file cannot make the decoder allocate more than 1 GiB per image. Whether the GPU accepts a texture that large depends on the device.
+- 16-bit indices cannot be 65,535, which graphics APIs can read as a primitive restart. glTF forbids it too.
 
 Some faults are common in exported files and leave the data usable, so the loader repairs them instead of failing:
 
 - Weights that do not sum to exactly 1 are divided by their sum. Negative weights and weights that sum to 0 still fail.
 - A joint listed twice in one vertex is kept; blending adds its weights, which gives the same result.
 - Normals, node rotations and rotation keyframes that are not unit length are normalized. Zero-length ones still fail. `CUBICSPLINE` tangents are never normalized.
+
+`baseColorFactor` must be between 0 and 1, as glTF requires.
 
 A node `matrix` must decompose into translation, rotation and scale, as glTF requires; a matrix with shear or perspective fails.
 
@@ -121,7 +129,7 @@ These fail with `NotSupportedException`:
 - Sparse accessors, morph targets and `weights` animation channels.
 - Primitives other than triangle lists, and primitives without `POSITION` or `NORMAL`.
 - More than one set of joints and weights (`JOINTS_1`).
-- A base color texture on a texture coordinate set other than 0, or of a type other than PNG and JPEG.
+- A base color texture on a texture coordinate set other than 0, or with a `mimeType` other than `image/png` and `image/jpeg`. Data that does not start like the image type it declares fails with `InvalidDataException`.
 
 These are ignored: metallic-roughness, normal, occlusion and emissive textures and factors, cameras, lights, `extras`, and attributes other than `POSITION`, `NORMAL`, `TEXCOORD_0`, `JOINTS_0` and `WEIGHTS_0`.
 

@@ -60,7 +60,7 @@ public class MaterialTests
         MaterialData material = data.Materials[0];
 
         Assert.That(material.BaseColorImage, Is.EqualTo(0));
-        Assert.That(data.Images[0].ToArray(), Is.EqualTo(new byte[] { 1, 2, 3, 4 }));
+        Assert.That(data.Images[0].ToArray(), Is.EqualTo(ImageHeaders.Png(2, 2)));
         Assert.That(material.BaseColorSampler.MagFilter, Is.EqualTo(TextureFilter.Nearest));
         Assert.That(material.BaseColorSampler.MinFilter, Is.EqualTo(TextureFilter.Linear));
         Assert.That(material.BaseColorSampler.AddressModeU, Is.EqualTo(SamplerAddressMode.ClampToEdge));
@@ -153,11 +153,83 @@ public class MaterialTests
         Assert.Throws<InvalidDataException>(() => builder.Read());
     }
 
-    private static GlbBuilder AddTexturedMaterial(JsonObject? sampler)
+    [Test]
+    public void Read_BaseColorFactorOutsideZeroToOne_Throws()
+    {
+        foreach (float value in new[] { -0.1f, 1.1f })
+        {
+            GlbBuilder builder = new();
+            builder.Add("materials", new JsonObject { ["pbrMetallicRoughness"] = new JsonObject { ["baseColorFactor"] = new JsonArray(1, value, 1, 1) } });
+
+            Assert.Throws<InvalidDataException>(() => builder.Read(), $"{value}");
+        }
+    }
+
+    [Test]
+    public void Read_JpegImage_IsRead()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Jpeg(640, 480), "image/jpeg");
+
+        Assert.That(builder.Read().Images[0].ToArray(), Is.EqualTo(ImageHeaders.Jpeg(640, 480)));
+    }
+
+    [TestCase("image/png")]
+    [TestCase("image/jpeg")]
+    public void Read_ImageNotOfItsMimeType_Throws(string mimeType)
+    {
+        byte[] image = mimeType == "image/png" ? ImageHeaders.Jpeg(2, 2) : ImageHeaders.Png(2, 2);
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, image, mimeType);
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [TestCase(16385u, 1u)]
+    [TestCase(1u, 16385u)]
+    [TestCase(0u, 1u)]
+    [TestCase(uint.MaxValue, 1u)]
+    public void Read_PngOfUnsupportedSize_ThrowsBeforeDecoding(uint width, uint height)
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Png(width, height), "image/png");
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_JpegLargerThanTheLimit_ThrowsBeforeDecoding()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, ImageHeaders.Jpeg(16385, 1), "image/jpeg");
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_JpegWithoutFrameHeader_Throws()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null, [0xFF, 0xD8, 0xFF, 0xDA, 0, 2], "image/jpeg");
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_ImagesStartingAtTheSameByte_ShareOneEntry()
+    {
+        GlbBuilder builder = AddTexturedMaterial(sampler: null);
+        // A second buffer view over the start of the same bytes.
+        int view = builder.Add("bufferViews", new JsonObject { ["buffer"] = 0, ["byteOffset"] = 0, ["byteLength"] = 20 });
+        builder.Add("images", new JsonObject { ["bufferView"] = view, ["mimeType"] = "image/png" });
+        builder.Add("textures", new JsonObject { ["source"] = 1 });
+        builder.Add("materials", new JsonObject { ["pbrMetallicRoughness"] = new JsonObject { ["baseColorTexture"] = new JsonObject { ["index"] = 1 } } });
+
+        ModelData data = builder.Read();
+
+        Assert.That(data.Images[1], Is.EqualTo(data.Images[0]));
+    }
+
+    private static GlbBuilder AddTexturedMaterial(JsonObject? sampler, byte[]? image = null, string mimeType = "image/png")
     {
         GlbBuilder builder = new();
-        int view = builder.AddBufferView(new byte[] { 1, 2, 3, 4 });
-        builder.Add("images", new JsonObject { ["bufferView"] = view, ["mimeType"] = "image/png" });
+        int view = builder.AddBufferView(image ?? ImageHeaders.Png(2, 2));
+        builder.Add("images", new JsonObject { ["bufferView"] = view, ["mimeType"] = mimeType });
         JsonObject texture = new() { ["source"] = 0 };
         if (sampler is not null)
         {

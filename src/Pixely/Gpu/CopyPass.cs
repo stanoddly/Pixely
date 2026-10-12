@@ -350,9 +350,11 @@ internal sealed class CopyPass
             throw new ArgumentException($"The image is {width}x{height} pixels; neither side can be 0.", nameof(image));
         }
 
-        if (imageData.Length != width * height * 4)
+        // Two ushort sides times 4 bytes can exceed int, so the length is a long.
+        long expectedLength = (long)width * height * 4;
+        if (imageData.Length != expectedLength)
         {
-            throw new ArgumentException($"The image has {imageData.Length} bytes of data, but {width}x{height} pixels need {width * height * 4}.", nameof(image));
+            throw new ArgumentException($"The image has {imageData.Length} bytes of data, but {width}x{height} pixels need {expectedLength}.", nameof(image));
         }
 
         SdlError.Clear();

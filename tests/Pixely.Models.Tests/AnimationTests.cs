@@ -103,6 +103,26 @@ public class AnimationTests
     }
 
     [Test]
+    public void Read_OutputSharedByCubicAndLinearChannels_KeepsTheCubicTangents()
+    {
+        // In-tangent, value and out-tangent of two keyframes; the tangents are not unit length.
+        float[] output = [0, 0, 3, 0, 0, 0, 0, 2, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 1, 1, 0, 0, 3, 0];
+        GlbBuilder alone = AddAnimatedNode([0, 1], MemoryMarshal.AsBytes<float>(output), AccessorReader.Float, "VEC4", "rotation", "CUBICSPLINE");
+        GlbBuilder shared = AddAnimatedNode([0, 1], MemoryMarshal.AsBytes<float>(output), AccessorReader.Float, "VEC4", "rotation", "CUBICSPLINE");
+        // A second animation reads the same output as six LINEAR keyframes, which normalizes every element of its copy.
+        int times = shared.AddFloats("SCALAR", 0, 1, 2, 3, 4, 5);
+        shared.Add("animations", new JsonObject
+        {
+            ["channels"] = new JsonArray(new JsonObject { ["sampler"] = 0, ["target"] = new JsonObject { ["node"] = 0, ["path"] = "rotation" } }),
+            ["samplers"] = new JsonArray(new JsonObject { ["input"] = times, ["output"] = 1 })
+        });
+
+        Vector4 expected = alone.Read().Animations[0].Channels[0].Sample(0.5f);
+
+        Assert.That(shared.Read().Animations[0].Channels[0].Sample(0.5f), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void Read_ChannelWithoutNode_IsSkipped()
     {
         GlbBuilder builder = AddAnimatedNode(new[] { 0f, 1f }, MemoryMarshal.AsBytes<float>(new float[] { 0, 0, 0, 1, 0, 0 }), AccessorReader.Float, "VEC3", "translation", "LINEAR");

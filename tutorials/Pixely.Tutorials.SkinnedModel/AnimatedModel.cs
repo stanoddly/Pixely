@@ -6,7 +6,8 @@ using Pixely.Models;
 namespace Pixely.Tutorials.SkinnedModel;
 
 // How a draw decides its front face. A skinned mesh has no single world matrix, so its winding follows the signs of its joint
-// matrices' determinants; when they differ, triangles wind both ways and no face can be culled.
+// matrices' determinants; when they differ, triangles wind both ways and no face can be culled. Blending very different joints can
+// still flip a triangle when every sign agrees, which a typical rig does not do.
 public enum Winding
 {
     CounterClockwise,
@@ -40,18 +41,29 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
         MeshNodes = CollectMeshNodes(model);
 
         _copies = new CopyState[copies.Length];
-        for (int copy = 0; copy < copies.Length; copy++)
+        // Nothing owns the buffers until the constructor returns, so a failure releases the ones created so far.
+        List<GpuStorageBuffer<Matrix4x4>> created = new();
+        try
         {
-            GpuStorageBuffer<Matrix4x4>[] jointBuffers = new GpuStorageBuffer<Matrix4x4>[model.Skins.Length];
-            for (int skin = 0; skin < model.Skins.Length; skin++)
+            for (int copy = 0; copy < copies.Length; copy++)
             {
-                jointBuffers[skin] = gpuMemorySystem.CreateStorageBuffer<Matrix4x4>(new Matrix4x4[model.Skins[skin].Joints.Length]);
+                GpuStorageBuffer<Matrix4x4>[] jointBuffers = new GpuStorageBuffer<Matrix4x4>[model.Skins.Length];
+                for (int skin = 0; skin < model.Skins.Length; skin++)
+                {
+                    jointBuffers[skin] = gpuMemorySystem.CreateStorageBuffer<Matrix4x4>(new Matrix4x4[model.Skins[skin].Joints.Length]);
+                    created.Add(jointBuffers[skin]);
+                }
+
+                _copies[copy] = new CopyState(jointBuffers, new Winding[model.Skins.Length]);
             }
 
-            _copies[copy] = new CopyState(jointBuffers, new Winding[model.Skins.Length]);
+            Update();
         }
-
-        Update();
+        catch
+        {
+            created.ForEach(buffer => buffer.Dispose());
+            throw;
+        }
     }
 
     public Model Model { get; }
@@ -127,7 +139,15 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
             new ModelCopy("double-sided", Matrix4x4.CreateTranslation(1.4f, 0, 0), ForceDoubleSided: true)
         ];
 
-        return new AnimatedModel(model, copies, frameClock, gpuMemorySystem);
+        try
+        {
+            return new AnimatedModel(model, copies, frameClock, gpuMemorySystem);
+        }
+        catch
+        {
+            model.Dispose();
+            throw;
+        }
     }
 
     private static ImmutableArray<int> CollectMeshNodes(Model model)

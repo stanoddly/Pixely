@@ -17,9 +17,13 @@ internal enum AccessorUse
 }
 
 // Reads accessors into arrays (glTF 2.0, section 3.6). Every read checks the accessor against its use and its bytes against the
-// buffer view, so a declared count can only allocate as much as the file holds.
+// buffer view. Reads are cached, and the arrays they return together are limited to a multiple of the file length, so accessors
+// that alias the same bytes cannot multiply allocations. Callers must not modify the returned arrays.
 internal sealed class AccessorReader
 {
+    // One byte of a normalized or integer component converts to a 4-byte float or uint, and an accessor can serve more than one use.
+    public const int ConversionBudgetFactor = 16;
+
     public const int Byte = 5120;
     public const int UnsignedByte = 5121;
     public const int Short = 5122;
@@ -29,24 +33,33 @@ internal sealed class AccessorReader
 
     private readonly GltfRootDto _root;
     private readonly ReadOnlyMemory<byte> _buffer;
-    private readonly long _fileLength;
+    private readonly Dictionary<(int Accessor, AccessorUse Use), float[]> _floats = new();
+    private readonly Dictionary<(int Accessor, AccessorUse Use), IntegerAccessorData> _integers = new();
+    private long _remainingBudget;
 
     public AccessorReader(GltfRootDto root, ReadOnlyMemory<byte> buffer, long fileLength)
     {
         _root = root;
         _buffer = buffer;
-        _fileLength = fileLength;
+        _remainingBudget = checked(fileLength * ConversionBudgetFactor);
     }
 
     public float[] ReadFloats(int accessorIndex, AccessorUse use)
     {
+        if (_floats.TryGetValue((accessorIndex, use), out float[]? cached))
+        {
+            return cached;
+        }
+
         ResolvedAccessor accessor = Resolve(accessorIndex, use);
-        float[] values = new float[checked(accessor.Count * accessor.ComponentCount)];
+        float[] values = new float[Charge(accessorIndex, accessor)];
+        _floats.Add((accessorIndex, use), values);
         if (accessor.Data.IsEmpty)
         {
             return values;
         }
 
+        // A value that is not finite fails the whole load, so a partly filled array in the cache is never read.
         ReadOnlySpan<byte> data = accessor.Data.Span;
         int componentSize = GetComponentSize(accessor.ComponentType);
         for (int element = 0; element < accessor.Count; element++)
@@ -80,8 +93,13 @@ internal sealed class AccessorReader
 
     public IntegerAccessorData ReadIntegers(int accessorIndex, AccessorUse use)
     {
+        if (_integers.TryGetValue((accessorIndex, use), out IntegerAccessorData cached))
+        {
+            return cached;
+        }
+
         ResolvedAccessor accessor = Resolve(accessorIndex, use);
-        uint[] values = new uint[checked(accessor.Count * accessor.ComponentCount)];
+        uint[] values = new uint[Charge(accessorIndex, accessor)];
         if (!accessor.Data.IsEmpty)
         {
             ReadOnlySpan<byte> data = accessor.Data.Span;
@@ -103,7 +121,23 @@ internal sealed class AccessorReader
             }
         }
 
-        return new IntegerAccessorData(values, accessor.ComponentType);
+        IntegerAccessorData result = new(values, accessor.ComponentType);
+        _integers.Add((accessorIndex, use), result);
+        return result;
+    }
+
+    // Takes the 4-byte values of the accessor out of the budget and returns their count.
+    private int Charge(int accessorIndex, ResolvedAccessor accessor)
+    {
+        int count = checked(accessor.Count * accessor.ComponentCount);
+        long byteCount = count * 4L;
+        if (byteCount > _remainingBudget)
+        {
+            throw new InvalidDataException($"accessors[{accessorIndex}]: the file's accessors convert to more than {ConversionBudgetFactor} times the file's size.");
+        }
+
+        _remainingBudget -= byteCount;
+        return count;
     }
 
     private ResolvedAccessor Resolve(int accessorIndex, AccessorUse? use)
@@ -168,13 +202,7 @@ internal sealed class AccessorReader
                 throw new InvalidDataException($"{name}: byteOffset is defined without a bufferView.");
             }
 
-            // An accessor without a buffer view reads as zeros. Its count is not backed by any bytes, so it is bounded by the
-            // file length instead, which keeps allocations proportional to the file.
-            if (checked(count * elementSize) > _fileLength)
-            {
-                throw new InvalidDataException($"{name}: {count} zero-filled elements exceed the size of the file.");
-            }
-
+            // An accessor without a buffer view reads as zeros. Its count is not backed by any bytes; the conversion budget bounds it.
             return new ResolvedAccessor(ReadOnlyMemory<byte>.Empty, (int)count, componentCount, componentType, elementSize);
         }
 
@@ -225,10 +253,11 @@ internal sealed class AccessorReader
         GltfBufferViewDto bufferView = bufferViews[bufferViewIndex];
         string name = $"bufferViews[{bufferViewIndex}]";
 
-        // GltfModelReader allows only buffer 0, stored in the binary chunk, whose length it has checked against the chunk.
-        if (bufferView.Buffer != 0)
+        // GltfModelReader allows at most buffer 0, stored in the binary chunk, whose length it has checked against the chunk.
+        int bufferCount = _root.Buffers?.Length ?? 0;
+        if (bufferView.Buffer is not { } buffer || buffer < 0 || buffer >= bufferCount)
         {
-            throw new InvalidDataException($"{name}: buffer {bufferView.Buffer} is out of range.");
+            throw new InvalidDataException($"{name}: buffer {bufferView.Buffer} is out of range; the file has {bufferCount} buffers.");
         }
 
         long offset = bufferView.ByteOffset ?? 0;

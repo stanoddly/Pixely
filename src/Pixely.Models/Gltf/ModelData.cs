@@ -18,8 +18,9 @@ internal sealed record ModelData(
 
 internal sealed record MeshData(string? Name, ImmutableArray<PrimitiveData> Primitives);
 
-// Exactly one of Indices16 and Indices32 is set. MaxJoint is -1 without a skin.
+// Exactly one of Indices16 and Indices32 is set. MaxJoint is -1 without a skin. Primitives that read the same accessors share arrays.
 internal sealed record PrimitiveData(PositionTextureNormalVertex[] Vertices, SkinVertex[]? Skin, ushort[]? Indices16, uint[]? Indices32, int? Material, int MaxJoint);
 
-// BaseColorImage indexes ModelData.Images, which holds the encoded bytes of every image the file defines.
+// BaseColorImage indexes ModelData.Images, which holds the encoded bytes of every image a material uses. Images that start at the
+// same byte share one entry.
 internal sealed record MaterialData(string? Name, Vector4 BaseColorFactor, int? BaseColorImage, SamplerConfig BaseColorSampler, AlphaMode AlphaMode, float AlphaCutoff, bool DoubleSided);

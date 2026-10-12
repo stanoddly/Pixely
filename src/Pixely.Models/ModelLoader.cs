@@ -39,17 +39,39 @@ public sealed class ModelLoader : IModelLoader
 
     private ImmutableArray<ModelMesh> UploadMeshes(ImmutableArray<MeshData> meshData, ResourceScope scope)
     {
+        // Primitives that read the same accessors share their arrays, and so their buffers. Arrays compare by reference.
+        Dictionary<PositionTextureNormalVertex[], GpuVertexBuffer<PositionTextureNormalVertex>> vertexBuffers = new();
+        Dictionary<SkinVertex[], GpuVertexBuffer<SkinVertex>> skinBuffers = new();
+        Dictionary<object, GpuIndexBuffer> indexBuffers = new();
+
         ImmutableArray<ModelMesh>.Builder meshes = ImmutableArray.CreateBuilder<ModelMesh>(meshData.Length);
         foreach (MeshData mesh in meshData)
         {
             ImmutableArray<ModelPrimitive>.Builder primitives = ImmutableArray.CreateBuilder<ModelPrimitive>(mesh.Primitives.Length);
             foreach (PrimitiveData primitive in mesh.Primitives)
             {
-                GpuVertexBuffer<PositionTextureNormalVertex> vertices = scope.Add(_gpuMemorySystem.CreateVertexBuffer<PositionTextureNormalVertex>(primitive.Vertices));
-                GpuVertexBuffer<SkinVertex>? skin = primitive.Skin is null ? null : scope.Add(_gpuMemorySystem.CreateVertexBuffer<SkinVertex>(primitive.Skin));
-                GpuIndexBuffer indices = scope.Add(primitive.Indices16 is { } indices16
-                    ? _gpuMemorySystem.CreateIndexBuffer(indices16)
-                    : _gpuMemorySystem.CreateIndexBuffer(primitive.Indices32!));
+                if (!vertexBuffers.TryGetValue(primitive.Vertices, out GpuVertexBuffer<PositionTextureNormalVertex>? vertices))
+                {
+                    vertices = scope.Add(_gpuMemorySystem.CreateVertexBuffer<PositionTextureNormalVertex>(primitive.Vertices));
+                    vertexBuffers.Add(primitive.Vertices, vertices);
+                }
+
+                GpuVertexBuffer<SkinVertex>? skin = null;
+                if (primitive.Skin is { } skinVertices && !skinBuffers.TryGetValue(skinVertices, out skin))
+                {
+                    skin = scope.Add(_gpuMemorySystem.CreateVertexBuffer<SkinVertex>(skinVertices));
+                    skinBuffers.Add(skinVertices, skin);
+                }
+
+                object indexArray = (object?)primitive.Indices16 ?? primitive.Indices32!;
+                if (!indexBuffers.TryGetValue(indexArray, out GpuIndexBuffer? indices))
+                {
+                    indices = scope.Add(primitive.Indices16 is { } indices16
+                        ? _gpuMemorySystem.CreateIndexBuffer(indices16)
+                        : _gpuMemorySystem.CreateIndexBuffer(primitive.Indices32!));
+                    indexBuffers.Add(indexArray, indices);
+                }
+
                 primitives.Add(new ModelPrimitive(vertices, skin, indices, primitive.Material));
             }
 
@@ -61,8 +83,8 @@ public sealed class ModelLoader : IModelLoader
 
     private ImmutableArray<ModelMaterial> UploadMaterials(ImmutableArray<MaterialData> materialData, ImmutableArray<ReadOnlyMemory<byte>> images, ResourceScope scope)
     {
-        // Materials that share an image share its texture.
-        Dictionary<int, Texture> textures = new();
+        // Materials that share an image share its texture. Images that alias the same bytes share one entry, which compares equal.
+        Dictionary<ReadOnlyMemory<byte>, Texture> textures = new();
         ImmutableArray<ModelMaterial>.Builder materials = ImmutableArray.CreateBuilder<ModelMaterial>(materialData.Length);
 
         foreach (MaterialData material in materialData)
@@ -70,12 +92,13 @@ public sealed class ModelLoader : IModelLoader
             ModelTexture? baseColorTexture = null;
             if (material.BaseColorImage is { } imageIndex)
             {
-                if (!textures.TryGetValue(imageIndex, out Texture? texture))
+                ReadOnlyMemory<byte> encodedImage = images[imageIndex];
+                if (!textures.TryGetValue(encodedImage, out Texture? texture))
                 {
-                    using Image image = _imageDecoder.Decode(images[imageIndex].Span);
+                    using Image image = _imageDecoder.Decode(encodedImage.Span);
                     // glTF base color textures are sRGB, so sampling returns linear values.
                     texture = scope.Add(_gpuMemorySystem.CreateTexture(image, TextureFormat.R8G8B8A8UnormSrgb));
-                    textures.Add(imageIndex, texture);
+                    textures.Add(encodedImage, texture);
                 }
 
                 baseColorTexture = new ModelTexture(texture, material.BaseColorSampler);

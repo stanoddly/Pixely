@@ -20,7 +20,7 @@ internal class SdlImage : Image
         get
         {
             SDL_Surface* surface = _surface;
-            int byteCount = surface->pitch * surface->h;
+            int byteCount = checked(surface->pitch * surface->h);
             return new ReadOnlySpan<byte>((void*)surface->pixels, byteCount);
         }
     }
@@ -117,6 +117,11 @@ internal class SdlImageDecoder : IImageDecoder
         if (sdlSurface->pitch != checked(sdlSurface->w * BytesPerPixel))
         {
             throw new InvalidDataException($"The decoded image has a pitch of {sdlSurface->pitch} bytes for {sdlSurface->w} pixels per row; rows must be tightly packed.");
+        }
+
+        if ((long)sdlSurface->pitch * sdlSurface->h > int.MaxValue)
+        {
+            throw new InvalidDataException($"The image is {sdlSurface->w}x{sdlSurface->h} pixels, more than a span of bytes can hold.");
         }
     }
 

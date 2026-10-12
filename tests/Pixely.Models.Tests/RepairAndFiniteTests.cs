@@ -74,6 +74,42 @@ public class RepairAndFiniteTests
     }
 
     [Test]
+    public void Read_HugeFiniteNormal_IsNormalized()
+    {
+        GlbBuilder builder = new();
+        JsonObject primitive = builder.AddTriangle();
+        primitive["attributes"]!["NORMAL"] = builder.AddFloats("VEC3", float.MaxValue, float.MaxValue, 0, 0, 0, 1, 0, 0, 1);
+
+        Vector3 normal = builder.Read().Meshes[0].Primitives[0].Vertices[0].Normal;
+
+        Assert.That(Vector3.Distance(normal, Vector3.Normalize(new Vector3(1, 1, 0))), Is.LessThan(1e-6f));
+    }
+
+    [Test]
+    public void Read_HugeFiniteWeights_AreRenormalized()
+    {
+        GlbBuilder builder = new();
+        float max = float.MaxValue;
+        AddSkinAttributes(builder, builder.AddFloats("VEC4", max, max, max, max, 1, 0, 0, 0, 1, 0, 0, 0));
+
+        Vector4 weights = builder.Read().Meshes[0].Primitives[0].Skin![0].Weights;
+
+        Assert.That(weights, Is.EqualTo(new Vector4(0.25f)));
+    }
+
+    [Test]
+    public void Read_HugeFiniteNodeRotation_IsNormalized()
+    {
+        GlbBuilder builder = new();
+        builder.Add("nodes", new JsonObject { ["rotation"] = new JsonArray(0, 0, float.MaxValue, float.MaxValue) });
+
+        Quaternion rotation = builder.Read().Nodes[0].LocalTransform.Rotation;
+
+        Assert.That(rotation.Length(), Is.EqualTo(1f).Within(1e-6f));
+        Assert.That(rotation.Z, Is.EqualTo(rotation.W));
+    }
+
+    [Test]
     public void Read_ZeroNormal_Throws()
     {
         GlbBuilder builder = new();

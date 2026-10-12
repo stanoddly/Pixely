@@ -17,6 +17,41 @@ public class GlbContainerTests
         Assert.That(data.Nodes, Is.Empty);
     }
 
+    [TestCase("nodes")]
+    [TestCase("meshes")]
+    [TestCase("accessors")]
+    [TestCase("bufferViews")]
+    [TestCase("buffers")]
+    public void Read_NullArrayElement_Throws(string arrayName)
+    {
+        GlbBuilder builder = new();
+        builder.AddTriangle();
+        builder.Build();
+        builder.Json[arrayName]!.AsArray().Add(null);
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_NullPrimitive_Throws()
+    {
+        GlbBuilder builder = new();
+        builder.AddTriangle();
+        builder.Json["meshes"]![0]!["primitives"]!.AsArray().Add(null);
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_BufferViewWithoutBuffers_Throws()
+    {
+        GlbBuilder builder = new();
+        builder.AddTriangle();
+        builder.Json["buffers"] = new JsonArray();
+
+        Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
     [Test]
     public void Read_ShorterThanHeader_Throws()
     {

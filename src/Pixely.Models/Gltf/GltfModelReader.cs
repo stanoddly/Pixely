@@ -32,6 +32,7 @@ internal static class GltfModelReader
         GlbChunks chunks = GlbReader.Read(file);
         GltfRootDto root = Deserialize(chunks.Json);
 
+        CheckElements(root);
         CheckAsset(root.Asset);
 
         if (root.ExtensionsRequired is { Length: > 0 } extensionsRequired)
@@ -75,6 +76,43 @@ internal static class GltfModelReader
         catch (JsonException exception)
         {
             throw new InvalidDataException($"The JSON chunk is not valid glTF JSON: {exception.Message}", exception);
+        }
+    }
+
+    // JSON allows null in an array of objects, glTF does not, and the reader uses every element.
+    private static void CheckElements(GltfRootDto root)
+    {
+        CheckElements(root.Scenes, "scenes");
+        CheckElements(root.Nodes, "nodes");
+        CheckElements(root.Meshes, "meshes");
+        CheckElements(root.Skins, "skins");
+        CheckElements(root.Animations, "animations");
+        CheckElements(root.Materials, "materials");
+        CheckElements(root.Textures, "textures");
+        CheckElements(root.Images, "images");
+        CheckElements(root.Samplers, "samplers");
+        CheckElements(root.Accessors, "accessors");
+        CheckElements(root.BufferViews, "bufferViews");
+        CheckElements(root.Buffers, "buffers");
+
+        for (int index = 0; index < (root.Meshes?.Length ?? 0); index++)
+        {
+            CheckElements(root.Meshes![index].Primitives, $"meshes[{index}].primitives");
+        }
+
+        for (int index = 0; index < (root.Animations?.Length ?? 0); index++)
+        {
+            CheckElements(root.Animations![index].Channels, $"animations[{index}].channels");
+            CheckElements(root.Animations[index].Samplers, $"animations[{index}].samplers");
+        }
+    }
+
+    private static void CheckElements<T>(T?[]? elements, string name) where T : class
+    {
+        int index = elements is null ? -1 : Array.IndexOf(elements, null);
+        if (index >= 0)
+        {
+            throw new InvalidDataException($"{name}[{index}] is null.");
         }
     }
 
@@ -393,6 +431,7 @@ internal static class GltfModelReader
     {
         GltfMeshDto[] meshDtos = root.Meshes ?? [];
         int materialCount = root.Materials?.Length ?? 0;
+        SharedArrays shared = new();
         ImmutableArray<MeshData>.Builder meshes = ImmutableArray.CreateBuilder<MeshData>(meshDtos.Length);
 
         for (int meshIndex = 0; meshIndex < meshDtos.Length; meshIndex++)
@@ -407,7 +446,7 @@ internal static class GltfModelReader
             for (int primitiveIndex = 0; primitiveIndex < primitiveDtos.Length; primitiveIndex++)
             {
                 string name = $"meshes[{meshIndex}].primitives[{primitiveIndex}]";
-                primitives.Add(ReadPrimitive(primitiveDtos[primitiveIndex], name, materialCount, accessors));
+                primitives.Add(ReadPrimitive(primitiveDtos[primitiveIndex], name, materialCount, accessors, shared));
             }
 
             meshes.Add(new MeshData(meshDtos[meshIndex].Name, primitives.MoveToImmutable()));
@@ -416,7 +455,7 @@ internal static class GltfModelReader
         return meshes.MoveToImmutable();
     }
 
-    private static PrimitiveData ReadPrimitive(GltfPrimitiveDto primitive, string name, int materialCount, AccessorReader accessors)
+    private static PrimitiveData ReadPrimitive(GltfPrimitiveDto primitive, string name, int materialCount, AccessorReader accessors, SharedArrays shared)
     {
         int mode = primitive.Mode ?? TrianglesMode;
         if (mode != TrianglesMode)
@@ -461,97 +500,45 @@ internal static class GltfModelReader
             throw new InvalidDataException($"{name}: JOINTS_0 and WEIGHTS_0 must be both present or both absent.");
         }
 
-        float[] positions = accessors.ReadFloats(positionAccessor, AccessorUse.Position);
-        int vertexCount = positions.Length / 3;
-
-        float[] normals = accessors.ReadFloats(normalAccessor, AccessorUse.Normal);
-        CheckCount(name, "NORMAL", normals.Length / 3, vertexCount);
-
-        float[]? texCoords = null;
-        if (attributes.TryGetValue("TEXCOORD_0", out int texCoordAccessor))
+        bool hasTexCoords = attributes.TryGetValue("TEXCOORD_0", out int texCoordAccessor);
+        (int Position, int Normal, int? TexCoord) vertexKey = (positionAccessor, normalAccessor, hasTexCoords ? texCoordAccessor : null);
+        if (!shared.Vertices.TryGetValue(vertexKey, out PositionTextureNormalVertex[]? vertices))
         {
-            texCoords = accessors.ReadFloats(texCoordAccessor, AccessorUse.TexCoord);
-            CheckCount(name, "TEXCOORD_0", texCoords.Length / 2, vertexCount);
+            vertices = ReadVertices(name, positionAccessor, normalAccessor, vertexKey.TexCoord, accessors);
+            shared.Vertices.Add(vertexKey, vertices);
         }
 
-        PositionTextureNormalVertex[] vertices = new PositionTextureNormalVertex[vertexCount];
-        for (int vertex = 0; vertex < vertexCount; vertex++)
-        {
-            Vector3 position = new(positions[vertex * 3], positions[vertex * 3 + 1], positions[vertex * 3 + 2]);
-            Vector3 normal = new(normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]);
-            float normalLength = normal.Length();
-            if (normalLength < MinimumLength)
-            {
-                throw new InvalidDataException($"{name}: the normal of vertex {vertex} has zero length.");
-            }
-
-            // Exporters often write normals that are not quite unit length, so they are repaired instead of rejected.
-            Vector2 texCoord = texCoords is null ? Vector2.Zero : new Vector2(texCoords[vertex * 2], texCoords[vertex * 2 + 1]);
-            vertices[vertex] = new PositionTextureNormalVertex(position, texCoord, normal / normalLength);
-        }
+        int vertexCount = vertices.Length;
 
         SkinVertex[]? skin = null;
         int maxJoint = -1;
         if (hasJoints)
         {
-            uint[] joints = accessors.ReadIntegers(jointsAccessor, AccessorUse.Joints).Values;
-            CheckCount(name, "JOINTS_0", joints.Length / 4, vertexCount);
-            float[] weights = accessors.ReadFloats(weightsAccessor, AccessorUse.Weights);
-            CheckCount(name, "WEIGHTS_0", weights.Length / 4, vertexCount);
-
-            skin = new SkinVertex[vertexCount];
-            for (int vertex = 0; vertex < vertexCount; vertex++)
+            if (!shared.Skins.TryGetValue((jointsAccessor, weightsAccessor), out (SkinVertex[] Skin, int MaxJoint) skinData))
             {
-                Vector4 weight = new(weights[vertex * 4], weights[vertex * 4 + 1], weights[vertex * 4 + 2], weights[vertex * 4 + 3]);
-                if (weight.X < 0 || weight.Y < 0 || weight.Z < 0 || weight.W < 0)
-                {
-                    throw new InvalidDataException($"{name}: vertex {vertex} has a negative weight.");
-                }
-
-                float sum = weight.X + weight.Y + weight.Z + weight.W;
-                if (sum < MinimumLength)
-                {
-                    throw new InvalidDataException($"{name}: the weights of vertex {vertex} sum to 0.");
-                }
-
-                // Quantized weights rarely sum to exactly 1, and exporters often miss it, so the sum is repaired instead of checked.
-                // A joint repeated within a vertex is kept: the blend adds its weights, which equals one combined weight.
-                ushort joint0 = (ushort)joints[vertex * 4];
-                ushort joint1 = (ushort)joints[vertex * 4 + 1];
-                ushort joint2 = (ushort)joints[vertex * 4 + 2];
-                ushort joint3 = (ushort)joints[vertex * 4 + 3];
-                maxJoint = Math.Max(maxJoint, Math.Max(Math.Max(joint0, joint1), Math.Max(joint2, joint3)));
-                skin[vertex] = new SkinVertex(joint0, joint1, joint2, joint3, weight / sum);
+                skinData = ReadSkin(name, jointsAccessor, weightsAccessor, accessors);
+                shared.Skins.Add((jointsAccessor, weightsAccessor), skinData);
             }
+
+            CheckCount(name, "JOINTS_0 and WEIGHTS_0", skinData.Skin.Length, vertexCount);
+            (skin, maxJoint) = skinData;
         }
 
-        ushort[]? indices16 = null;
-        uint[]? indices32 = null;
+        IndexArrays indices;
         if (primitive.Indices is { } indexAccessor)
         {
-            IntegerAccessorData indexData = accessors.ReadIntegers(indexAccessor, AccessorUse.Indices);
-            uint[] indices = indexData.Values;
-            if (indices.Length % 3 != 0)
+            if (!shared.Indices.TryGetValue(indexAccessor, out (IndexArrays Indices, uint MaxIndex) indexData))
             {
-                throw new InvalidDataException($"{name}: {indices.Length} indices do not form whole triangles.");
+                indexData = ReadIndices(name, indexAccessor, accessors);
+                shared.Indices.Add(indexAccessor, indexData);
             }
 
-            foreach (uint index in indices)
+            if (indexData.MaxIndex >= vertexCount)
             {
-                if (index >= vertexCount)
-                {
-                    throw new InvalidDataException($"{name}: index {index} is out of range for {vertexCount} vertices.");
-                }
+                throw new InvalidDataException($"{name}: index {indexData.MaxIndex} is out of range for {vertexCount} vertices.");
             }
 
-            if (indexData.ComponentType == AccessorReader.UnsignedInt)
-            {
-                indices32 = indices;
-            }
-            else
-            {
-                indices16 = Array.ConvertAll(indices, index => (ushort)index);
-            }
+            indices = indexData.Indices;
         }
         else
         {
@@ -560,26 +547,131 @@ internal static class GltfModelReader
                 throw new InvalidDataException($"{name}: {vertexCount} vertices without indices do not form whole triangles.");
             }
 
-            // 16-bit indices address 65,536 vertices, 0 to 65,535.
-            if (vertexCount <= ushort.MaxValue + 1)
+            if (!shared.SequentialIndices.TryGetValue(vertexCount, out indices))
             {
-                indices16 = new ushort[vertexCount];
-                for (int i = 0; i < vertexCount; i++)
-                {
-                    indices16[i] = (ushort)i;
-                }
-            }
-            else
-            {
-                indices32 = new uint[vertexCount];
-                for (int i = 0; i < vertexCount; i++)
-                {
-                    indices32[i] = (uint)i;
-                }
+                indices = CreateSequentialIndices(vertexCount);
+                shared.SequentialIndices.Add(vertexCount, indices);
             }
         }
 
-        return new PrimitiveData(vertices, skin, indices16, indices32, primitive.Material, maxJoint);
+        return new PrimitiveData(vertices, skin, indices.Indices16, indices.Indices32, primitive.Material, maxJoint);
+    }
+
+    private static PositionTextureNormalVertex[] ReadVertices(string name, int positionAccessor, int normalAccessor, int? texCoordAccessor, AccessorReader accessors)
+    {
+        float[] positions = accessors.ReadFloats(positionAccessor, AccessorUse.Position);
+        int vertexCount = positions.Length / 3;
+
+        float[] normals = accessors.ReadFloats(normalAccessor, AccessorUse.Normal);
+        CheckCount(name, "NORMAL", normals.Length / 3, vertexCount);
+
+        float[]? texCoords = null;
+        if (texCoordAccessor is { } accessor)
+        {
+            texCoords = accessors.ReadFloats(accessor, AccessorUse.TexCoord);
+            CheckCount(name, "TEXCOORD_0", texCoords.Length / 2, vertexCount);
+        }
+
+        PositionTextureNormalVertex[] vertices = new PositionTextureNormalVertex[vertexCount];
+        for (int vertex = 0; vertex < vertexCount; vertex++)
+        {
+            Vector3 position = new(positions[vertex * 3], positions[vertex * 3 + 1], positions[vertex * 3 + 2]);
+            Vector3 normal = new(normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]);
+            // Exporters often write normals that are not quite unit length, so they are repaired instead of rejected.
+            Vector4 unitNormal = Normalize(new Vector4(normal, 0), name, $"the normal of vertex {vertex}");
+            Vector2 texCoord = texCoords is null ? Vector2.Zero : new Vector2(texCoords[vertex * 2], texCoords[vertex * 2 + 1]);
+            vertices[vertex] = new PositionTextureNormalVertex(position, texCoord, new Vector3(unitNormal.X, unitNormal.Y, unitNormal.Z));
+        }
+
+        return vertices;
+    }
+
+    private static (SkinVertex[] Skin, int MaxJoint) ReadSkin(string name, int jointsAccessor, int weightsAccessor, AccessorReader accessors)
+    {
+        uint[] joints = accessors.ReadIntegers(jointsAccessor, AccessorUse.Joints).Values;
+        float[] weights = accessors.ReadFloats(weightsAccessor, AccessorUse.Weights);
+        int vertexCount = joints.Length / 4;
+        CheckCount(name, "WEIGHTS_0", weights.Length / 4, vertexCount);
+
+        SkinVertex[] skin = new SkinVertex[vertexCount];
+        int maxJoint = -1;
+        for (int vertex = 0; vertex < vertexCount; vertex++)
+        {
+            Vector4 weight = new(weights[vertex * 4], weights[vertex * 4 + 1], weights[vertex * 4 + 2], weights[vertex * 4 + 3]);
+            if (weight.X < 0 || weight.Y < 0 || weight.Z < 0 || weight.W < 0)
+            {
+                throw new InvalidDataException($"{name}: vertex {vertex} has a negative weight.");
+            }
+
+            // Quantized weights rarely sum to exactly 1, and exporters often miss it, so the sum is repaired instead of checked. The
+            // sum is a double, so four large finite weights cannot overflow it.
+            // A joint repeated within a vertex is kept: the blend adds its weights, which equals one combined weight.
+            double sum = (double)weight.X + weight.Y + weight.Z + weight.W;
+            if (sum < MinimumLength)
+            {
+                throw new InvalidDataException($"{name}: the weights of vertex {vertex} sum to 0.");
+            }
+
+            ushort joint0 = (ushort)joints[vertex * 4];
+            ushort joint1 = (ushort)joints[vertex * 4 + 1];
+            ushort joint2 = (ushort)joints[vertex * 4 + 2];
+            ushort joint3 = (ushort)joints[vertex * 4 + 3];
+            maxJoint = Math.Max(maxJoint, Math.Max(Math.Max(joint0, joint1), Math.Max(joint2, joint3)));
+            Vector4 normalized = new((float)(weight.X / sum), (float)(weight.Y / sum), (float)(weight.Z / sum), (float)(weight.W / sum));
+            skin[vertex] = new SkinVertex(joint0, joint1, joint2, joint3, normalized);
+        }
+
+        return (skin, maxJoint);
+    }
+
+    private static (IndexArrays Indices, uint MaxIndex) ReadIndices(string name, int indexAccessor, AccessorReader accessors)
+    {
+        IntegerAccessorData indexData = accessors.ReadIntegers(indexAccessor, AccessorUse.Indices);
+        uint[] indices = indexData.Values;
+        if (indices.Length % 3 != 0)
+        {
+            throw new InvalidDataException($"{name}: {indices.Length} indices do not form whole triangles.");
+        }
+
+        bool wide = indexData.ComponentType == AccessorReader.UnsignedInt;
+        uint maxIndex = 0;
+        foreach (uint index in indices)
+        {
+            // glTF forbids the largest value of the index type, because graphics APIs can read it as a primitive restart. Byte
+            // indices are uploaded as 16 bits, where 255 is an ordinary index, and a 32-bit one is always past the vertex count.
+            if (!wide && index == ushort.MaxValue)
+            {
+                throw new InvalidDataException($"{name}: index {index} is the primitive restart value of 16-bit indices.");
+            }
+
+            maxIndex = Math.Max(maxIndex, index);
+        }
+
+        IndexArrays arrays = wide ? new IndexArrays(null, indices) : new IndexArrays(Array.ConvertAll(indices, index => (ushort)index), null);
+        return (arrays, maxIndex);
+    }
+
+    private static IndexArrays CreateSequentialIndices(int vertexCount)
+    {
+        // 16-bit indices address 65,535 vertices, 0 to 65,534; 65,535 is the primitive restart value.
+        if (vertexCount <= ushort.MaxValue)
+        {
+            ushort[] indices16 = new ushort[vertexCount];
+            for (int i = 0; i < vertexCount; i++)
+            {
+                indices16[i] = (ushort)i;
+            }
+
+            return new IndexArrays(indices16, null);
+        }
+
+        uint[] indices32 = new uint[vertexCount];
+        for (int i = 0; i < vertexCount; i++)
+        {
+            indices32[i] = (uint)i;
+        }
+
+        return new IndexArrays(null, indices32);
     }
 
     private static void CheckCount(string name, string attribute, int count, int vertexCount)
@@ -630,9 +722,9 @@ internal static class GltfModelReader
             Vector4 baseColorFactor = Vector4.One;
             if (material.PbrMetallicRoughness?.BaseColorFactor is { } factor)
             {
-                if (factor.Length != 4 || !factor.All(float.IsFinite))
+                if (factor.Length != 4 || !factor.All(value => value is >= 0 and <= 1))
                 {
-                    throw new InvalidDataException($"{name}: baseColorFactor must be 4 finite numbers.");
+                    throw new InvalidDataException($"{name}: baseColorFactor must be 4 numbers between 0 and 1.");
                 }
 
                 baseColorFactor = new Vector4(factor[0], factor[1], factor[2], factor[3]);
@@ -694,11 +786,12 @@ internal static class GltfModelReader
     }
 
     // Only images a material uses are read, so an unused image the loader cannot read, such as an external normal map, does not
-    // fail the load. Unused entries stay empty.
+    // fail the load. Unused entries stay empty. Images that start at the same byte share one entry, so the loader decodes them once.
     private static ImmutableArray<ReadOnlyMemory<byte>> ReadImages(GltfRootDto root, ImmutableArray<MaterialData> materials, AccessorReader accessors)
     {
         GltfImageDto[] imageDtos = root.Images ?? [];
         ReadOnlyMemory<byte>[] images = new ReadOnlyMemory<byte>[imageDtos.Length];
+        Dictionary<long, ReadOnlyMemory<byte>> imagesByStart = new();
 
         foreach (MaterialData material in materials)
         {
@@ -719,7 +812,16 @@ internal static class GltfModelReader
                 throw new NotSupportedException($"images[{index}]: mimeType '{image.MimeType}' is not supported; only image/png and image/jpeg are.");
             }
 
-            images[index] = accessors.GetBufferView(bufferView, out _);
+            ReadOnlyMemory<byte> data = accessors.GetBufferView(bufferView, out _);
+            long start = root.BufferViews![bufferView].ByteOffset ?? 0;
+            if (!imagesByStart.TryGetValue(start, out ReadOnlyMemory<byte> shared))
+            {
+                ImageHeader.Check(data.Span, image.MimeType, $"images[{index}]");
+                shared = data;
+                imagesByStart.Add(start, shared);
+            }
+
+            images[index] = shared;
         }
 
         return [.. images];
@@ -728,6 +830,9 @@ internal static class GltfModelReader
     private static ImmutableArray<ModelAnimation> ReadAnimations(GltfAnimationDto[] animationDtos, GltfNodeDto[] nodes, AccessorReader accessors)
     {
         ImmutableArray<ModelAnimation>.Builder animations = ImmutableArray.CreateBuilder<ModelAnimation>(animationDtos.Length);
+        // Channels that read the same accessors share their checked keyframes, so each accessor is checked and repaired once.
+        Dictionary<int, float[]> times = new();
+        Dictionary<(int Output, AnimationPath Path, bool Cubic), float[]> outputs = new();
 
         for (int animationIndex = 0; animationIndex < animationDtos.Length; animationIndex++)
         {
@@ -780,7 +885,7 @@ internal static class GltfModelReader
                     throw new InvalidDataException($"{name}: sampler {samplerIndex} is out of range.");
                 }
 
-                channels.Add(ReadChannel(samplers[samplerIndex], $"{animationName}.samplers[{samplerIndex}]", node, path, accessors));
+                channels.Add(ReadChannel(samplers[samplerIndex], $"{animationName}.samplers[{samplerIndex}]", node, path, accessors, times, outputs));
             }
 
             animations.Add(new ModelAnimation(animation.Name, channels.ToImmutable()));
@@ -789,7 +894,8 @@ internal static class GltfModelReader
         return animations.MoveToImmutable();
     }
 
-    private static AnimationChannel ReadChannel(GltfAnimationSamplerDto sampler, string name, int node, AnimationPath path, AccessorReader accessors)
+    private static AnimationChannel ReadChannel(GltfAnimationSamplerDto sampler, string name, int node, AnimationPath path, AccessorReader accessors,
+        Dictionary<int, float[]> timesByInput, Dictionary<(int Output, AnimationPath Path, bool Cubic), float[]> outputs)
     {
         AnimationInterpolation interpolation = sampler.Interpolation switch
         {
@@ -802,6 +908,36 @@ internal static class GltfModelReader
         int input = sampler.Input ?? throw new InvalidDataException($"{name}: input is missing.");
         int output = sampler.Output ?? throw new InvalidDataException($"{name}: output is missing.");
 
+        if (!timesByInput.TryGetValue(input, out float[]? times))
+        {
+            times = ReadTimes(input, name, accessors);
+            timesByInput.Add(input, times);
+        }
+
+        bool cubic = interpolation == AnimationInterpolation.CubicSpline;
+        if (cubic && times.Length < 2)
+        {
+            throw new InvalidDataException($"{name}: CUBICSPLINE needs at least 2 keyframes.");
+        }
+
+        if (!outputs.TryGetValue((output, path, cubic), out float[]? values))
+        {
+            values = ReadOutput(output, name, path, cubic, accessors);
+            outputs.Add((output, path, cubic), values);
+        }
+
+        int componentCount = path == AnimationPath.Rotation ? 4 : 3;
+        int expected = times.Length * (cubic ? 3 : 1);
+        if (values.Length / componentCount != expected)
+        {
+            throw new InvalidDataException($"{name}: output has {values.Length / componentCount} elements, but {times.Length} keyframes need {expected}.");
+        }
+
+        return new AnimationChannel(node, path, interpolation, times, values);
+    }
+
+    private static float[] ReadTimes(int input, string name, AccessorReader accessors)
+    {
         float[] times = accessors.ReadFloats(input, AccessorUse.AnimationInput);
         if (times[0] < 0)
         {
@@ -816,43 +952,36 @@ internal static class GltfModelReader
             }
         }
 
-        bool cubic = interpolation == AnimationInterpolation.CubicSpline;
-        if (cubic && times.Length < 2)
+        return times;
+    }
+
+    private static float[] ReadOutput(int output, string name, AnimationPath path, bool cubic, AccessorReader accessors)
+    {
+        if (path != AnimationPath.Rotation)
         {
-            throw new InvalidDataException($"{name}: CUBICSPLINE needs at least 2 keyframes.");
+            return accessors.ReadFloats(output, AccessorUse.TranslationOrScaleOutput);
         }
 
-        AccessorUse use = path == AnimationPath.Rotation ? AccessorUse.RotationOutput : AccessorUse.TranslationOrScaleOutput;
-        int componentCount = path == AnimationPath.Rotation ? 4 : 3;
-        float[] values = accessors.ReadFloats(output, use);
-
-        int expected = times.Length * (cubic ? 3 : 1);
-        if (values.Length / componentCount != expected)
+        // Key values are unit quaternions, repaired if an exporter left them slightly off. CUBICSPLINE tangents, the first and
+        // third element of each keyframe, are derivatives and are never normalized. The repair writes a copy, because the
+        // accessor reader shares its arrays.
+        float[] values = (float[])accessors.ReadFloats(output, AccessorUse.RotationOutput).Clone();
+        for (int element = 0; element < values.Length / 4; element++)
         {
-            throw new InvalidDataException($"{name}: output has {values.Length / componentCount} elements, but {times.Length} keyframes need {expected}.");
-        }
-
-        if (path == AnimationPath.Rotation)
-        {
-            // Key values are unit quaternions, repaired if an exporter left them slightly off. CUBICSPLINE tangents, the first and
-            // third element of each keyframe, are derivatives and are never normalized.
-            for (int element = 0; element < expected; element++)
+            if (cubic && element % 3 != 1)
             {
-                if (cubic && element % 3 != 1)
-                {
-                    continue;
-                }
-
-                int offset = element * 4;
-                Quaternion rotation = NormalizeRotation(new Vector4(values[offset], values[offset + 1], values[offset + 2], values[offset + 3]), name);
-                values[offset] = rotation.X;
-                values[offset + 1] = rotation.Y;
-                values[offset + 2] = rotation.Z;
-                values[offset + 3] = rotation.W;
+                continue;
             }
+
+            int offset = element * 4;
+            Quaternion rotation = NormalizeRotation(new Vector4(values[offset], values[offset + 1], values[offset + 2], values[offset + 3]), name);
+            values[offset] = rotation.X;
+            values[offset + 1] = rotation.Y;
+            values[offset + 2] = rotation.Z;
+            values[offset + 3] = rotation.W;
         }
 
-        return new AnimationChannel(node, path, interpolation, times, values);
+        return values;
     }
 
     private static Quaternion NormalizeRotation(Vector4 value, string name)
@@ -862,14 +991,20 @@ internal static class GltfModelReader
             throw new InvalidDataException($"{name}: a rotation is not finite.");
         }
 
-        float length = value.Length();
+        Vector4 normalized = Normalize(value, name, "a rotation");
+        return new Quaternion(normalized.X, normalized.Y, normalized.Z, normalized.W);
+    }
+
+    // The length is a double, so finite components as large as float.MaxValue cannot overflow it to infinity.
+    private static Vector4 Normalize(Vector4 value, string name, string what)
+    {
+        double length = Math.Sqrt((double)value.X * value.X + (double)value.Y * value.Y + (double)value.Z * value.Z + (double)value.W * value.W);
         if (length < MinimumLength)
         {
-            throw new InvalidDataException($"{name}: a rotation has zero length.");
+            throw new InvalidDataException($"{name}: {what} has zero length.");
         }
 
-        Vector4 normalized = value / length;
-        return new Quaternion(normalized.X, normalized.Y, normalized.Z, normalized.W);
+        return new Vector4((float)(value.X / length), (float)(value.Y / length), (float)(value.Z / length), (float)(value.W / length));
     }
 
     private static Vector3 ReadVector3(float[] values, string name, string property)
@@ -931,4 +1066,16 @@ internal static class GltfModelReader
 
         return true;
     }
+
+    // Primitives that read the same accessors share the converted arrays, so the loader uploads each array once.
+    private sealed class SharedArrays
+    {
+        public Dictionary<(int Position, int Normal, int? TexCoord), PositionTextureNormalVertex[]> Vertices { get; } = new();
+        public Dictionary<(int Joints, int Weights), (SkinVertex[] Skin, int MaxJoint)> Skins { get; } = new();
+        public Dictionary<int, (IndexArrays Indices, uint MaxIndex)> Indices { get; } = new();
+        public Dictionary<int, IndexArrays> SequentialIndices { get; } = new();
+    }
+
+    // Exactly one of the two is set.
+    private readonly record struct IndexArrays(ushort[]? Indices16, uint[]? Indices32);
 }

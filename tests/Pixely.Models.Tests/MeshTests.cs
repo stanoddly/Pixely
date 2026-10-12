@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Pixely.Models.Gltf;
@@ -37,6 +38,53 @@ public class MeshTests
         primitive["attributes"]!["NORMAL"] = builder.AddFloats("VEC3", 0, 0, 1, 0, 0, 1);
 
         Assert.Throws<InvalidDataException>(() => builder.Read());
+    }
+
+    [Test]
+    public void Read_SixteenBitRestartIndex_Throws()
+    {
+        GlbBuilder builder = new();
+        JsonObject primitive = builder.AddTriangle();
+        primitive["indices"] = builder.AddUShorts("SCALAR", 0, 1, ushort.MaxValue);
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => builder.Read())!;
+        Assert.That(exception.Message, Does.Contain("restart"));
+    }
+
+    [Test]
+    public void Read_PrimitivesReadingTheSameAccessors_ShareArrays()
+    {
+        GlbBuilder builder = new();
+        JsonObject primitive = builder.AddTriangle();
+        builder.Json["meshes"]![0]!["primitives"]!.AsArray().Add(primitive.DeepClone());
+
+        ImmutableArray<PrimitiveData> primitives = builder.Read().Meshes[0].Primitives;
+
+        Assert.That(primitives[1].Vertices, Is.SameAs(primitives[0].Vertices));
+        Assert.That(primitives[1].Indices16, Is.SameAs(primitives[0].Indices16));
+    }
+
+    [Test]
+    public void Read_AccessorsAliasingTheSameBytes_StopAtTheConversionBudget()
+    {
+        // Every primitive reads its own TEXCOORD_0 accessor, and all of them alias one buffer view, so the converted data grows
+        // with the number of primitives while the file barely does.
+        const int vertexCount = 3000;
+        GlbBuilder builder = new();
+        int positions = builder.AddFloats("VEC3", new float[vertexCount * 3]);
+        int normals = builder.AddFloats("VEC3", Enumerable.Repeat(new[] { 0f, 0f, 1f }, vertexCount).SelectMany(normal => normal).ToArray());
+        int texCoordView = builder.AddBufferView(new byte[vertexCount * 8]);
+        JsonArray primitives = new();
+        for (int i = 0; i < 200; i++)
+        {
+            int texCoords = builder.AddAccessor(texCoordView, AccessorReader.Float, "VEC2", vertexCount);
+            primitives.Add(new JsonObject { ["attributes"] = new JsonObject { ["POSITION"] = positions, ["NORMAL"] = normals, ["TEXCOORD_0"] = texCoords } });
+        }
+
+        builder.Add("meshes", new JsonObject { ["primitives"] = primitives });
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => builder.Read())!;
+        Assert.That(exception.Message, Does.Contain("times the file's size"));
     }
 
     [Test]
