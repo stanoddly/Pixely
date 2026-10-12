@@ -52,11 +52,12 @@ VertexToFragment vertexMain(VertexInput input)
     float3 r0 = skin.Row0.xyz;
     float3 r1 = skin.Row1.xyz;
     float3 r2 = skin.Row2.xyz;
-    float determinant = dot(r0, cross(r1, r2));
-    float3 normal = input.Normal.x * cross(r1, r2) + input.Normal.y * cross(r2, r0) + input.Normal.z * cross(r0, r1);
-    normal *= determinant < 0.0 ? -1.0 : 1.0;
-    // A collapsed blend has no meaningful normal; keep the untransformed one rather than normalizing zero.
-    float3 worldNormal = dot(normal, normal) > 1e-16 ? normal : input.Normal;
+    float3 c0 = cross(r1, r2);
+    float3 c1 = cross(r2, r0);
+    float3 c2 = cross(r0, r1);
+    float determinant = dot(r0, c0);
+    float3 normal = (input.Normal.x * c0 + input.Normal.y * c1 + input.Normal.z * c2) * (determinant < 0.0 ? -1.0 : 1.0);
+    float3 worldNormal = directionOrFallback(normal, dot(c0, c0) + dot(c1, c1) + dot(c2, c2), input.Normal);
 
     return toFragment(worldPosition, worldNormal, input.TexCoord, vertexConstants.viewProjection);
 }

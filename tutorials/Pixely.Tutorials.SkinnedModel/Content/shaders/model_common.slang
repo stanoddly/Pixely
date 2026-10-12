@@ -39,6 +39,14 @@ VertexToFragment toFragment(float3 worldPosition, float3 worldNormal, float2 tex
     return output;
 }
 
+// A transformed normal far shorter than its matrix has no reliable direction, such as under a node collapsed to zero on an axis;
+// the untransformed normal stands in then. matrixSizeSquared is the sum of the matrix's squared entries. The threshold is relative to
+// it, because a cofactor matrix scales with the square of the model's scale, so a fixed threshold would reject small models.
+float3 directionOrFallback(float3 transformed, float matrixSizeSquared, float3 fallback)
+{
+    return dot(transformed, transformed) > matrixSizeSquared * 1e-12 ? transformed : fallback;
+}
+
 float3 encodeSrgb(float3 linear)
 {
     float3 low = linear * 12.92;

@@ -17,9 +17,10 @@ VertexToFragment vertexMain(VertexInput input)
 {
     float3 worldPosition = mul(vertexConstants.world, float4(input.Position, 1.0)).xyz;
     // normalMatrix is the cofactor matrix of world, the inverse transpose up to scale, which keeps normals perpendicular under any
-    // scale or mirroring. A node collapsed to zero on an axis can leave a normal with no direction; keep the untransformed one then.
-    float3 normal = mul((float3x3)vertexConstants.normalMatrix, input.Normal);
-    float3 worldNormal = dot(normal, normal) > 1e-16 ? normal : input.Normal;
+    // scale or mirroring.
+    float3x3 normalMatrix = (float3x3)vertexConstants.normalMatrix;
+    float matrixSizeSquared = dot(normalMatrix[0], normalMatrix[0]) + dot(normalMatrix[1], normalMatrix[1]) + dot(normalMatrix[2], normalMatrix[2]);
+    float3 worldNormal = directionOrFallback(mul(normalMatrix, input.Normal), matrixSizeSquared, input.Normal);
     return toFragment(worldPosition, worldNormal, input.TexCoord, vertexConstants.viewProjection);
 }
 
