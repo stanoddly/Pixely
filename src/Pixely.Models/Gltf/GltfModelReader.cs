@@ -392,6 +392,8 @@ internal static class GltfModelReader
                 throw new InvalidDataException($"{name}: skeleton {skeleton} is out of range.");
             }
 
+            // Each joint index takes a few bytes of JSON and a 64-byte matrix here, so skins that repeat joints are charged too.
+            accessors.Charge((long)joints.Length * Unsafe.SizeOf<Matrix4x4>(), name);
             ImmutableArray<Matrix4x4>.Builder inverseBindMatrices = ImmutableArray.CreateBuilder<Matrix4x4>(joints.Length);
             if (skin.InverseBindMatrices is { } accessor)
             {

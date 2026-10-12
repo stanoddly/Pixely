@@ -304,4 +304,23 @@ public class NodeAndSkinTests
     }
 
     private static JsonArray ToJson(float[] values) => new(values.Select(value => (JsonNode?)value).ToArray());
+
+    [Test]
+    public void Read_ManySkinsRepeatingJoints_StopAtTheConversionBudget()
+    {
+        // Each skin lists ten joints in about 34 bytes of JSON and gets ten 64-byte inverse bind matrices, about 19 times as much.
+        GlbBuilder builder = new();
+        for (int node = 0; node < 10; node++)
+        {
+            builder.Add("nodes", new JsonObject());
+        }
+
+        for (int skin = 0; skin < 1000; skin++)
+        {
+            builder.Add("skins", new JsonObject { ["joints"] = new JsonArray(0, 1, 2, 3, 4, 5, 6, 7, 8, 9) });
+        }
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => builder.Read())!;
+        Assert.That(exception.Message, Does.Contain("times the file's size"));
+    }
 }

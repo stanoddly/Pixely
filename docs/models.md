@@ -104,9 +104,9 @@ glTF front faces wind counter-clockwise, while Pixely's pipeline default is cloc
 
 Model files are untrusted data. The loader checks everything it uses: references between objects, every accessor against its buffer view, component types for each use, finite numbers, index ranges, attribute counts, the node graph (one parent at most, no cycles), skins against the meshes they deform, and animation keyframes. It is not a full conformance check; the [glTF Validator](https://github.khronos.org/glTF-Validator/) is.
 
-Size arithmetic is checked, and allocations are bounded by the file's size:
+Size arithmetic is checked, and allocations are bounded before they happen:
 
-- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together, the accessors and the vertex, skin and index arrays built from them, is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
+- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together, the accessors, the vertex, skin and index arrays built from them and the skins' inverse bind matrices, is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
 - An image is checked against its `mimeType` and its size is read from its PNG or JPEG header before it is decoded. Each side must be between 1 and 16,384 pixels, and the images of a model together at most 16,384 × 16,384 pixels, which decode to 1 GiB. A compressed image can be much smaller than its pixels, so a small file can still use that much: while the largest image uploads, its decoded pixels, its transfer buffer and its texture each take up to 1 GiB. Whether the GPU accepts a texture that large depends on the device.
 - 16-bit indices cannot be 65,535, which graphics APIs can read as a primitive restart. glTF forbids it too.
 
