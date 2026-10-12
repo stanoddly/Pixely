@@ -13,7 +13,7 @@
         <CompilerVisibleProperty Include="PixelyDIEmitTrimAnnotations" />
     </ItemGroup>
 
-    <!-- SlangVersion pins the toolchain for package consumers here and for source builds in the same file. -->
+    <!-- Pins and imports the toolchain SDK, the same file as in source builds. -->
     <Import Project="$(MSBuildThisFileDirectory)..\tools\net11.0\any\build\Pixely.SdlangCompiler.props" />
     <Import Project="$(MSBuildThisFileDirectory)Pixely.Browser.props" />
 </Project>

@@ -1,27 +1,20 @@
 <Project>
     <PropertyGroup>
-        <SlangPlatform Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">linux-x86_64</SlangPlatform>
-        <SlangPlatform Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">linux-aarch64</SlangPlatform>
-        <SlangPlatform Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">windows-x86_64</SlangPlatform>
-        <SlangPlatform Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">macos-aarch64</SlangPlatform>
+        <SlangDxcToolchainVersion>2026.19.0.1</SlangDxcToolchainVersion>
     </PropertyGroup>
 
+    <!--
+      The toolchain SDK references the platform package of the build host and exposes SlangDxcToolchainDirectory.
+      Its props read Directory.Packages.props, so this file must be imported after Microsoft.NET.Sdk's props.
+    -->
+    <Import Project="Sdk.props" Sdk="SlangDxcBundle.Toolchain" Version="$(SlangDxcToolchainVersion)" />
+
     <PropertyGroup>
-        <SlangVersion>2026.17.1</SlangVersion>
-        <SlangToolSourceDirectory>$(SlangDxcToolchainRoot)$(SlangPlatform)/</SlangToolSourceDirectory>
         <SlangCompilerExeName>slangc</SlangCompilerExeName>
         <SlangCompilerExeName Condition="$([MSBuild]::IsOSPlatform('Windows'))">slangc.exe</SlangCompilerExeName>
-        <SlangCompilerPath>$(SlangToolSourceDirectory)bin/$(SlangCompilerExeName)</SlangCompilerPath>
+        <SlangCompilerPath>$(SlangDxcToolchainDirectory)bin/$(SlangCompilerExeName)</SlangCompilerPath>
         <!-- Source imports use the build output; package imports use the task assembly beside the build directory. -->
         <SdlangCompilerAssembly Condition="Exists('$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.csproj')">$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Pixely.SdlangCompiler.dll</SdlangCompilerAssembly>
         <SdlangCompilerAssembly Condition="!Exists('$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.csproj')">$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.dll</SdlangCompilerAssembly>
     </PropertyGroup>
-
-    <!-- ProjectReference does not expose the toolchain's buildTransitive property to source projects importing these assets. -->
-    <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\Pixely.SdlangCompiler.csproj')">
-        <PackageReference Include="SlangDxcBundle.Toolchain">
-            <Version Condition="'$(ManagePackageVersionsCentrally)' != 'true'">[$(SlangVersion)]</Version>
-            <VersionOverride Condition="'$(ManagePackageVersionsCentrally)' == 'true'">[$(SlangVersion)]</VersionOverride>
-        </PackageReference>
-    </ItemGroup>
 </Project>

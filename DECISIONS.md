@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-12: The shader toolchain is imported as a project SDK
+
+`Pixely.SdlangCompiler.props` and `.targets` import the `SlangDxcBundle.Toolchain` project SDK with an explicit `Version` instead of referencing the package. The SDK references only the build host's `SlangDxcBundle.Toolchain.<rid>` package and exposes its directory as `SlangDxcToolchainDirectory`.
+
+- From `2026.19.0.1` the toolchain ships as an MSBuild project SDK plus one package per build host, and a `PackageReference` to the SDK package fails the build. The earlier single package carried all five platforms.
+- Importing it from the shader props covers package consumers and source builds with one pin, because the Pixely SDK imports the same file.
+- The toolchain SDK owns host detection, so Pixely no longer maps the host to a Slang platform, and macOS x64 hosts gain the compiler.
+- The pin moves from `SlangVersion` to `SlangDxcToolchainVersion`, because the fourth component is a packaging revision, not part of the Slang version. The shader cache compares this version, so a new packaging revision recompiles shaders.
+
+Cost: MSBuild resolves a named SDK once per build, so another project SDK in the same build that pins a different toolchain version silently wins, with only warning MSB4240.
+
 ## 2026-10-12: 3D models are binary glTF read in managed code
 
 `Pixely.Models` loads binary glTF 2.0 (`.glb`) at runtime with its own reader: `System.Text.Json` with a source-generated context for the JSON chunk, and bounds-checked accessor reads for the binary chunk. Images inside the file are decoded through the new `IImageDecoder`. Pixely ships no model shader.
