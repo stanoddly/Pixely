@@ -6,7 +6,7 @@ Mouse positions use logical coordinates relative to the target window's top-left
 
 The first mouse command on a scope raises `WindowEnter` for it and makes `IMouseService.IsInWindow` true for that scope before the command's own event, the same order SDL uses when the pointer arrives in a window. `mouse leave` raises `WindowLeave` and resets that; it is the only way synthetic input leaves a window and works while a button is held, which real input cannot do, so it can drive a press cancellation. The next mouse command enters again.
 
-Automated input affects Pixely's event-derived synthetic device state; every view scope has its own synthetic mouse and keyboard, so positions, held buttons and held keys never cross windows. Gamepads belong to no window, so there is one synthetic gamepad for the whole app. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state.
+Automated input affects Pixely's event-derived synthetic device state; every view scope has its own synthetic mouse and keyboard, so positions, held buttons and held keys never cross windows. Gamepads belong to no window, so there is one synthetic gamepad for the whole app. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state. Screenshots do not show the cursor, and SDL animates an animated cursor (`docs/cursors.md`) in real time, not on the fixed-step game clock.
 
 ## Driving the app from standard input
 

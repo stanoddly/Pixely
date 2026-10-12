@@ -406,7 +406,7 @@ public abstract class Window : IDisposable
         ReadOnlySpan<byte> pixelData = icon.Data;
         int width = icon.Size.Width;
         int height = icon.Size.Height;
-        int pitch = width * 4;
+        int pitch = ImageSurfaces.GetPackedPitch(icon);
 
         unsafe
         {
