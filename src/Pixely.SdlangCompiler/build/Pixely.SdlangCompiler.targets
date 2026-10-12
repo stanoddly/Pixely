@@ -1,4 +1,7 @@
 <Project>
+    <!-- Fails the build on an unsupported or unrestored build host, so ValidateSlangToolchain only checks the compiler itself. -->
+    <Import Project="Sdk.targets" Sdk="SlangDxcBundle.Toolchain" Version="$(SlangDxcToolchainVersion)" />
+
     <UsingTask
         TaskName="Pixely.SdlangCompiler.SdlangCompileTask"
         AssemblyFile="$(SdlangCompilerAssembly)"
@@ -6,12 +9,6 @@
         Runtime="NET" />
 
     <Target Name="ValidateSlangToolchain">
-        <Error Text="SlangDxcBundle.Toolchain did not expose SlangDxcToolchainRoot."
-               Condition="'$(SlangDxcToolchainRoot)' == ''" />
-        <Error Text="Unsupported platform for Slang shader compiler. Supported: Linux x64, Linux ARM64, Windows x64, macOS ARM64."
-               Condition="'$(SlangPlatform)' == ''" />
-        <Error Text="Slang tool directory does not exist: $(SlangToolSourceDirectory)"
-               Condition="!Exists('$(SlangToolSourceDirectory)')" />
         <Error Text="Slang compiler does not exist: $(SlangCompilerPath)"
                Condition="!Exists('$(SlangCompilerPath)')" />
     </Target>
