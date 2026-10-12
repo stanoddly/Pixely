@@ -17,9 +17,9 @@ internal enum AccessorUse
 }
 
 // Reads accessors into arrays (glTF 2.0, section 3.6). Every read checks the accessor against its use and its bytes against the
-// buffer view. Reads are cached, and everything converted from the file, these arrays and the ones callers build from them and
-// Charge, is limited to a multiple of the file length, so accessors that alias the same bytes cannot multiply allocations.
-// Callers must not modify the returned arrays.
+// buffer view. Reads are cached. These arrays, and the arrays callers build from them and pass to Charge, are together limited to
+// a multiple of the file length, so accessors that alias the same bytes cannot multiply allocations. Callers must not modify the
+// returned arrays.
 internal sealed class AccessorReader
 {
     // One byte of a normalized or integer component converts to a 4-byte float or uint, which callers convert again into vertices.
@@ -54,41 +54,38 @@ internal sealed class AccessorReader
 
         ResolvedAccessor accessor = Resolve(accessorIndex, use);
         float[] values = new float[ChargeValues(accessorIndex, accessor)];
-        _floats.Add((accessorIndex, use), values);
-        if (accessor.Data.IsEmpty)
+        if (!accessor.Data.IsEmpty)
         {
-            return values;
-        }
-
-        // A value that is not finite fails the whole load, so a partly filled array in the cache is never read.
-        ReadOnlySpan<byte> data = accessor.Data.Span;
-        int componentSize = GetComponentSize(accessor.ComponentType);
-        for (int element = 0; element < accessor.Count; element++)
-        {
-            int elementOffset = element * accessor.Stride;
-            for (int component = 0; component < accessor.ComponentCount; component++)
+            ReadOnlySpan<byte> data = accessor.Data.Span;
+            int componentSize = GetComponentSize(accessor.ComponentType);
+            for (int element = 0; element < accessor.Count; element++)
             {
-                ReadOnlySpan<byte> bytes = data[(elementOffset + component * componentSize)..];
-                float value = accessor.ComponentType switch
+                int elementOffset = element * accessor.Stride;
+                for (int component = 0; component < accessor.ComponentCount; component++)
                 {
-                    Float => BinaryPrimitives.ReadSingleLittleEndian(bytes),
-                    // Normalized integers convert as section 3.11 defines; signed values clamp at -1.
-                    Byte => MathF.Max((sbyte)bytes[0] / 127f, -1f),
-                    UnsignedByte => bytes[0] / 255f,
-                    Short => MathF.Max(BinaryPrimitives.ReadInt16LittleEndian(bytes) / 32767f, -1f),
-                    UnsignedShort => BinaryPrimitives.ReadUInt16LittleEndian(bytes) / 65535f,
-                    _ => throw new InvalidDataException($"accessors[{accessorIndex}]: component type {accessor.ComponentType} cannot be read as floats.")
-                };
+                    ReadOnlySpan<byte> bytes = data[(elementOffset + component * componentSize)..];
+                    float value = accessor.ComponentType switch
+                    {
+                        Float => BinaryPrimitives.ReadSingleLittleEndian(bytes),
+                        // Normalized integers convert as section 3.11 defines; signed values clamp at -1.
+                        Byte => MathF.Max((sbyte)bytes[0] / 127f, -1f),
+                        UnsignedByte => bytes[0] / 255f,
+                        Short => MathF.Max(BinaryPrimitives.ReadInt16LittleEndian(bytes) / 32767f, -1f),
+                        UnsignedShort => BinaryPrimitives.ReadUInt16LittleEndian(bytes) / 65535f,
+                        _ => throw new InvalidDataException($"accessors[{accessorIndex}]: component type {accessor.ComponentType} cannot be read as floats.")
+                    };
 
-                if (!float.IsFinite(value))
-                {
-                    throw new InvalidDataException($"accessors[{accessorIndex}]: element {element} has a value that is not finite.");
+                    if (!float.IsFinite(value))
+                    {
+                        throw new InvalidDataException($"accessors[{accessorIndex}]: element {element} has a value that is not finite.");
+                    }
+
+                    values[element * accessor.ComponentCount + component] = value;
                 }
-
-                values[element * accessor.ComponentCount + component] = value;
             }
         }
 
+        _floats.Add((accessorIndex, use), values);
         return values;
     }
 
