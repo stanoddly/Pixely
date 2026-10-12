@@ -13,12 +13,14 @@ internal class SdlImage : Image
         _surface = surface;
     }
 
+    internal Pointer<SDL_Surface> Surface => _surface;
+
     public override unsafe ReadOnlySpan<byte> Data
     {
         get
         {
             SDL_Surface* surface = _surface;
-            int byteCount = surface->pitch * surface->h;
+            int byteCount = checked(surface->pitch * surface->h);
             return new ReadOnlySpan<byte>((void*)surface->pixels, byteCount);
         }
     }
@@ -50,21 +52,32 @@ internal class SdlImage : Image
 internal class SdlImageLoader : IImageLoader
 {
     private readonly ContentSource _contentSource;
+    private readonly SdlImageDecoder _decoder = new();
 
     public SdlImageLoader(ContentSource contentSource)
     {
         _contentSource = contentSource;
     }
 
-    public unsafe Image Load(ReadOnlySpan<char> path)
+    public Image Load(ReadOnlySpan<char> path)
     {
         using Stream fileStream = _contentSource.GetFile(path).Open();
         byte[] fileData = new byte[fileStream.Length];
         fileStream.ReadExactly(fileData);
 
-        fixed (byte* fileDataPtr = fileData)
+        return _decoder.Decode(fileData);
+    }
+}
+
+internal class SdlImageDecoder : IImageDecoder
+{
+    private const int BytesPerPixel = 4;
+
+    public unsafe Image Decode(ReadOnlySpan<byte> encodedImage)
+    {
+        fixed (byte* encodedImagePtr = encodedImage)
         {
-            Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)fileDataPtr, (UIntPtr)fileData.Length);
+            Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)encodedImagePtr, (UIntPtr)encodedImage.Length);
             if (sdlStream.IsNull)
             {
                 throw new InvalidOperationException($"SDL_IOFromConstMem failed: {SDL3.SDL_GetError()}");
@@ -73,10 +86,42 @@ internal class SdlImageLoader : IImageLoader
             Pointer<SDL_Surface> surface = SdlBoolInterop.IMG_Load_IO(sdlStream, true);
             if (surface.IsNull)
             {
-                throw new InvalidOperationException($"IMG_Load_IO failed: {SDL3.SDL_GetError()}");
+                throw new InvalidDataException($"IMG_Load_IO failed: {SDL3.SDL_GetError()}");
             }
 
-            return ConvertToAbgr8888(surface);
+            SdlImage image = ConvertToAbgr8888(surface);
+            try
+            {
+                CheckLayout(image.Surface);
+            }
+            catch
+            {
+                image.Dispose();
+                throw;
+            }
+
+            return image;
+        }
+    }
+
+    // SdlImage reports its size as ShortSize and its data as pitch * height bytes, and textures are uploaded as width * 4 bytes
+    // per row, so a surface that does not fit these is rejected here rather than truncated or misread later.
+    private static unsafe void CheckLayout(Pointer<SDL_Surface> surface)
+    {
+        SDL_Surface* sdlSurface = surface;
+        if (sdlSurface->w <= 0 || sdlSurface->h <= 0 || sdlSurface->w > ushort.MaxValue || sdlSurface->h > ushort.MaxValue)
+        {
+            throw new InvalidDataException($"The image is {sdlSurface->w}x{sdlSurface->h} pixels; each side must be between 1 and {ushort.MaxValue}.");
+        }
+
+        if (sdlSurface->pitch != checked(sdlSurface->w * BytesPerPixel))
+        {
+            throw new InvalidDataException($"The decoded image has a pitch of {sdlSurface->pitch} bytes for {sdlSurface->w} pixels per row; rows must be tightly packed.");
+        }
+
+        if ((long)sdlSurface->pitch * sdlSurface->h > int.MaxValue)
+        {
+            throw new InvalidDataException($"The image is {sdlSurface->w}x{sdlSurface->h} pixels, more than a span of bytes can hold.");
         }
     }
 

@@ -100,6 +100,11 @@ public class PixelyAppBuilder : ServiceCollection
             AddSingleton<IImageLoader, SdlImageLoader>();
         }
 
+        if (!IsRegistered<IImageDecoder>())
+        {
+            AddSingleton<IImageDecoder, SdlImageDecoder>();
+        }
+
         // Diagnostics, see docs/diagnostics.md. Registered last, and the report resolves the logger factory, the GPU device and the
         // GPU memory system only while diagnostics are on, so they change neither when the app's services are created nor when they
         // are disposed. While they are off, the frame records its timings to a recorder that does nothing and no report is created.

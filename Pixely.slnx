@@ -22,6 +22,7 @@
     <Project Path="src/Pixely.Utils/Pixely.Utils.csproj" />
     <Project Path="src/Pixely/Pixely.csproj" />
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
+    <Project Path="src/Pixely.Models/Pixely.Models.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Pixely.Fitness.Tests/Pixely.Fitness.Tests.csproj" />
@@ -37,6 +38,7 @@
     <Project Path="tests/Pixely.Ui.Tests/Pixely.Ui.Tests.csproj" />
     <Project Path="tests/Pixely.Events.Tests/Pixely.Events.Tests.csproj" />
     <Project Path="tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj" />
+    <Project Path="tests/Pixely.Models.Tests/Pixely.Models.Tests.csproj" />
     <Project Path="tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj" />
     <Project Path="tests/Pixely.Tests/Pixely.Tests.csproj" />
   </Folder>
@@ -45,6 +47,7 @@
     <Project Path="tutorials/Pixely.Tutorials.EmbeddedContent/Pixely.Tutorials.EmbeddedContent.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.DepthOnly/Pixely.Tutorials.DepthOnly.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Multisampling/Pixely.Tutorials.Multisampling.csproj" />
+    <Project Path="tutorials/Pixely.Tutorials.SkinnedModel/Pixely.Tutorials.SkinnedModel.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Logging/Pixely.Tutorials.Logging.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Triangle/Pixely.Tutorials.Triangle.csproj" />
     <Project Path="tutorials/Pixely.Tutorials.Browser/Pixely.Tutorials.Browser.csproj" />

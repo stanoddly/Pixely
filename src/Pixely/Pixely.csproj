@@ -14,6 +14,8 @@
         <!-- Painting text needs a text sprite, which needs a Texture, whose constructor is
              internal. Laying a Label out needs neither. -->
         <InternalsVisibleTo Include="Pixely.Ui.Tests" />
+        <!-- The model tests decode a texture embedded in a model with SdlImageDecoder. -->
+        <InternalsVisibleTo Include="Pixely.Models.Tests" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PublishAot>true</PublishAot>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <PixelyHosting>true</PixelyHosting>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.Models\Pixely.Models.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <!-- Reference the SdlangCompiler project -->
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely.SdlangCompiler\Pixely.SdlangCompiler.csproj" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <!-- Import the compiler's props and targets files -->
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.props" />
+    <Import Project="..\..\src\Pixely.SdlangCompiler\build\Pixely.SdlangCompiler.targets" />
+
+    <!-- model_common.slang is imported by both programs and is not a program itself. -->
+    <ItemGroup>
+        <SdlangShader Include="Content\shaders\*.slang" Exclude="Content\shaders\model_common.slang" />
+    </ItemGroup>
+
+</Project>
