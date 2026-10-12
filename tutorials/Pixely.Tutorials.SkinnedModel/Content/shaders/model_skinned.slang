@@ -28,7 +28,7 @@ struct VertexInput
 [shader("vertex")]
 VertexToFragment vertexMain(VertexInput input)
 {
-    // The joint matrices already hold the whole transform to world space, so world and normalMatrix are not used here.
+    // The joint matrices place the mesh in the scene, and world places the copy being drawn; normalMatrix is not used here.
     JointMatrix skin;
     skin.Row0 = 0;
     skin.Row1 = 0;
@@ -43,6 +43,12 @@ VertexToFragment vertexMain(VertexInput input)
         skin.Row2 += weight * joint.Row2;
         skin.Row3 += weight * joint.Row3;
     }
+
+    // Each row of skin times world gives the same row of their product, so the result transforms by the joints, then by world.
+    skin.Row0 = mul(vertexConstants.world, skin.Row0);
+    skin.Row1 = mul(vertexConstants.world, skin.Row1);
+    skin.Row2 = mul(vertexConstants.world, skin.Row2);
+    skin.Row3 = mul(vertexConstants.world, skin.Row3);
 
     float3 worldPosition = input.Position.x * skin.Row0.xyz + input.Position.y * skin.Row1.xyz + input.Position.z * skin.Row2.xyz + skin.Row3.xyz;
 

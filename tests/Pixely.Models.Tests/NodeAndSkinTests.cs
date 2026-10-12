@@ -27,7 +27,7 @@ public class NodeAndSkinTests
     [Test]
     public void ReadMatrix_ColumnMajorValues_GiveTheRowVectorMatrix()
     {
-        Matrix4x4 matrix = GltfModelReader.ReadMatrix(_asymmetricMatrix, 0, "test", "matrix");
+        Matrix4x4 matrix = GltfValues.ReadMatrix(_asymmetricMatrix, 0, "test", "matrix");
 
         Assert.That(new[] { matrix.M41, matrix.M42, matrix.M43 }, Is.EqualTo(new[] { 5f, 6f, 7f }));
         Assert.That(Vector3.Transform(Vector3.UnitY, matrix), Is.EqualTo(new Vector3(2, 6, 7)));
@@ -152,6 +152,43 @@ public class NodeAndSkinTests
 
         Assert.That(data.DefaultScene, Is.EqualTo(0));
         Assert.That(data.Scenes[0].RootNodes, Is.EqualTo(new[] { 0 }));
+    }
+
+    [Test]
+    public void Read_SceneMeshNodes_AreTheNodesWithAMeshUnderItsRoots()
+    {
+        // Scene 0 holds the triangle's node 0. Scene 1 holds node 1, which has no mesh, and its child 2, which has one. Node 3 has a
+        // mesh but is in no scene.
+        GlbBuilder builder = new();
+        builder.AddTriangle();
+        builder.Add("nodes", new JsonObject { ["children"] = new JsonArray(2) });
+        builder.Add("nodes", new JsonObject { ["mesh"] = 0 });
+        builder.Add("nodes", new JsonObject { ["mesh"] = 0 });
+        builder.Add("scenes", new JsonObject { ["nodes"] = new JsonArray(1) });
+
+        ModelData data = builder.Read();
+
+        Assert.That(data.Scenes[0].MeshNodes, Is.EqualTo(new[] { 0 }));
+        Assert.That(data.Scenes[1].MeshNodes, Is.EqualTo(new[] { 2 }));
+    }
+
+    [Test]
+    public void Read_ManyScenesSharingADeepHierarchy_ExceedTheBudget()
+    {
+        // 1,000 scenes share the root of a 1,000-node chain: a million visits from about 30 KB of JSON.
+        GlbBuilder builder = new();
+        for (int node = 0; node < 1000; node++)
+        {
+            builder.Add("nodes", node < 999 ? new JsonObject { ["children"] = new JsonArray(node + 1) } : new JsonObject());
+        }
+
+        for (int scene = 0; scene < 1000; scene++)
+        {
+            builder.Add("scenes", new JsonObject { ["nodes"] = new JsonArray(0) });
+        }
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => builder.Read())!;
+        Assert.That(exception.Message, Does.StartWith("scenes["));
     }
 
     [Test]

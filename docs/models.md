@@ -4,7 +4,7 @@
 
 ## Loading
 
-`RegisterModelLoading()` registers `IModelLoader`:
+`RegisterModelLoading()` registers `IModelLoader` and `ModelInstanceFactory`:
 
 ```csharp
 builder.RegisterModelLoading();
@@ -25,7 +25,7 @@ Every array is in file order, so an index means the same as in the file.
 | Member | Content |
 | --- | --- |
 | `Nodes` | `ModelNode`: name, `Parent`, `Children`, `LocalTransform`, and optional `Mesh` and `Skin` indices |
-| `Scenes`, `DefaultScene` | `ModelScene`: the root nodes drawn together. `DefaultScene` is the file's `scene`, or null when the file names none; a viewer usually draws scene 0 then |
+| `Scenes`, `DefaultScene` | `ModelScene`: the root nodes drawn together, and `MeshNodes`, every node with a mesh under them. `DefaultScene` is the file's `scene`, or null when the file names none; a viewer usually draws scene 0 then |
 | `Meshes` | `ModelMesh`: one `ModelPrimitive` per draw |
 | `Materials` | `ModelMaterial`: base color factor and texture, alpha mode and cutoff, double-sided |
 | `Skins` | `ModelSkin`: joint node indices, inverse bind matrices, optional skeleton root |
@@ -55,9 +55,48 @@ glTF base color textures are sRGB, so they are uploaded as `R8G8B8A8UnormSrgb` a
 
 Materials sharing an image share its texture, and so do images whose buffer views cover the same bytes.
 
+## Instances
+
+A `ModelInstance` is one character drawn from a shared `Model`. It holds a pose, the world matrix of every node, and the joint matrices of every skin with a storage buffer for each. `ModelInstanceFactory` creates it:
+
+```csharp
+ModelInstance instance = modelInstanceFactory.Create(model);
+
+// Each frame, in an update:
+instance.Animate(model.Animations[0], frameClock.ElapsedTime);
+
+// When drawing, at a placement such as Matrix4x4.CreateTranslation(position). A file can have no scenes.
+ImmutableArray<int> meshNodes = model.Scenes.IsEmpty ? [] : model.Scenes[model.DefaultScene ?? 0].MeshNodes;
+foreach (int node in meshNodes)
+{
+    Matrix4x4 world;
+    Winding winding;
+    if (model.Nodes[node].Skin is { } skin)
+    {
+        // The joint matrices place the mesh in the model; the shader applies world after them.
+        world = placement;
+        winding = instance.GetSkinWinding(skin, placement);
+        renderPass.BindVertexStorageBuffer(instance.GetJointBuffer(skin));
+    }
+    else
+    {
+        world = instance.WorldMatrices[node] * placement;
+        winding = ModelInstance.GetWinding(world);
+    }
+
+    // Push world as the shader's world matrix, and bind the pipeline for winding.
+}
+```
+
+- `Create` computes the matrices in the pose the file gives the model and uploads the joints, so a new instance can be drawn before it is animated.
+- `Animate` resets the pose, applies the animation at the elapsed time looped over its `Duration`, and updates the matrices. It throws `ArgumentException` for an animation of another model, before changing the pose. The loop is computed in double, so a long-running game does not lose its place in the loop.
+- `UpdateMatrices` computes the matrices from `Pose` as it is and uploads the joints. Use it after editing `Pose` yourself, for example to play an animation once, blend two animations, or turn a head toward a target.
+- The game calls `Animate` or `UpdateMatrices` from its own update; the instance does not update itself. Uploads from every instance go into the frame's one copy pass.
+- The instance owns its joint buffers, not the model. Dispose every instance, then the model. A disposed instance throws `ObjectDisposedException` from `Animate`, `UpdateMatrices` and `GetJointBuffer`.
+
 ## Poses and animation
 
-A `ModelPose` holds the local transform of every node for one instance of a model. Two characters that share a `Model` use two poses. After construction nothing in it allocates.
+A `ModelPose` holds the local transform of every node for one instance of a model. `ModelInstance.Pose` is one; a game that keeps its own matrices uses a pose directly. Two characters that share a `Model` use two poses. After construction nothing in it allocates.
 
 ```csharp
 ModelPose pose = new(model);
@@ -101,13 +140,15 @@ glTF front faces wind counter-clockwise, while Pixely's pipeline default is cloc
 - A skinned draw has no single world matrix. When every joint matrix has a negative determinant it winds clockwise, when every one is positive counter-clockwise. When the signs differ, its triangles wind both ways and it needs `CullMode.None`. This is a heuristic: blending joints that turn very differently, such as half turns about different axes, can flip a triangle even when every sign agrees. A typical rig blends joints that are close, and an app that must be exact draws with `CullMode.None`.
 - A double-sided material needs `CullMode.None` in any case.
 
+`ModelInstance.GetWinding(world)` and `instance.GetSkinWinding(skin, placement)` apply these rules and return a `Winding`: `CounterClockwise`, `Clockwise`, or `Mixed` for `CullMode.None`. The placement is the transform a skinned shader applies after the joints, to draw one instance at several places.
+
 ## Checks and repairs
 
 Model files are untrusted data. The loader checks everything it uses: references between objects, every accessor against its buffer view, component types for each use, finite numbers, index ranges, attribute counts, the node graph (one parent at most, no cycles), skins against the meshes they deform, and animation keyframes. It is not a full conformance check; the [glTF Validator](https://github.khronos.org/glTF-Validator/) is.
 
 Size arithmetic is checked, and allocations are bounded before they happen:
 
-- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together, the accessors, the vertex, skin and index arrays built from them and the skins' inverse bind matrices, is at most 16 times the file's size, so accessors that alias the same bytes cannot multiply it.
+- Each accessor is converted once per use, and primitives and channels that read the same accessors share the result. Everything converted together, the accessors, the vertex, skin and index arrays built from them, the skins' inverse bind matrices and the scenes' mesh nodes, is at most 16 times the file's size, so accessors that alias the same bytes, or scenes that share one hierarchy, cannot multiply it.
 - An image is checked against its `mimeType` and its size is read from its PNG or JPEG header before it is decoded. Each side must be between 1 and 16,384 pixels, and the images of a model together at most 16,384 × 16,384 pixels, which decode to 1 GiB. A compressed image can be much smaller than its pixels, so a small file can still use that much: while the largest image uploads, its decoded pixels, its transfer buffer and its texture each take up to 1 GiB. Whether the GPU accepts a texture that large depends on the device.
 - 16-bit indices cannot be 65,535, which graphics APIs can read as a primitive restart. glTF forbids it too.
 
@@ -136,4 +177,4 @@ These are ignored: metallic-roughness, normal, occlusion and emissive textures a
 
 ## Memory
 
-The returned `Model` keeps nodes, scenes, skins, materials and animation keyframes. The file's bytes, the converted vertex and index arrays and the encoded images are released when `Load` returns. While `Load` runs it holds the file, its parsed JSON, the converted arrays, one decoded image at a time, and the upload transfer buffers. In the browser, the `.glb` also stays in the in-memory file system for the app's lifetime ([content-distribution.md](content-distribution.md)).
+The returned `Model` keeps nodes, scenes, skins, materials and animation keyframes. The file's bytes, the converted vertex and index arrays and the encoded images are released when `Load` returns. A `ModelInstance` holds one local transform and one world matrix per node, and one joint matrix per joint of each skin, which it also keeps in a storage buffer. While `Load` runs it holds the file, its parsed JSON, the converted arrays, one decoded image at a time, and the upload transfer buffers. In the browser, the `.glb` also stays in the in-memory file system for the app's lifetime ([content-distribution.md](content-distribution.md)).

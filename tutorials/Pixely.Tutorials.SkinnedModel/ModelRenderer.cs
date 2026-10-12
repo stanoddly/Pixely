@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Pixely.Content;
@@ -17,7 +18,16 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
     private static readonly Vector3 _cameraTarget = new(0, 0.75f, 0);
     private static readonly Vector3 _lightDirection = Vector3.Normalize(new Vector3(-0.4f, -0.6f, -1f));
 
+    // Left: mirrored on X, so it draws with clockwise front faces. Middle: as loaded. Right: drawn as if double-sided, with no culling.
+    private static readonly ModelCopy[] _copies =
+    [
+        new(Matrix4x4.CreateScale(-1, 1, 1) * Matrix4x4.CreateTranslation(-1.4f, 0, 0), ForceDoubleSided: false),
+        new(Matrix4x4.Identity, ForceDoubleSided: false),
+        new(Matrix4x4.CreateTranslation(1.4f, 0, 0), ForceDoubleSided: true)
+    ];
+
     private readonly AnimatedModel _animatedModel;
+    private readonly ImmutableArray<int> _meshNodes;
     private readonly GpuDevice _gpuDevice;
     private readonly Pipelines _staticPipelines;
     private readonly Pipelines _skinnedPipelines;
@@ -25,9 +35,10 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
     private readonly Dictionary<SamplerConfig, Sampler> _samplers = new();
     private Texture? _depthBuffer;
 
-    private ModelRenderer(AnimatedModel animatedModel, GpuDevice gpuDevice, Pipelines staticPipelines, Pipelines skinnedPipelines, Texture whiteTexture)
+    private ModelRenderer(AnimatedModel animatedModel, ImmutableArray<int> meshNodes, GpuDevice gpuDevice, Pipelines staticPipelines, Pipelines skinnedPipelines, Texture whiteTexture)
     {
         _animatedModel = animatedModel;
+        _meshNodes = meshNodes;
         _gpuDevice = gpuDevice;
         _staticPipelines = staticPipelines;
         _skinnedPipelines = skinnedPipelines;
@@ -56,31 +67,31 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
             .SetDepthBuffer(_depthBuffer, _depthSettings)
             .Build();
 
-        Model model = _animatedModel.Model;
-        for (int copy = 0; copy < _animatedModel.Copies.Length; copy++)
+        ModelInstance instance = _animatedModel.Instance;
+        Model model = instance.Model;
+        foreach (ModelCopy copy in _copies)
         {
-            ModelCopy modelCopy = _animatedModel.Copies[copy];
-            foreach (int nodeIndex in _animatedModel.MeshNodes)
+            foreach (int nodeIndex in _meshNodes)
             {
                 ModelNode node = model.Nodes[nodeIndex];
-                Matrix4x4 world = _animatedModel.World[nodeIndex] * modelCopy.Placement;
+                int? skin = node.Skin;
+                // glTF ignores the transform of a skinned mesh's own node, because its joint matrices already place it in the scene.
+                // The skinned shader applies the placement after the joints.
+                Matrix4x4 world = skin is null ? instance.WorldMatrices[nodeIndex] * copy.Placement : copy.Placement;
+                Winding winding = skin is null ? ModelInstance.GetWinding(world) : instance.GetSkinWinding(skin.Value, copy.Placement);
                 commandBuffer.PushVertexUniformData(0, new VertexConstants(viewProjection, world, CreateNormalMatrix(world)));
 
                 foreach (ModelPrimitive primitive in model.Meshes[node.Mesh!.Value].Primitives)
                 {
                     ModelMaterial material = primitive.Material is { } materialIndex ? model.Materials[materialIndex] : ModelMaterial.Default;
-                    bool skinned = node.Skin is not null;
-                    Winding winding = skinned
-                        ? _animatedModel.GetWinding(copy, node.Skin!.Value)
-                        : AnimatedModel.GetWinding(world);
-                    bool doubleSided = material.DoubleSided || modelCopy.ForceDoubleSided;
+                    bool doubleSided = material.DoubleSided || copy.ForceDoubleSided;
 
-                    renderPass.BindGraphicsPipeline((skinned ? _skinnedPipelines : _staticPipelines).Select(doubleSided, winding));
+                    renderPass.BindGraphicsPipeline((skin is null ? _staticPipelines : _skinnedPipelines).Select(doubleSided, winding));
                     renderPass.BindVertexBuffer(0, primitive.Vertices);
-                    if (skinned)
+                    if (skin is not null)
                     {
                         renderPass.BindVertexBuffer(1, primitive.Skin!);
-                        renderPass.BindVertexStorageBuffer(_animatedModel.GetJointBuffer(copy, node.Skin!.Value));
+                        renderPass.BindVertexStorageBuffer(instance.GetJointBuffer(skin.Value));
                     }
 
                     renderPass.BindIndexBuffer(primitive.Indices);
@@ -130,8 +141,15 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
         Pipelines staticPipelines = Pipelines.Build(graphicsPipelineBuilder, "shaders/model_static", skinned: false);
         Pipelines skinnedPipelines = Pipelines.Build(graphicsPipelineBuilder, "shaders/model_skinned", skinned: true);
         Texture whiteTexture = gpuMemorySystem.CreateTexture(new RawImage([255, 255, 255, 255], new ShortSize(1, 1), PixelFormat.Abgr8888), TextureFormat.R8G8B8A8UnormSrgb);
-        return new ModelRenderer(animatedModel, gpuDevice, staticPipelines, skinnedPipelines, whiteTexture);
+        // The default scene, or the first one when the file names none, as glTF viewers do.
+        Model model = animatedModel.Instance.Model;
+        ImmutableArray<int> meshNodes = model.Scenes.IsEmpty ? [] : model.Scenes[model.DefaultScene ?? 0].MeshNodes;
+        return new ModelRenderer(animatedModel, meshNodes, gpuDevice, staticPipelines, skinnedPipelines, whiteTexture);
     }
+
+    // One copy of the model on screen: where it stands, and whether it is drawn as if its materials were double-sided. The copies
+    // share one pose, since they show the same model at the same time.
+    private sealed record ModelCopy(Matrix4x4 Placement, bool ForceDoubleSided);
 
     // One program in the three states a draw can need: culling back faces that wind either way, or no culling.
     private sealed record Pipelines(GraphicsPipeline CounterClockwise, GraphicsPipeline Clockwise, GraphicsPipeline NoCulling)

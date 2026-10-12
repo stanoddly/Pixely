@@ -9,6 +9,7 @@ public static class ModelLoadingExtensions
     {
         services.UseGpu();
         services.AddSingleton<IModelLoader, ModelLoader>();
+        services.AddSingleton<ModelInstanceFactory>();
         return services;
     }
 }
