@@ -20,10 +20,11 @@ public enum AnimationInterpolation
 /// <summary>A keyframe animation of node transforms. Play it with <see cref="ModelPose.Apply"/>.</summary>
 public sealed class ModelAnimation
 {
-    internal ModelAnimation(string? name, ImmutableArray<AnimationChannel> channels)
+    internal ModelAnimation(string? name, ImmutableArray<AnimationChannel> channels, ImmutableArray<ModelNode> nodes)
     {
         Name = name;
         Channels = channels;
+        Nodes = nodes;
         Duration = channels.IsEmpty ? 0f : channels.Max(channel => channel.Times[^1]);
     }
 
@@ -33,6 +34,10 @@ public sealed class ModelAnimation
     public float Duration { get; }
 
     public ImmutableArray<AnimationChannel> Channels { get; }
+
+    // The nodes of the model the animation belongs to, so a pose can reject an animation of another model, whose channels index
+    // other nodes.
+    internal ImmutableArray<ModelNode> Nodes { get; }
 }
 
 /// <summary>Animates one transform component of one node.</summary>
@@ -111,7 +116,16 @@ public sealed class AnimationChannel
                 float u2 = u * u;
                 float u3 = u2 * u;
                 Vector4 result = (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
-                return Path == AnimationPath.Rotation ? Vector4.Normalize(result) : result;
+
+                // Finite keyframes can still give a result with no direction or out of float range: two keys of opposite sign
+                // with zero tangents meet at a zero quaternion, and huge tangents overflow. The nearer keyframe stands in then.
+                float length = result.Length();
+                if (!float.IsFinite(length) || (Path == AnimationPath.Rotation && length < 1e-6f))
+                {
+                    return u < 0.5f ? p0 : p1;
+                }
+
+                return Path == AnimationPath.Rotation ? result / length : result;
             }
         }
     }

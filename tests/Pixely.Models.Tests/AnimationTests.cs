@@ -38,7 +38,7 @@ public class AnimationTests
     public void Sample_SingleKeyframe_AlwaysGivesItsValue()
     {
         AnimationChannel channel = new(0, AnimationPath.Translation, AnimationInterpolation.Linear, [0], [3, 0, 0]);
-        ModelAnimation animation = new(null, [channel]);
+        ModelAnimation animation = new(null, [channel], []);
 
         Assert.That(animation.Duration, Is.EqualTo(0));
         Assert.That(channel.Sample(1), Is.EqualTo(new Vector4(3, 0, 0, 0)));
@@ -223,10 +223,11 @@ public class AnimationTests
     public void Apply_WritesTheSampledComponentOnly()
     {
         ModelNode node = new(null, null, [], new NodeTransform(Vector3.Zero, Quaternion.Identity, new Vector3(2)), null, null);
-        ModelPose pose = new([node], [0]);
+        ImmutableArray<ModelNode> nodes = [node];
+        ModelPose pose = new(nodes, [0]);
         AnimationChannel channel = new(0, AnimationPath.Translation, AnimationInterpolation.Linear, [0, 1], [0, 0, 0, 2, 0, 0]);
 
-        pose.Apply(new ModelAnimation(null, [channel]), 0.5f);
+        pose.Apply(new ModelAnimation(null, [channel], nodes), 0.5f);
 
         Assert.That(pose.LocalTransforms[0], Is.EqualTo(new NodeTransform(Vector3.UnitX, Quaternion.Identity, new Vector3(2))));
         pose.Reset();
@@ -236,9 +237,55 @@ public class AnimationTests
     [Test]
     public void Apply_NaNTime_Throws()
     {
-        ModelPose pose = new([new ModelNode(null, null, [], NodeTransform.Identity, null, null)], [0]);
+        ImmutableArray<ModelNode> nodes = [new ModelNode(null, null, [], NodeTransform.Identity, null, null)];
+        ModelPose pose = new(nodes, [0]);
 
-        Assert.Throws<ArgumentException>(() => pose.Apply(new ModelAnimation(null, ImmutableArray<AnimationChannel>.Empty), float.NaN));
+        Assert.Throws<ArgumentException>(() => pose.Apply(new ModelAnimation(null, ImmutableArray<AnimationChannel>.Empty, nodes), float.NaN));
+    }
+
+    [Test]
+    public void Apply_AnimationOfAnotherModel_Throws()
+    {
+        // Equal nodes in another array: the check is identity, because another model's channels index other nodes.
+        ModelNode node = new(null, null, [], NodeTransform.Identity, null, null);
+        ModelPose pose = new([node], [0]);
+        AnimationChannel channel = new(0, AnimationPath.Translation, AnimationInterpolation.Linear, [0, 1], [0, 0, 0, 2, 0, 0]);
+
+        Assert.Throws<ArgumentException>(() => pose.Apply(new ModelAnimation(null, [channel], [node]), 0.5f));
+    }
+
+    [TestCase(0.25f, 1f)]
+    [TestCase(0.75f, -1f)]
+    public void Sample_CubicRotationBetweenOppositeKeys_UsesTheNearerKey(float time, float expectedW)
+    {
+        // q and -q are the same rotation; with zero tangents the spline passes through a zero quaternion halfway, and near it.
+        float[] values = [0, 0, 0, 0, /**/ 0, 0, 0, 1, /**/ 0, 0, 0, 0, /**/ 0, 0, 0, 0, /**/ 0, 0, 0, -1, /**/ 0, 0, 0, 0];
+        AnimationChannel channel = new(0, AnimationPath.Rotation, AnimationInterpolation.CubicSpline, [0, 1], values);
+
+        Vector4 result = channel.Sample(time);
+
+        Assert.That(float.IsFinite(result.Length()), Is.True);
+        Assert.That(result.W, Is.EqualTo(expectedW).Within(1e-6f));
+    }
+
+    [Test]
+    public void Sample_CubicRotationThroughZero_IsFinite()
+    {
+        float[] values = [0, 0, 0, 0, /**/ 0, 0, 0, 1, /**/ 0, 0, 0, 0, /**/ 0, 0, 0, 0, /**/ 0, 0, 0, -1, /**/ 0, 0, 0, 0];
+        AnimationChannel channel = new(0, AnimationPath.Rotation, AnimationInterpolation.CubicSpline, [0, 1], values);
+
+        Assert.That(float.IsFinite(channel.Sample(0.5f).Length()), Is.True);
+    }
+
+    [Test]
+    public void Sample_CubicWithOverflowingTangents_UsesTheNearerKey()
+    {
+        // Finite tangents scaled by a keyframe delta of 2 overflow to infinity.
+        float[] values = [0, 0, 0, /**/ 1, 0, 0, /**/ float.MaxValue, 0, 0, /**/ float.MaxValue, 0, 0, /**/ 2, 0, 0, /**/ 0, 0, 0];
+        AnimationChannel channel = new(0, AnimationPath.Translation, AnimationInterpolation.CubicSpline, [0, 2], values);
+
+        Assert.That(channel.Sample(0.5f), Is.EqualTo(new Vector4(1, 0, 0, 0)));
+        Assert.That(channel.Sample(1.5f), Is.EqualTo(new Vector4(2, 0, 0, 0)));
     }
 
     private static GlbBuilder AddAnimatedNode(float[] times, ReadOnlySpan<byte> output, int outputComponentType, string outputType, string path, string interpolation)

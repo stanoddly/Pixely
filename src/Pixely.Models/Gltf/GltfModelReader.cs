@@ -62,7 +62,7 @@ internal static class GltfModelReader
 
         ImmutableArray<MaterialData> materials = ReadMaterials(root);
         ImmutableArray<ReadOnlyMemory<byte>> images = ReadImages(root, materials, accessors);
-        ImmutableArray<ModelAnimation> animations = ReadAnimations(root.Animations ?? [], nodeDtos, accessors);
+        ImmutableArray<ModelAnimation> animations = ReadAnimations(root.Animations ?? [], nodeDtos, nodes, accessors);
 
         return new ModelData(nodes, parentFirstOrder, scenes, defaultScene, meshes, materials, images, skins, animations);
     }
@@ -843,7 +843,7 @@ internal static class GltfModelReader
         return [.. images];
     }
 
-    private static ImmutableArray<ModelAnimation> ReadAnimations(GltfAnimationDto[] animationDtos, GltfNodeDto[] nodes, AccessorReader accessors)
+    private static ImmutableArray<ModelAnimation> ReadAnimations(GltfAnimationDto[] animationDtos, GltfNodeDto[] nodes, ImmutableArray<ModelNode> modelNodes, AccessorReader accessors)
     {
         ImmutableArray<ModelAnimation>.Builder animations = ImmutableArray.CreateBuilder<ModelAnimation>(animationDtos.Length);
         // Channels that read the same accessors share their checked keyframes, so each accessor is checked and repaired once.
@@ -904,7 +904,7 @@ internal static class GltfModelReader
                 channels.Add(ReadChannel(samplers[samplerIndex], $"{animationName}.samplers[{samplerIndex}]", node, path, accessors, times, outputs));
             }
 
-            animations.Add(new ModelAnimation(animation.Name, channels.ToImmutable()));
+            animations.Add(new ModelAnimation(animation.Name, channels.ToImmutable(), modelNodes));
         }
 
         return animations.MoveToImmutable();

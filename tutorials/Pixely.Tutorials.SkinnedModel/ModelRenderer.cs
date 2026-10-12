@@ -64,8 +64,7 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
             {
                 ModelNode node = model.Nodes[nodeIndex];
                 Matrix4x4 world = _animatedModel.World[nodeIndex] * modelCopy.Placement;
-                Matrix4x4.Invert(world, out Matrix4x4 inverseWorld);
-                commandBuffer.PushVertexUniformData(0, new VertexConstants(viewProjection, world, Matrix4x4.Transpose(inverseWorld)));
+                commandBuffer.PushVertexUniformData(0, new VertexConstants(viewProjection, world, CreateNormalMatrix(world)));
 
                 foreach (ModelPrimitive primitive in model.Meshes[node.Mesh!.Value].Primitives)
                 {
@@ -73,7 +72,7 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
                     bool skinned = node.Skin is not null;
                     Winding winding = skinned
                         ? _animatedModel.GetWinding(copy, node.Skin!.Value)
-                        : world.GetDeterminant() < 0 ? Winding.Clockwise : Winding.CounterClockwise;
+                        : AnimatedModel.GetWinding(world);
                     bool doubleSided = material.DoubleSided || modelCopy.ForceDoubleSided;
 
                     renderPass.BindGraphicsPipeline((skinned ? _skinnedPipelines : _staticPipelines).Select(doubleSided, winding));
@@ -97,6 +96,22 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
                 }
             }
         }
+    }
+
+    // Normals transform by the inverse transpose of the upper 3x3, which is its cofactor matrix divided by its determinant. The
+    // cofactor matrix exists even when the inverse does not, such as for a node scaled to zero on one axis, and multiplying by the
+    // determinant's sign instead of dividing keeps mirrored normals pointing outward. The shader normalizes the result, the same
+    // as model_skinned.slang does for joints.
+    private static Matrix4x4 CreateNormalMatrix(Matrix4x4 world)
+    {
+        Vector3 r0 = new(world.M11, world.M12, world.M13);
+        Vector3 r1 = new(world.M21, world.M22, world.M23);
+        Vector3 r2 = new(world.M31, world.M32, world.M33);
+        float sign = Vector3.Dot(r0, Vector3.Cross(r1, r2)) < 0 ? -1 : 1;
+        Vector3 c0 = sign * Vector3.Cross(r1, r2);
+        Vector3 c1 = sign * Vector3.Cross(r2, r0);
+        Vector3 c2 = sign * Vector3.Cross(r0, r1);
+        return new Matrix4x4(c0.X, c0.Y, c0.Z, 0, c1.X, c1.Y, c1.Z, 0, c2.X, c2.Y, c2.Z, 0, 0, 0, 0, 1);
     }
 
     private Sampler GetSampler(SamplerConfig config)

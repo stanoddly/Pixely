@@ -45,6 +45,11 @@ public sealed class ModelPose
             throw new ArgumentException("The time is NaN.", nameof(time));
         }
 
+        if (animation.Nodes != _nodes)
+        {
+            throw new ArgumentException("The animation belongs to another model than the pose.", nameof(animation));
+        }
+
         foreach (AnimationChannel channel in animation.Channels)
         {
             Vector4 value = channel.Sample(time);

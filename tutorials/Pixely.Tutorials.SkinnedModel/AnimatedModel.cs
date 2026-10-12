@@ -6,7 +6,7 @@ using Pixely.Models;
 namespace Pixely.Tutorials.SkinnedModel;
 
 // How a draw decides its front face. A skinned mesh has no single world matrix, so its winding follows the signs of its joint
-// matrices' determinants; when they differ, triangles wind both ways and no face can be culled. Blending very different joints can
+// matrices' determinants; when they differ, or one is zero, triangles wind both ways or not at all and no face can be culled. Blending very different joints can
 // still flip a triangle when every sign agrees, which a typical rig does not do.
 public enum Winding
 {
@@ -84,10 +84,10 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
         if (!Model.Animations.IsEmpty)
         {
             ModelAnimation animation = Model.Animations[0];
-            float elapsed = (float)_frameClock.ElapsedTime.TotalSeconds;
-            // An animation whose keyframes are all at time 0 has no duration to loop over.
-            float time = animation.Duration > 0 ? elapsed % animation.Duration : 0;
-            _pose.Apply(animation, time);
+            // An animation whose keyframes are all at time 0 has no duration to loop over. The modulo runs in double, because a
+            // float holds a long elapsed time too coarsely to find the position within one loop.
+            double time = animation.Duration > 0 ? _frameClock.ElapsedTime.TotalSeconds % animation.Duration : 0;
+            _pose.Apply(animation, (float)time);
         }
 
         _pose.ComputeWorldMatrices(_world);
@@ -100,14 +100,17 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
                 ModelPose.ComputeJointMatrices(Model.Skins[skin], _world, joints);
 
                 int positive = 0;
+                int negative = 0;
                 for (int i = 0; i < joints.Length; i++)
                 {
                     // The placement applies after the skin, so it moves or mirrors the whole skinned mesh.
                     joints[i] *= Copies[copy].Placement;
-                    positive += joints[i].GetDeterminant() > 0 ? 1 : 0;
+                    Winding jointWinding = GetWinding(joints[i]);
+                    positive += jointWinding == Winding.CounterClockwise ? 1 : 0;
+                    negative += jointWinding == Winding.Clockwise ? 1 : 0;
                 }
 
-                _copies[copy].Windings[skin] = positive == joints.Length ? Winding.CounterClockwise : positive == 0 ? Winding.Clockwise : Winding.Mixed;
+                _copies[copy].Windings[skin] = positive == joints.Length ? Winding.CounterClockwise : negative == joints.Length ? Winding.Clockwise : Winding.Mixed;
                 _gpuMemorySystem.UpdateStorageBuffer<Matrix4x4>(_copies[copy].JointBuffers[skin], joints);
             }
         }
@@ -148,6 +151,14 @@ public sealed class AnimatedModel : IUpdatable, IDisposable
             model.Dispose();
             throw;
         }
+    }
+
+    // A transform with a zero determinant collapses the mesh onto a plane or less, where faces have no winding to cull by. glTF
+    // allows it, and animations scale nodes to zero to hide them.
+    public static Winding GetWinding(Matrix4x4 transform)
+    {
+        float determinant = transform.GetDeterminant();
+        return determinant > 0 ? Winding.CounterClockwise : determinant < 0 ? Winding.Clockwise : Winding.Mixed;
     }
 
     private static ImmutableArray<int> CollectMeshNodes(Model model)

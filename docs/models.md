@@ -77,7 +77,8 @@ gpuMemorySystem.UpdateStorageBuffer<Matrix4x4>(jointBuffer, joints);
 - `Reset` returns every node to the transform the file gives it. `Apply` only sets the components the animation animates, so without `Reset` a node keeps what an earlier animation set.
 - `Apply` clamps a time outside the animation to its first or last keyframe. Looping is the caller's choice. `Duration` is the last keyframe time over all channels, so it is 0 only when every keyframe is at time 0.
 - `LocalTransforms` can be edited directly, for example to turn a head toward a target after `Apply`.
-- `STEP`, `LINEAR` and `CUBICSPLINE` interpolation follow the glTF specification. Rotations interpolate along the shorter arc.
+- `STEP`, `LINEAR` and `CUBICSPLINE` interpolation follow the glTF specification. Rotations interpolate along the shorter arc. Where a `CUBICSPLINE` result has no direction or overflows, such as halfway between two keys of opposite sign with zero tangents, the nearer keyframe's value is used.
+- `Apply` throws `ArgumentException` for an animation of another model, because its channels index that model's nodes.
 
 ## Matrices
 
