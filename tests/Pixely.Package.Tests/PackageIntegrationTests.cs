@@ -34,6 +34,7 @@ public class PackageIntegrationTests
         "Pixely.DependencyInjection",
         "Pixely.Events",
         "Pixely.Logging",
+        "Pixely.Models",
         "Pixely.Observations",
         "Pixely.ShaderCommon",
         "Pixely.Ui",

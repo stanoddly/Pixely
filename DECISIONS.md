@@ -2,6 +2,20 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-12: 3D models are binary glTF read in managed code
+
+`Pixely.Models` loads binary glTF 2.0 (`.glb`) at runtime with its own reader: `System.Text.Json` with a source-generated context for the JSON chunk, and bounds-checked accessor reads for the binary chunk. Images inside the file are decoded through the new `IImageDecoder`. Pixely ships no model shader.
+
+- glTF defines skins and keyframe animation, and its binary buffers need little conversion before upload.
+- A managed reader adds no native library, so the desktop, NativeAOT and the browser share one code path. Assimp or another native importer would need its own archive for the browser.
+- A primitive has two vertex buffers: the existing `PositionTextureNormalVertex` in slot 0, and `SkinVertex` (joints and weights) in slot 1 only for skinned primitives. Static and skinned primitives share one type, and static ones carry no unused joint data. A pipeline declares its slots, so static and skinned primitives need different pipelines.
+- `IImageDecoder` is a separate interface instead of a new member of `IImageLoader`, so apps that implement `IImageLoader` keep compiling. `SdlImageDecoder` checks the decoded size and row pitch, and `CreateTexture(Image, TextureFormat)` checks the image before upload, so a malformed image fails instead of being truncated.
+- Base color textures are uploaded as `R8G8B8A8UnormSrgb`, as glTF requires. `CreateTexture(Image)` keeps `R8G8B8A8Unorm`.
+- The loader checks what it uses for memory safety and correct output, and repairs faults that exporters commonly write and that leave the data usable: weights that do not sum to 1, a joint repeated in one vertex, normals and rotations that are not unit length. Rejecting them would fail models from common tools. It is not a conformance validator.
+- Matrices stay `System.Numerics` row-vector matrices, consistent with the rest of Pixely; reading glTF's column-major numbers in order gives them directly.
+
+Cost: no `.gltf` files, morph targets, sparse accessors or extensions that a file requires. A game writes its own model shaders and picks the front face per draw, because glTF is right-handed and counter-clockwise while Pixely's pipeline default is clockwise and `PerspectiveCamera` is left-handed. Images decode through SDL3_image, so the browser decodes only the formats its `SDL3_image.a` was built with. The loader keeps no cache.
+
 ## 2026-10-06: Uploads are waited for on V3DV
 
 With `PixelyConfig.UploadWait` on, `GpuMemorySystem.Submit()` submits the uploads with `SDL_SubmitGPUCommandBufferAndAcquireFence` and waits on the fence, so a render coordinator submits the frame only after its uploads have finished. `Automatic`, the default, turns it on when the device's driver name (`SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING`) starts with `V3DV`, and off everywhere else. `PIXELY_UPLOAD_WAIT` overrides it.

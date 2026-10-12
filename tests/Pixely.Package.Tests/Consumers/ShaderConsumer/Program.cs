@@ -14,6 +14,7 @@ string[] runtimeAssemblies =
     "Pixely.DependencyInjection",
     "Pixely.Events",
     "Pixely.Logging",
+    "Pixely.Models",
     "Pixely.ShaderCommon",
     "Pixely.Utils"
 ];

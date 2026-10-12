@@ -325,18 +325,44 @@ internal sealed class CopyPass
 
     public Texture CreateTexture(Image image)
     {
-        SdlError.Clear();
+        return CreateTexture(image, TextureFormat.R8G8B8A8Unorm);
+    }
 
-        // TODO: check parameters
+    public Texture CreateTexture(Image image, TextureFormat format)
+    {
+        // Both formats take the image's R, G, B, A bytes as they are; the sRGB one only changes how sampling reads them.
+        if (format != TextureFormat.R8G8B8A8Unorm && format != TextureFormat.R8G8B8A8UnormSrgb)
+        {
+            throw new ArgumentOutOfRangeException(nameof(format), format, $"Only {TextureFormat.R8G8B8A8Unorm} and {TextureFormat.R8G8B8A8UnormSrgb} can be created from an image.");
+        }
+
+        // Pixely labels R, G, B, A bytes as Abgr8888 (SdlImageDecoder) and as Rgba8888 (RawImage producers).
+        if (image.PixelFormat != PixelFormat.Abgr8888 && image.PixelFormat != PixelFormat.Rgba8888)
+        {
+            throw new ArgumentException($"The image's pixel format is {image.PixelFormat}; only 4-byte R, G, B, A pixels can be uploaded.", nameof(image));
+        }
+
         ReadOnlySpan<byte> imageData = image.Data;
         (ushort width, ushort height) = image.Size;
+
+        if (width == 0 || height == 0)
+        {
+            throw new ArgumentException($"The image is {width}x{height} pixels; neither side can be 0.", nameof(image));
+        }
+
+        if (imageData.Length != width * height * 4)
+        {
+            throw new ArgumentException($"The image has {imageData.Length} bytes of data, but {width}x{height} pixels need {width * height * 4}.", nameof(image));
+        }
+
+        SdlError.Clear();
 
         unsafe
         {
             SDL_GPUTextureCreateInfo sdlGpuTextureCreateInfo = new SDL_GPUTextureCreateInfo
             {
                 type = SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D,
-                format = SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                format = (SDL_GPUTextureFormat)format,
                 width = (uint)width,
                 height = (uint)height,
                 layer_count_or_depth = 1,
@@ -356,7 +382,7 @@ internal sealed class CopyPass
                 throw;
             }
 
-            Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), TextureFormat.R8G8B8A8Unorm, TextureUsage.Sampler);
+            Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), format, TextureUsage.Sampler);
             _gpuDevice.RegisterTexture(texture);
             return texture;
         }

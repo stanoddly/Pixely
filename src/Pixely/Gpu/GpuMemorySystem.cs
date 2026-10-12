@@ -101,6 +101,12 @@ public class GpuMemorySystem: ICopyPass
         return GetOrCreateCopyPass().CreateTexture(image);
     }
 
+    /// <summary>Creates a sampled texture with <paramref name="format"/>, <see cref="TextureFormat.R8G8B8A8Unorm"/> or <see cref="TextureFormat.R8G8B8A8UnormSrgb"/>, from 4-byte R, G, B, A pixels.</summary>
+    public Texture CreateTexture(Image image, TextureFormat format)
+    {
+        return GetOrCreateCopyPass().CreateTexture(image, format);
+    }
+
     public TextureArray CreateTextureArray(ReadOnlySpan<Image> images)
     {
         return GetOrCreateCopyPass().CreateTextureArray(images);
