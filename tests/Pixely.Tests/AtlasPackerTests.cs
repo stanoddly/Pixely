@@ -479,7 +479,7 @@ public class AtlasPackerTests
         SpriteAtlasBuilder.Create(new SpriteAtlasBuilderConfig(["sprites"]), new StubTextureLoader(), imageLoader, contentSource, new SpriteAssetStorage());
 
         Assert.That(imageLoader.Images, Has.Count.EqualTo(3));
-        Assert.That(imageLoader.Images, Has.All.Matches<DisposalTrackingImage>(image => image.IsDisposed));
+        Assert.That(imageLoader.Images, Has.All.Matches<DisposalTrackingImage>(image => image is { IsDisposed: true }));
     }
 
     private static bool RectanglesOverlap(ShortRectangle a, ShortRectangle b)
