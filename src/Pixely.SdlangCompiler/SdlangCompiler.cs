@@ -937,7 +937,7 @@ public class SdlangCompiler
         @"(?:@\w+\b(?:\([^()]*\))?\s*)+(?=\w+\s*:)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private static readonly Regex WebGpuInterpolatePattern = new(@"@interpolate\([^()]*\)\s*", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex WebGpuInterpolatePattern = new(@"@interpolate\([^()]*\)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // When a shader passes its stage input struct to a helper function, Slang keeps the source struct for the helper and
     // copies the interpolation modifiers onto its members, which have no @location. WGSL allows @interpolate only with

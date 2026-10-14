@@ -1126,11 +1126,9 @@ public class SdlangCompilerTests
 
         string wgsl = ReadGeneratedWgsl(shaderPath, "fragment");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(wgsl, Does.Match(@"@interpolate\(flat\) @location\(0\)"));
-            Assert.That(wgsl, Does.Not.Match(@"@interpolate\([^()]*\)\s+\w+\s*:"), "every @interpolate is followed by @location");
-        });
+        List<string> interpolated = wgsl.Split('\n').Where(line => line.Contains("@interpolate", StringComparison.Ordinal)).ToList();
+
+        Assert.That(interpolated, Is.Not.Empty.And.All.Contain("@location("));
     }
 
     private string ReadGeneratedWgsl(string shaderPath, string? stage)

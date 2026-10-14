@@ -24,6 +24,31 @@ public class WebGpuInterpolationRewriteTests
         });
     }
 
+    // Slang emits this for a storage buffer whose element struct also carries nointerpolation.
+    [Test]
+    public void RemovesInterpolateBeforeAnotherAttribute()
+    {
+        string wgsl = "    @interpolate(flat) @align(16) color_0 : vec4<f32>,";
+
+        Assert.That(SdlangCompiler.RemoveWebGpuInterpolationWithoutLocation(wgsl), Is.EqualTo("     @align(16) color_0 : vec4<f32>,"));
+    }
+
+    [Test]
+    public void KeepsTheMemberAfterACommentedInterpolate()
+    {
+        string wgsl = """
+            struct S_0
+            {
+                // @interpolate(flat)
+                value_0 : f32,
+            };
+            """;
+
+        string rewritten = SdlangCompiler.RemoveWebGpuInterpolationWithoutLocation(wgsl);
+
+        Assert.That(rewritten, Does.Contain("\n    value_0 : f32,"));
+    }
+
     [Test]
     public void RemovesInterpolateFromParameterWithoutLocation()
     {
@@ -31,7 +56,7 @@ public class WebGpuInterpolationRewriteTests
 
         string rewritten = SdlangCompiler.RemoveWebGpuInterpolationWithoutLocation(wgsl);
 
-        Assert.That(rewritten, Is.EqualTo("fn shade_0(color_0 : vec4<f32>, @builtin(position) position_0 : vec4<f32>) -> vec4<f32>"));
+        Assert.That(rewritten, Is.EqualTo("fn shade_0( color_0 : vec4<f32>, @builtin(position) position_0 : vec4<f32>) -> vec4<f32>"));
     }
 
     [Test]
