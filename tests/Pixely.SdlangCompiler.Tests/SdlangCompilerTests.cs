@@ -148,6 +148,36 @@ public class SdlangCompilerTests
                                                             }
                                                             """;
 
+    // Slang keeps VertexToFragment for the helper and copies nointerpolation onto its members without @location.
+    private const string FragmentShaderPassingFlatInputToHelper = """
+                                                                  struct VertexToFragment {
+                                                                      float4 position : SV_Position;
+                                                                      nointerpolation float4 color : TEXCOORD0;
+                                                                  };
+
+                                                                  struct VertexInput {
+                                                                      float3 position : POSITION;
+                                                                      float4 color : COLOR0;
+                                                                  };
+
+                                                                  float4 shade(VertexToFragment input) {
+                                                                      return input.color;
+                                                                  }
+
+                                                                  [shader("vertex")]
+                                                                  VertexToFragment vertexMain(VertexInput input) {
+                                                                      VertexToFragment output;
+                                                                      output.position = float4(input.position, 1.0);
+                                                                      output.color = input.color;
+                                                                      return output;
+                                                                  }
+
+                                                                  [shader("fragment")]
+                                                                  float4 fragmentMain(VertexToFragment input) : SV_Target {
+                                                                      return shade(input);
+                                                                  }
+                                                                  """;
+
     private const string ValidFragmentShaderWithBindings = """
                                                            struct FragmentInput {
                                                                float4 position : SV_Position;
@@ -1084,6 +1114,21 @@ public class SdlangCompilerTests
 
         Assert.That(bindings, Is.Unique);
         Assert.That(wgsl, Does.Not.Match(@"@binding\(\d+\) @group"), "every declaration was rewritten");
+    }
+
+    [Test]
+    public void CompileShader_FlatInputStructPassedToHelper_KeepsInterpolateOnlyWithLocationInWgsl()
+    {
+        string shaderPath = CreateTemporaryShaderFile(FragmentShaderPassingFlatInputToHelper);
+
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string wgsl = ReadGeneratedWgsl(shaderPath, "fragment");
+
+        List<string> interpolated = wgsl.Split('\n').Where(line => line.Contains("@interpolate", StringComparison.Ordinal)).ToList();
+
+        Assert.That(interpolated, Is.Not.Empty.And.All.Contain("@location("));
     }
 
     private string ReadGeneratedWgsl(string shaderPath, string? stage)

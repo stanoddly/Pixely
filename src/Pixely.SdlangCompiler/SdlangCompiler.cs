@@ -108,7 +108,7 @@ public class SdlangCompiler
     private static string CalculateSourceHash(FileInfo filePath, IEnumerable<string> sourceDependencies)
     {
         using IncrementalHash sourceHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        sourceHash.AppendData(CommandLineOptionsHash);
+        sourceHash.AppendData(CompilerConfigurationHash);
         Span<byte> pathLength = stackalloc byte[sizeof(int)];
 
         foreach (string sourceDependency in sourceDependencies)
@@ -178,9 +178,13 @@ public class SdlangCompiler
         { ShaderFormatDto.Wgsl, [] }
     };
 
-    // Part of every source hash, so outputs that other options produced are compiled again.
-    private static readonly byte[] CommandLineOptionsHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n",
-        VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString()))))));
+    // Bump whenever a rewrite of the slangc output changes, such as the Metal buffer or WGSL rewrites, so cached outputs are rewritten.
+    private const int OutputRewriteVersion = 1;
+
+    // Part of every source hash, so outputs that other options or an older output rewrite produced are compiled again.
+    private static readonly byte[] CompilerConfigurationHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n",
+        VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString())))
+            .Append($"output rewrite {OutputRewriteVersion}"))));
 
     private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
         FileInfo filePath,
@@ -251,6 +255,7 @@ public class SdlangCompiler
         else if (format == ShaderFormatDto.Wgsl)
         {
             NormalizeWebGpuBindings(outputFile, reflection!.Stage, reflection.Bindings);
+            File.WriteAllText(outputFile.FullName, RemoveWebGpuInterpolationWithoutLocation(File.ReadAllText(outputFile.FullName)));
         }
 
         return new ShaderInstanceDto(format, outputFile.Name, entryPoint);
@@ -930,6 +935,20 @@ public class SdlangCompiler
 
         throw new ShaderBindingValidationException($"WGSL declares '{name}' in the {stage} shader as var{addressSpace} : {type}, which is not a resource the WebGPU binding rewrite knows.");
     }
+
+    // The attributes of a struct member or function parameter: a run of attributes followed by its name and a colon.
+    private static readonly Regex WebGpuMemberAttributesPattern = new(
+        @"(?:@\w+\b(?:\([^()]*\))?\s*)+(?=\w+\s*:)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex WebGpuInterpolatePattern = new(@"@interpolate\([^()]*\)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // When a shader passes its stage input struct to a helper function, Slang keeps the source struct for the helper and
+    // copies the interpolation modifiers onto its members, which have no @location. WGSL allows @interpolate only with
+    // @location, so WebGPU rejects the whole module. Without @location the attribute means nothing, so it is removed.
+    internal static string RemoveWebGpuInterpolationWithoutLocation(string wgsl) => WebGpuMemberAttributesPattern.Replace(
+        wgsl,
+        match => match.Value.Contains("@location(", StringComparison.Ordinal) ? match.Value : WebGpuInterpolatePattern.Replace(match.Value, ""));
 
     private static void ValidateBindings(ShaderStageDto stage, List<ResourceBinding> bindings)
     {

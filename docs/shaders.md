@@ -353,12 +353,14 @@ Per-target shader records carry the source entry point name for every format. `m
 
 SDL's WebGPU backend reads the bind group layout out of the WGSL text, and WebGPU has no combined image sampler: a sampled texture and its sampler need two bindings. SDL requires the read-only group's bindings to be dense from 0 with each sampled texture followed by its sampler, then the storage textures, then the storage buffers, all in slot order; read-write and uniform groups use the slot as the binding. Slang emits the register index as the binding, so a texture would collide with its sampler, and no register shift produces the interleave. The compiler rewrites the `@binding` numbers of the generated WGSL from the reflected resources instead, so the register convention above is all a shader needs; the desktop formats are unchanged. A shader whose WGSL declares a resource the reflection does not list, or the other way round, fails the build.
 
+The compiler also removes `@interpolate(...)` from every struct member and function parameter without `@location`. When a fragment shader passes its input struct to a helper function, Slang keeps that struct for the helper and copies modifiers such as `nointerpolation` onto its members as `@interpolate(flat)`, but those members are not stage input and have no `@location`. WGSL allows `@interpolate` only with `@location`, so WebGPU would reject the whole shader module. Without `@location` the attribute has no meaning, so removing it changes no valid shader.
+
 Three limits. The reflection classifies every read-only texture as sampled, so a read-only storage texture (a `Texture2D` read with `Load` and no sampler at its index) fails the sampler pairing check rather than being placed after the samplers. A depth texture sampled as a float texture needs SDL's `//SDLGPU_ForceAllowSamplingForTexture(group, binding)` directive in the WGSL, which nothing emits yet. Comparison sampling (`SamplerComparisonState`, `SampleCmp`) does not work in the browser: Slang emits `texture_2d<f32>` beside `sampler_comparison`, and WGSL's `textureSampleCompare` requires `texture_depth_2d`.
 
 ## Notes
 
 - Graphics programs use the fixed source entry points `vertexMain` and `fragmentMain`; compute shaders use `computeMain`
-- Shader compilation is cached based on the source hash, which also covers the slangc options, the Slang version, and expected target formats
+- Shader compilation is cached based on the source hash, which also covers the slangc options, the version of the compiler's rewrites of the slangc output, the Slang version, and expected target formats
 - SPIR-V is used by Vulkan, DXIL by Direct3D 12, and MSL by Metal
 - Always use explicit register bindings for constant buffers
 - Space3 is used for fragment constant buffers by convention
