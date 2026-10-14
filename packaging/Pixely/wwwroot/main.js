@@ -6,6 +6,13 @@ import * as host from './pixely-host.js';
 // The page is the screen; SDL's Emscripten port draws into Module.canvas, the element its default selector "#canvas" names.
 const canvas = document.getElementById('canvas');
 
+// pixely-host.js requests the adapter while runMain runs, so the listener goes in first.
+globalThis.addEventListener('pixelygpuadapter', event => {
+    if (event.detail.isFallbackAdapter) {
+        showFallbackNotice();
+    }
+});
+
 try {
     // runMain resolves with the value the managed Main returns; it rejects when Main throws, which the default OnException does.
     // The loader reads PixelyBrowserBrotli from the boot config that onConfigLoaded hands it, before the runtime downloads any file.
@@ -25,6 +32,28 @@ try {
 function describeException() {
     const exception = host.readException?.();
     return exception ? `${exception.type}: ${exception.message}` : null;
+}
+
+// A fallback adapter draws in software, so the game crawls, and the console is not where a player looks. The notice says why over
+// the canvas without stopping the game, and dismissing it hands the keyboard back to the canvas.
+function showFallbackNotice() {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'position: fixed; top: 1em; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 2em); box-sizing: border-box; display: flex; align-items: center; gap: 1em; padding: 0.75em 1em; background: rgba(0, 0, 0, 0.85); color: #fff; font: 16px system-ui, sans-serif;';
+
+    const message = document.createElement('p');
+    message.style.cssText = 'margin: 0;';
+    message.textContent = 'The browser draws this game in software, so it runs slowly. Turning on hardware acceleration in the browser may fix it.';
+
+    const button = document.createElement('button');
+    button.style.cssText = 'font: inherit; padding: 0.25em 1em;';
+    button.textContent = 'Dismiss';
+    button.addEventListener('click', () => {
+        notice.remove();
+        canvas.focus();
+    });
+
+    notice.append(message, button);
+    document.body.append(notice);
 }
 
 // Once the app has ended the canvas keeps its last frame, and the console is not where a player looks, so the page says what happened

@@ -125,9 +125,13 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
             properties = SDL3.SDL_GetGPUDeviceProperties(gpuDevice.SdlGpuDevice);
         }
 
-        string name = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown") ?? "unknown";
+        string? name = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_NAME_STRING, null);
+#if BROWSER
+        // SDL's WebGPU backend names no device, so the page's description of the adapter stands in.
+        name ??= BrowserHost.AdapterName;
+#endif
         string driverVersion = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING, "unknown") ?? "unknown";
-        return FormatDevice(name, gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", driverVersion, waitsForUploads);
+        return FormatDevice(name ?? "unknown", gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", driverVersion, waitsForUploads);
     }
 
     internal static string FormatDevice(string name, string backend, string driverName, string driverVersion, bool? waitsForUploads)

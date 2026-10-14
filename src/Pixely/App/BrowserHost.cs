@@ -29,6 +29,9 @@ public static partial class BrowserHost
 
     internal static WebGpuHandles? WebGpuHandles { get; private set; }
 
+    // What the browser reveals of the WebGPU adapter, for the diagnostics; null before PrepareAsync or from a pixely-host.js that predates it.
+    internal static string? AdapterName { get; private set; }
+
     [JSImport("runFrameLoop", HostModuleName)]
     private static partial Task RunFrameLoop([JSMarshalAs<JSType.Function<JSType.Boolean>>] Func<bool> runFrame);
 
@@ -62,6 +65,7 @@ public static partial class BrowserHost
             (IntPtr)handles.GetPropertyAsInt32("instance"),
             (IntPtr)handles.GetPropertyAsInt32("adapter"),
             (IntPtr)handles.GetPropertyAsInt32("device"));
+        AdapterName = handles.GetPropertyAsString("adapterName");
 #else
         throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
 #endif

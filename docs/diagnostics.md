@@ -16,6 +16,12 @@ At startup, the GPU device, when the root provider registers one:
 GPU device: AMD Radeon Graphics (RADV REMBRANDT), backend vulkan, driver radv 26.2.3, upload wait off
 ```
 
+In the browser, SDL names no device, so the name is what the browser reveals of the WebGPU adapter: its vendor, architecture, device and description, whichever are not empty, or `unknown` when all are, and `(fallback adapter)` for an adapter that draws in software (see [hosting.md](hosting.md#webgpu-in-the-browser)):
+
+```text
+GPU device: google swiftshader (fallback adapter), backend webgpu, driver unknown unknown, upload wait off
+```
+
 `upload wait` says whether `GpuMemorySystem.Submit()` waits for the uploads to finish on the GPU (see [window-rendering.md](window-rendering.md#waiting-for-uploads)). It is left out when the app has no `GpuMemorySystem`.
 
 For each window, its swapchain on the first frame and whenever its size or format changes:
