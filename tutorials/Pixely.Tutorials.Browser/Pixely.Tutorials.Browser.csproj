@@ -26,11 +26,6 @@
         <NativeFileReference Include="$(_BrowserNativeLibraryDirectory)*.a" />
     </ItemGroup>
 
-    <!-- An empty glob would publish a bundle that fails at run time. -->
-    <Target Name="_RequireBrowserSdlLibrary" BeforeTargets="BeforeBuild" Condition="'$(_BrowserNativeLibraryDirectory)' != '' and !Exists('$(_BrowserNativeLibraryDirectory)SDL3.a')">
-        <Error Text="BrowserNativeLibraryDirectory $(_BrowserNativeLibraryDirectory) has no SDL3.a; see docs/hosting.md, SDL3 in the browser." />
-    </Target>
-
     <ItemGroup>
         <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
         <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />

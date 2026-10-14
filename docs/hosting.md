@@ -52,7 +52,8 @@ static partial class Program
 
 ## Reporting failures
 
-Pixely does not report failures on its own. A project that wants a player-visible message declares
+On the desktop Pixely does not report failures on its own; in the browser the default page shows
+them (see [The frame loop](#the-frame-loop)). A project that wants a player-visible message declares
 the optional `OnException`, whose return value is the exit code:
 
 ```csharp
@@ -66,7 +67,10 @@ static int OnException(Exception exception)
 
 A failure in `Configure`, `Build` or `Run` is passed to it before the application is disposed: a
 failure during `Run` still has the window open behind the box, a failure during `Build` has no window
-yet. An exception thrown by the handler itself propagates in place of the original.
+yet. An exception the handler throws while handling the failure leaves `Main` as an
+`AggregateException` holding both, so the original cause is not lost; its message ends with both
+inner messages. An exception that is the failure itself, rethrown, or that holds it as its
+`InnerException` leaves `Main` unchanged.
 
 When the project declares none, the generated file's default applies: it rethrows the exception with
 its original stack trace, so the process fails as it would from a hand-written `Main`. The default is
@@ -86,10 +90,11 @@ It adds `Main` to `Program`, which builds the app from `Configure`, runs it, han
 `OnException` and disposes the app last, and `PixelyProgramDefaults` to the namespace, which holds the
 default `OnException`. Nothing else is added. On the desktop `Main` is `static int Main()` and calls
 `app.Run()`; for `browser-wasm` it is `static async Task<int> Main()`, marked
-`[SupportedOSPlatform("browser")]`, and awaits `BrowserHost.RunAsync(app)`. Every other line is the
-same. The generated part of `Program` states no accessibility, so the project's part
-may state any. The file is generated for `Exe` and `WinExe` C# projects, is rewritten only when its
-content changes, and is removed by `dotnet clean`.
+`[SupportedOSPlatform("browser")]`, awaits `BrowserHost.RunAsync(app)`, and passes a failure to
+`BrowserHost.ReportExceptionAsync` before `OnException` sees it, and again when `OnException`
+throws an exception other than the failure. Every other line is the same. The generated part of `Program` states no
+accessibility, so the project's part may state any. The file is generated for `Exe` and `WinExe` C#
+projects, is rewritten only when its content changes, and is removed by `dotnet clean`.
 
 ## Diagnostics
 
@@ -107,6 +112,8 @@ content changes, and is removed by `dotnet clean`.
 - PIXELY0007: a browser build whose framework is not a browser one. The SDK switches a single
   `net11.0` without `-f`; a project with `TargetFrameworks` lists `net11.0-browser` itself and
   publishes with `dotnet publish -f net11.0-browser -r browser-wasm` (see below).
+- PIXELY0013: a browser build without a native reference named `SDL3`. Link an Emscripten build of
+  SDL as `SDL3.a` (see [SDL3 in the browser](#sdl3-in-the-browser)).
 
 ## The browser
 
@@ -211,11 +218,13 @@ archive for `DllImport("SDL3")` is `SDL3.a`, not `libSDL3.a`, and so on for `SDL
 `SDL3_ttf.a` and `SDL3_mixer.a`. Any further archive those libraries need (FreeType, HarfBuzz, libpng,
 Ogg, Vorbis) is one more `NativeFileReference`; the runtime already links zlib. A reachable native
 call whose symbol no archive provides fails the link (`WasmAllowUndefinedSymbols=true` defers that to
-run time); a library that is not linked at all leaves its calls failing at run time as before. The
-Pixely SDK adds no link step of its own; a relink happens whenever native references exist. Only a publish
-trims, so `dotnet build -r browser-wasm` and `dotnet run -r browser-wasm` put every P/Invoke of the
-SDL bindings in the table, and an archive built from an older SDL than the bindings target fails
-the link on the calls it lacks; set `WasmAllowUndefinedSymbols` to `true` for those commands.
+run time). A build for `browser-wasm` without a native reference named `SDL3` fails with PIXELY0013,
+because every Pixely app calls SDL; `SDL3_image`, `SDL3_ttf` and `SDL3_mixer` are optional, and one
+that is not linked leaves its calls failing at run time. The Pixely SDK adds no link step of its own;
+a relink happens whenever native references exist. Only a publish trims, so
+`dotnet build -r browser-wasm` and `dotnet run -r browser-wasm` put every P/Invoke of the SDL
+bindings in the table, and an archive built from an older SDL than the bindings target fails the
+link on the calls it lacks; set `WasmAllowUndefinedSymbols` to `true` for those commands.
 
 `ICursorService` (`docs/cursors.md`) calls `SDL_CreateAnimatedCursor`, so a custom `SDL3.a` must be built from SDL 3.4.0 or later.
 
@@ -326,18 +335,25 @@ and is rethrown by `RunAsync` as the original managed exception, so the generate
 `OnException` and the `finally` that disposes the app run as on the desktop. `BrowserHost` is public
 for a hand-written `Main`, which is `async Task<int>` and carries `[SupportedOSPlatform("browser")]`;
 without the attribute CA1416 fires on the browser compile. The desktop build of Pixely declares
-`BrowserHost` too, so the public surface is the same in both builds; there `RunAsync` throws
-`PlatformNotSupportedException`.
+`BrowserHost` too, so the public surface is the same in both builds; there `RunAsync` and
+`ReportExceptionAsync` throw `PlatformNotSupportedException`. A hand-written `Main` that wants the
+exception type on the page awaits `ReportExceptionAsync(exception)` in its `catch`, as the generated
+one does.
 
 `dotnet.runMain()` in `main.js` resolves with the value `Main` returns. When `OnException` returns,
 that value is the result; when it throws, including the default that rethrows, `runMain()` rejects
 and `main.js` logs the error and rethrows it to the browser console. The canvas keeps its last
 frame either way, so the default `main.js` also covers it with a message when `Main` rejects or
 returns a non-zero exit code: "The graphics device was lost." when `pixely-host.js` recorded a
-loss, "Pixely stopped." otherwise, the error message or exit code beneath, and a button that
-reloads the page, which is the only recovery a page can offer after startup. A project that wants
-another message replaces `main.js`. What `MessageBox.Show` does in a handler depends on the native
-SDL build, which is a separate piece of work.
+loss, "Pixely stopped." otherwise, a detail beneath, and a button that reloads the page, which is
+the only recovery a page can offer after startup. The detail is the reported exception as
+`type: message`, or the rejection's message when nothing was reported; after a non-zero exit code
+it is the reported exception, if any, followed by "Exit code N.". The generated `Main` reports the
+failure through `BrowserHost.ReportExceptionAsync`, because a managed exception reaches JavaScript
+with its message only. A project that wants another message replaces `main.js`.
+
+`MessageBox.Show` opens a blocking `alert()` in the browser, through SDL's Emscripten video driver.
+A browser handler can skip it, because the page shows the failure.
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so
 `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
@@ -357,12 +373,14 @@ has no file at that relative path:
   `Module.canvas` and `configureCompressedResources` as `onConfigLoaded`, installs
   `loadCompressedResource` as the resource loader, awaits `dotnet.runMain()`, logs the exit code,
   logs and rethrows a rejection, and covers the canvas with a message on a rejection or a non-zero
-  exit code.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `readDeviceLoss()`,
+  exit code. The message is the reported exception as `type: message`, followed by the exit code
+  when `OnException` returned one; without a report it is the rejection's message.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`,
+  `recordException(type, message)`, `readDeviceLoss()`, `readException()`,
   `configureCompressedResources(config)` and `loadCompressedResource`. `BrowserHost` imports it as
   module `pixely-host` from `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same
-  module for the last three. A replacement keeps the exports and the location; without the last
-  two, `PixelyBrowserBrotli` has no effect.
+  module for the last four. A replacement keeps the exports and the location; without the last two,
+  `PixelyBrowserBrotli` has no effect.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
 setting. `PixelyBrowserIndexHtml` and `PixelyBrowserMainJs` point the default at another file;

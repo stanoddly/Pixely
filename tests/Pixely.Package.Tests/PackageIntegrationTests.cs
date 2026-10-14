@@ -429,6 +429,26 @@ public class PackageIntegrationTests
         });
     }
 
+    // The fixture's handler throws another exception when HOSTED_CONSUMER_HANDLER_THROWS is set, and both leave Main together; one that
+    // wraps the failure as its inner exception, with HOSTED_CONSUMER_HANDLER_WRAPS, leaves Main as it is. The fixture exits with 3 from
+    // AppDomain.UnhandledException, as the narrow handler variant does.
+    [TestCase("HOSTED_CONSUMER_HANDLER_THROWS", "Unhandled: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)")]
+    [TestCase("HOSTED_CONSUMER_HANDLER_WRAPS", "Unhandled: OnException wrapped the failure.")]
+    public async Task HostedConsumerWhoseOnExceptionThrowsKeepsTheFailure(string variable, string expected)
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory);
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, new Dictionary<string, string> { [variable] = "1" }, Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(3));
+            Assert.That(output, Does.Contain(expected));
+        });
+    }
+
     [Test]
     public async Task HostedConsumerWithoutConfigureFailsToCompile()
     {
@@ -478,6 +498,7 @@ public class PackageIntegrationTests
             Assert.That(File.ReadAllText(generatedFile), Does.Contain("[global::System.Runtime.Versioning.SupportedOSPlatform(\"browser\")]")
                 .And.Contain("private static async global::System.Threading.Tasks.Task<int> Main()")
                 .And.Contain("return await global::Pixely.App.BrowserHost.RunAsync(app);")
+                .And.Contain("await global::Pixely.App.BrowserHost.ReportExceptionAsync(exception);")
                 .And.Not.Contain("app.Run()"));
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Does.Contain("<canvas id=\"canvas\""));
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "main.js")), Does.Contain("consumer bootstrap"));
@@ -509,14 +530,16 @@ public class PackageIntegrationTests
         await BuildConsumerAsync(consumerDirectory);
         Assert.Multiple(() =>
         {
-            Assert.That(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs")), Does.Contain("private static int Main()"));
+            Assert.That(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs")), Does.Contain("private static int Main()").And.Not.Contain("ReportExceptionAsync"));
             Assert.That(File.ReadAllText(generatedFile), Does.Contain("BrowserHost.RunAsync"));
         });
     }
 
     // The bundle runs under node as it would in a page: the generated async Main runs Configure, which fails on purpose, and the handler
-    // decides whether runMain() resolves with its return value or rejects with the exception. One publish serves both outcomes: the
-    // fixture's handler rethrows when HOSTED_CONSUMER_RETHROW is set, which the node script passes through dotnet.withEnvironmentVariable.
+    // decides whether runMain() resolves with its return value or rejects with the exception. One publish serves every outcome: the
+    // fixture's handler rethrows when HOSTED_CONSUMER_RETHROW is set, throws another exception when HOSTED_CONSUMER_HANDLER_THROWS is
+    // set and wraps the failure when HOSTED_CONSUMER_HANDLER_WRAPS is set, which the node script passes through
+    // dotnet.withEnvironmentVariable. Every outcome reports the exception that leaves Main, or the handled one, to the page.
     [Test]
     public async Task HostedConsumerBundleRunsItsGeneratedEntryPointUnderNode()
     {
@@ -529,13 +552,21 @@ public class PackageIntegrationTests
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         string handled = await RunBrowserBundleAsync(wwwroot, environment: null);
         string rethrown = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_RETHROW"] = "1" });
+        string handlerFailed = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_HANDLER_THROWS"] = "1" });
+        string handlerWrapped = await RunBrowserBundleAsync(wwwroot, environment: new() { ["HOSTED_CONSUMER_HANDLER_WRAPS"] = "1" });
         Assert.Multiple(() =>
         {
             Assert.That(publishOutput, Does.Contain("PIXELY0012"));
             Assert.That(Directory.GetFiles(Path.Combine(wwwroot, "_framework"), "*.br"), Is.Empty);
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""pixely"":\s*\{\s*""brotli"":\s*false"));
-            Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1"));
-            Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected"));
+            Assert.That(handled, Does.Contain("Configure ran.").And.Contain("OnException ran: Configure failed on purpose.").And.Contain("RESULT exit code 1")
+                .And.Contain("RESULT reported System.InvalidOperationException: Configure failed on purpose."));
+            Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected")
+                .And.Contain("RESULT reported System.InvalidOperationException: Configure failed on purpose."));
+            Assert.That(handlerFailed, Does.Contain("RESULT rejected Error: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)")
+                .And.Contain("RESULT reported System.AggregateException: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)"));
+            Assert.That(handlerWrapped, Does.Contain("RESULT rejected Error: OnException wrapped the failure.")
+                .And.Contain("RESULT reported System.InvalidOperationException: OnException wrapped the failure."));
         });
     }
 
@@ -1084,6 +1115,41 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("error PIXELY0004").And.Contain("pass -r browser-wasm on the command line"));
     }
 
+    // Every browser app calls SDL, so a browser build without an SDL3 archive fails before it compiles. A lib-prefixed archive or one
+    // named in another case registers another module and does not count. A native reference turns on the relink, whose targets need
+    // the wasm-tools workload.
+    [TestCase(null, false)]
+    [TestCase("wasm/libSDL3.a", true)]
+    [TestCase("wasm/sdl3.a", false)]
+    public async Task BrowserBuildWithoutAnSdlArchiveFailsWithPixely0013(string? nativeFileReference, bool libPrefixed)
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        if (nativeFileReference is not null)
+        {
+            await RequireWasmToolsAsync(consumerDirectory);
+        }
+
+        string[] properties = nativeFileReference is null ? ["_PixelySkipBrowserSdlCheck=false"] : ["_PixelySkipBrowserSdlCheck=false", $"HostedConsumerNativeFileReference={nativeFileReference}"];
+        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: properties);
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("error PIXELY0013"));
+            Assert.That(output.Contains("PIXELY0005", StringComparison.Ordinal), Is.EqualTo(libPrefixed));
+        });
+    }
+
+    // The check reads only the file name, so the archive need not exist for the target to pass.
+    [Test]
+    public async Task BrowserBuildWithAnSdlArchivePassesTheSdlCheck()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        await RequireWasmToolsAsync(consumerDirectory);
+
+        await RunBrowserConsumerTargetAsync(consumerDirectory, "_PixelyRequireBrowserSdlArchive", "_PixelySkipBrowserSdlCheck=false", "HostedConsumerNativeFileReference=wasm/SDL3.a");
+    }
+
     // A project that lists net11.0-browser itself is not switched: its browser inner build is selected with -f, and its desktop
     // build stays a desktop build. The framework may carry its platform version; the SDK recognises both spellings as browser 1.0.
     [TestCase("net11.0-browser")]
@@ -1121,7 +1187,8 @@ public class PackageIntegrationTests
 
     // Without -f every inner build gets the browser RID, and one that is not net11.0-browser cannot be a browser app; a list without
     // the browser framework has no inner build that could be. Built rather than published: publish refuses a multi-targeting
-    // project without -f on its own (NETSDK1129).
+    // project without -f on its own (NETSDK1129). The SDL check runs too: it leaves an inner build of another framework to the
+    // framework message, and only the net11.0-browser inner build of the default list fails it.
     [TestCase(null)]
     [TestCase("net11.0")]
     public async Task MultiTargetingConsumerWithoutTheBrowserFrameworkSelectedFailsWithTheFrameworkMessage(string? frameworks)
@@ -1129,9 +1196,13 @@ public class PackageIntegrationTests
         string consumerDirectory = GetConsumerDirectory("MultiTargetConsumer");
         DeleteConsumerOutputs("MultiTargetConsumer");
 
-        string[] properties = frameworks is null ? [] : [$"MultiTargetConsumerFrameworks={frameworks}"];
+        string[] properties = frameworks is null ? ["_PixelySkipBrowserSdlCheck=false"] : ["_PixelySkipBrowserSdlCheck=false", $"MultiTargetConsumerFrameworks={frameworks}"];
         string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false, properties: properties);
-        Assert.That(output, Does.Contain("error PIXELY0007").And.Contain("dotnet publish -f net11.0-browser -r browser-wasm"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("error PIXELY0007").And.Contain("dotnet publish -f net11.0-browser -r browser-wasm"));
+            Assert.That(output.Contains("PIXELY0013", StringComparison.Ordinal), Is.EqualTo(frameworks is null));
+        });
     }
 
     [Test]
@@ -1386,6 +1457,7 @@ public class PackageIntegrationTests
         string variables = string.Concat((environment ?? []).Select(pair => $".withEnvironmentVariable({JsonSerializer.Serialize(pair.Key)}, {JsonSerializer.Serialize(pair.Value)})"));
         File.WriteAllText(script, $$"""
             import { dotnet } from './_framework/dotnet.js';
+            import * as host from './pixely-host.js';
             globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 5);
             try {
                 const exitCode = await dotnet{{variables}}.runMain();
@@ -1393,6 +1465,8 @@ public class PackageIntegrationTests
             } catch (error) {
                 console.log(`RESULT rejected ${error}`);
             }
+            const exception = host.readException();
+            console.log(exception ? `RESULT reported ${exception.type}: ${exception.message}` : 'RESULT reported nothing');
             """);
         (int exitCode, string output) = await RunProcessExpectingExitCodeAsync("node", wwwroot, null, script);
         Assert.That(exitCode, Is.EqualTo(0), output);

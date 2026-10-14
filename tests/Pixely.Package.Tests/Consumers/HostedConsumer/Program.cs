@@ -19,6 +19,16 @@ static partial class Program
             Environment.Exit(3);
         };
 #endif
+        // The handler's own exception leaves Main as well; exiting from the event keeps that observable on the desktop without a core dump.
+        bool handlerFails = Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_THROWS") == "1" || Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_WRAPS") == "1";
+        if (handlerFails && !OperatingSystem.IsBrowser())
+        {
+            AppDomain.CurrentDomain.UnhandledException += (_, arguments) =>
+            {
+                Console.WriteLine($"Unhandled: {((Exception)arguments.ExceptionObject).Message}");
+                Environment.Exit(3);
+            };
+        }
         Console.WriteLine("Configure ran.");
         throw new InvalidOperationException("Configure failed on purpose.");
     }
@@ -38,6 +48,16 @@ static partial class Program
         if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_RETHROW") == "1")
         {
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception);
+        }
+        // A handler that fails while handling, as one that shows a message box without SDL does.
+        if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_THROWS") == "1")
+        {
+            throw new DllNotFoundException("SDL3");
+        }
+        // A handler that replaces the failure on purpose, keeping it as the inner exception.
+        if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_WRAPS") == "1")
+        {
+            throw new InvalidOperationException("OnException wrapped the failure.", exception);
         }
         Console.WriteLine($"OnException ran: {exception.Message}");
         return 1;

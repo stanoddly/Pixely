@@ -1,10 +1,11 @@
-// The page side of Pixely.App.BrowserHost: the WebGPU device SDL adopts, and the requestAnimationFrame loop.
+// The page side of Pixely.App.BrowserHost: the WebGPU device SDL adopts, the requestAnimationFrame loop, and the exception that ended the app.
 
 // What SDL's WebGPU backend requires of a device (SDL_gpu_webgpu.c in stanoddly/SDL_wgpu), and what it uses when present.
 const requiredFeatures = ['depth32float-stencil8', 'rg11b10ufloat-renderable', 'indirect-first-instance', 'depth-clip-control', 'bgra8unorm-storage', 'float32-filterable'];
 const optionalFeatures = ['float32-blendable', 'texture-compression-astc', 'texture-compression-astc-sliced-3d', 'texture-compression-bc', 'texture-compression-bc-sliced-3d', 'texture-formats-tier1', 'texture-formats-tier2', 'clip-distances'];
 
 let deviceLoss = null;
+let exitException = null;
 
 // dotnet.js registers the runtime globally once it is created; Module is the Emscripten module the WebGPU binding lives on.
 function runtimeModule() {
@@ -58,6 +59,17 @@ export async function createGpuDevice() {
 // message. BrowserHost.RunAsync turns it into GpuDeviceLostException, and main.js reads it to word the message it shows.
 export function readDeviceLoss() {
     return deviceLoss;
+}
+
+// BrowserHost.ReportExceptionAsync records the exception that ended the app, because a managed exception rejecting runMain reaches
+// JavaScript with its message only. main.js reads it to show the type with the message.
+export function recordException(type, message) {
+    exitException = { type, message };
+}
+
+// The exception that ended the app as { type, message }, or null when none was reported.
+export function readException() {
+    return exitException;
 }
 
 // Owns the requestAnimationFrame loop for Pixely.App.BrowserHost. The managed callback is marshalled once, here, not per frame,
