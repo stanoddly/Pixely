@@ -360,7 +360,7 @@ Three limits. The reflection classifies every read-only texture as sampled, so a
 ## Notes
 
 - Graphics programs use the fixed source entry points `vertexMain` and `fragmentMain`; compute shaders use `computeMain`
-- Shader compilation is cached based on the source hash, which also covers the slangc options, the Slang version, and expected target formats
+- Shader compilation is cached based on the source hash, which also covers the slangc options, the version of the compiler's rewrites of the slangc output, the Slang version, and expected target formats
 - SPIR-V is used by Vulkan, DXIL by Direct3D 12, and MSL by Metal
 - Always use explicit register bindings for constant buffers
 - Space3 is used for fragment constant buffers by convention

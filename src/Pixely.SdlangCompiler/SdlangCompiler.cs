@@ -108,7 +108,7 @@ public class SdlangCompiler
     private static string CalculateSourceHash(FileInfo filePath, IEnumerable<string> sourceDependencies)
     {
         using IncrementalHash sourceHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        sourceHash.AppendData(CommandLineOptionsHash);
+        sourceHash.AppendData(CompilerConfigurationHash);
         Span<byte> pathLength = stackalloc byte[sizeof(int)];
 
         foreach (string sourceDependency in sourceDependencies)
@@ -178,9 +178,13 @@ public class SdlangCompiler
         { ShaderFormatDto.Wgsl, [] }
     };
 
-    // Part of every source hash, so outputs that other options produced are compiled again.
-    private static readonly byte[] CommandLineOptionsHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n",
-        VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString()))))));
+    // Bump whenever a rewrite of the slangc output changes, such as the Metal buffer or WGSL rewrites, so cached outputs are rewritten.
+    private const int OutputRewriteVersion = 1;
+
+    // Part of every source hash, so outputs that other options or an older output rewrite produced are compiled again.
+    private static readonly byte[] CompilerConfigurationHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n",
+        VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString())))
+            .Append($"output rewrite {OutputRewriteVersion}"))));
 
     private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
         FileInfo filePath,
