@@ -100,6 +100,23 @@
     </Target>
 
     <!--
+      Pixely calls SDL for every window, input and GPU operation, and the browser has no SDL to load at run time: without an
+      SDL3 archive linked into the runtime the first SDL call fails with DllNotFoundException, whose message is only "SDL3".
+      URL references count, since they are native references by now. The name is compared with case, as the P/Invoke table
+      matches it. Only a browser framework is checked, so an inner build of another framework under the browser RID reports
+      PIXELY0007 instead. _PixelySkipBrowserSdlCheck is for the SDK's own test fixtures, which run browser builds that never
+      call SDL; it is not a supported setting.
+    -->
+    <Target Name="_PixelyRequireBrowserSdlArchive" BeforeTargets="BeforeBuild" DependsOnTargets="_PixelyResolveNativeUrlReferences"
+            Condition="'$(_PixelyBrowser)' == 'true' and '$(TargetPlatformIdentifier)' == 'browser' and '$(_PixelySkipBrowserSdlCheck)' != 'true'">
+        <ItemGroup>
+            <_PixelySdlArchive Include="@(NativeFileReference)" Condition="$([System.String]::Equals('%(Filename)', 'SDL3'))" />
+        </ItemGroup>
+        <Error Code="PIXELY0013" File="$(MSBuildProjectFullPath)" Condition="'@(_PixelySdlArchive)' == ''"
+               Text="A browser app links SDL into the runtime, and this build has no SDL3 archive: add a NativeFileReference or NativeUrlReference to an Emscripten build of SDL named SDL3.a (docs/hosting.md, SDL3 in the browser)." />
+    </Target>
+
+    <!--
       A NativeUrlReference is a native reference downloaded from a URL and pinned by its SHA-256 (Sha256 metadata). The cache
       is in the project's obj folder by default, so no other project's build writes to it. It is keyed by the hash and keeps
       the URL's file name, which is the P/Invoke module the archive registers. The items become native references in a

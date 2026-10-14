@@ -11,4 +11,12 @@
         <RunAOTCompilation Condition="'$(RunAOTCompilation)' == ''">false</RunAOTCompilation>
     </PropertyGroup>
 
+    <!--
+      The browser fixtures never call SDL and most lanes cannot relink the runtime, so they skip PIXELY0013. The test of the error
+      sets the property to false on the command line.
+    -->
+    <PropertyGroup>
+        <_PixelySkipBrowserSdlCheck Condition="'$(_PixelySkipBrowserSdlCheck)' == ''">true</_PixelySkipBrowserSdlCheck>
+    </PropertyGroup>
+
 </Project>

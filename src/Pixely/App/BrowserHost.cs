@@ -37,6 +37,9 @@ public static partial class BrowserHost
 
     [JSImport("readDeviceLoss", HostModuleName)]
     private static partial JSObject? ReadDeviceLoss();
+
+    [JSImport("recordException", HostModuleName)]
+    private static partial void RecordException(string type, string message);
 #endif
 
     /// <summary>
@@ -93,6 +96,31 @@ public static partial class BrowserHost
         }
 
         return 0;
+#else
+        throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
+#endif
+    }
+
+    /// <summary>
+    /// Records the exception that ended the app, so the page can show its type beside its message: a managed exception that rejects
+    /// the runtime's main promise reaches JavaScript with its message only. The latest record replaces the previous one. The generated
+    /// entry point reports the exception it catches, then what leaves it when <c>OnException</c> throws: the two together, or the
+    /// exception that wraps the caught one.
+    /// </summary>
+    public static async Task ReportExceptionAsync(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+#if BROWSER
+        // Reporting runs while an exception is on its way out of Main, so a failure here must not replace that exception.
+        try
+        {
+            await JSHost.ImportAsync(HostModuleName, HostModuleUrl);
+            RecordException(exception.GetType().FullName ?? exception.GetType().Name, exception.Message);
+        }
+        catch (Exception reportException)
+        {
+            Console.Error.WriteLine($"Pixely could not report the exception to the page: {reportException.Message}");
+        }
 #else
         throw new PlatformNotSupportedException("BrowserHost runs an app in a browser; build for browser-wasm.");
 #endif

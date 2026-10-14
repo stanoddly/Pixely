@@ -1,6 +1,6 @@
 import { dotnet } from './_framework/dotnet.js';
-// A namespace import keeps a replaced pixely-host.js that predates readDeviceLoss or loadCompressedResource loading; a named import
-// would fail to link. Without loadCompressedResource the runtime fetches every file itself.
+// A namespace import keeps a replaced pixely-host.js that predates readDeviceLoss, readException or loadCompressedResource loading; a
+// named import would fail to link. Without loadCompressedResource the runtime fetches every file itself.
 import * as host from './pixely-host.js';
 
 // The page is the screen; SDL's Emscripten port draws into Module.canvas, the element its default selector "#canvas" names.
@@ -12,12 +12,19 @@ try {
     const exitCode = await dotnet.withModuleConfig({ canvas, onConfigLoaded: host.configureCompressedResources }).withResourceLoader(host.loadCompressedResource).runMain();
     console.log(`Pixely exited with code ${exitCode}`);
     if (exitCode !== 0) {
-        showStopped(`Exit code ${exitCode}.`);
+        // An OnException that handled the failure returns the code; the generated entry point reported the exception before calling it.
+        showStopped([describeException(), `Exit code ${exitCode}.`].filter(Boolean).join('\n'));
     }
 } catch (error) {
     console.error('Pixely failed', error);
-    showStopped(error?.message ?? String(error));
+    showStopped(describeException() ?? error?.message ?? String(error));
     throw error;
+}
+
+// A managed exception reaches the page with its message only, so the type comes from the record BrowserHost.ReportExceptionAsync left.
+function describeException() {
+    const exception = host.readException?.();
+    return exception ? `${exception.type}: ${exception.message}` : null;
 }
 
 // Once the app has ended the canvas keeps its last frame, and the console is not where a player looks, so the page says what happened

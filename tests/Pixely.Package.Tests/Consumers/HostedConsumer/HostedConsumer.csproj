@@ -15,6 +15,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- A native reference the PIXELY0013 tests name; the check runs before anything reads the file. -->
+        <NativeFileReference Include="$(HostedConsumerNativeFileReference)" Condition="'$(HostedConsumerNativeFileReference)' != ''" />
         <!-- A library on the SDK that a browser publish must leave a library. -->
         <ProjectReference Include="..\LibraryConsumer\LibraryConsumer.csproj" Condition="'$(HostedConsumerReferencesLibrary)' == 'true'" />
     </ItemGroup>
