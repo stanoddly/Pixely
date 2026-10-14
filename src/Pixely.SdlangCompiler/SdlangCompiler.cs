@@ -251,6 +251,7 @@ public class SdlangCompiler
         else if (format == ShaderFormatDto.Wgsl)
         {
             NormalizeWebGpuBindings(outputFile, reflection!.Stage, reflection.Bindings);
+            File.WriteAllText(outputFile.FullName, RemoveWebGpuInterpolationWithoutLocation(File.ReadAllText(outputFile.FullName)));
         }
 
         return new ShaderInstanceDto(format, outputFile.Name, entryPoint);
@@ -930,6 +931,20 @@ public class SdlangCompiler
 
         throw new ShaderBindingValidationException($"WGSL declares '{name}' in the {stage} shader as var{addressSpace} : {type}, which is not a resource the WebGPU binding rewrite knows.");
     }
+
+    // The attributes of a struct member or function parameter: a run of attributes followed by its name and a colon.
+    private static readonly Regex WebGpuMemberAttributesPattern = new(
+        @"(?:@\w+\b(?:\([^()]*\))?\s*)+(?=\w+\s*:)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex WebGpuInterpolatePattern = new(@"@interpolate\([^()]*\)\s*", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // When a shader passes its stage input struct to a helper function, Slang keeps the source struct for the helper and
+    // copies the interpolation modifiers onto its members, which have no @location. WGSL allows @interpolate only with
+    // @location, so WebGPU rejects the whole module. Without @location the attribute means nothing, so it is removed.
+    internal static string RemoveWebGpuInterpolationWithoutLocation(string wgsl) => WebGpuMemberAttributesPattern.Replace(
+        wgsl,
+        match => match.Value.Contains("@location(", StringComparison.Ordinal) ? match.Value : WebGpuInterpolatePattern.Replace(match.Value, ""));
 
     private static void ValidateBindings(ShaderStageDto stage, List<ResourceBinding> bindings)
     {
