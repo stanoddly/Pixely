@@ -6,6 +6,7 @@ const optionalFeatures = ['float32-blendable', 'texture-compression-astc', 'text
 
 let deviceLoss = null;
 let exitException = null;
+let gpuAdapter = null;
 
 // dotnet.js registers the runtime globally once it is created; Module is the Emscripten module the WebGPU binding lives on.
 function runtimeModule() {
@@ -33,6 +34,17 @@ export async function createGpuDevice() {
     if (!adapter) {
         throw new Error('No WebGPU adapter is available');
     }
+    // A browser without a usable hardware adapter can hand out a software one, and the app then runs at a few frames per second
+    // with no sign of why. The event and readGpuAdapter let a page tell the player, which the default main.js does. The name is
+    // what the browser reveals, which can be nothing; browsers before GPUAdapterInfo.isFallbackAdapter have the flag on the adapter.
+    const info = adapter.info;
+    const name = [info?.vendor, info?.architecture, info?.device, info?.description].filter(Boolean).join(' ') || 'unknown';
+    gpuAdapter = Object.freeze({ name, isFallbackAdapter: (info?.isFallbackAdapter ?? adapter.isFallbackAdapter) === true });
+    const adapterName = gpuAdapter.isFallbackAdapter ? `${name} (fallback adapter)` : name;
+    if (gpuAdapter.isFallbackAdapter) {
+        console.warn(`WebGPU runs on ${adapterName}, which draws in software, so the app runs slowly. Turning on hardware acceleration in the browser may fix it.`);
+    }
+    globalThis.dispatchEvent(new CustomEvent('pixelygpuadapter', { detail: gpuAdapter }));
     const missing = requiredFeatures.filter(feature => !adapter.features.has(feature));
     if (missing.length > 0) {
         throw new Error(`The WebGPU adapter lacks features SDL requires: ${missing.join(', ')}`);
@@ -52,7 +64,14 @@ export async function createGpuDevice() {
     });
     device.addEventListener('uncapturederror', event => console.error('WebGPU error', event.error?.message ?? event.error));
 
-    return { instance, adapter: adapterPtr, device: devicePtr };
+    // SDL's WebGPU backend names no device, so the diagnostics name the adapter.
+    return { instance, adapter: adapterPtr, device: devicePtr, adapterName };
+}
+
+// The adapter createGpuDevice requested, the same { name, isFallbackAdapter } its pixelygpuadapter event carries, or null before
+// the request or for an app without a GPU device. A page that subscribes after the event fired reads it here.
+export function readGpuAdapter() {
+    return gpuAdapter;
 }
 
 // The loss the current device reported, or null: an Error with the WebGPU reason ("unknown" or "destroyed") and the browser's

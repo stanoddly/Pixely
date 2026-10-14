@@ -292,6 +292,22 @@ pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiti
 `Main` awaits `PrepareAsync` the same way. `GpuBackend.Automatic` advertises WGSL only in the
 browser; `GpuBackend.WebGpu` (`PIXELY_GRAPHICS=webgpu`) names the driver explicitly.
 
+A browser without a usable hardware adapter can hand out a fallback adapter, which draws in
+software: Ungoogled Chromium on Linux did so with WebGPU on and Vulkan off, while `chrome://gpu`
+reported WebGPU as hardware accelerated. The app then runs at a few frames per second. So
+`pixely-host.js` reads `adapter.info.isFallbackAdapter`, or `adapter.isFallbackAdapter` in browsers
+that predate it, and for a fallback adapter warns in the console with the adapter's name.
+
+When the app registers a `GpuDevice`, `pixely-host.js` dispatches a `pixelygpuadapter` event on
+`window` after requesting the adapter and before requesting the device. Its `detail` has `name`
+and `isFallbackAdapter`. `name` is the adapter's vendor, architecture, device and description,
+whichever the browser reveals, or `unknown` when it reveals none. `readGpuAdapter()` returns the
+same object afterwards, and `null` before the request or for an app without a `GpuDevice`, so a
+page that subscribes late reads it there. The default `main.js` shows a notice for a fallback
+adapter (see [The page](#the-page)); a page of its own can show its own. The diagnostics name the
+device by the same name, with `(fallback adapter)` for a fallback adapter (see
+[Diagnostics](diagnostics.md)).
+
 SDL cannot install callbacks on an adopted device, so `pixely-host.js` observes `device.lost` and
 `uncapturederror` itself. An uncaptured error is logged. A lost device is terminal: every GPU
 resource went with it, SDL would keep recording against the dead device without noticing, and
@@ -374,12 +390,16 @@ has no file at that relative path:
   `loadCompressedResource` as the resource loader, awaits `dotnet.runMain()`, logs the exit code,
   logs and rethrows a rejection, and covers the canvas with a message on a rejection or a non-zero
   exit code. The message is the reported exception as `type: message`, followed by the exit code
-  when `OnException` returned one; without a report it is the rejection's message.
-- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`,
+  when `OnException` returned one; without a report it is the rejection's message. On a fallback
+  adapter it shows a notice at the top of the page that the browser draws in software and that
+  turning on hardware acceleration may fix it; the game keeps running, and the player can dismiss
+  the notice.
+- `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `readGpuAdapter()`,
   `recordException(type, message)`, `readDeviceLoss()`, `readException()`,
-  `configureCompressedResources(config)` and `loadCompressedResource`. `BrowserHost` imports it as
-  module `pixely-host` from `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same
-  module for the last four. A replacement keeps the exports and the location; without the last two,
+  `configureCompressedResources(config)` and `loadCompressedResource`. `createGpuDevice()`
+  dispatches the `pixelygpuadapter` event. `BrowserHost` imports it as module `pixely-host` from
+  `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same module for the last
+  four. A replacement keeps the exports and the location; without the last two,
   `PixelyBrowserBrotli` has no effect.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further
