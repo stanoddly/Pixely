@@ -5,18 +5,22 @@ import * as host from './pixely-host.js';
 
 // The page is the screen; SDL's Emscripten port draws into Module.canvas, the element its default selector "#canvas" names.
 const canvas = document.getElementById('canvas');
+const loading = showLoading();
 
-// pixely-host.js requests the adapter while runMain runs, so the listener goes in first.
+// pixely-host.js requests the adapter and runs the first frame while runMain runs, so the listeners go in first.
 globalThis.addEventListener('pixelygpuadapter', event => {
     if (event.detail.isFallbackAdapter) {
         showFallbackNotice();
     }
 });
+globalThis.addEventListener('pixelyfirstframe', () => loading.indicator.remove(), { once: true });
 
 try {
     // runMain resolves with the value the managed Main returns; it rejects when Main throws, which the default OnException does.
     // The loader reads PixelyBrowserBrotli from the boot config that onConfigLoaded hands it, before the runtime downloads any file.
-    const exitCode = await dotnet.withModuleConfig({ canvas, onConfigLoaded: host.configureCompressedResources }).withResourceLoader(host.loadCompressedResource).runMain();
+    // onRuntimeInitialized runs once every file the runtime needs to start is in memory.
+    const moduleConfig = { canvas, onConfigLoaded: host.configureCompressedResources, onRuntimeInitialized: () => { loading.stage.textContent = 'Starting…'; } };
+    const exitCode = await dotnet.withModuleConfig(moduleConfig).withResourceLoader(host.loadCompressedResource).runMain();
     console.log(`Pixely exited with code ${exitCode}`);
     if (exitCode !== 0) {
         // An OnException that handled the failure returns the code; the generated entry point reported the exception before calling it.
@@ -26,6 +30,28 @@ try {
     console.error('Pixely failed', error);
     showStopped(describeException() ?? error?.message ?? String(error));
     throw error;
+} finally {
+    // An app can end before its first frame, or never run the frame loop.
+    loading.indicator.remove();
+}
+
+// The canvas stays black while the runtime downloads and the app starts, which takes a while on a first visit, so the page says what
+// it waits for. A bar with a percentage would mislead: the runtime counts a file as loaded once its headers arrive, and its total
+// grows as further downloads start. A progress element without a value shows activity instead.
+function showLoading() {
+    const indicator = document.createElement('div');
+    indicator.style.cssText = 'position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1em; padding: 1em; box-sizing: border-box; color: #fff; font: 16px system-ui, sans-serif; pointer-events: none;';
+
+    const stage = document.createElement('p');
+    stage.style.cssText = 'margin: 0;';
+    stage.textContent = 'Downloading…';
+
+    const bar = document.createElement('progress');
+    bar.style.cssText = 'width: min(20em, 100%);';
+
+    indicator.append(stage, bar);
+    document.body.append(indicator);
+    return { indicator, stage };
 }
 
 // A managed exception reaches the page with its message only, so the type comes from the record BrowserHost.ReportExceptionAsync left.
@@ -42,7 +68,7 @@ function showFallbackNotice() {
 
     const message = document.createElement('p');
     message.style.cssText = 'margin: 0;';
-    message.textContent = 'The browser draws this game in software, so it runs slowly. Turning on hardware acceleration in the browser may fix it.';
+    message.textContent = 'Your browser isn\'t using your graphics card, so this game runs slowly. To fix it, search the web for "turn on hardware acceleration" for your browser.';
 
     const button = document.createElement('button');
     button.style.cssText = 'font: inherit; padding: 0.25em 1em;';

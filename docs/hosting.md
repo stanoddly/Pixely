@@ -157,7 +157,9 @@ assembly identity is name and version, not framework, which is why the browser b
 surface is kept a superset of the desktop one (package validation checks it at pack).
 
 The page is under `bin/<Configuration>/net11.0-browser/browser-wasm/publish/wwwroot/`. Serve that
-directory over HTTP; opening `index.html` from disk does not work. The Publish SDK also copies the
+directory over HTTP; opening `index.html` from disk does not work. WebGPU needs a secure context,
+so serve it over HTTPS, or over HTTP from `localhost`; elsewhere the app fails when it requests the
+GPU device. The Publish SDK also copies the
 project's `*.json` and `*.config` files, `global.json` and `NuGet.Config` included, beside `wwwroot`,
 so serve `wwwroot` only. Desktop and browser keep separate `obj/` and `bin/` directories, but they
 share the restore state: after a browser restore the WebAssembly pack's props default the RID to
@@ -348,7 +350,9 @@ hosts; an app can ship them in `Content.pk3` in the browser's file system instea
 
 A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync(app)` takes the place of
 `app.Run()`: `pixely-host.js` calls `IPixelyApp.RunFrame()` once per `requestAnimationFrame` and
-`RunAsync` completes with 0 when it returns `false`. An exception thrown by a frame rejects the loop
+`RunAsync` completes with 0 when it returns `false`. After the first `RunFrame()` it dispatches a
+`pixelyfirstframe` event on `window`, so a page can remove a loading indicator once the app has
+drawn. An exception thrown by a frame rejects the loop
 and is rethrown by `RunAsync` as the original managed exception, so the generated `catch`,
 `OnException` and the `finally` that disposes the app run as on the desktop. `BrowserHost` is public
 for a hand-written `Main`, which is `async Task<int>` and carries `[SupportedOSPlatform("browser")]`;
@@ -393,15 +397,19 @@ has no file at that relative path:
   logs and rethrows a rejection, and covers the canvas with a message on a rejection or a non-zero
   exit code. The message is the reported exception as `type: message`, followed by the exit code
   when `OnException` returned one; without a report it is the rejection's message. On a fallback
-  adapter it shows a notice at the top of the page that the browser draws in software and that
-  turning on hardware acceleration may fix it; the game keeps running, and the player can dismiss
-  the notice.
+  adapter it shows a notice at the top of the page that the browser isn't using the graphics card,
+  and that the player can search the web for how to turn on hardware acceleration in their browser;
+  the game keeps running, and the player can dismiss the notice. Until the first frame it shows a
+  loading indicator: "Downloading…" until the runtime's `onRuntimeInitialized`, then "Starting…",
+  above a `<progress>` element without a value. A percentage would mislead, because the runtime's
+  `onDownloadResourceProgress` counts a file once its headers arrive, and its total grows as further
+  downloads start. The indicator also goes when `runMain()` settles.
 - `pixely-host.js`: exports `runFrameLoop(runFrame)`, `createGpuDevice()`, `readGpuAdapter()`,
   `recordException(type, message)`, `readDeviceLoss()`, `readException()`,
   `configureCompressedResources(config)` and `loadCompressedResource`. `createGpuDevice()`
-  dispatches the `pixelygpuadapter` event. `BrowserHost` imports it as module `pixely-host` from
+  dispatches the `pixelygpuadapter` event, and `runFrameLoop` the `pixelyfirstframe` event. `BrowserHost` imports it as module `pixely-host` from
   `../pixely-host.js`, relative to `dotnet.js`; `main.js` imports the same module for the last
-  four. A replacement keeps the exports and the location; without the last two,
+  four. A replacement keeps the exports, the events and the location; without the last two,
   `PixelyBrowserBrotli` has no effect.
 
 A project's own `wwwroot/index.html` or `wwwroot/main.js` replaces the default with no further

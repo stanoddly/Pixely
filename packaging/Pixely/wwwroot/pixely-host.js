@@ -23,8 +23,13 @@ export async function createGpuDevice() {
     if (!webgpu || !Module._wgpuCreateInstance) {
         throw new Error('The runtime was linked without the WebGPU binding; publish with PixelyBrowserWebGpu=true (docs/hosting.md)');
     }
+    // Browsers hide navigator.gpu outside a secure context, as on plain http from anywhere but localhost, so no browser setting the
+    // player could change would help there.
+    if (!globalThis.isSecureContext) {
+        throw new Error('This page must be served over HTTPS or from localhost for WebGPU to work.');
+    }
     if (!navigator.gpu) {
-        throw new Error('WebGPU is not available in this browser');
+        throw new Error('Your browser doesn\'t support WebGPU, which this game needs. To fix it, search the web for "enable WebGPU" for your browser, or update your browser.');
     }
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -87,9 +92,11 @@ export function readException() {
 // and its proxy is disposed when the loop ends so the delegate and the app it targets stop being rooted by a GC handle.
 // Everything sits inside the try so the promise rejects instead of the error stopping at the browser console: an exception thrown
 // inside a requestAnimationFrame callback never reaches the awaiting managed Main by itself. A lost device ends the loop the
-// same way, since SDL keeps recording against a dead device without noticing.
+// same way, since SDL keeps recording against a dead device without noticing. After the first frame it dispatches the
+// pixelyfirstframe event, which tells a page that the app has drawn and a loading indicator can go.
 export function runFrameLoop(runFrame) {
     return new Promise((resolve, reject) => {
+        let firstFrame = true;
         const finish = (settle, value) => {
             runFrame.dispose?.();
             settle(value);
@@ -98,7 +105,15 @@ export function runFrameLoop(runFrame) {
             try {
                 if (deviceLoss) {
                     finish(reject, deviceLoss);
-                } else if (runFrame()) {
+                    return;
+                }
+                const running = runFrame();
+                if (firstFrame) {
+                    firstFrame = false;
+                    // Node has no global dispatchEvent.
+                    globalThis.dispatchEvent?.(new Event('pixelyfirstframe'));
+                }
+                if (running) {
                     globalThis.requestAnimationFrame(tick);
                 } else {
                     finish(resolve);
