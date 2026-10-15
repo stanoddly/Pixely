@@ -2,6 +2,15 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-15: The browser's WebGPU device gets every feature the adapter offers
+
+`pixely-host.js` requests the device with every feature in `adapter.features` and no longer checks features itself. SDL's WebGPU backend checks the device when it adopts it.
+
+- A WebGPU device has only the features it was requested with, and the page requests the device for SDL, so the page has to enable whatever SDL requires or uses.
+- The page kept a copy of SDL's required and optional feature lists, which drifts whenever the fork changes its lists. The fork already requires `bgra8unorm-storage` and `float32-filterable`, although it checks both where it uses them, and the copy rejected devices for them a second time ([stanoddly/XDL_wgpu#28](https://github.com/stanoddly/XDL_wgpu/issues/28)).
+
+Cost: the device also enables features neither SDL nor the app uses. Until the fork puts the missing features in its error, `PixelyInitializationException` says only "Adopted WebGPU device lacks required features, see the log", and the names are in the browser console.
+
 ## 2026-10-12: The shader toolchain is imported as a project SDK
 
 `Pixely.SdlangCompiler.props` and `.targets` import the `SlangDxcBundle.Toolchain` project SDK with an explicit `Version` instead of referencing the package. The SDK references only the build host's `SlangDxcBundle.Toolchain.<rid>` package and exposes its directory as `SlangDxcToolchainDirectory`.

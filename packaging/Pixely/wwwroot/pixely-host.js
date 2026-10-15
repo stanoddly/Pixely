@@ -1,9 +1,5 @@
 // The page side of Pixely.App.BrowserHost: the WebGPU device SDL adopts, the requestAnimationFrame loop, and the exception that ended the app.
 
-// What SDL's WebGPU backend requires of a device (SDL_gpu_webgpu.c in stanoddly/SDL_wgpu), and what it uses when present.
-const requiredFeatures = ['depth32float-stencil8', 'rg11b10ufloat-renderable', 'indirect-first-instance', 'depth-clip-control', 'bgra8unorm-storage', 'float32-filterable'];
-const optionalFeatures = ['float32-blendable', 'texture-compression-astc', 'texture-compression-astc-sliced-3d', 'texture-compression-bc', 'texture-compression-bc-sliced-3d', 'texture-formats-tier1', 'texture-formats-tier2', 'clip-distances'];
-
 let deviceLoss = null;
 let exitException = null;
 let gpuAdapter = null;
@@ -45,13 +41,9 @@ export async function createGpuDevice() {
         console.warn(`WebGPU runs on ${adapterName}, which draws in software, so the app runs slowly. Turning on hardware acceleration in the browser may fix it.`);
     }
     globalThis.dispatchEvent(new CustomEvent('pixelygpuadapter', { detail: gpuAdapter }));
-    const missing = requiredFeatures.filter(feature => !adapter.features.has(feature));
-    if (missing.length > 0) {
-        throw new Error(`The WebGPU adapter lacks features SDL requires: ${missing.join(', ')}`);
-    }
-    const device = await adapter.requestDevice({
-        requiredFeatures: [...requiredFeatures, ...optionalFeatures.filter(feature => adapter.features.has(feature))]
-    });
+    // A device has only the features it was requested with, and which of them SDL requires or uses is SDL's to decide. So the
+    // device gets every feature the adapter offers, and SDL rejects one that lacks a feature it requires when it adopts it.
+    const device = await adapter.requestDevice({ requiredFeatures: [...adapter.features] });
 
     const instance = Module._wgpuCreateInstance(0);
     const adapterPtr = webgpu.importJsAdapter(adapter, instance);

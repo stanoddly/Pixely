@@ -286,9 +286,11 @@ dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path
 Requesting a WebGPU adapter and device is asynchronous, and SDL would wait it out by suspending the
 wasm stack, which no managed frame survives. So the page requests them: the generated `Main` awaits
 `BrowserHost.PrepareAsync(builder)` before `Build()`, and when the builder has a `GpuDevice`
-registered, `pixely-host.js` requests an adapter, requests a device with the features SDL requires,
+registered, `pixely-host.js` requests an adapter, requests a device with every feature the adapter offers,
 imports both into emdawnwebgpu beneath an instance of its own, and `PixelyFactory` hands the three
-pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiting. A hand-written
+pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiting. SDL decides which
+features it requires: when the device lacks one, adopting it fails and `PixelyFactory` throws
+`PixelyInitializationException` with SDL's error, and SDL's log names each missing feature. A hand-written
 `Main` awaits `PrepareAsync` the same way. `GpuBackend.Automatic` advertises WGSL only in the
 browser; `GpuBackend.WebGpu` (`PIXELY_GRAPHICS=webgpu`) names the driver explicitly.
 
