@@ -290,7 +290,7 @@ registered, `pixely-host.js` requests an adapter, requests a device with every f
 imports both into emdawnwebgpu beneath an instance of its own, and `PixelyFactory` hands the three
 pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiting. SDL decides which
 features it requires: when the device lacks one, adopting it fails and `PixelyFactory` throws
-`PixelyInitializationException` with SDL's error, and SDL's log names each missing feature. A hand-written
+`PixelyInitializationException` with SDL's error, which names each missing feature. A hand-written
 `Main` awaits `PrepareAsync` the same way. `GpuBackend.Automatic` advertises WGSL only in the
 browser; `GpuBackend.WebGpu` (`PIXELY_GRAPHICS=webgpu`) names the driver explicitly.
 
