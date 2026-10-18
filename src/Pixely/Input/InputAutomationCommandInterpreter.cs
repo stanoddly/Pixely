@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.Versioning;
@@ -14,6 +15,10 @@ namespace Pixely.Input;
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationCommandInterpreter
 {
+    // Key names from other naming schemes (DOM KeyboardEvent.code, Unity KeyCode, XNA Keys, SDL short forms) that people and
+    // language models write in scenarios. A side-less modifier such as "Ctrl" presses the left key.
+    private static readonly FrozenDictionary<string, Scancode> ScancodeAliases = CreateScancodeAliases();
+
     private readonly InputAutomation _automation;
     private readonly WindowRegistry _windowRegistry;
     private readonly IImageWriter _imageWriter;
@@ -106,13 +111,13 @@ internal sealed class InputAutomationCommandInterpreter
                 _automation.MouseLeave(viewScope);
                 break;
             case ["key", "down", string scancode]:
-                _automation.KeyDown(ParseEnum<Scancode>(scancode), viewScope);
+                _automation.KeyDown(ParseScancode(scancode), viewScope);
                 break;
             case ["key", "up", string scancode]:
-                _automation.KeyUp(ParseEnum<Scancode>(scancode), viewScope);
+                _automation.KeyUp(ParseScancode(scancode), viewScope);
                 break;
             case ["key", "press", string scancode]:
-                _automation.KeyPress(ParseEnum<Scancode>(scancode), viewScope);
+                _automation.KeyPress(ParseScancode(scancode), viewScope);
                 break;
             case ["text", ..]:
                 _automation.TextInput(command["text".Length..].Trim(), viewScope);
@@ -237,6 +242,57 @@ internal sealed class InputAutomationCommandInterpreter
         }
 
         return button;
+    }
+
+    private static Scancode ParseScancode(string word)
+    {
+        // The alias lookup comes first so that a digit names its key; Enum.TryParse would read "4" as the value of A.
+        return ScancodeAliases.TryGetValue(word, out Scancode scancode) ? scancode : ParseEnum<Scancode>(word);
+    }
+
+    private static FrozenDictionary<string, Scancode> CreateScancodeAliases()
+    {
+        Dictionary<string, Scancode> aliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Ctrl"] = Scancode.LeftCtrl, ["Control"] = Scancode.LeftCtrl, ["LeftControl"] = Scancode.LeftCtrl, ["ControlLeft"] = Scancode.LeftCtrl, ["LControl"] = Scancode.LeftCtrl, ["LCtrl"] = Scancode.LeftCtrl,
+            ["RightControl"] = Scancode.RightCtrl, ["ControlRight"] = Scancode.RightCtrl, ["RControl"] = Scancode.RightCtrl, ["RCtrl"] = Scancode.RightCtrl,
+            ["Shift"] = Scancode.LeftShift, ["ShiftLeft"] = Scancode.LeftShift, ["LShift"] = Scancode.LeftShift,
+            ["ShiftRight"] = Scancode.RightShift, ["RShift"] = Scancode.RightShift,
+            ["Alt"] = Scancode.LeftAlt, ["Option"] = Scancode.LeftAlt, ["AltLeft"] = Scancode.LeftAlt, ["LAlt"] = Scancode.LeftAlt, ["LeftOption"] = Scancode.LeftAlt,
+            ["AltRight"] = Scancode.RightAlt, ["RAlt"] = Scancode.RightAlt, ["RightOption"] = Scancode.RightAlt,
+            ["Gui"] = Scancode.LeftGui, ["Meta"] = Scancode.LeftGui, ["Super"] = Scancode.LeftGui, ["Windows"] = Scancode.LeftGui, ["Win"] = Scancode.LeftGui,
+            ["Command"] = Scancode.LeftGui, ["Cmd"] = Scancode.LeftGui, ["LeftMeta"] = Scancode.LeftGui, ["MetaLeft"] = Scancode.LeftGui, ["LeftSuper"] = Scancode.LeftGui, ["LeftWindows"] = Scancode.LeftGui,
+            ["LeftWin"] = Scancode.LeftGui, ["LeftCommand"] = Scancode.LeftGui, ["LeftCmd"] = Scancode.LeftGui, ["LGui"] = Scancode.LeftGui,
+            ["RightMeta"] = Scancode.RightGui, ["MetaRight"] = Scancode.RightGui, ["RightSuper"] = Scancode.RightGui, ["RightWindows"] = Scancode.RightGui,
+            ["RightWin"] = Scancode.RightGui, ["RightCommand"] = Scancode.RightGui, ["RightCmd"] = Scancode.RightGui, ["RGui"] = Scancode.RightGui,
+            ["ArrowUp"] = Scancode.Up, ["UpArrow"] = Scancode.Up, ["ArrowDown"] = Scancode.Down, ["DownArrow"] = Scancode.Down,
+            ["ArrowLeft"] = Scancode.Left, ["LeftArrow"] = Scancode.Left, ["ArrowRight"] = Scancode.Right, ["RightArrow"] = Scancode.Right,
+            ["Enter"] = Scancode.Return, ["Esc"] = Scancode.Escape, ["Spacebar"] = Scancode.Space, ["Del"] = Scancode.Delete, ["Ins"] = Scancode.Insert,
+            ["PgUp"] = Scancode.PageUp, ["PgDn"] = Scancode.PageDown, ["NumLock"] = Scancode.NumLockClear, ["ContextMenu"] = Scancode.Application,
+            ["Equal"] = Scancode.Equals, ["Quote"] = Scancode.Apostrophe, ["Backquote"] = Scancode.Grave, ["Backtick"] = Scancode.Grave,
+            ["BracketLeft"] = Scancode.LeftBracket, ["BracketRight"] = Scancode.RightBracket, ["IntlBackslash"] = Scancode.NonUsBackslash,
+            ["NumpadEnter"] = Scancode.KeypadEnter, ["NumpadAdd"] = Scancode.KeypadPlus, ["NumpadSubtract"] = Scancode.KeypadMinus,
+            ["NumpadMultiply"] = Scancode.KeypadMultiply, ["NumpadDivide"] = Scancode.KeypadDivide, ["NumpadDecimal"] = Scancode.KeypadPeriod,
+            ["NumpadEqual"] = Scancode.KeypadEquals, ["NumpadComma"] = Scancode.KeypadComma,
+        };
+
+        for (int digit = 0; digit <= 9; digit++)
+        {
+            Scancode number = Enum.Parse<Scancode>($"Number{digit}");
+            Scancode keypad = Enum.Parse<Scancode>($"Keypad{digit}");
+            aliases[$"{digit}"] = number;
+            aliases[$"Digit{digit}"] = number;
+            aliases[$"Alpha{digit}"] = number;
+            aliases[$"D{digit}"] = number;
+            aliases[$"Numpad{digit}"] = keypad;
+        }
+
+        for (char letter = 'A'; letter <= 'Z'; letter++)
+        {
+            aliases[$"Key{letter}"] = Enum.Parse<Scancode>($"{letter}");
+        }
+
+        return aliases.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     private static Vector2 ParseVector(string x, string y)
