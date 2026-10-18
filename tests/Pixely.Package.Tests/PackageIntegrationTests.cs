@@ -407,10 +407,11 @@ public class PackageIntegrationTests
     }
 
     // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
-    // The fixture exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler
-    // variant is covered by the browser publish under node.
+    // The default of a Release build shows a message box outside headless mode, so PIXELY_HEADLESS makes it rethrow instead. The fixture
+    // exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler variant is covered
+    // by the browser publish under node.
     [Test]
-    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate()
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagateInHeadlessMode()
     {
         string consumerDirectory = GetConsumerDirectory("HostedConsumer");
         DeleteConsumerOutputs("HostedConsumer");
@@ -419,6 +420,7 @@ public class PackageIntegrationTests
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
+            new Dictionary<string, string> { ["PIXELY_HEADLESS"] = "1" },
             Path.Combine(outputDirectory, "HostedConsumer.dll"));
         Assert.Multiple(() =>
         {
