@@ -57,8 +57,8 @@ writes the exception to standard error, shows its message in an error `MessageBo
 "Fatal error" and exits with 1. A system that cannot show the box gets a second entry on standard
 error instead. A Debug build and a headless run (`PIXELY_HEADLESS` set to `1` or `true`, see
 headless.md) rethrow the exception instead, so a debugger stops on it and nobody has to dismiss a box.
-`PixelyConfig.Headless` set in code does not count: a failure in `Configure` happens before the
-config exists. In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
+The default reads only the environment variable, so `PixelyConfig.Headless` set in code does not
+count. In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
 
 A project that wants other behavior declares the optional `OnException`, whose return value is the
 exit code:

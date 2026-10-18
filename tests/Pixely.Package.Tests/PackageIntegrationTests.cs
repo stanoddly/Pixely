@@ -431,6 +431,36 @@ public class PackageIntegrationTests
         });
     }
 
+    // Outside headless mode the default of a Release build reports the failure itself. Empty display variables leave the message box
+    // nothing to connect to, so it fails or shows nowhere instead of blocking the run; libwayland would fall back to wayland-0 for a
+    // removed WAYLAND_DISPLAY, but not for an empty one. Either way the exception reaches standard error and the exit code is 1.
+    [Test]
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionReportsTheFailureInRelease()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Ignore("Without a display server to withhold, the message box would block the run.");
+        }
+
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NARROW_HANDLER");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            new Dictionary<string, string> { ["PIXELY_HEADLESS"] = "0", ["DISPLAY"] = "", ["WAYLAND_DISPLAY"] = "" },
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran."));
+            Assert.That(output, Does.Contain("System.InvalidOperationException: Configure failed on purpose."));
+            Assert.That(output, Does.Not.Contain("Unhandled:"));
+            Assert.That(output, Does.Not.Contain("OnException ran"));
+        });
+    }
+
     // The fixture's handler throws another exception when HOSTED_CONSUMER_HANDLER_THROWS is set, and both leave Main together; one that
     // wraps the failure as its inner exception, with HOSTED_CONSUMER_HANDLER_WRAPS, leaves Main as it is. The fixture exits with 3 from
     // AppDomain.UnhandledException, as the narrow handler variant does.
