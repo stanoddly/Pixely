@@ -407,10 +407,11 @@ public class PackageIntegrationTests
     }
 
     // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
-    // The fixture exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler
-    // variant is covered by the browser publish under node.
+    // The default of a Release build shows a message box outside headless mode, so PIXELY_HEADLESS makes it rethrow instead. The fixture
+    // exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler variant is covered
+    // by the browser publish under node.
     [Test]
-    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagate()
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionLetsTheFailurePropagateInHeadlessMode()
     {
         string consumerDirectory = GetConsumerDirectory("HostedConsumer");
         DeleteConsumerOutputs("HostedConsumer");
@@ -419,12 +420,43 @@ public class PackageIntegrationTests
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
             consumerDirectory,
+            new Dictionary<string, string> { ["PIXELY_HEADLESS"] = "1" },
             Path.Combine(outputDirectory, "HostedConsumer.dll"));
         Assert.Multiple(() =>
         {
             Assert.That(exitCode, Is.EqualTo(3));
             Assert.That(output, Does.Contain("Configure ran."));
             Assert.That(output, Does.Contain("Unhandled: Configure failed on purpose."));
+            Assert.That(output, Does.Not.Contain("OnException ran"));
+        });
+    }
+
+    // Outside headless mode the default of a Release build reports the failure itself. Empty display variables leave the message box
+    // nothing to connect to, so it fails or shows nowhere instead of blocking the run; libwayland would fall back to wayland-0 for a
+    // removed WAYLAND_DISPLAY, but not for an empty one. Either way the exception reaches standard error and the exit code is 1.
+    [Test]
+    public async Task HostedConsumerWithoutAnApplicableOnExceptionReportsTheFailureInRelease()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Ignore("Without a display server to withhold, the message box would block the run.");
+        }
+
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, defineConstants: "HOSTED_CONSUMER_NARROW_HANDLER");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            new Dictionary<string, string> { ["PIXELY_HEADLESS"] = "0", ["DISPLAY"] = "", ["WAYLAND_DISPLAY"] = "" },
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("Configure ran."));
+            Assert.That(output, Does.Contain("System.InvalidOperationException: Configure failed on purpose."));
+            Assert.That(output, Does.Not.Contain("Unhandled:"));
             Assert.That(output, Does.Not.Contain("OnException ran"));
         });
     }

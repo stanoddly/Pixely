@@ -4,7 +4,8 @@
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
       project's RootNamespace whose Main builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
-      of Program. On browser-wasm the browser owns the frame loop and the WebGPU device is requested
+      of Program, which on the desktop reports the failure in a message box in Release builds outside
+      headless mode and otherwise rethrows it. On browser-wasm the browser owns the frame loop and the WebGPU device is requested
       asynchronously, so Main is async, awaits Pixely.App.BrowserHost.PrepareAsync before building and
       Pixely.App.BrowserHost.RunAsync in place of app.Run(), and reports the failure to the page through
       Pixely.App.BrowserHost.ReportExceptionAsync; every other line is shared. An exception OnException
@@ -90,9 +91,27 @@
             <_PixelyEntryPointLine Include="{" />
             <_PixelyEntryPointLine Include="%20%20%20%20extension(Program)" />
             <_PixelyEntryPointLine Include="%20%20%20%20{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// Rethrown with its original stack trace, so a failure fails the process as it would from a hand-written Main." />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// A Release build writes the failure to standard error, shows it to the player and exits with 1. A Debug build and a headless run (PIXELY_HEADLESS) rethrow it with its original stack trace, so a debugger stops on it and nobody has to dismiss a box." Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// Rethrown with its original stack trace, so a failure fails the process as it would from a hand-written Main, and the page reports it." Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20internal static int OnException(global::System.Exception exception)" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <_PixelyEntryPointLine Include="#if !DEBUG" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20string%3F headless = global::System.Environment.GetEnvironmentVariable(&quot;PIXELY_HEADLESS&quot;)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20if (headless%3F.Trim().ToLowerInvariant() is not (&quot;1&quot; or &quot;true&quot;))" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20{" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20global::System.Console.Error.WriteLine(exception)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20try" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20{" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20global::Pixely.MessageBox.Show(global::Pixely.MessageBoxSeverity.Error, &quot;Fatal error&quot;, exception.Message)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20}" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20// A system without a display cannot show the box, and standard error already has the failure." Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20catch (global::System.Exception messageBoxException)" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20{" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20global::System.Console.Error.WriteLine(messageBoxException)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20}" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20return 1%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20}" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="#endif" Condition="'$(_PixelyBrowser)' != 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception)%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20return 1%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20}" />

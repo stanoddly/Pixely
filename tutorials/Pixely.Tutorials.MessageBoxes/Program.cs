@@ -24,9 +24,10 @@ static partial class Program
         builder.AddSingleton<IUiView, MessageBoxView>();
     }
 
-    // Pixely does not report failures on its own. Declaring this optional method makes the
-    // generated Main pass a failure from Configure, Build or Run here and exit with what it
-    // returns; without it the exception propagates. It runs before the application is disposed,
+    // Without this optional method the generated default reports a failure in a message box in
+    // Release builds and rethrows it in Debug builds and headless runs. Declaring it makes the
+    // generated Main pass a failure from Configure, Build or Run here, in every build, and exit
+    // with what it returns. It runs before the application is disposed,
     // so a failure during Run still has the window open behind the box, while a failure during
     // Build has no window yet, which is why the box is shown without a parent.
     static int OnException(Exception exception)

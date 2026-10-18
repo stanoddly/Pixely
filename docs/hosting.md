@@ -52,9 +52,16 @@ static partial class Program
 
 ## Reporting failures
 
-On the desktop Pixely does not report failures on its own; in the browser the default page shows
-them (see [The frame loop](#the-frame-loop)). A project that wants a player-visible message declares
-the optional `OnException`, whose return value is the exit code:
+On the desktop a Release build reports a failure on its own: the generated default `OnException`
+writes the exception to standard error, shows its message in an error `MessageBox` titled
+"Fatal error" and exits with 1. A system that cannot show the box gets a second entry on standard
+error instead. A Debug build and a headless run (`PIXELY_HEADLESS` set to `1` or `true`, see
+headless.md) rethrow the exception instead, so a debugger stops on it and nobody has to dismiss a box.
+The default reads only the environment variable, so `PixelyConfig.Headless` set in code does not
+count. In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
+
+A project that wants other behavior declares the optional `OnException`, whose return value is the
+exit code:
 
 ```csharp
 static int OnException(Exception exception)
@@ -72,8 +79,9 @@ yet. An exception the handler throws while handling the failure leaves `Main` as
 inner messages. An exception that is the failure itself, rethrown, or that holds it as its
 `InnerException` leaves `Main` unchanged.
 
-When the project declares none, the generated file's default applies: it rethrows the exception with
-its original stack trace, so the process fails as it would from a hand-written `Main`. The default is
+When the project declares none, the generated file's default described above applies. Where it
+rethrows, it keeps the original stack trace, so the process fails as it would from a hand-written
+`Main`. The default is
 an extension member of `Program`, and lookup prefers a member the type declares over an extension
 member, which is what makes `OnException` optional without a declaration of any kind.
 
