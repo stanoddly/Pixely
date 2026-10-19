@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +9,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Pixely.ShaderCommon;
+using Task = System.Threading.Tasks.Task;
 
 namespace Pixely.SdlangCompiler;
 
@@ -51,8 +53,17 @@ public class SdlangCompiler
     private static readonly ShaderFormatDto[] TargetFormats =
         [ShaderFormatDto.SpirV, .. AdditionalTargetFormats];
 
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    // MSBuild batching matched item identities ignoring case, so two spellings of one file compiled once. A case-insensitive
+    // file system would otherwise compile them concurrently into the same outputs.
+    internal static readonly StringComparer InputPathComparer = StringComparer.OrdinalIgnoreCase;
+
     private readonly string _slangCompilerPath;
     private readonly TaskLoggingHelper _log;
+    // Shaders compile concurrently, and TaskLoggingHelper is not documented as safe to call from several threads at once.
+    private readonly Lock _logLock = new();
+    // Waiting for slangc holds no thread, so nothing else bounds how many processes the concurrent compiles start.
+    private readonly SemaphoreSlim _slangProcessSlots;
 
     private static readonly Dictionary<ShaderFormatDto, string> TargetsWithExtensions = new()
     {
@@ -73,6 +84,7 @@ public class SdlangCompiler
 
         _slangCompilerPath = slangCompilerPath;
         _log = log;
+        _slangProcessSlots = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount);
     }
 
     private static string GetSlangVersion()
@@ -91,14 +103,31 @@ public class SdlangCompiler
             throw new ShaderCompilationException("No filenames provided");
         }
 
-        foreach (string filename in filenames)
+        FileInfo[] files = filenames.Select(filename => new FileInfo(filename)).DistinctBy(file => file.FullName, InputPathComparer).ToArray();
+        FileInfo? missingFile = files.FirstOrDefault(file => !file.Exists);
+        if (missingFile != null)
         {
-            FileInfo file = new FileInfo(filename);
-            if (!file.Exists)
-            {
-                throw new ShaderCompilationException($"File {file.FullName} does not exist");
-            }
-            CompileShader(file, force);
+            throw new ShaderCompilationException($"File {missingFile.FullName} does not exist");
+        }
+
+        // The thread pool runs the compiles, so their continuations never need the thread blocked in Wait, whatever
+        // synchronization context the host installed.
+        Task compilation = Task.Run(() => Task.WhenAll(files.Select(file => CompileShaderAsync(file, force))));
+        try
+        {
+            compilation.Wait();
+        }
+        catch (AggregateException failure) when (failure.InnerExceptions.Count == 1)
+        {
+            ExceptionDispatchInfo.Throw(failure.InnerExceptions[0]);
+        }
+
+        // A shader deletes its metadata before replacing its outputs, and a cleanup in between would remove those outputs as
+        // obsolete. So every output directory is cleaned once, after all shaders compiled. A failed compile skips it, so a
+        // cleanup error cannot hide the compile error, and the next successful build removes the obsolete outputs.
+        foreach (DirectoryInfo sourceDirectory in files.Select(file => file.Directory!).DistinctBy(directory => directory.FullName, PathComparer))
+        {
+            CleanupGeneratedFiles(sourceDirectory, new DirectoryInfo(Path.Combine(sourceDirectory.FullName, GeneratedShaderDirectory)));
         }
     }
 
@@ -186,7 +215,7 @@ public class SdlangCompiler
         VulkanBindingShifts.Concat(CommandLineOptions.SelectMany(options => options.Value.Prepend(options.Key.ToString())))
             .Append($"output rewrite {OutputRewriteVersion}"))));
 
-    private (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) CompileTargets(
+    private async Task<(FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances)> CompileTargetsAsync(
         FileInfo filePath,
         DirectoryInfo tempDir,
         string entryPoint,
@@ -195,27 +224,24 @@ public class SdlangCompiler
         FileInfo reflectionFile = new FileInfo(Path.Combine(tempDir.FullName, $"{outputName}.reflection.json"));
         FileInfo dependencyFile = new FileInfo(Path.Combine(tempDir.FullName, $"{outputName}.dependencies.d"));
 
-        List<ShaderInstanceDto> shaderInstances = new List<ShaderInstanceDto>();
-        shaderInstances.Add(CompileTarget(
+        ShaderInstanceDto spirVShader = await CompileTargetAsync(
             filePath,
             tempDir,
             ShaderFormatDto.SpirV,
             entryPoint,
             outputName,
             reflectionFile,
-            dependencyFile));
+            dependencyFile);
 
         // The SPIR-V compile is the one that reflects, and the WGSL target is rewritten from that reflection.
         ShaderReflection reflection = ParseReflectionData(reflectionFile, entryPoint);
-        foreach (ShaderFormatDto format in AdditionalTargetFormats)
-        {
-            shaderInstances.Add(CompileTarget(filePath, tempDir, format, entryPoint, outputName, reflection: reflection));
-        }
+        ShaderInstanceDto[] additionalShaders = await Task.WhenAll(AdditionalTargetFormats.Select(format =>
+            CompileTargetAsync(filePath, tempDir, format, entryPoint, outputName, reflection: reflection)));
 
-        return (dependencyFile, reflection, shaderInstances);
+        return (dependencyFile, reflection, [spirVShader, .. additionalShaders]);
     }
 
-    private ShaderInstanceDto CompileTarget(
+    private async Task<ShaderInstanceDto> CompileTargetAsync(
         FileInfo filePath,
         DirectoryInfo outputDir,
         ShaderFormatDto format,
@@ -243,7 +269,7 @@ public class SdlangCompiler
             args.AddRange(["-depfile", dependencyFile.FullName]);
         }
 
-        ExecuteSlang(args, $"{format} shader compilation");
+        await ExecuteSlangAsync(args, $"{format} shader compilation");
         if (format == ShaderFormatDto.SpirV)
         {
             ThrowIfReadsDrawParameters(outputFile, filePath, entryPoint);
@@ -273,7 +299,7 @@ public class SdlangCompiler
         }
     }
 
-    private ShaderSourceKind DiscoverShader(
+    private async Task<ShaderSourceKind> DiscoverShaderAsync(
         FileInfo filePath,
         DirectoryInfo tempDir)
     {
@@ -287,13 +313,13 @@ public class SdlangCompiler
             "-reflection-json", reflectionFile.FullName
         ];
 
-        ExecuteSlang(args, "Shader discovery");
+        await ExecuteSlangAsync(args, "Shader discovery");
         return ParseDiscoveryReflection(reflectionFile);
     }
 
-    private void ExecuteSlang(List<string> args, string operation)
+    private async Task ExecuteSlangAsync(List<string> args, string operation)
     {
-        _log.LogMessage(MessageImportance.Low, $"Executing {operation.ToLowerInvariant()}: {_slangCompilerPath} {string.Join(" ", args)}");
+        LogMessage($"Executing {operation.ToLowerInvariant()}: {_slangCompilerPath} {string.Join(" ", args)}");
 
         Process process = new Process
         {
@@ -308,17 +334,28 @@ public class SdlangCompiler
             }
         };
 
-        process.Start();
-        process.StandardInput.Close();
-        // Read one stream asynchronously so slangc cannot block on a full pipe while the other is drained.
-        Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        string standardError = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        string standardOutput = standardOutputTask.Result;
+        string standardOutput;
+        string standardError;
+        await _slangProcessSlots.WaitAsync();
+        try
+        {
+            process.Start();
+            process.StandardInput.Close();
+            // Read both streams concurrently so slangc cannot block on a full pipe while the other is drained.
+            Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            standardOutput = await standardOutputTask;
+            standardError = await standardErrorTask;
+        }
+        finally
+        {
+            _slangProcessSlots.Release();
+        }
 
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
-            _log.LogMessage(MessageImportance.Low, standardOutput.Trim());
+            LogMessage(standardOutput.Trim());
         }
 
         if (process.ExitCode != 0)
@@ -332,7 +369,18 @@ public class SdlangCompiler
 
         if (!string.IsNullOrWhiteSpace(standardError))
         {
-            _log.LogWarning(standardError.Trim());
+            lock (_logLock)
+            {
+                _log.LogWarning(standardError.Trim());
+            }
+        }
+    }
+
+    private void LogMessage(string message)
+    {
+        lock (_logLock)
+        {
+            _log.LogMessage(MessageImportance.Low, message);
         }
     }
 
@@ -1755,19 +1803,18 @@ public class SdlangCompiler
         };
     }
 
-    private void CompileShader(FileInfo filePath, bool force = false)
+    private async Task CompileShaderAsync(FileInfo filePath, bool force)
     {
         DirectoryInfo parentDir = filePath.Directory!;
         DirectoryInfo outputDir = new DirectoryInfo(Path.Combine(parentDir.FullName, GeneratedShaderDirectory));
 
         if (ShouldSkipCompilation(filePath, outputDir, force))
         {
-            CleanupGeneratedFiles(parentDir, outputDir);
-            _log.LogMessage(MessageImportance.Low, $"Skipping {filePath.FullName} (unchanged)");
+            LogMessage($"Skipping {filePath.FullName} (unchanged)");
             return;
         }
 
-        _log.LogMessage(MessageImportance.Low, $"Result directory: {outputDir.FullName}");
+        LogMessage($"Result directory: {outputDir.FullName}");
 
         string filenameWithoutExt = Path.GetFileNameWithoutExtension(filePath.Name);
 
@@ -1777,13 +1824,13 @@ public class SdlangCompiler
         DirectoryInfo tempDir = Directory.CreateTempSubdirectory("ShaderPack_");
         try
         {
-            _log.LogMessage(MessageImportance.Low, $"Intermediate results written to: {tempDir.FullName}");
+            LogMessage($"Intermediate results written to: {tempDir.FullName}");
 
-            ShaderSourceKind shaderSourceKind = DiscoverShader(filePath, tempDir);
+            ShaderSourceKind shaderSourceKind = await DiscoverShaderAsync(filePath, tempDir);
 
             if (shaderSourceKind == ShaderSourceKind.Compute)
             {
-                (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) = CompileTargets(
+                (FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances) = await CompileTargetsAsync(
                     filePath,
                     tempDir,
                     "computeMain",
@@ -1806,15 +1853,17 @@ public class SdlangCompiler
                     reflection.ThreadCountX,
                     reflection.ThreadCountY,
                     reflection.ThreadCountZ);
-                CleanupGeneratedFiles(parentDir, outputDir);
                 return;
             }
 
-            (FileInfo graphicsDependencyFile, ShaderReflection vertexReflection, List<ShaderInstanceDto> vertexShaders) = CompileTargets(
-                filePath,
-                tempDir,
-                "vertexMain",
-                $"{filenameWithoutExt}.vertex");
+            Task<(FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances)> vertexCompilation =
+                CompileTargetsAsync(filePath, tempDir, "vertexMain", $"{filenameWithoutExt}.vertex");
+            Task<(FileInfo dependencyFile, ShaderReflection reflection, List<ShaderInstanceDto> shaderInstances)> fragmentCompilation =
+                CompileTargetsAsync(filePath, tempDir, "fragmentMain", $"{filenameWithoutExt}.fragment");
+            // Both stages finish before the temporary directory they write to is deleted, even when one of them fails.
+            await Task.WhenAll(vertexCompilation, fragmentCompilation);
+
+            (FileInfo graphicsDependencyFile, ShaderReflection vertexReflection, List<ShaderInstanceDto> vertexShaders) = await vertexCompilation;
             List<string> graphicsSourceDependencies = ReadSourceDependencies(filePath, graphicsDependencyFile);
             string graphicsSourceHash = CalculateSourceHash(filePath, graphicsSourceDependencies);
             if (vertexReflection.Stage != ShaderStageDto.Vertex)
@@ -1822,11 +1871,7 @@ public class SdlangCompiler
                 throw new ShaderCompilationException("Entry point 'vertexMain' is not a vertex shader.");
             }
 
-            (FileInfo _, ShaderReflection fragmentReflection, List<ShaderInstanceDto> fragmentShaders) = CompileTargets(
-                filePath,
-                tempDir,
-                "fragmentMain",
-                $"{filenameWithoutExt}.fragment");
+            (FileInfo _, ShaderReflection fragmentReflection, List<ShaderInstanceDto> fragmentShaders) = await fragmentCompilation;
             if (fragmentReflection.Stage != ShaderStageDto.Fragment)
             {
                 throw new ShaderCompilationException("Entry point 'fragmentMain' is not a fragment shader.");
@@ -1842,7 +1887,6 @@ public class SdlangCompiler
                 fragmentShaders,
                 graphicsSourceHash,
                 graphicsSourceDependencies);
-            CleanupGeneratedFiles(parentDir, outputDir);
         }
         finally
         {
@@ -1873,10 +1917,7 @@ public class SdlangCompiler
             return;
         }
 
-        StringComparer filenameComparer = OperatingSystem.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-        HashSet<string> expectedFilenames = new HashSet<string>(filenameComparer);
+        HashSet<string> expectedFilenames = new HashSet<string>(PathComparer);
         foreach (FileInfo metadataFile in outputDirectory.GetFiles("*.metadata.json"))
         {
             string shaderName = metadataFile.Name[..^".metadata.json".Length];
@@ -1915,14 +1956,14 @@ public class SdlangCompiler
 
         HashSet<string> generatedExtensions = new HashSet<string>(
             TargetsWithExtensions.Values.Select(extension => $".{extension}"),
-            filenameComparer);
+            PathComparer);
         foreach (FileInfo generatedFile in outputDirectory.GetFiles())
         {
             bool isGeneratedFile = generatedFile.Name.EndsWith(".metadata.json", StringComparison.OrdinalIgnoreCase) ||
                 generatedExtensions.Contains(generatedFile.Extension);
             if (isGeneratedFile && !expectedFilenames.Contains(generatedFile.Name))
             {
-                _log.LogMessage(MessageImportance.Low, $"Removing obsolete shader output: {generatedFile.FullName}");
+                LogMessage($"Removing obsolete shader output: {generatedFile.FullName}");
                 generatedFile.Delete();
             }
         }
