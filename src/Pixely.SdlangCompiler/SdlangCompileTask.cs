@@ -13,10 +13,9 @@ public class SdlangCompileTask : Microsoft.Build.Utilities.Task
     private static readonly string[] GeneratedShaderExtensions = ["spv", "dxil", "metal", "wgsl"];
 
     /// <summary>
-    /// The input shader file to compile.
+    /// The input shader files to compile.
     /// </summary>
-    [Required]
-    public string InputFile { get; set; } = "";
+    public ITaskItem[] InputFiles { get; set; } = [];
 
     /// <summary>
     /// Path to the slangc executable. Slang is build-time tooling, so it is located through this
@@ -46,12 +45,27 @@ public class SdlangCompileTask : Microsoft.Build.Utilities.Task
             return false;
         }
 
+        // Matches task batching over an empty item list, which never ran the task.
+        if (InputFiles.Length == 0)
+        {
+            return true;
+        }
+
         try
         {
+            string[] inputFiles = InputFiles.Select(item => Path.GetFullPath(item.ItemSpec)).Distinct(SdlangCompiler.InputPathComparer).ToArray();
             SdlangCompiler sdlangCompiler = new(SlangCompilerPath, Log);
-            sdlangCompiler.Compile([InputFile], false);
-            GeneratedFiles = GetGeneratedFiles(InputFile);
+            sdlangCompiler.Compile(inputFiles, false);
+            GeneratedFiles = inputFiles.SelectMany(GetGeneratedFiles).ToArray();
             return true;
+        }
+        catch (AggregateException failures)
+        {
+            foreach (Exception failure in failures.InnerExceptions)
+            {
+                Log.LogError(failure.Message);
+            }
+            return false;
         }
         catch (Exception ex)
         {

@@ -37,6 +37,8 @@ Reference the [Pixely SDK](sdk.md) and declare the shaders to compile:
 
 The SDK imports the shader build integration automatically. It compiles every `SdlangShader` item before `CoreCompile` and exposes the generated files as `@(SdlangShaderOutput)`. Generated files remain beside their shader sources; the compilation targets do not copy, package, or embed them. This lets each project own its complete content pipeline independently of shader compilation. The shader task and its dependencies are build tools and do not enter the application's references or output.
 
+Shaders compile concurrently. Each call of the shader task runs at most one `slangc` process per processor at a time. Projects built in parallel, and the target frameworks of a multi-targeted project, each call the task separately.
+
 Generated shaders are runtime content. See [Content distribution](content-distribution.md) for the loose-directory, embedded-resource, and ZIP policies, with runnable tutorials for embedding generated shaders in an assembly and publishing content in a ZIP archive.
 
 Pixely provides the shader compiler for Linux x64/ARM64, Windows x64, and macOS x64/ARM64. Compilation uses the build host's compiler regardless of the application's target runtime. Custom compilation targets can use the compiler path exposed through `$(SlangCompilerPath)`.
@@ -50,7 +52,7 @@ The `SdlangShader` item plus the shared target covers the normal case. To compil
     <ItemGroup>
         <GeneratedShader Include="$(OutputPath)\Generated\*.slang" />
     </ItemGroup>
-    <SdlangCompileTask InputFile="%(GeneratedShader.Identity)" SlangCompilerPath="$(SlangCompilerPath)" />
+    <SdlangCompileTask InputFiles="@(GeneratedShader)" SlangCompilerPath="$(SlangCompilerPath)" />
 </Target>
 ```
 
@@ -58,7 +60,7 @@ Do not name a custom target `CompileSdlangShaders`; a target defined in the proj
 
 ### Migrating existing projects
 
-Earlier versions required each project to define its own target calling the task. Replace it with the `SdlangShader` item group shown above. Projects that still call the task without `SlangCompilerPath` fail the build with a message pointing here.
+Earlier versions required each project to define its own target calling the task. Replace it with the `SdlangShader` item group shown above. Projects that still call the task without `SlangCompilerPath` fail the build with a message pointing here. Custom targets that batched the task with `InputFile="%(Shader.Identity)"` pass the whole item list instead, as `InputFiles="@(Shader)"`.
 
 Remove `OutputItemType` and `OutputLogicalNamePrefix` metadata from `SdlangShader`. Projects that copy or package content should enumerate their content tree after compilation. Projects that embed generated shaders should consume `@(SdlangShaderOutput)` before `AssignTargetPaths`, as described in [Content distribution](content-distribution.md).
 

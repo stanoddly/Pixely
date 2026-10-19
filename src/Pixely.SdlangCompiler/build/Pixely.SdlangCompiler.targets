@@ -15,7 +15,7 @@
 
     <Target Name="CompileSdlangShaders" BeforeTargets="CoreCompile" DependsOnTargets="ValidateSlangToolchain"
             Condition="'@(SdlangShader)' != ''">
-        <SdlangCompileTask InputFile="%(SdlangShader.Identity)" SlangCompilerPath="$(SlangCompilerPath)">
+        <SdlangCompileTask InputFiles="@(SdlangShader)" SlangCompilerPath="$(SlangCompilerPath)">
             <Output TaskParameter="GeneratedFiles" ItemName="SdlangShaderOutput" />
         </SdlangCompileTask>
     </Target>

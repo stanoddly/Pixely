@@ -49,7 +49,7 @@
         <ItemGroup>
             <TestSdlangShader Include="$(OutputPath)\TestShaders\*.slang" />
         </ItemGroup>
-        <SdlangCompileTask InputFile="%(TestSdlangShader.Identity)" SlangCompilerPath="$(SlangCompilerPath)" />
+        <SdlangCompileTask InputFiles="@(TestSdlangShader)" SlangCompilerPath="$(SlangCompilerPath)" />
     </Target>
 
     <ItemGroup>
