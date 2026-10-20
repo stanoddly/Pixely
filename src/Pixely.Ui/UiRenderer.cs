@@ -19,7 +19,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 {
     private static readonly ColorTargetSettings _uiColorTargetSettings = new()
     {
-        ClearColorValue = FColors.Transparent
+        ClearColorValue = Colors.Transparent
     };
 
     private static readonly ColorTargetSettings _loadColorTargetSettings = new() { LoadOperation = LoadOperation.Load };

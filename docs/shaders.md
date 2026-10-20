@@ -102,6 +102,14 @@ Every graphics-program source declares exactly one `vertexMain` and one `fragmen
 
 **Output semantics:** Always use `SV_Position` for the first vertex-output field. Use `SV_Target0`, `SV_Target1`, etc. for multiple render targets (MRT). Order matches the `AddColorTarget()` calls in pipeline builder.
 
+## Color spaces
+
+Shaders work in linear light. Every window's swapchain is an sRGB format, so the GPU encodes what a fragment shader writes to sRGB, and blends in linear light. Textures created from images (`ITextureLoader`, `GpuMemorySystem.CreateTexture(Image)`, sprites, glyphs) are `R8G8B8A8UnormSrgb`, so sampling returns linear values. Data that is not color, such as normal maps, masks or lookup tables, is created with `TextureFormat.R8G8B8A8Unorm` through the overloads that take a format, so it is read as stored.
+
+In C#, `SrgbColor` holds a color as authored, in bytes, and `LinearColor` holds what the GPU works with, in floats. `SrgbColor` converts to `LinearColor` implicitly; the other way is an explicit cast that clamps and rounds. Alpha is linear in both. `Colors` names `SrgbColor` values.
+
+A compute shader cannot write an sRGB format, so a texture it writes linear values into is `R8G8B8A8Unorm` or a float format. Blitting it to an sRGB target encodes the values on write. The `ComputeShader` tutorial does this.
+
 ## Constant Buffers (Uniforms)
 
 Fragment shader with constant buffer:
@@ -122,8 +130,10 @@ float4 fragmentMain(VertexToFragment input) : SV_Target0
 
 ```csharp
 // Before drawing, push uniform data
-renderPass.PushFragmentUniformData(0, FColors.Magenta);  // Slot 0
+renderPass.PushFragmentUniformData(0, (LinearColor)Colors.Magenta);  // Slot 0
 ```
+
+A color pushed to a shader is a `LinearColor`. `PushFragmentUniformData<T>` is generic, so an `SrgbColor` is converted with an explicit cast, as above; without it the bytes of the sRGB color would be pushed.
 
 **Available push methods:**
 - `CommandBuffer.PushFragmentUniformData<T>(uint slot, T data)`
@@ -268,6 +278,19 @@ struct Input
 ```
 
 The order of `TEXCOORD` semantics must match the order of fields in the C# vertex struct.
+
+A vertex color is an `SrgbColor` stored as `UByte4Norm`, so the shader receives sRGB-encoded values. Decode them to linear light in the vertex stage:
+
+```csharp
+float3 decodeSrgb(float3 encoded)
+{
+    float3 low = encoded / 12.92;
+    float3 high = pow((encoded + 0.055) / 1.055, 2.4);
+    return select(encoded <= 0.04045, low, high);
+}
+
+output.Color = float4(decodeSrgb(input.Color.rgb), input.Color.a);
+```
 
 ## Vertex and Instance IDs
 

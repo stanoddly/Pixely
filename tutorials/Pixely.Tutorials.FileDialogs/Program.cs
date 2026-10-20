@@ -18,7 +18,7 @@ static partial class Program
         builder.AddSingleton<UiStyle>(provider =>
             new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14))
             {
-                Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255) }
+                Text = new TextAppearance { Foreground = new SrgbColor(235, 238, 242, 255) }
             });
 
         builder.AddSingleton(new FileDialogsViewModel());

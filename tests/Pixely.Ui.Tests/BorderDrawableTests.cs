@@ -9,8 +9,8 @@ namespace Pixely.Ui.Tests;
 /// </summary>
 public class BorderDrawableTests
 {
-    private static readonly Color Border = new(255, 0, 0, 255);
-    private static readonly Color Fill = new(0, 0, 255, 255);
+    private static readonly SrgbColor Border = new(255, 0, 0, 255);
+    private static readonly SrgbColor Fill = new(0, 0, 255, 255);
 
     [Test]
     public void Paint_EmitsFourEdgesAroundTheFill()
@@ -25,7 +25,7 @@ public class BorderDrawableTests
             Assert.That(root.Instructions[2].Area, Is.EqualTo(new Rectangle(0, 2, 2, 26)), "left");
             Assert.That(root.Instructions[3].Area, Is.EqualTo(new Rectangle(38, 2, 2, 26)), "right");
             Assert.That(root.Instructions[4].Area, Is.EqualTo(new Rectangle(2, 2, 36, 26)), "the fill, painted last");
-            Assert.That(root.Instructions[4].Tint, Is.EqualTo((FColor)Fill));
+            Assert.That(root.Instructions[4].Tint, Is.EqualTo((LinearColor)Fill));
         });
     }
 
@@ -56,7 +56,7 @@ public class BorderDrawableTests
             Assert.That(root.Instructions, Has.Count.EqualTo(1),
                 "the top edge takes the whole element and the three empty rectangles left over are dropped");
             Assert.That(root.Instructions[0].Area, Is.EqualTo(new Rectangle(0, 0, 20, 20)));
-            Assert.That(root.Instructions[0].Tint, Is.EqualTo((FColor)Border),
+            Assert.That(root.Instructions[0].Tint, Is.EqualTo((LinearColor)Border),
                 "an empty interior is not handed to the fill, which a nine-patch would paint corners into anyway");
         });
     }

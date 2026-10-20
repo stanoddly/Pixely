@@ -14,8 +14,8 @@ public enum AlphaMode
 public sealed record ModelTexture(Texture Texture, SamplerConfig Sampler);
 
 /// <summary>The base color part of a glTF metallic-roughness material. <see cref="BaseColorFactor"/> is linear RGBA.</summary>
-public sealed record ModelMaterial(string? Name, Vector4 BaseColorFactor, ModelTexture? BaseColorTexture, AlphaMode AlphaMode, float AlphaCutoff, bool DoubleSided)
+public sealed record ModelMaterial(string? Name, LinearColor BaseColorFactor, ModelTexture? BaseColorTexture, AlphaMode AlphaMode, float AlphaCutoff, bool DoubleSided)
 {
     /// <summary>The material glTF uses for a primitive without one.</summary>
-    public static ModelMaterial Default { get; } = new(null, Vector4.One, null, AlphaMode.Opaque, 0.5f, false);
+    public static ModelMaterial Default { get; } = new(null, new LinearColor(1, 1, 1, 1), null, AlphaMode.Opaque, 0.5f, false);
 }

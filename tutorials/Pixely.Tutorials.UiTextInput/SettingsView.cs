@@ -10,8 +10,8 @@ namespace Pixely.Tutorials.UiTextInput;
 /// </summary>
 public sealed class SettingsView : UiView<SettingsViewModel>
 {
-    private static readonly Color Background = new(28, 30, 34, 255);
-    private static readonly Color Panel = new(42, 50, 63, 255);
+    private static readonly SrgbColor Background = new(28, 30, 34, 255);
+    private static readonly SrgbColor Panel = new(42, 50, 63, 255);
 
     private const int FieldWidth = 240;
 

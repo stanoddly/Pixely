@@ -13,9 +13,9 @@ namespace Pixely.Tutorials.Hotbar;
 /// </summary>
 public sealed class HotbarSlot : Element, IPointerTarget
 {
-    private static readonly Drawable Normal = new SolidDrawable(new Color(60, 60, 60, 255));
-    private static readonly Drawable Selected = new SolidDrawable(new Color(200, 200, 200, 255));
-    private static readonly Drawable Hovered = new SolidDrawable(new Color(100, 100, 100, 255));
+    private static readonly Drawable Normal = new SolidDrawable(new SrgbColor(60, 60, 60, 255));
+    private static readonly Drawable Selected = new SolidDrawable(new SrgbColor(200, 200, 200, 255));
+    private static readonly Drawable Hovered = new SolidDrawable(new SrgbColor(100, 100, 100, 255));
 
     private bool _isSelected;
     private bool _isHovered;

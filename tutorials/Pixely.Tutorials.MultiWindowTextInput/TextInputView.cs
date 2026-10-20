@@ -32,7 +32,7 @@ public sealed class TextInputViewModel : IUiViewModel
 
 public sealed class TextInputView : UiView<TextInputViewModel>
 {
-    private static readonly Color BackgroundColor = new(28, 30, 34, 255);
+    private static readonly SrgbColor BackgroundColor = new(28, 30, 34, 255);
 
     private readonly string _name;
     private readonly TextBox _field = new() { Width = Sizing.Fixed(360) };

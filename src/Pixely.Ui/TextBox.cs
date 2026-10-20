@@ -278,11 +278,11 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         InvalidatePaint();
     }
 
-    private Color SelectionColor() => Style.Field.Selection;
+    private SrgbColor SelectionColor() => Style.Field.Selection;
 
-    private Color ForegroundColor() => IsEffectivelyEnabled ? Style.Field.Foreground : Style.Field.Disabled;
+    private SrgbColor ForegroundColor() => IsEffectivelyEnabled ? Style.Field.Foreground : Style.Field.Disabled;
 
-    private Color CaretColor() => Style.Field.Caret ?? ForegroundColor();
+    private SrgbColor CaretColor() => Style.Field.Caret ?? ForegroundColor();
 
     /// <summary>
     /// How far to slide the text left so the caret is inside the content. Only ever as far as it has

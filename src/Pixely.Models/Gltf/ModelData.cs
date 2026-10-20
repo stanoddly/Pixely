@@ -23,4 +23,4 @@ internal sealed record PrimitiveData(PositionTextureNormalVertex[] Vertices, Ski
 
 // BaseColorImage indexes ModelData.Images, which holds the encoded bytes of every image a material uses. Images with the same buffer
 // view bytes compare equal.
-internal sealed record MaterialData(string? Name, Vector4 BaseColorFactor, int? BaseColorImage, SamplerConfig BaseColorSampler, AlphaMode AlphaMode, float AlphaCutoff, bool DoubleSided);
+internal sealed record MaterialData(string? Name, LinearColor BaseColorFactor, int? BaseColorImage, SamplerConfig BaseColorSampler, AlphaMode AlphaMode, float AlphaCutoff, bool DoubleSided);

@@ -10,7 +10,7 @@ namespace Pixely.Ui;
 public sealed class Image : Element
 {
     private SpriteAsset _sprite;
-    private Color _tint = Colors.White;
+    private SrgbColor _tint = Colors.White;
 
     public Image(SpriteAsset sprite)
     {
@@ -26,7 +26,7 @@ public sealed class Image : Element
         set => SetMeasureProperty(ref _sprite, value ?? throw new ArgumentNullException(nameof(value)));
     }
 
-    public Color Tint
+    public SrgbColor Tint
     {
         get => _tint;
         set => SetPaintProperty(ref _tint, value);

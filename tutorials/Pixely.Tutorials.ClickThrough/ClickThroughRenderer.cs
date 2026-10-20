@@ -9,7 +9,7 @@ public class ClickThroughRenderer : IRenderer<BasicRenderContext>
 {
     private static readonly ColorTargetSettings _transparentClearSettings = new()
     {
-        ClearColorValue = FColors.Transparent,
+        ClearColorValue = Colors.Transparent,
         LoadOperation = LoadOperation.Clear
     };
 
@@ -30,7 +30,7 @@ public class ClickThroughRenderer : IRenderer<BasicRenderContext>
             .Build();
 
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.SkyBlue);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.SkyBlue);
         renderPass.BindVertexBuffer(_quad);
         renderPass.DrawPrimitive();
     }

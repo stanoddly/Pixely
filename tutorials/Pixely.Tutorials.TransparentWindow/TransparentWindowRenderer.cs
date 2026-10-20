@@ -9,7 +9,7 @@ public class TransparentWindowRenderer : IRenderer<BasicRenderContext>
 {
     private static readonly ColorTargetSettings _transparentClearSettings = new()
     {
-        ClearColorValue = FColors.Transparent,
+        ClearColorValue = Colors.Transparent,
         LoadOperation = LoadOperation.Clear
     };
 
@@ -33,11 +33,11 @@ public class TransparentWindowRenderer : IRenderer<BasicRenderContext>
 
         renderPass.BindGraphicsPipeline(_graphicsPipeline);
 
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.Magenta);
         renderPass.BindVertexBuffer(_topLeftQuad);
         renderPass.DrawPrimitive();
 
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Cyan);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.Cyan);
         renderPass.BindVertexBuffer(_bottomRightQuad);
         renderPass.DrawPrimitive();
     }

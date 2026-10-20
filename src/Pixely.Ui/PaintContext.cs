@@ -57,22 +57,22 @@ public sealed class PaintContext
         return new ClipScope(this, _clipStack.Count, _generation);
     }
 
-    public void FillRectangle(Rectangle area, Color color) => FillRectangle(area, (FColor)color);
+    public void FillRectangle(Rectangle area, SrgbColor color) => FillRectangle(area, (LinearColor)color);
 
-    public void FillRectangle(Rectangle area, FColor color)
+    public void FillRectangle(Rectangle area, LinearColor color)
     {
         Emit(new PaintInstruction(area, CurrentClip, null, PaintInstruction.FullUvs, color));
     }
 
-    public void DrawSprite(SpriteAsset sprite, Rectangle area, Color tint) => DrawSprite(sprite, area, (FColor)tint);
+    public void DrawSprite(SpriteAsset sprite, Rectangle area, SrgbColor tint) => DrawSprite(sprite, area, (LinearColor)tint);
 
-    public void DrawSprite(SpriteAsset sprite, Rectangle area, FColor tint)
+    public void DrawSprite(SpriteAsset sprite, Rectangle area, LinearColor tint)
     {
         ArgumentNullException.ThrowIfNull(sprite);
         Emit(new PaintInstruction(area, CurrentClip, sprite.Texture, sprite.CalculateTextureRegionUVs(), tint));
     }
 
-    public void DrawTexture(Texture texture, Rectangle area, Vector4 uvs, FColor tint)
+    public void DrawTexture(Texture texture, Rectangle area, Vector4 uvs, LinearColor tint)
     {
         ArgumentNullException.ThrowIfNull(texture);
         Emit(new PaintInstruction(area, CurrentClip, texture, uvs, tint));

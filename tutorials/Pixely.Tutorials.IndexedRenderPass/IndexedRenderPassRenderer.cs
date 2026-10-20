@@ -12,7 +12,7 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
     private readonly GpuVertexBuffer<PositionColorVertex> _vertexBuffer;
     private readonly GpuIndexBuffer _indexBuffer;
     private readonly GpuStorageBuffer<Vector4> _instanceOffsets;
-    private readonly GpuStorageBuffer<Vector4> _instanceTints;
+    private readonly GpuStorageBuffer<LinearColor> _instanceTints;
 
     public IndexedRenderPassRenderer(
         GraphicsPipeline indexedPipeline,
@@ -20,7 +20,7 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
         GpuVertexBuffer<PositionColorVertex> vertexBuffer,
         GpuIndexBuffer indexBuffer,
         GpuStorageBuffer<Vector4> instanceOffsets,
-        GpuStorageBuffer<Vector4> instanceTints)
+        GpuStorageBuffer<LinearColor> instanceTints)
     {
         _indexedPipeline = indexedPipeline;
         _instancedPipeline = instancedPipeline;
@@ -94,17 +94,17 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
             new Vector4( 0.55f, -0.45f, 0.0f, 0.0f)
         ];
 
-        Vector4[] instanceTints =
+        LinearColor[] instanceTints =
         [
-            new Vector4(0.95f, 0.30f, 0.30f, 1.0f),
-            new Vector4(0.25f, 0.80f, 0.95f, 1.0f),
-            new Vector4(0.90f, 0.85f, 0.25f, 1.0f)
+            new SrgbColor(242, 77, 77, 255),
+            new SrgbColor(64, 204, 242, 255),
+            new SrgbColor(230, 217, 64, 255)
         ];
 
         GpuVertexBuffer<PositionColorVertex> vertexBuffer = gpuMemorySystem.CreateVertexBuffer<PositionColorVertex>(vertices);
         GpuIndexBuffer indexBuffer = gpuMemorySystem.CreateIndexBuffer(indices);
         GpuStorageBuffer<Vector4> offsetBuffer = gpuMemorySystem.CreateStorageBuffer<Vector4>(instanceOffsets);
-        GpuStorageBuffer<Vector4> tintBuffer = gpuMemorySystem.CreateStorageBuffer<Vector4>(instanceTints);
+        GpuStorageBuffer<LinearColor> tintBuffer = gpuMemorySystem.CreateStorageBuffer<LinearColor>(instanceTints);
 
         GraphicsPipeline indexedPipeline = graphicsPipelineBuilder
             .SetPrimitiveType(PrimitiveType.TriangleList)

@@ -11,11 +11,11 @@ namespace Pixely.Ui;
 public readonly record struct ButtonAppearance
 {
     /// <summary>The look a button has when no theme says otherwise, so one is visible without setup.</summary>
-    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new Color(52, 60, 74, 255)))
+    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new SrgbColor(52, 60, 74, 255)))
     {
-        Hovered = new SolidDrawable(new Color(70, 80, 98, 255)),
-        Pressed = new SolidDrawable(new Color(38, 44, 55, 255)),
-        Disabled = new SolidDrawable(new Color(40, 44, 51, 255))
+        Hovered = new SolidDrawable(new SrgbColor(70, 80, 98, 255)),
+        Pressed = new SolidDrawable(new SrgbColor(38, 44, 55, 255)),
+        Disabled = new SolidDrawable(new SrgbColor(40, 44, 51, 255))
     };
 
     /// <summary>
@@ -48,16 +48,16 @@ public readonly record struct ButtonAppearance
 public readonly record struct FieldAppearance
 {
     /// <summary>Focused rather than hovered, because a field shows which one the typing goes to.</summary>
-    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new Color(28, 32, 40, 255)))
+    public static StateDrawables DefaultBackground { get; } = new(new SolidDrawable(new SrgbColor(28, 32, 40, 255)))
     {
-        Focused = new SolidDrawable(new Color(38, 44, 55, 255)),
-        Disabled = new SolidDrawable(new Color(32, 34, 38, 255))
+        Focused = new SolidDrawable(new SrgbColor(38, 44, 55, 255)),
+        Disabled = new SolidDrawable(new SrgbColor(32, 34, 38, 255))
     };
 
     private readonly StateDrawables? _background;
-    private readonly Color? _foreground;
-    private readonly Color? _disabled;
-    private readonly Color? _selection;
+    private readonly SrgbColor? _foreground;
+    private readonly SrgbColor? _disabled;
+    private readonly SrgbColor? _selection;
 
     public StateDrawables Background
     {
@@ -65,7 +65,7 @@ public readonly record struct FieldAppearance
         init => _background = value;
     }
 
-    public Color Foreground
+    public SrgbColor Foreground
     {
         get => _foreground ?? UiStyle.DefaultForeground;
         init => _foreground = value;
@@ -75,7 +75,7 @@ public readonly record struct FieldAppearance
     /// Text in a field that cannot be used. Its own colour rather than a tint of the foreground,
     /// because how far to fade depends on what the text is drawn against.
     /// </summary>
-    public Color Disabled
+    public SrgbColor Disabled
     {
         get => _disabled ?? UiStyle.DefaultDisabledForeground;
         init => _disabled = value;
@@ -85,14 +85,14 @@ public readonly record struct FieldAppearance
     /// Behind selected text. Its own value rather than part of a drawable, because it is painted
     /// under a run of characters whose extent is only known while the text is being drawn.
     /// </summary>
-    public Color Selection
+    public SrgbColor Selection
     {
         get => _selection ?? UiStyle.DefaultSelection;
         init => _selection = value;
     }
 
     /// <summary>The caret. Null means whatever the text is drawn in, which is what most themes want.</summary>
-    public Color? Caret { get; init; }
+    public SrgbColor? Caret { get; init; }
 }
 
 /// <summary>
@@ -113,40 +113,40 @@ public enum TextEmphasis
 /// <summary>What text outside a control of its own — a bare <see cref="Label"/> — is drawn in.</summary>
 public readonly record struct TextAppearance
 {
-    private readonly Color? _foreground;
-    private readonly Color? _muted;
-    private readonly Color? _accent;
-    private readonly Color? _disabled;
+    private readonly SrgbColor? _foreground;
+    private readonly SrgbColor? _muted;
+    private readonly SrgbColor? _accent;
+    private readonly SrgbColor? _disabled;
 
-    public Color Foreground
+    public SrgbColor Foreground
     {
         get => _foreground ?? UiStyle.DefaultForeground;
         init => _foreground = value;
     }
 
     /// <summary>Captions and anything else deliberately quieter than the text around it.</summary>
-    public Color Muted
+    public SrgbColor Muted
     {
         get => _muted ?? UiStyle.DefaultMuted;
         init => _muted = value;
     }
 
     /// <summary>Headings and anything the screen is drawing the eye to.</summary>
-    public Color Accent
+    public SrgbColor Accent
     {
         get => _accent ?? UiStyle.DefaultAccent;
         init => _accent = value;
     }
 
     /// <inheritdoc cref="FieldAppearance.Disabled"/>
-    public Color Disabled
+    public SrgbColor Disabled
     {
         get => _disabled ?? UiStyle.DefaultDisabledForeground;
         init => _disabled = value;
     }
 
     /// <summary>Disabled beats every emphasis: unusable is the more important thing to show.</summary>
-    public Color Resolve(TextEmphasis emphasis, bool isEnabled)
+    public SrgbColor Resolve(TextEmphasis emphasis, bool isEnabled)
     {
         if (!isEnabled)
         {
@@ -166,10 +166,10 @@ public readonly record struct TextAppearance
 public readonly record struct ScrollAppearance
 {
     /// <summary>Translucent, since the bars lie over the content rather than beside it.</summary>
-    public static StateDrawables DefaultThumb { get; } = new(new SolidDrawable(new Color(120, 128, 140, 200)))
+    public static StateDrawables DefaultThumb { get; } = new(new SolidDrawable(new SrgbColor(120, 128, 140, 200)))
     {
-        Hovered = new SolidDrawable(new Color(150, 158, 170, 220)),
-        Pressed = new SolidDrawable(new Color(180, 188, 200, 240))
+        Hovered = new SolidDrawable(new SrgbColor(150, 158, 170, 220)),
+        Pressed = new SolidDrawable(new SrgbColor(180, 188, 200, 240))
     };
 
     private readonly Drawable? _track;

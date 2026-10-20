@@ -155,7 +155,7 @@ public class UiViewTests
         public int SyncCount { get; private set; }
 
         public Element Bar { get; } =
-            new Column { Background = new SolidDrawable(new Color(255, 255, 255, 255)), Height = Sizing.Fixed(10) };
+            new Column { Background = new SolidDrawable(new SrgbColor(255, 255, 255, 255)), Height = Sizing.Fixed(10) };
 
         protected override Element Build()
         {

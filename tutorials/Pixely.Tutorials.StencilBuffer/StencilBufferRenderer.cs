@@ -9,7 +9,7 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
 {
     private static readonly ColorTargetSettings _blackClearSettings = new()
     {
-        ClearColorValue = FColors.Black
+        ClearColorValue = Colors.Black
     };
 
     private static readonly DepthBufferSettings _stencilClearSettings = new()
@@ -49,14 +49,14 @@ public class StencilBufferRenderer : IRenderer<BasicRenderContext>
             .Build();
 
         // Draw 1: Write stencil mask with the small quad (magenta, but color write could be off — we keep it to show the mask area)
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.Magenta);
         renderPass.BindGraphicsPipeline(_maskPipeline);
         renderPass.SetStencilReference(1);
         renderPass.BindVertexBuffer(_smallQuadBuffer);
         renderPass.DrawPrimitive();
 
         // Draw 2: Draw full-screen quad, but only where stencil == 1 (the small quad area)
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Cyan);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.Cyan);
         renderPass.BindGraphicsPipeline(_drawPipeline);
         renderPass.SetStencilReference(1);
         renderPass.BindVertexBuffer(_fullScreenQuadBuffer);

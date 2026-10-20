@@ -27,10 +27,10 @@ GPU device: google swiftshader (fallback adapter), backend webgpu, driver unknow
 For each window, its swapchain on the first frame and whenever its size or format changes:
 
 ```text
-Swapchain of view 0: 800x600, B8G8R8A8Unorm, present mode vsync
+Swapchain of view 0: 800x600, B8G8R8A8UnormSrgb, present mode vsync
 ```
 
-Pixely never changes SDL's swapchain parameters, so the present mode is always vsync. An offscreen window in headless mode reports `offscreen` instead, because it presents nothing.
+Pixely sets every swapchain to `SDR_LINEAR` with vsync, so the format is an sRGB one and the present mode is always vsync. An offscreen window in headless mode reports `offscreen` instead, because it presents nothing.
 
 Every 5 seconds of frames, or every 4096 frames if that comes first, and once more for the remaining frames when the app is disposed:
 

@@ -51,6 +51,8 @@ public class ComputeRenderer : IRenderer<BasicRenderContext>
         Pixely.Gpu.ComputeShader computeShader = computeShaderLoader.Load("shaders/compute");
         ComputePipeline computePipeline = computePipelineBuilder.Build(computeShader);
 
+        // The shader writes linear values. Compute shaders cannot write sRGB formats, so the texture is UNORM, and the blit to the
+        // sRGB swapchain encodes the values on write.
         Texture outputTexture = gpuDevice.CreateTexture(
             new ShortSize(512, 512),
             TextureFormat.R8G8B8A8Unorm,

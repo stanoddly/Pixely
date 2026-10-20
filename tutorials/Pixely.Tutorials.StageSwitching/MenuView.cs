@@ -11,8 +11,8 @@ namespace Pixely.Tutorials.StageSwitching;
 /// </summary>
 public sealed class MenuView : UiView<MenuViewModel>
 {
-    private static readonly Color BackgroundColor = new(28, 30, 34, 255);
-    private static readonly Drawable ActiveBackground = new SolidDrawable(new Color(46, 139, 87, 255));
+    private static readonly SrgbColor BackgroundColor = new(28, 30, 34, 255);
+    private static readonly Drawable ActiveBackground = new SolidDrawable(new SrgbColor(46, 139, 87, 255));
 
     private const int ButtonWidth = 160;
     private const int ButtonHeight = 44;
@@ -25,8 +25,8 @@ public sealed class MenuView : UiView<MenuViewModel>
     public MenuView(MenuViewModel viewModel, IStageManager stageManager)
         : base(viewModel)
     {
-        _stageA = StageButton("Stage A", stageManager, "A", new Color(70, 130, 180, 255));
-        _stageB = StageButton("Stage B", stageManager, "B", new Color(180, 100, 70, 255));
+        _stageA = StageButton("Stage A", stageManager, "A", new SrgbColor(70, 130, 180, 255));
+        _stageB = StageButton("Stage B", stageManager, "B", new SrgbColor(180, 100, 70, 255));
     }
 
     protected override Element Build()
@@ -54,7 +54,7 @@ public sealed class MenuView : UiView<MenuViewModel>
         _stageB.Background = ViewModel.ActiveStage == "B" ? ActiveBackground : null;
     }
 
-    private Button StageButton(string text, IStageManager stageManager, string stage, Color color)
+    private Button StageButton(string text, IStageManager stageManager, string stage, SrgbColor color)
     {
         Button button = new(text) { Width = Sizing.Fixed(ButtonWidth), Height = Sizing.Fixed(ButtonHeight) };
         button.Clicked += () =>

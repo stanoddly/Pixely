@@ -10,14 +10,14 @@ public class StorageBufferRenderer : IRenderer<BasicRenderContext>
 {
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quadVertexBuffer;
-    private readonly GpuStorageBuffer<Vector4> _colorBuffer;
+    private readonly GpuStorageBuffer<LinearColor> _colorBuffer;
     private readonly int _colorCount;
     private float _time;
 
     public StorageBufferRenderer(
         GraphicsPipeline graphicsPipeline,
         GpuVertexBuffer<PositionVertex> quadVertexBuffer,
-        GpuStorageBuffer<Vector4> colorBuffer,
+        GpuStorageBuffer<LinearColor> colorBuffer,
         int colorCount)
     {
         _graphicsPipeline = graphicsPipeline;
@@ -56,20 +56,20 @@ public class StorageBufferRenderer : IRenderer<BasicRenderContext>
     {
         // Create an array of colors to store in the storage buffer
         // This demonstrates passing more data than uniform slots would allow
-        Vector4[] colors =
+        LinearColor[] colors =
         [
-            new Vector4(1.0f, 0.0f, 0.0f, 1.0f), // Red
-            new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
-            new Vector4(1.0f, 1.0f, 0.0f, 1.0f), // Yellow
-            new Vector4(0.0f, 1.0f, 0.0f, 1.0f), // Green
-            new Vector4(0.0f, 1.0f, 1.0f, 1.0f), // Cyan
-            new Vector4(0.0f, 0.0f, 1.0f, 1.0f), // Blue
-            new Vector4(0.5f, 0.0f, 1.0f, 1.0f), // Purple
-            new Vector4(1.0f, 0.0f, 1.0f, 1.0f), // Magenta
+            new SrgbColor(255, 0, 0, 255), // Red
+            new SrgbColor(255, 128, 0, 255), // Orange
+            new SrgbColor(255, 255, 0, 255), // Yellow
+            new SrgbColor(0, 255, 0, 255), // Green
+            new SrgbColor(0, 255, 255, 255), // Cyan
+            new SrgbColor(0, 0, 255, 255), // Blue
+            new SrgbColor(128, 0, 255, 255), // Purple
+            new SrgbColor(255, 0, 255, 255), // Magenta
         ];
 
         // Create storage buffer from color array
-        GpuStorageBuffer<Vector4> colorBuffer = gpuMemorySystem.CreateStorageBuffer<Vector4>(colors);
+        GpuStorageBuffer<LinearColor> colorBuffer = gpuMemorySystem.CreateStorageBuffer<LinearColor>(colors);
 
         // Create vertex buffer with a quad
         GpuVertexBuffer<PositionVertex> quadVertexBuffer =

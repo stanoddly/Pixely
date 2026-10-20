@@ -152,7 +152,7 @@ internal class FontSystem: IFontSystem, IUpdatable
 
     private Pointer<SDL_Surface> RenderTextToSurface(string text, Font font)
     {
-        Color usedColor = Colors.White;
+        SrgbColor usedColor = Colors.White;
         unsafe
         {
             SDL_Color white = (SDL_Color)usedColor;

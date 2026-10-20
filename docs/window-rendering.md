@@ -59,6 +59,8 @@ at the root when any stage renders: `IsRegistered` sees the parent, and a stage 
 under a root without the device registers the device in that child, so each such stage creates its own device and
 a root window created by `AddWindow` stays unclaimed.
 
+A window claimed for the device gets an sRGB swapchain (`SDR_LINEAR` with vsync): what shaders write is linear light, and the GPU encodes it to sRGB on write (see [shaders.md](shaders.md#color-spaces)). Its `ColorTargetFormat` is `B8G8R8A8UnormSrgb` or `R8G8B8A8UnormSrgb`, whichever the driver has. A driver without an sRGB swapchain for the window fails window creation with `PixelyInitializationException`; there is no fallback, because it would need every shader to encode as well.
+
 Without `UseGpu()` there is no device: `AddWindow` alone creates an SDL window that is not claimed for a device,
 the frame loop processes events and updates, and the window's `ColorTargetFormat` and
 `TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an

@@ -17,7 +17,7 @@ public class ArrangeSkipTests
         Layout.Run(root, 100, 100);
         int arranges = box.ArrangeCount;
 
-        box.Background = new SolidDrawable(new Color(255, 0, 0, 255));
+        box.Background = new SolidDrawable(new SrgbColor(255, 0, 0, 255));
         Layout.Run(root, 100, 100);
 
         Assert.Multiple(() =>

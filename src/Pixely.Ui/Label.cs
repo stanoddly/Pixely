@@ -118,7 +118,7 @@ public sealed class Label : Element
     /// in none. A label has no colour of its own: what text looks like is the theme's to decide,
     /// and which control it belongs to is what selects between the theme's answers.
     /// </summary>
-    private Color ResolvedColor
+    private SrgbColor ResolvedColor
     {
         get
         {

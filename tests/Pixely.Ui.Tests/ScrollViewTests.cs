@@ -1204,8 +1204,8 @@ public class ScrollViewTests
     [Test]
     public void TheBar_TakesItsLookFromTheStyle()
     {
-        SolidDrawable thumb = new(new Color(1, 2, 3, 255));
-        SolidDrawable track = new(new Color(4, 5, 6, 255));
+        SolidDrawable thumb = new(new SrgbColor(1, 2, 3, 255));
+        SolidDrawable track = new(new SrgbColor(4, 5, 6, 255));
         ScrollView view = Sized(new MeasuredBox(80, 500));
         UiRoot root = new() { Style = new UiStyle { Scroll = new ScrollAppearance { Thumb = new StateDrawables(thumb), Track = track, Thickness = 10, MinimumThumbLength = 4 } } };
         root.AddLayer(new Column { Children = { view } });
@@ -1215,8 +1215,8 @@ public class ScrollViewTests
         Assert.Multiple(() =>
         {
             Assert.That(VerticalBar(view).Bounds, Is.EqualTo(new Rectangle(90, 0, 10, 120)));
-            Assert.That(root.Instructions.Any(instruction => instruction.Area == new Rectangle(90, 0, 10, 120) && instruction.Tint == (FColor)track.Color), Is.True, "the track");
-            Assert.That(root.Instructions.Any(instruction => instruction.Area == new Rectangle(90, 0, 10, 28) && instruction.Tint == (FColor)thumb.Color), Is.True, "the thumb");
+            Assert.That(root.Instructions.Any(instruction => instruction.Area == new Rectangle(90, 0, 10, 120) && instruction.Tint == (LinearColor)track.Color), Is.True, "the track");
+            Assert.That(root.Instructions.Any(instruction => instruction.Area == new Rectangle(90, 0, 10, 28) && instruction.Tint == (LinearColor)thumb.Color), Is.True, "the thumb");
         });
     }
 
@@ -1241,7 +1241,7 @@ public class ScrollViewTests
     [Test]
     public void TheBars_ArePaintedAfterTheChildren()
     {
-        Element child = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(500), Background = new SolidDrawable(new Color(9, 9, 9, 255)) };
+        Element child = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(500), Background = new SolidDrawable(new SrgbColor(9, 9, 9, 255)) };
         ScrollView view = Sized(child);
         UiRoot root = Rooted(view);
 

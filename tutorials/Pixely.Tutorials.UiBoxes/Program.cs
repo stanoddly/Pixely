@@ -14,11 +14,11 @@ namespace Pixely.Tutorials.UiBoxes;
 /// </summary>
 static partial class Program
 {
-    private static readonly Color Background = new(24, 27, 32, 255);
-    private static readonly Color Panel = new(52, 62, 78, 255);
-    private static readonly Color Accent = new(233, 138, 76, 255);
-    private static readonly Color Teal = new(70, 168, 160, 255);
-    private static readonly Color Pale = new(226, 232, 240, 255);
+    private static readonly SrgbColor Background = new(24, 27, 32, 255);
+    private static readonly SrgbColor Panel = new(52, 62, 78, 255);
+    private static readonly SrgbColor Accent = new(233, 138, 76, 255);
+    private static readonly SrgbColor Teal = new(70, 168, 160, 255);
+    private static readonly SrgbColor Pale = new(226, 232, 240, 255);
 
     static void Configure(PixelyAppBuilder builder)
     {

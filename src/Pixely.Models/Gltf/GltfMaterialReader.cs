@@ -20,7 +20,7 @@ internal static class GltfMaterialReader
             GltfMaterialDto material = materialDtos[index];
             string name = $"materials[{index}]";
 
-            Vector4 baseColorFactor = Vector4.One;
+            LinearColor baseColorFactor = new(1, 1, 1, 1);
             if (material.PbrMetallicRoughness?.BaseColorFactor is { } factor)
             {
                 if (factor.Length != 4 || !factor.All(value => value is >= 0 and <= 1))
@@ -28,7 +28,7 @@ internal static class GltfMaterialReader
                     throw new InvalidDataException($"{name}: baseColorFactor must be 4 numbers between 0 and 1.");
                 }
 
-                baseColorFactor = new Vector4(factor[0], factor[1], factor[2], factor[3]);
+                baseColorFactor = new LinearColor(factor[0], factor[1], factor[2], factor[3]);
             }
 
             int? baseColorImage = null;

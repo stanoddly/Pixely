@@ -235,12 +235,12 @@ public class ButtonTests
         root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(normal) { Hovered = hovered } } };
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Red));
 
         root.PointerMoved(new Vector2Int(10, 10));
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Green));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Green));
     }
 
     [Test]
@@ -252,7 +252,7 @@ public class ButtonTests
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Blue));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Blue));
     }
 
     [Test]
@@ -440,12 +440,12 @@ public class ButtonTests
         };
         UiRoot root = Rooted(button);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Red));
 
         root.PointerMoved(new Vector2Int(10, 10));
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red), "one drawable means one look, not a hover that reverts to the default");
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Red), "one drawable means one look, not a hover that reverts to the default");
     }
 
     [Test]
@@ -456,14 +456,14 @@ public class ButtonTests
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Red));
 
         root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
 
         Assert.Multiple(() =>
         {
             Assert.That(root.Update(), Is.True);
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Blue));
+            Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Blue));
         });
     }
 
@@ -484,14 +484,14 @@ public class ButtonTests
 
         root.PointerMoved(new Vector2Int(5, 5));
         root.Update();
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Green));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Green));
 
         layer.Padding = new Thickness(100, 0, 0, 0);
         root.Update();
 
         // Revalidation runs between arrange and paint, so the frame that moves the button is
         // already the frame that stops painting it hovered.
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Colors.Red));
     }
 
     [Test]
@@ -753,5 +753,5 @@ public class ButtonTests
     }
 
     /// <summary>The tint of the first instruction, which is the button's background.</summary>
-    private static FColor PaintedColor(UiRoot root) => root.Instructions[0].Tint;
+    private static LinearColor PaintedColor(UiRoot root) => root.Instructions[0].Tint;
 }

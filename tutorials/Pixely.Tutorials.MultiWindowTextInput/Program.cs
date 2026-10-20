@@ -31,7 +31,7 @@ static partial class Program
         builder.AddSingleton<UiStyle>(provider =>
             new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14))
             {
-                Text = new TextAppearance { Foreground = new Color(235, 238, 242, 255), Muted = new Color(180, 180, 180, 255) }
+                Text = new TextAppearance { Foreground = new SrgbColor(235, 238, 242, 255), Muted = new SrgbColor(180, 180, 180, 255) }
             });
 
         builder.AddSingleton<IUiView>(new TextInputView(LeftView, "Left View", new TextInputViewModel("left")));

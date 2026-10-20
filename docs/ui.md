@@ -167,11 +167,11 @@ A custom element overrides `MeasureContent` and `PaintContent`. Drawing content 
 ```csharp
 public sealed class Divider : Element
 {
-    private Color _color = Colors.White;
+    private SrgbColor _color = Colors.White;
 
     protected override int MaxChildCount => 0;
 
-    public Color Color
+    public SrgbColor Color
     {
         get => _color;
         set => SetPaintProperty(ref _color, value);
@@ -401,7 +401,7 @@ There is no per-element override to reach for. In order of what to try:
 
 Everything that takes a font takes `IFont` — `UiStyle.Body/Title/Small`, `Label.Font`, `TextBox` and `NumberBox<T>`. `Font` implements it, so passing one loaded from an `IFontSystem` is unchanged. The interface is what makes text layout testable without a device: measuring goes through `IFont.Measure`, which for a real `Font` is `TTF_GetStringSizeWrapped` and uploads nothing, while `IFont.CreateTextSprite` is reached only by painting. A test can substitute a font with stated metrics and let rasterisation throw, which is what `FixedWidthFont` in `Pixely.Ui.Tests` does.
 
-Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given. `StateColors` is the same shape over `Color`.
+Backgrounds that react to interaction are `StateDrawables`: a required `Normal` plus optional `Hovered`, `Pressed`, `Focused` and `Disabled`, each falling back to `Normal` when it was not given. `StateColors` is the same shape over `SrgbColor`. Colors are authored as `SrgbColor` and converted to linear light once, when the UI paints; the retained texture is in the window's sRGB format, so translucent fills and anti-aliased text blend in linear light.
 
 A control's state reaches the text inside it through `IVisualStateSource`, which `Button` implements: a `Label` walks up to the nearest one and resolves its colour against that state while painting. This is what lets a button tint its label on hover without knowing that its content is text at all — the content stays an ordinary element. An implementation of the interface must invalidate paint when its state *or* its `ContentForeground` changes (`SetPaintProperty` for either kept in a field, `InvalidatePaint` for what is derived); nothing below it is marked dirty otherwise.
 

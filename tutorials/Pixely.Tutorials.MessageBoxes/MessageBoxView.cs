@@ -12,7 +12,7 @@ public sealed class MessageBoxView : UiView
     private const int ButtonWidth = 260;
     private const int ButtonHeight = 44;
 
-    private static readonly Color BackgroundColor = new(28, 30, 34, 255);
+    private static readonly SrgbColor BackgroundColor = new(28, 30, 34, 255);
 
     private readonly Window _window;
 

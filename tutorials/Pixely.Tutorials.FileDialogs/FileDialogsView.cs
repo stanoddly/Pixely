@@ -12,7 +12,7 @@ public sealed class FileDialogsView : UiView<FileDialogsViewModel>
     private const int ButtonWidth = 180;
     private const int ButtonHeight = 48;
 
-    private static readonly Color BackgroundColor = new(28, 30, 34, 255);
+    private static readonly SrgbColor BackgroundColor = new(28, 30, 34, 255);
 
     private readonly Window _window;
     private readonly Button _open;

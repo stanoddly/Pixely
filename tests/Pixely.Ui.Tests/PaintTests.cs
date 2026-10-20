@@ -4,8 +4,8 @@ namespace Pixely.Ui.Tests;
 
 public class PaintTests
 {
-    private static readonly Color Red = new(255, 0, 0, 255);
-    private static readonly Color Blue = new(0, 0, 255, 255);
+    private static readonly SrgbColor Red = new(255, 0, 0, 255);
+    private static readonly SrgbColor Blue = new(0, 0, 255, 255);
 
     [Test]
     public void Paint_EmitsBackgroundsInTreeOrder()
@@ -24,8 +24,8 @@ public class PaintTests
         Assert.Multiple(() =>
         {
             Assert.That(uiRoot.Instructions, Has.Count.EqualTo(2));
-            Assert.That(uiRoot.Instructions[0].Tint, Is.EqualTo((FColor)Red), "the parent paints first");
-            Assert.That(uiRoot.Instructions[1].Tint, Is.EqualTo((FColor)Blue));
+            Assert.That(uiRoot.Instructions[0].Tint, Is.EqualTo((LinearColor)Red), "the parent paints first");
+            Assert.That(uiRoot.Instructions[1].Tint, Is.EqualTo((LinearColor)Blue));
         });
     }
 

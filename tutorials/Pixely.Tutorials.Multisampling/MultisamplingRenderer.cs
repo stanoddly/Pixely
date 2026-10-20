@@ -40,7 +40,7 @@ public class MultisamplingRenderer : IRenderer<BasicRenderContext>
             _depthBuffer = _gpuDevice.CreateDepthBufferTexture(swapchainTexture.Size, DepthFormat, sampleCount: Samples);
         }
 
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.Magenta);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, (LinearColor)Colors.Magenta);
         using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(_colorTarget, swapchainTexture, _resolveSettings)
             .SetDepthBuffer(_depthBuffer!, _depthSettings)
