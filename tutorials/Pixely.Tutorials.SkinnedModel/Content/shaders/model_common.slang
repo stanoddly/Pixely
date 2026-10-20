@@ -17,8 +17,8 @@ struct FragmentConstants
     float4 cameraPosition;
     // Fragments with less alpha are discarded; negative for materials that are not alpha-masked.
     float alphaCutoff;
-    uint encodeSrgb;
-    uint2 padding;
+    float padding0;
+    float2 padding1;
 };
 
 struct VertexToFragment
@@ -47,13 +47,6 @@ float3 directionOrFallback(float3 transformed, float matrixSizeSquared, float3 f
     return dot(transformed, transformed) > matrixSizeSquared * 1e-12 ? transformed : fallback;
 }
 
-float3 encodeSrgb(float3 linear)
-{
-    float3 low = linear * 12.92;
-    float3 high = 1.055 * pow(max(linear, 0.0031308), 1.0 / 2.4) - 0.055;
-    return select(linear <= 0.0031308, low, high);
-}
-
 float4 shade(VertexToFragment input, float4 baseColor, FragmentConstants constants)
 {
     if (baseColor.a < constants.alphaCutoff)
@@ -70,11 +63,7 @@ float4 shade(VertexToFragment input, float4 baseColor, FragmentConstants constan
     }
 
     float diffuse = max(dot(normal, -normalize(constants.lightDirection.xyz)), 0.0);
+    // Linear light: the sRGB swapchain encodes it on write.
     float3 color = baseColor.rgb * (0.25 + 0.75 * diffuse);
-    if (constants.encodeSrgb != 0)
-    {
-        color = encodeSrgb(color);
-    }
-
     return float4(color, baseColor.a);
 }

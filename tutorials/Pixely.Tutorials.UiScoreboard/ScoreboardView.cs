@@ -11,10 +11,10 @@ namespace Pixely.Tutorials.UiScoreboard;
 /// </summary>
 public sealed class ScoreboardView : UiView<ScoreboardViewModel>
 {
-    private static readonly Color Background = new(22, 25, 31, 255);
-    private static readonly Color Panel = new(42, 50, 63, 255);
-    private static readonly Color HealthBack = new(60, 32, 32, 255);
-    private static readonly Color HealthFill = new(94, 191, 122, 255);
+    private static readonly SrgbColor Background = new(22, 25, 31, 255);
+    private static readonly SrgbColor Panel = new(42, 50, 63, 255);
+    private static readonly SrgbColor HealthBack = new(60, 32, 32, 255);
+    private static readonly SrgbColor HealthFill = new(94, 191, 122, 255);
 
     private const int BarWidth = 240;
 

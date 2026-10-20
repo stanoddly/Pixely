@@ -16,16 +16,16 @@ public abstract class Drawable
 
 public sealed class SolidDrawable : Drawable
 {
-    public SolidDrawable(Color color) => Color = color;
+    public SolidDrawable(SrgbColor color) => Color = color;
 
-    public Color Color { get; }
+    public SrgbColor Color { get; }
 
     public override void Paint(PaintContext context, Rectangle bounds) => context.FillRectangle(bounds, Color);
 }
 
 public sealed class SpriteDrawable : Drawable
 {
-    public SpriteDrawable(SpriteAsset sprite, Color tint)
+    public SpriteDrawable(SpriteAsset sprite, SrgbColor tint)
     {
         ArgumentNullException.ThrowIfNull(sprite);
         Sprite = sprite;
@@ -33,7 +33,7 @@ public sealed class SpriteDrawable : Drawable
     }
 
     public SpriteAsset Sprite { get; }
-    public Color Tint { get; }
+    public SrgbColor Tint { get; }
 
     public override void Paint(PaintContext context, Rectangle bounds) => context.DrawSprite(Sprite, bounds, Tint);
 }
@@ -46,7 +46,7 @@ public sealed class NinePatchDrawable : Drawable
 {
     private readonly Thickness _insets;
 
-    public NinePatchDrawable(SpriteAsset sprite, Thickness insets, Color tint)
+    public NinePatchDrawable(SpriteAsset sprite, Thickness insets, SrgbColor tint)
     {
         ArgumentNullException.ThrowIfNull(sprite);
 
@@ -70,7 +70,7 @@ public sealed class NinePatchDrawable : Drawable
 
     public SpriteAsset Sprite { get; }
     public Thickness Insets => _insets;
-    public Color Tint { get; }
+    public SrgbColor Tint { get; }
 
     public override void Paint(PaintContext context, Rectangle bounds)
     {
@@ -110,7 +110,7 @@ public sealed class NinePatchDrawable : Drawable
                     Lerp(spriteUvs.X, spriteUvs.Z, sourceColumns[column + 1] / (float)spriteWidth),
                     Lerp(spriteUvs.Y, spriteUvs.W, sourceRows[row + 1] / (float)spriteHeight));
 
-                context.DrawTexture(Sprite.Texture, area, uvs, (FColor)Tint);
+                context.DrawTexture(Sprite.Texture, area, uvs, (LinearColor)Tint);
             }
         }
     }
@@ -127,7 +127,7 @@ public sealed class BorderDrawable : Drawable
 {
     private readonly Thickness _thickness;
 
-    public BorderDrawable(Color color, Thickness thickness, Drawable? fill = null)
+    public BorderDrawable(SrgbColor color, Thickness thickness, Drawable? fill = null)
     {
         if (thickness.HasNegativeEdge)
         {
@@ -139,7 +139,7 @@ public sealed class BorderDrawable : Drawable
         Fill = fill;
     }
 
-    public Color Color { get; }
+    public SrgbColor Color { get; }
     public Thickness Thickness => _thickness;
     public Drawable? Fill { get; }
 

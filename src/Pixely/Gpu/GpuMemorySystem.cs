@@ -96,20 +96,28 @@ public class GpuMemorySystem: ICopyPass
         GetOrCreateCopyPass().UpdateStorageBuffer(storageBuffer, data);
     }
 
+    /// <summary>Creates a sampled <see cref="TextureFormat.R8G8B8A8UnormSrgb"/> texture from 4-byte R, G, B, A pixels, so sampling returns linear light.</summary>
     public Texture CreateTexture(Image image)
     {
         return GetOrCreateCopyPass().CreateTexture(image);
     }
 
-    /// <summary>Creates a sampled texture with <paramref name="format"/>, <see cref="TextureFormat.R8G8B8A8Unorm"/> or <see cref="TextureFormat.R8G8B8A8UnormSrgb"/>, from 4-byte R, G, B, A pixels.</summary>
+    /// <summary>Creates a sampled texture with <paramref name="format"/>, <see cref="TextureFormat.R8G8B8A8Unorm"/> for data or <see cref="TextureFormat.R8G8B8A8UnormSrgb"/> for color, from 4-byte R, G, B, A pixels.</summary>
     public Texture CreateTexture(Image image, TextureFormat format)
     {
         return GetOrCreateCopyPass().CreateTexture(image, format);
     }
 
+    /// <summary>Creates a sampled <see cref="TextureFormat.R8G8B8A8UnormSrgb"/> texture array, one layer per image.</summary>
     public TextureArray CreateTextureArray(ReadOnlySpan<Image> images)
     {
         return GetOrCreateCopyPass().CreateTextureArray(images);
+    }
+
+    /// <summary>Creates a sampled texture array with <paramref name="format"/>, <see cref="TextureFormat.R8G8B8A8Unorm"/> for data or <see cref="TextureFormat.R8G8B8A8UnormSrgb"/> for color, one layer per image.</summary>
+    public TextureArray CreateTextureArray(ReadOnlySpan<Image> images, TextureFormat format)
+    {
+        return GetOrCreateCopyPass().CreateTextureArray(images, format);
     }
 
     // Nothing consumes uploads once the app tears down and the device is destroyed next, so a pending command buffer is cancelled

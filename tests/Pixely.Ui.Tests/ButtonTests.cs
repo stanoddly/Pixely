@@ -228,37 +228,37 @@ public class ButtonTests
     [Test]
     public void TheBackgroundFollowsTheState()
     {
-        SolidDrawable normal = new(Colors.Red);
-        SolidDrawable hovered = new(Colors.Green);
+        SolidDrawable normal = new(SrgbColors.Red);
+        SolidDrawable hovered = new(SrgbColors.Green);
         Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = Rooted(button);
         root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(normal) { Hovered = hovered } } };
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Red));
 
         root.PointerMoved(new Vector2Int(10, 10));
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Green));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Green));
     }
 
     [Test]
     public void WithoutItsOwnBackgrounds_AButtonTakesTheStyles()
     {
-        SolidDrawable styled = new(Colors.Blue);
+        SolidDrawable styled = new(SrgbColors.Blue);
         Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
         UiRoot root = new() { Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(styled) } } };
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Blue));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Blue));
     }
 
     [Test]
     public void AStateWithoutADrawable_FallsBackToNormal()
     {
-        StateDrawables backgrounds = new(new SolidDrawable(Colors.Red)) { Pressed = new SolidDrawable(Colors.Green) };
+        StateDrawables backgrounds = new(new SolidDrawable(SrgbColors.Red)) { Pressed = new SolidDrawable(SrgbColors.Green) };
 
         Assert.Multiple(() =>
         {
@@ -436,34 +436,34 @@ public class ButtonTests
         {
             Width = Sizing.Fixed(40),
             Height = Sizing.Fixed(20),
-            Background = new SolidDrawable(Colors.Red)
+            Background = new SolidDrawable(SrgbColors.Red)
         };
         UiRoot root = Rooted(button);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Red));
 
         root.PointerMoved(new Vector2Int(10, 10));
         root.Update();
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red), "one drawable means one look, not a hover that reverts to the default");
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Red), "one drawable means one look, not a hover that reverts to the default");
     }
 
     [Test]
     public void ReplacingTheStyle_Repaints()
     {
         Button button = new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
-        UiRoot root = new() { Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Red)) } } };
+        UiRoot root = new() { Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(SrgbColors.Red)) } } };
         root.AddLayer(new Column { Children = { button } });
         Update(root);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Red));
 
-        root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Blue)) } };
+        root.Style = new UiStyle { Button = new ButtonAppearance { Background = new StateDrawables(new SolidDrawable(SrgbColors.Blue)) } };
 
         Assert.Multiple(() =>
         {
             Assert.That(root.Update(), Is.True);
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Blue));
+            Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Blue));
         });
     }
 
@@ -477,21 +477,21 @@ public class ButtonTests
         {
             Button = new ButtonAppearance
             {
-                Background = new StateDrawables(new SolidDrawable(Colors.Red)) { Hovered = new SolidDrawable(Colors.Green) }
+                Background = new StateDrawables(new SolidDrawable(SrgbColors.Red)) { Hovered = new SolidDrawable(SrgbColors.Green) }
             }
         };
         root.Update();
 
         root.PointerMoved(new Vector2Int(5, 5));
         root.Update();
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Green));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Green));
 
         layer.Padding = new Thickness(100, 0, 0, 0);
         root.Update();
 
         // Revalidation runs between arrange and paint, so the frame that moves the button is
         // already the frame that stops painting it hovered.
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Colors.Red));
+        Assert.That(PaintedColor(root), Is.EqualTo(LinearColors.Red));
     }
 
     [Test]
@@ -603,7 +603,7 @@ public class ButtonTests
         // Reconciling hover happens inside Update, so an enter that updates again re-enters it.
         target.WhenEntered = () =>
         {
-            target.Background = new SolidDrawable(Colors.Red);
+            target.Background = new SolidDrawable(SrgbColors.Red);
             nestedUpdated = root.Update();
         };
 
@@ -711,8 +711,8 @@ public class ButtonTests
     [Test]
     public void StateDrawables_ResolveFocusedAndFallBackWhenItIsNotSet()
     {
-        SolidDrawable normal = new(Colors.Red);
-        SolidDrawable focused = new(Colors.Green);
+        SolidDrawable normal = new(SrgbColors.Red);
+        SolidDrawable focused = new(SrgbColors.Green);
 
         Assert.Multiple(() =>
         {
@@ -724,7 +724,7 @@ public class ButtonTests
     [Test]
     public void ContentForeground_PrefersTheStyleAndFallsBackOnTheDefault()
     {
-        StateColors styled = new(Colors.Green);
+        StateColors styled = new(SrgbColors.Green);
         Button button = new();
         UiRoot root = Rooted(button);
 
@@ -753,5 +753,5 @@ public class ButtonTests
     }
 
     /// <summary>The tint of the first instruction, which is the button's background.</summary>
-    private static FColor PaintedColor(UiRoot root) => root.Instructions[0].Tint;
+    private static LinearColor PaintedColor(UiRoot root) => root.Instructions[0].Tint;
 }

@@ -6,6 +6,8 @@ public interface ITextureLoader
 {
     Texture Load(string path);
     Texture Load(Image image);
+    Texture Load(string path, TextureFormat format);
+    Texture Load(Image image, TextureFormat format);
 }
 
 public class TextureLoader : ITextureLoader
@@ -28,5 +30,16 @@ public class TextureLoader : ITextureLoader
     public Texture Load(Image image)
     {
         return _gpuMemorySystem.CreateTexture(image);
+    }
+
+    public Texture Load(string path, TextureFormat format)
+    {
+        using Image image = _imageLoader.Load(path);
+        return Load(image, format);
+    }
+
+    public Texture Load(Image image, TextureFormat format)
+    {
+        return _gpuMemorySystem.CreateTexture(image, format);
     }
 }

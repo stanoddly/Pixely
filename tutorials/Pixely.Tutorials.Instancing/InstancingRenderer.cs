@@ -11,13 +11,13 @@ public class InstancingRenderer : IRenderer<BasicRenderContext>
     private readonly GraphicsPipeline _graphicsPipeline;
     private readonly GpuVertexBuffer<PositionVertex> _quadVertexBuffer;
     private readonly GpuStorageBuffer<Vector4> _offsetBuffer;
-    private readonly GpuStorageBuffer<Vector4> _colorBuffer;
+    private readonly GpuStorageBuffer<LinearColor> _colorBuffer;
 
     public InstancingRenderer(
         GraphicsPipeline graphicsPipeline,
         GpuVertexBuffer<PositionVertex> quadVertexBuffer,
         GpuStorageBuffer<Vector4> offsetBuffer,
-        GpuStorageBuffer<Vector4> colorBuffer)
+        GpuStorageBuffer<LinearColor> colorBuffer)
     {
         _graphicsPipeline = graphicsPipeline;
         _quadVertexBuffer = quadVertexBuffer;
@@ -56,16 +56,16 @@ public class InstancingRenderer : IRenderer<BasicRenderContext>
         ];
 
         // Colors for each instance
-        Vector4[] colors =
+        LinearColor[] colors =
         [
-            new Vector4(1.0f, 0.0f, 0.0f, 1.0f), // Red
-            new Vector4(0.0f, 1.0f, 0.0f, 1.0f), // Green
-            new Vector4(0.0f, 0.0f, 1.0f, 1.0f), // Blue
-            new Vector4(1.0f, 1.0f, 0.0f, 1.0f), // Yellow
+            new SrgbColor(255, 0, 0, 255), // Red
+            new SrgbColor(0, 255, 0, 255), // Green
+            new SrgbColor(0, 0, 255, 255), // Blue
+            new SrgbColor(255, 255, 0, 255), // Yellow
         ];
 
         GpuStorageBuffer<Vector4> offsetBuffer = gpuMemorySystem.CreateStorageBuffer<Vector4>(offsets);
-        GpuStorageBuffer<Vector4> colorBuffer = gpuMemorySystem.CreateStorageBuffer<Vector4>(colors);
+        GpuStorageBuffer<LinearColor> colorBuffer = gpuMemorySystem.CreateStorageBuffer<LinearColor>(colors);
 
         GpuVertexBuffer<PositionVertex> quadVertexBuffer =
             gpuMemorySystem.CreateVertexBuffer(PositionShapes.VerticalQuad);

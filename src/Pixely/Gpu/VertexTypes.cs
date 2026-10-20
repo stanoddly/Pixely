@@ -102,9 +102,9 @@ public readonly record struct PositionVertex(Vector3 Position) : IVertexType, IP
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public readonly record struct PositionColorVertex(Vector3 Position, Color Color) : IVertexType, IPositionable
+public readonly record struct PositionColorVertex(Vector3 Position, SrgbColor Color) : IVertexType, IPositionable
 {
-    public static implicit operator PositionColorVertex((Vector3 position, Color color) tuple) => new PositionColorVertex(tuple.position, tuple.color);
+    public static implicit operator PositionColorVertex((Vector3 position, SrgbColor color) tuple) => new PositionColorVertex(tuple.position, tuple.color);
 
     public static ImmutableArray<VertexElementFormat> VertexElements { get; } = [VertexElementFormat.Float3, VertexElementFormat.UByte4Norm];
 }
@@ -118,9 +118,9 @@ public readonly record struct PositionTextureVertex(Vector3 Position, Vector2 Te
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public readonly record struct PositionNormalColorVertex(Vector3 Position, Vector3 Normal, Color Color) : IVertexType, IPositionable
+public readonly record struct PositionNormalColorVertex(Vector3 Position, Vector3 Normal, SrgbColor Color) : IVertexType, IPositionable
 {
-    public static implicit operator PositionNormalColorVertex((Vector3 position, Vector3 normal, Color color) tuple) => new PositionNormalColorVertex(tuple.position, tuple.normal, tuple.color);
+    public static implicit operator PositionNormalColorVertex((Vector3 position, Vector3 normal, SrgbColor color) tuple) => new PositionNormalColorVertex(tuple.position, tuple.normal, tuple.color);
 
     public static ImmutableArray<VertexElementFormat> VertexElements { get; } = [VertexElementFormat.Float3, VertexElementFormat.Float3, VertexElementFormat.UByte4Norm];
 }
@@ -133,8 +133,8 @@ public readonly record struct PositionTextureNormalVertex(Vector3 Position, Vect
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public readonly record struct PositionTextureNormalColorVertex(Vector3 Position, Vector2 TextureCoords, Vector3 Normal, Color Color) : IVertexType, IPositionable
+public readonly record struct PositionTextureNormalColorVertex(Vector3 Position, Vector2 TextureCoords, Vector3 Normal, SrgbColor Color) : IVertexType, IPositionable
 {
-    public static implicit operator PositionTextureNormalColorVertex((Vector3 position, Vector2 textureCoords, Vector3 normal, Color color) tuple) => new PositionTextureNormalColorVertex(tuple.position, tuple.textureCoords, tuple.normal, tuple.color);
+    public static implicit operator PositionTextureNormalColorVertex((Vector3 position, Vector2 textureCoords, Vector3 normal, SrgbColor color) tuple) => new PositionTextureNormalColorVertex(tuple.position, tuple.textureCoords, tuple.normal, tuple.color);
     public static ImmutableArray<VertexElementFormat> VertexElements { get; } = [VertexElementFormat.Float3, VertexElementFormat.Float2, VertexElementFormat.Float3, VertexElementFormat.UByte4Norm];
 }

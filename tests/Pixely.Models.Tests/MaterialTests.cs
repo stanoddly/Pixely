@@ -15,7 +15,7 @@ public class MaterialTests
 
         MaterialData material = builder.Read().Materials[0];
 
-        Assert.That(material.BaseColorFactor, Is.EqualTo(Vector4.One));
+        Assert.That(material.BaseColorFactor, Is.EqualTo(new LinearColor(1, 1, 1, 1)));
         Assert.That(material.BaseColorImage, Is.Null);
         Assert.That(material.AlphaMode, Is.EqualTo(AlphaMode.Opaque));
         Assert.That(material.AlphaCutoff, Is.EqualTo(0.5f));
@@ -36,7 +36,7 @@ public class MaterialTests
 
         MaterialData material = builder.Read().Materials[0];
 
-        Assert.That(material.BaseColorFactor, Is.EqualTo(new Vector4(0.5f, 0.25f, 1, 0.75f)));
+        Assert.That(material.BaseColorFactor, Is.EqualTo(new LinearColor(0.5f, 0.25f, 1, 0.75f)));
         Assert.That(material.AlphaMode, Is.EqualTo(AlphaMode.Mask));
         Assert.That(material.AlphaCutoff, Is.EqualTo(0.3f));
         Assert.That(material.DoubleSided, Is.True);

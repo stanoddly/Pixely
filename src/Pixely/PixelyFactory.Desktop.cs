@@ -103,9 +103,12 @@ public partial class PixelyFactory
         // Only size and title matter: the SDL window is never shown, it just backs events and text input.
         // It is not claimed for the GPU device: with a claimed window, SDL's Vulkan backend frees finished work only on a
         // submit that requested a swapchain texture, which an offscreen window never does.
+        // Selected before the SDL window exists, so a device without either format leaves no window to clean up.
+        TextureFormat colorTargetFormat = OffscreenWindow.SelectColorTargetFormat(
+            format => gpuDevice.IsTextureFormatSupported(format, TextureType.TwoD, TextureUsage.ColorTarget | TextureUsage.Sampler));
         (uint width, uint height) = config.Size ?? DefaultSize;
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, sdlWindowId, frameClock, platformInfo, WindowCloseBehavior.QuitApplication);
+        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, colorTargetFormat, sdlWindowId, frameClock, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 }
 #endif

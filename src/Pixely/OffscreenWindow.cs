@@ -22,6 +22,7 @@ public sealed class OffscreenWindow : Window
         ViewScope viewScope,
         Pointer<SDL_Window> sdlWindow,
         GpuDevice gpuDevice,
+        TextureFormat colorTargetFormat,
         uint sdlId,
         PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
@@ -29,11 +30,29 @@ public sealed class OffscreenWindow : Window
         : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
     {
         _gpuDevice = gpuDevice;
+        ColorTargetFormat = colorTargetFormat;
     }
 
-    // The format SDL gives an SDR swapchain on Vulkan and D3D12. A Vulkan driver without it gives the desktop R8G8B8A8Unorm,
-    // so a headless run can then render in a different format than a desktop one.
-    public override TextureFormat ColorTargetFormat => TextureFormat.B8G8R8A8Unorm;
+    public override TextureFormat ColorTargetFormat { get; }
+
+    /// <summary>
+    /// The sRGB format a desktop window's SDR_LINEAR swapchain has: B8G8R8A8UnormSrgb on Vulkan and D3D12, R8G8B8A8UnormSrgb on a
+    /// Vulkan driver without it. Throws when the device supports neither, the same as a desktop window without an sRGB swapchain.
+    /// </summary>
+    internal static TextureFormat SelectColorTargetFormat(Func<TextureFormat, bool> isSupported)
+    {
+        if (isSupported(TextureFormat.B8G8R8A8UnormSrgb))
+        {
+            return TextureFormat.B8G8R8A8UnormSrgb;
+        }
+
+        if (isSupported(TextureFormat.R8G8B8A8UnormSrgb))
+        {
+            return TextureFormat.R8G8B8A8UnormSrgb;
+        }
+
+        throw new PixelyInitializationException("The GPU device supports neither B8G8R8A8UnormSrgb nor R8G8B8A8UnormSrgb as a sampled color target, which an offscreen window needs.");
+    }
 
     // There is always a frame to draw, whether or not the SDL window is shown.
     public override bool IsRenderable => true;

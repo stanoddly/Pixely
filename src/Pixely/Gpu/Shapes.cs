@@ -206,7 +206,7 @@ public static class PositionTextureShapes
 
 public static class PositionNormalColorShapes
 {
-    private static ImmutableArray<PositionNormalColorVertex> RecreateShape(ImmutableArray<PositionTextureNormalVertex> shape, Color color)
+    private static ImmutableArray<PositionNormalColorVertex> RecreateShape(ImmutableArray<PositionTextureNormalVertex> shape, SrgbColor color)
     {
         var builder = ImmutableArray.CreateBuilder<PositionNormalColorVertex>(shape.Length);
         foreach (PositionTextureNormalVertex positionTextureNormalVertex in shape)
@@ -218,10 +218,10 @@ public static class PositionNormalColorShapes
 
     static PositionNormalColorShapes()
     {
-        Cube = PositionTextureNormalShapes.Cube.Reshape(vertices => RecreateShape(vertices, new Color(255, 255, 255, 255)));
-        IsometricCube = PositionTextureNormalShapes.IsometricCube.Reshape(vertices => RecreateShape(vertices, new Color(255, 255, 255, 255)));
-        HorizontalQuad = PositionTextureNormalShapes.HorizontalQuad.Reshape(vertices => RecreateShape(vertices, new Color(255, 255, 255, 255)));
-        VerticalQuad = PositionTextureNormalShapes.VerticalQuad.Reshape(vertices => RecreateShape(vertices, new Color(255, 255, 255, 255)));
+        Cube = PositionTextureNormalShapes.Cube.Reshape(vertices => RecreateShape(vertices, new SrgbColor(255, 255, 255, 255)));
+        IsometricCube = PositionTextureNormalShapes.IsometricCube.Reshape(vertices => RecreateShape(vertices, new SrgbColor(255, 255, 255, 255)));
+        HorizontalQuad = PositionTextureNormalShapes.HorizontalQuad.Reshape(vertices => RecreateShape(vertices, new SrgbColor(255, 255, 255, 255)));
+        VerticalQuad = PositionTextureNormalShapes.VerticalQuad.Reshape(vertices => RecreateShape(vertices, new SrgbColor(255, 255, 255, 255)));
     }
 
     public static readonly Shape<PositionNormalColorVertex> Cube;
@@ -239,42 +239,42 @@ public static class PositionColorShapes
     {
         ImmutableArray<PositionColorVertex> horizontalQuadLines =
         [
-            new(new Vector3(-1.0f, 0.0f, -1.0f), new Color(255, 255, 255, 255)),
-            new(new Vector3(1.0f, 0.0f, -1.0f), new Color(255, 255, 255, 255)),
-            new(new Vector3(1.0f, 0.0f, 1.0f), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1.0f, 0.0f, 1.0f), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1.0f, 0.0f, -1.0f), new Color(255, 255, 255, 255)),
+            new(new Vector3(-1.0f, 0.0f, -1.0f), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(1.0f, 0.0f, -1.0f), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(1.0f, 0.0f, 1.0f), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1.0f, 0.0f, 1.0f), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1.0f, 0.0f, -1.0f), new SrgbColor(255, 255, 255, 255)),
         ];
         HorizontalQuadLines = horizontalQuadLines;
 
         ImmutableArray<PositionColorVertex> cubeLines =
         [
-            new(new Vector3(-1, -1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1, -1, -1), new Color(255, 255, 255, 255)),
+            new(new Vector3(-1, -1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1, -1, -1), new SrgbColor(255, 255, 255, 255)),
 
-            new(new Vector3(-1,  1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1,  1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1,  1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1,  1, -1), new Color(255, 255, 255, 255)),
+            new(new Vector3(-1,  1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1,  1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1,  1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1,  1, -1), new SrgbColor(255, 255, 255, 255)),
 
-            new(new Vector3(-1, -1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1,  1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1, -1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3( 1,  1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1, -1,  1), new Color(255, 255, 255, 255)),
-            new(new Vector3(-1,  1,  1), new Color(255, 255, 255, 255)),
+            new(new Vector3(-1, -1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1,  1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1, -1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3( 1,  1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1, -1,  1), new SrgbColor(255, 255, 255, 255)),
+            new(new Vector3(-1,  1,  1), new SrgbColor(255, 255, 255, 255)),
         ];
         CubeLines = cubeLines;
     }

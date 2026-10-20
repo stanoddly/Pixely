@@ -18,7 +18,7 @@ static partial class Program
                     Title: "Window Dragging",
                     Borderless: true));
 
-        builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(FColors.SkyBlue));
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(LinearColors.SkyBlue));
 
         builder.OnBuilt((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
@@ -105,7 +105,7 @@ internal sealed class ClearRenderer : IRenderer<BasicRenderContext>
 {
     private readonly ColorTargetSettings _clearSettings;
 
-    public ClearRenderer(FColor color)
+    public ClearRenderer(LinearColor color)
     {
         _clearSettings = new ColorTargetSettings { ClearColorValue = color, LoadOperation = LoadOperation.Clear };
     }

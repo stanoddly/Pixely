@@ -29,5 +29,7 @@ public interface ICopyPass: IDisposable
     void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged;
 
     Texture CreateTexture(Image image);
+    Texture CreateTexture(Image image, TextureFormat format);
     TextureArray CreateTextureArray(ReadOnlySpan<Image> images);
+    TextureArray CreateTextureArray(ReadOnlySpan<Image> images, TextureFormat format);
 }

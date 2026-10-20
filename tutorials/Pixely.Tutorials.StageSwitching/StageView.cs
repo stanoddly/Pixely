@@ -10,9 +10,9 @@ namespace Pixely.Tutorials.StageSwitching;
 public sealed class StageView : UiView, IDisposable
 {
     private readonly string _name;
-    private readonly Color _color;
+    private readonly SrgbColor _color;
 
-    public StageView(string name, Color color)
+    public StageView(string name, SrgbColor color)
     {
         _name = name;
         _color = color;

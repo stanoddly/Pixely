@@ -13,7 +13,7 @@ internal readonly record struct PaintInstruction(
     Rectangle Clip,
     Texture? Texture,
     Vector4 Uvs,
-    FColor Tint)
+    LinearColor Tint)
 {
     internal static readonly Vector4 FullUvs = new(0f, 0f, 1f, 1f);
 }

@@ -8,7 +8,7 @@ namespace Pixely.Ui.Tests;
 /// </summary>
 public class ViewModelDrivenUpdateTests
 {
-    private static readonly Color Fill = new(90, 190, 120, 255);
+    private static readonly SrgbColor Fill = new(90, 190, 120, 255);
 
     [Test]
     public void Update_WithNoChanges_DoesNothing()
@@ -134,7 +134,7 @@ public class ViewModelDrivenUpdateTests
         UiRoot root = Run(new Column { Children = { box } });
         ulong painted = root.PaintVersion;
 
-        box.Background = new SolidDrawable(new Color(200, 40, 40, 255));
+        box.Background = new SolidDrawable(new SrgbColor(200, 40, 40, 255));
         root.Update();
 
         Assert.That(root.PaintVersion, Is.EqualTo(painted + 1));
@@ -180,7 +180,7 @@ public class ViewModelDrivenUpdateTests
                 ThrowOnNextPaint = false;
                 // A quad the completed build does not have, so the working list differs from it
                 // and a root exposing the wrong list would show up.
-                context.FillRectangle(Bounds, Colors.Red);
+                context.FillRectangle(Bounds, SrgbColors.Red);
                 throw new InvalidOperationException("paint failed");
             }
         }

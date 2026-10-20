@@ -494,6 +494,8 @@ public class AtlasPackerTests
     {
         public Texture Load(string path) => null!;
         public Texture Load(Image image) => null!;
+        public Texture Load(string path, TextureFormat format) => null!;
+        public Texture Load(Image image, TextureFormat format) => null!;
     }
 
     private class StubImageLoader(Dictionary<string, RawImage> images) : IImageLoader

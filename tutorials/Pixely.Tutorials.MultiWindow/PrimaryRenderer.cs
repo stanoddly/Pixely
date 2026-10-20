@@ -17,7 +17,7 @@ public class PrimaryRenderer : IRenderer<BasicRenderContext>
 
     public void Render(BasicRenderContext renderContext)
     {
-        renderContext.CommandBuffer.PushFragmentUniformData(0, FColors.SkyBlue);
+        renderContext.CommandBuffer.PushFragmentUniformData(0, LinearColors.SkyBlue);
         using RenderPass renderPass = new RenderPassBuilder(renderContext.CommandBuffer)
             .AddColorTarget(renderContext.SwapchainTexture)
             .SetSharedColorTargetSettings(ColorTargetSettings.Clear)

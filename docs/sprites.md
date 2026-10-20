@@ -2,6 +2,8 @@
 
 `RegisterSpriteLoading()` registers `ISpriteAssetLoader` and `IAnimatedSpriteAssetLoader`. Both load a JSON file from the `ContentSource` by path, resolve its texture through `ITextureLoader`, and cache the asset in `SpriteAssetStorage`, so loading the same path twice returns the same instance.
 
+Sprite textures are `R8G8B8A8UnormSrgb`, the default of `ITextureLoader`, so sampling them returns linear values (see [shaders.md](shaders.md#color-spaces)).
+
 ## Sprite file
 
 ```json

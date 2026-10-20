@@ -8,15 +8,15 @@ namespace Pixely.Ui.Tests;
 /// </summary>
 public class LabelColorTests
 {
-    private static readonly Color Explicit = new(1, 2, 3, 255);
-    private static readonly Color Normal = new(10, 10, 10, 255);
-    private static readonly Color Hovered = new(20, 20, 20, 255);
-    private static readonly Color Pressed = new(30, 30, 30, 255);
-    private static readonly Color Disabled = new(40, 40, 40, 255);
-    private static readonly Color StyleForeground = new(50, 50, 50, 255);
-    private static readonly Color StyleDisabled = new(60, 60, 60, 255);
-    private static readonly Color StyleMuted = new(70, 70, 70, 255);
-    private static readonly Color StyleAccent = new(80, 80, 80, 255);
+    private static readonly SrgbColor Explicit = new(1, 2, 3, 255);
+    private static readonly SrgbColor Normal = new(10, 10, 10, 255);
+    private static readonly SrgbColor Hovered = new(20, 20, 20, 255);
+    private static readonly SrgbColor Pressed = new(30, 30, 30, 255);
+    private static readonly SrgbColor Disabled = new(40, 40, 40, 255);
+    private static readonly SrgbColor StyleForeground = new(50, 50, 50, 255);
+    private static readonly SrgbColor StyleDisabled = new(60, 60, 60, 255);
+    private static readonly SrgbColor StyleMuted = new(70, 70, 70, 255);
+    private static readonly SrgbColor StyleAccent = new(80, 80, 80, 255);
 
     [Test]
     public void WithoutAnythingElse_TakesTheStylesForeground()
@@ -24,7 +24,7 @@ public class LabelColorTests
         Label label = new("hi");
         UiRoot root = Rooted(label, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)StyleForeground));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)StyleForeground));
     }
 
     [Test]
@@ -33,7 +33,7 @@ public class LabelColorTests
         Label label = new(new RasterisingFont(), "hi");
         UiRoot root = Rooted(label, style: null);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)UiStyle.DefaultForeground));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)UiStyle.DefaultForeground));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class LabelColorTests
         button.Content = label;
         UiRoot root = Rooted(button, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Normal));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Normal));
     }
 
     [Test]
@@ -56,7 +56,7 @@ public class LabelColorTests
 
         root.PointerMoved(new Vector2Int(10, 10));
         bool repainted = root.Update();
-        FColor hovered = PaintedColor(root);
+        LinearColor hovered = PaintedColor(root);
 
         root.PointerPressed(new Vector2Int(10, 10));
         root.Update();
@@ -64,8 +64,8 @@ public class LabelColorTests
         Assert.Multiple(() =>
         {
             Assert.That(repainted, Is.True, "the hover has to ask for the repaint that draws the new colour");
-            Assert.That(hovered, Is.EqualTo((FColor)Hovered));
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)Pressed));
+            Assert.That(hovered, Is.EqualTo((LinearColor)Hovered));
+            Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Pressed));
         });
     }
 
@@ -76,7 +76,7 @@ public class LabelColorTests
         button.Content = new Label("hi") { Emphasis = TextEmphasis.Accent };
         UiRoot root = Rooted(button, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Disabled), "the control it sits in answers for its text, emphasis or not");
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Disabled), "the control it sits in answers for its text, emphasis or not");
     }
 
     [Test]
@@ -93,7 +93,7 @@ public class LabelColorTests
         Assert.Multiple(() =>
         {
             Assert.That(button.VisualState, Is.EqualTo(VisualState.Normal));
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)Disabled), "the button's disabled colour, since it is the nearest source");
+            Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Disabled), "the button's disabled colour, since it is the nearest source");
         });
     }
 
@@ -104,7 +104,7 @@ public class LabelColorTests
         group.Children.Add(new Label("hi"));
         UiRoot root = Rooted(group, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)StyleDisabled));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)StyleDisabled));
     }
 
     [Test]
@@ -115,15 +115,15 @@ public class LabelColorTests
         button.Content = label;
         UiRoot root = Rooted(button, Style());
 
-        FColor enabled = PaintedColor(root);
+        LinearColor enabled = PaintedColor(root);
         button.IsEnabled = false;
         bool repainted = root.Update();
 
         Assert.Multiple(() =>
         {
-            Assert.That(enabled, Is.EqualTo((FColor)Normal));
+            Assert.That(enabled, Is.EqualTo((LinearColor)Normal));
             Assert.That(repainted, Is.True);
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)Disabled));
+            Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Disabled));
         });
     }
 
@@ -134,7 +134,7 @@ public class LabelColorTests
         group.Children.Add(new Label(new RasterisingFont(), "hi"));
         UiRoot root = Rooted(group, style: null);
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)UiStyle.DefaultDisabledForeground));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)UiStyle.DefaultDisabledForeground));
     }
 
     [Test]
@@ -165,8 +165,8 @@ public class LabelColorTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(PaintedColor(muted), Is.EqualTo((FColor)StyleMuted));
-            Assert.That(PaintedColor(accent), Is.EqualTo((FColor)StyleAccent));
+            Assert.That(PaintedColor(muted), Is.EqualTo((LinearColor)StyleMuted));
+            Assert.That(PaintedColor(accent), Is.EqualTo((LinearColor)StyleAccent));
         });
     }
 
@@ -177,7 +177,7 @@ public class LabelColorTests
         group.Children.Add(new Label("hi") { Emphasis = TextEmphasis.Accent });
         UiRoot root = Rooted(group, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)StyleDisabled));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)StyleDisabled));
     }
 
     [Test]
@@ -186,15 +186,15 @@ public class LabelColorTests
         Label label = new("hi");
         UiRoot root = Rooted(label, Style());
 
-        FColor before = PaintedColor(root);
+        LinearColor before = PaintedColor(root);
         label.Emphasis = TextEmphasis.Accent;
         bool repainted = root.Update();
 
         Assert.Multiple(() =>
         {
-            Assert.That(before, Is.EqualTo((FColor)StyleForeground));
+            Assert.That(before, Is.EqualTo((LinearColor)StyleForeground));
             Assert.That(repainted, Is.True);
-            Assert.That(PaintedColor(root), Is.EqualTo((FColor)StyleAccent));
+            Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)StyleAccent));
         });
     }
 
@@ -209,7 +209,7 @@ public class LabelColorTests
         outer.Children.Add(inner);
         UiRoot root = Rooted(outer, Style());
 
-        Assert.That(PaintedColor(root), Is.EqualTo((FColor)Normal));
+        Assert.That(PaintedColor(root), Is.EqualTo((LinearColor)Normal));
     }
 
     [Test]
@@ -262,7 +262,7 @@ public class LabelColorTests
     }
 
     /// <summary>The tint of the last instruction, which is the deepest thing painted: the text.</summary>
-    private static FColor PaintedColor(UiRoot root) => root.Instructions[^1].Tint;
+    private static LinearColor PaintedColor(UiRoot root) => root.Instructions[^1].Tint;
 
     /// <summary>Stands in for a control outside Pixely.Ui that colours the text inside it.</summary>
     private sealed class StateSource(StateColors foreground) : Element, IVisualStateSource

@@ -12,7 +12,7 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
 {
     private const DepthBufferFormat DepthFormat = DepthBufferFormat.Depth32;
 
-    private static readonly ColorTargetSettings _clearSettings = new() { ClearColorValue = new FColor(0.18f, 0.2f, 0.24f, 1f) };
+    private static readonly ColorTargetSettings _clearSettings = new() { ClearColorValue = new SrgbColor(46, 51, 61, 255) };
     private static readonly DepthBufferSettings _depthSettings = new() { DepthBufferStoreOperation = StoreOperation.DontCare };
     private static readonly Vector3 _cameraPosition = new(0, 0.9f, 4.2f);
     private static readonly Vector3 _cameraTarget = new(0, 0.75f, 0);
@@ -58,8 +58,6 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
         float aspectRatio = (float)swapchainTexture.Size.Width / swapchainTexture.Size.Height;
         Matrix4x4 viewProjection = Matrix4x4.CreateLookAt(_cameraPosition, _cameraTarget, Vector3.UnitY)
                                    * Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4, aspectRatio, 0.1f, 100f);
-        // A swapchain without an sRGB format stores what the shader writes, so the shader encodes its linear result itself.
-        bool encodeSrgb = swapchainTexture.Format is not (TextureFormat.B8G8R8A8UnormSrgb or TextureFormat.R8G8B8A8UnormSrgb);
 
         CommandBuffer commandBuffer = renderContext.CommandBuffer;
         using RenderPass renderPass = new RenderPassBuilder(commandBuffer)
@@ -101,7 +99,7 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
 
                     float alphaCutoff = material.AlphaMode == AlphaMode.Mask ? material.AlphaCutoff : -1f;
                     commandBuffer.PushFragmentUniformData(0, new FragmentConstants(
-                        material.BaseColorFactor, new Vector4(_lightDirection, 0), new Vector4(_cameraPosition, 1), alphaCutoff, encodeSrgb ? 1u : 0u));
+                        material.BaseColorFactor, new Vector4(_lightDirection, 0), new Vector4(_cameraPosition, 1), alphaCutoff));
 
                     renderPass.DrawIndexedPrimitive();
                 }
@@ -189,8 +187,9 @@ public sealed class ModelRenderer : IRenderer<BasicRenderContext>
 
     // Matches FragmentConstants in model_common.slang, padded to 64 bytes.
     [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct FragmentConstants(Vector4 BaseColorFactor, Vector4 LightDirection, Vector4 CameraPosition, float AlphaCutoff, uint EncodeSrgb)
+    private readonly record struct FragmentConstants(LinearColor BaseColorFactor, Vector4 LightDirection, Vector4 CameraPosition, float AlphaCutoff)
     {
-        private readonly ulong _padding;
+        private readonly float _padding0;
+        private readonly ulong _padding1;
     }
 }

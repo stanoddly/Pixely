@@ -59,17 +59,17 @@ public sealed record UiStyle
     public TextAppearance Text { get; init; }
 
     /// <summary>Used when no style supplies one, so a field is usable without any setup.</summary>
-    public static Color DefaultSelection { get; } = new(51, 102, 170, 180);
+    public static SrgbColor DefaultSelection { get; } = new(51, 102, 170, 180);
 
     /// <inheritdoc cref="DefaultSelection"/>
-    public static Color DefaultForeground { get; } = Colors.White;
+    public static SrgbColor DefaultForeground { get; } = SrgbColors.White;
 
     /// <inheritdoc cref="DefaultSelection"/>
-    public static Color DefaultDisabledForeground { get; } = new(130, 130, 130, 255);
+    public static SrgbColor DefaultDisabledForeground { get; } = new(130, 130, 130, 255);
 
     /// <inheritdoc cref="DefaultSelection"/>
-    public static Color DefaultMuted { get; } = new(160, 168, 180, 255);
+    public static SrgbColor DefaultMuted { get; } = new(160, 168, 180, 255);
 
     /// <inheritdoc cref="DefaultSelection"/>
-    public static Color DefaultAccent { get; } = new(239, 139, 79, 255);
+    public static SrgbColor DefaultAccent { get; } = new(239, 139, 79, 255);
 }

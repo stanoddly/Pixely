@@ -42,10 +42,10 @@ public class IndexBufferRenderer : IRenderer<BasicRenderContext>
     {
         PositionColorVertex[] vertices =
         [
-            new PositionColorVertex(new Vector3(-0.6f, -0.6f, 0.0f), Colors.Red),
-            new PositionColorVertex(new Vector3(-0.6f,  0.6f, 0.0f), Colors.Green),
-            new PositionColorVertex(new Vector3( 0.6f, -0.6f, 0.0f), Colors.Blue),
-            new PositionColorVertex(new Vector3( 0.6f,  0.6f, 0.0f), Colors.Yellow)
+            new PositionColorVertex(new Vector3(-0.6f, -0.6f, 0.0f), SrgbColors.Red),
+            new PositionColorVertex(new Vector3(-0.6f,  0.6f, 0.0f), SrgbColors.Green),
+            new PositionColorVertex(new Vector3( 0.6f, -0.6f, 0.0f), SrgbColors.Blue),
+            new PositionColorVertex(new Vector3( 0.6f,  0.6f, 0.0f), SrgbColors.Yellow)
         ];
 
         ushort[] indices =

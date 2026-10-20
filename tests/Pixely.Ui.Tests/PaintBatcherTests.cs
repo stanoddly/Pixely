@@ -4,7 +4,7 @@ namespace Pixely.Ui.Tests;
 
 public class PaintBatcherTests
 {
-    private static readonly Color Red = new(255, 0, 0, 255);
+    private static readonly SrgbColor Red = new(255, 0, 0, 255);
 
     [Test]
     public void Batches_ConsecutiveSolidFills_AreOneBatch()

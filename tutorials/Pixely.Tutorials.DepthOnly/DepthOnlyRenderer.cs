@@ -7,7 +7,7 @@ public class DepthOnlyRenderer : IRenderer<BasicRenderContext>
 {
     private static readonly ColorTargetSettings _greenClearSettings = new()
     {
-        ClearColorValue = new FColor(0.2f, 0.6f, 0.2f, 1.0f)
+        ClearColorValue = new SrgbColor(51, 153, 51, 255)
     };
 
     private readonly GraphicsPipeline _depthOnlyPipeline;

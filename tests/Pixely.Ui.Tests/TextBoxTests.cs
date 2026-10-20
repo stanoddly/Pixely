@@ -443,7 +443,7 @@ public class TextBoxTests
     [Test]
     public void TheStylesBackgrounds_FallBackWithinThemselves()
     {
-        StateDrawables backgrounds = new(new SolidDrawable(Colors.Red)) { Focused = new SolidDrawable(Colors.Green) };
+        StateDrawables backgrounds = new(new SolidDrawable(SrgbColors.Red)) { Focused = new SolidDrawable(SrgbColors.Green) };
         ExposedTextBox focused = new();
         ExposedTextBox plain = new();
         UiRoot root = new() { Style = new UiStyle { Field = new FieldAppearance { Background = backgrounds } } };
@@ -460,9 +460,9 @@ public class TextBoxTests
     [Test]
     public void APlainBackgroundAssignedToTheField_BeatsTheStyle()
     {
-        SolidDrawable plain = new(Colors.Red);
+        SolidDrawable plain = new(SrgbColors.Red);
         ExposedTextBox field = new() { Background = plain };
-        UiRoot root = new() { Style = new UiStyle { Field = new FieldAppearance { Background = new StateDrawables(new SolidDrawable(Colors.Blue)) } } };
+        UiRoot root = new() { Style = new UiStyle { Field = new FieldAppearance { Background = new StateDrawables(new SolidDrawable(SrgbColors.Blue)) } } };
         root.AddLayer(new Column { Children = { field } });
         root.Focus(field);
 
@@ -473,7 +473,7 @@ public class TextBoxTests
     [Test]
     public void WithoutAStyleOfItsOwn_AFieldTakesTheStylesAndThenTheBuiltInOne()
     {
-        StateDrawables styled = new(new SolidDrawable(Colors.Blue));
+        StateDrawables styled = new(new SolidDrawable(SrgbColors.Blue));
         ExposedTextBox fromStyle = new();
         ExposedTextBox fromDefault = new();
         UiRoot styledRoot = new() { Style = new UiStyle { Field = new FieldAppearance { Background = styled } } };

@@ -58,29 +58,29 @@ public sealed class StateDrawables
 }
 
 /// <summary>
-/// One <see cref="Color"/> per <see cref="VisualState"/>, with the fallbacks
+/// One <see cref="SrgbColor"/> per <see cref="VisualState"/>, with the fallbacks
 /// <see cref="StateDrawables"/> has. A parallel type rather than a generic one over both, because
 /// a drawable and a colour are the only two things that vary per state, and generalising would
 /// rename what consumers already write.
 /// </summary>
 public sealed class StateColors
 {
-    public StateColors(Color normal)
+    public StateColors(SrgbColor normal)
     {
         Normal = normal;
     }
 
-    public Color Normal { get; }
+    public SrgbColor Normal { get; }
 
-    public Color? Hovered { get; init; }
+    public SrgbColor? Hovered { get; init; }
 
-    public Color? Pressed { get; init; }
+    public SrgbColor? Pressed { get; init; }
 
-    public Color? Focused { get; init; }
+    public SrgbColor? Focused { get; init; }
 
-    public Color? Disabled { get; init; }
+    public SrgbColor? Disabled { get; init; }
 
-    public Color Resolve(VisualState state)
+    public SrgbColor Resolve(VisualState state)
     {
         return state switch
         {

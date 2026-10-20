@@ -13,9 +13,9 @@ namespace Pixely.Tutorials.UiScrollView;
 /// </summary>
 static partial class Program
 {
-    private static readonly Color Background = new(24, 27, 32, 255);
-    private static readonly Color Panel = new(36, 42, 52, 255);
-    private static readonly Color Chip = new(70, 168, 160, 255);
+    private static readonly SrgbColor Background = new(24, 27, 32, 255);
+    private static readonly SrgbColor Panel = new(36, 42, 52, 255);
+    private static readonly SrgbColor Chip = new(70, 168, 160, 255);
 
     static void Configure(PixelyAppBuilder builder)
     {
@@ -31,7 +31,7 @@ static partial class Program
             return new UiStyle(fonts.Load("fonts/GohuFont-Medium.ttf", 14))
             {
                 Title = fonts.Load("fonts/GohuFont-Medium.ttf", 14),
-                Scroll = new ScrollAppearance { Track = new SolidDrawable(new Color(255, 255, 255, 20)) }
+                Scroll = new ScrollAppearance { Track = new SolidDrawable(new SrgbColor(255, 255, 255, 20)) }
             };
         });
 

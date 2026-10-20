@@ -51,7 +51,7 @@ The shader then reads slot 0 at `TEXCOORD0` to `TEXCOORD2` (position, texture co
 
 `ModelMaterial.BaseColorTexture` is a `ModelTexture`: the texture, and the file's sampler settings as a `SamplerConfig`. The game creates the `Sampler` with `GpuDevice.CreateSampler` and owns it. A texture without a sampler in the file gets `Repeat` and `Linear`. Textures have one mip level, so a glTF mipmap filter maps to its base filter.
 
-glTF base color textures are sRGB, so they are uploaded as `R8G8B8A8UnormSrgb` and sampling returns linear values. `BaseColorFactor` is linear too. Pixely's swapchain is not an sRGB format, so a shader that lights in linear space encodes its result to sRGB before writing it. The tutorial's `model_common.slang` shows how.
+glTF base color textures are sRGB, so they are uploaded as `R8G8B8A8UnormSrgb` and sampling returns linear values. `BaseColorFactor` is a `LinearColor`, as glTF defines it. Pixely's swapchain is an sRGB format, so a shader lights in linear light and writes its result as it is; the GPU encodes it to sRGB on write. The tutorial's `model_common.slang` shows this.
 
 Materials sharing an image share its texture, and so do images whose buffer views cover the same bytes.
 

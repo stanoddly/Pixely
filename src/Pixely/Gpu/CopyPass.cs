@@ -323,39 +323,19 @@ internal sealed class CopyPass
         storageBuffer.Size = data.Length;
     }
 
+    // Images hold color, which is sRGB-encoded, so sampling returns linear light. Data such as normal maps passes R8G8B8A8Unorm.
     public Texture CreateTexture(Image image)
     {
-        return CreateTexture(image, TextureFormat.R8G8B8A8Unorm);
+        return CreateTexture(image, TextureFormat.R8G8B8A8UnormSrgb);
     }
 
     public Texture CreateTexture(Image image, TextureFormat format)
     {
-        // Both formats take the image's R, G, B, A bytes as they are; the sRGB one only changes how sampling reads them.
-        if (format != TextureFormat.R8G8B8A8Unorm && format != TextureFormat.R8G8B8A8UnormSrgb)
-        {
-            throw new ArgumentOutOfRangeException(nameof(format), format, $"Only {TextureFormat.R8G8B8A8Unorm} and {TextureFormat.R8G8B8A8UnormSrgb} can be created from an image.");
-        }
-
-        // Pixely labels R, G, B, A bytes as Abgr8888 (SdlImageDecoder) and as Rgba8888 (RawImage producers).
-        if (image.PixelFormat != PixelFormat.Abgr8888 && image.PixelFormat != PixelFormat.Rgba8888)
-        {
-            throw new ArgumentException($"The image's pixel format is {image.PixelFormat}; only 4-byte R, G, B, A pixels can be uploaded.", nameof(image));
-        }
+        ValidateImageFormat(format);
+        ValidateImage(image, nameof(image));
 
         ReadOnlySpan<byte> imageData = image.Data;
         (ushort width, ushort height) = image.Size;
-
-        if (width == 0 || height == 0)
-        {
-            throw new ArgumentException($"The image is {width}x{height} pixels; neither side can be 0.", nameof(image));
-        }
-
-        // Two ushort sides times 4 bytes can exceed int, so the length is a long.
-        long expectedLength = (long)width * height * 4;
-        if (imageData.Length != expectedLength)
-        {
-            throw new ArgumentException($"The image has {imageData.Length} bytes of data, but {width}x{height} pixels need {expectedLength}.", nameof(image));
-        }
 
         SdlError.Clear();
 
@@ -392,14 +372,23 @@ internal sealed class CopyPass
 
     public TextureArray CreateTextureArray(ReadOnlySpan<Image> images)
     {
+        return CreateTextureArray(images, TextureFormat.R8G8B8A8UnormSrgb);
+    }
+
+    public TextureArray CreateTextureArray(ReadOnlySpan<Image> images, TextureFormat format)
+    {
+        ValidateImageFormat(format);
+
         if (images.Length == 0)
         {
             throw new ArgumentException("At least one image required", nameof(images));
         }
 
         ShortSize size = images[0].Size;
-        for (int i = 1; i < images.Length; i++)
+        for (int i = 0; i < images.Length; i++)
         {
+            ValidateImage(images[i], $"{nameof(images)}[{i}]");
+
             if (images[i].Size != size)
             {
                 throw new ArgumentException(
@@ -418,7 +407,7 @@ internal sealed class CopyPass
             SDL_GPUTextureCreateInfo sdlGpuTextureCreateInfo = new SDL_GPUTextureCreateInfo
             {
                 type = SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D_ARRAY,
-                format = SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                format = (SDL_GPUTextureFormat)format,
                 width = width,
                 height = height,
                 layer_count_or_depth = layerCount,
@@ -441,9 +430,41 @@ internal sealed class CopyPass
                 throw;
             }
 
-            TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, TextureFormat.R8G8B8A8Unorm, TextureUsage.Sampler);
+            TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, format, TextureUsage.Sampler);
             _gpuDevice.RegisterTexture(textureArray);
             return textureArray;
+        }
+    }
+
+    // Both formats take the image's R, G, B, A bytes as they are; the sRGB one only changes how sampling reads them.
+    private static void ValidateImageFormat(TextureFormat format)
+    {
+        if (format != TextureFormat.R8G8B8A8Unorm && format != TextureFormat.R8G8B8A8UnormSrgb)
+        {
+            throw new ArgumentOutOfRangeException(nameof(format), format, $"Only {TextureFormat.R8G8B8A8Unorm} and {TextureFormat.R8G8B8A8UnormSrgb} can be created from an image.");
+        }
+    }
+
+    private static void ValidateImage(Image image, string paramName)
+    {
+        // Pixely labels R, G, B, A bytes as Abgr8888 (SdlImageDecoder) and as Rgba8888 (RawImage producers).
+        if (image.PixelFormat != PixelFormat.Abgr8888 && image.PixelFormat != PixelFormat.Rgba8888)
+        {
+            throw new ArgumentException($"The image's pixel format is {image.PixelFormat}; only 4-byte R, G, B, A pixels can be uploaded.", paramName);
+        }
+
+        (ushort width, ushort height) = image.Size;
+
+        if (width == 0 || height == 0)
+        {
+            throw new ArgumentException($"The image is {width}x{height} pixels; neither side can be 0.", paramName);
+        }
+
+        // Two ushort sides times 4 bytes can exceed int, so the length is a long.
+        long expectedLength = (long)width * height * 4;
+        if (image.Data.Length != expectedLength)
+        {
+            throw new ArgumentException($"The image has {image.Data.Length} bytes of data, but {width}x{height} pixels need {expectedLength}.", paramName);
         }
     }
 }

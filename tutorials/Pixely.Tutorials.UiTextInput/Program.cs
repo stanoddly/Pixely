@@ -34,9 +34,9 @@ static partial class Program
                 Title = fonts.Load("fonts/GohuFont-Medium.ttf", 14),
                 Text = new TextAppearance
                 {
-                    Foreground = new Color(235, 238, 242, 255),
-                    Muted = new Color(150, 162, 180, 255),
-                    Accent = new Color(233, 138, 76, 255)
+                    Foreground = new SrgbColor(235, 238, 242, 255),
+                    Muted = new SrgbColor(150, 162, 180, 255),
+                    Accent = new SrgbColor(233, 138, 76, 255)
                 }
             };
         });
