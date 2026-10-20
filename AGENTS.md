@@ -35,3 +35,4 @@
 
 - `DECISIONS.md` - Design decisions with their deciding constraints and known costs, newest first. Add an entry only for a substantial Pixely design choice, not for a small change or a decision that belongs to a dependency such as the SDL fork.
 - `.github/PUBLISHING.md` - Development-feed and nuget.org publication setup, workflows, and recovery
+- `.github/DEPENDENCY-UPDATES.md` - Self-hosted Renovate: what it updates, the `RENOVATE_TOKEN` secret and its rotation
