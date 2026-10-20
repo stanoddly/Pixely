@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <SlangDxcToolchainVersion>2026.19.0.1</SlangDxcToolchainVersion>
+        <SlangDxcToolchainVersion>2026.20.0.1</SlangDxcToolchainVersion>
     </PropertyGroup>
 
     <!--
