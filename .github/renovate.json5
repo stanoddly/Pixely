@@ -1,0 +1,36 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  enabledManagers: ['nuget', 'custom.regex'],
+  // The consumers pin wrong versions on purpose to test that the Pixely SDK removes them.
+  ignorePaths: ['tests/Pixely.Package.Tests/Consumers/**'],
+  separateMajorMinor: false,
+  // Renovate treats commits by this email as its own and may overwrite them, so no person or agent commits with it.
+  gitAuthor: 'Renovate <renovate@pixely.invalid>',
+  packageRules: [
+    {
+      matchPackageNames: ['*'],
+      groupName: 'NuGet packages',
+    },
+    {
+      matchDepNames: ['dotnet-sdk'],
+      enabled: false,
+    },
+    {
+      // Source generators must not reference a newer Roslyn version than the compiler loading them, so each stays within its current major.
+      matchPackageNames: ['Microsoft.CodeAnalysis.Analyzers', 'Microsoft.CodeAnalysis.CSharp'],
+      allowedVersions: '(,{{add major 1}}.0)',
+    },
+  ],
+  customManagers: [
+    {
+      // The toolchain is an MSBuild project SDK imported with a property version, which the nuget manager cannot update.
+      customType: 'regex',
+      managerFilePatterns: ['/^src/Pixely\\.SdlangCompiler/build/Pixely\\.SdlangCompiler\\.props$/'],
+      matchStrings: ['<SlangDxcToolchainVersion>(?<currentValue>[^<]+)</SlangDxcToolchainVersion>'],
+      depNameTemplate: 'SlangDxcBundle.Toolchain',
+      datasourceTemplate: 'nuget',
+      // NuGet versioning reads a bare version as a minimum, and custom managers ignore rangeStrategy, so the version is matched exactly.
+      versioningTemplate: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-(?<prerelease>.+))?$',
+    },
+  ],
+}

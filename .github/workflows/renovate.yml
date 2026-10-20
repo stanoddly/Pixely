@@ -1,0 +1,27 @@
+name: Renovate
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # Pull requests opened with GITHUB_TOKEN do not trigger the pull request workflow, so Renovate uses its own token.
+      # Renovate itself follows the action's default major image tag, so it takes backward-compatible releases without bumps here.
+      # The action publishes no major tag, so it stays at an exact release. Its minor releases can move Renovate to a new major, so bump it by hand.
+      - uses: renovatebot/github-action@v46.3.9
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
