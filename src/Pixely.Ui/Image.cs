@@ -10,7 +10,7 @@ namespace Pixely.Ui;
 public sealed class Image : Element
 {
     private SpriteAsset _sprite;
-    private SrgbColor _tint = Colors.White;
+    private SrgbColor _tint = SrgbColors.White;
 
     public Image(SpriteAsset sprite)
     {

@@ -59,20 +59,20 @@ public class IndexedRenderPassRenderer : IRenderer<BasicRenderContext>
     {
         PositionColorVertex[] vertices =
         [
-            new PositionColorVertex(new Vector3(-0.85f,  0.75f, 0.0f), Colors.Red),
-            new PositionColorVertex(new Vector3(-0.85f,  0.20f, 0.0f), Colors.Green),
-            new PositionColorVertex(new Vector3(-0.30f,  0.75f, 0.0f), Colors.Blue),
-            new PositionColorVertex(new Vector3(-0.30f,  0.20f, 0.0f), Colors.Yellow),
+            new PositionColorVertex(new Vector3(-0.85f,  0.75f, 0.0f), SrgbColors.Red),
+            new PositionColorVertex(new Vector3(-0.85f,  0.20f, 0.0f), SrgbColors.Green),
+            new PositionColorVertex(new Vector3(-0.30f,  0.75f, 0.0f), SrgbColors.Blue),
+            new PositionColorVertex(new Vector3(-0.30f,  0.20f, 0.0f), SrgbColors.Yellow),
 
-            new PositionColorVertex(new Vector3( 0.30f,  0.75f, 0.0f), Colors.Cyan),
-            new PositionColorVertex(new Vector3( 0.30f,  0.20f, 0.0f), Colors.Magenta),
-            new PositionColorVertex(new Vector3( 0.85f,  0.75f, 0.0f), Colors.White),
-            new PositionColorVertex(new Vector3( 0.85f,  0.20f, 0.0f), Colors.Orange),
+            new PositionColorVertex(new Vector3( 0.30f,  0.75f, 0.0f), SrgbColors.Cyan),
+            new PositionColorVertex(new Vector3( 0.30f,  0.20f, 0.0f), SrgbColors.Magenta),
+            new PositionColorVertex(new Vector3( 0.85f,  0.75f, 0.0f), SrgbColors.White),
+            new PositionColorVertex(new Vector3( 0.85f,  0.20f, 0.0f), SrgbColors.Orange),
 
-            new PositionColorVertex(new Vector3(-0.17f,  0.17f, 0.0f), Colors.White),
-            new PositionColorVertex(new Vector3(-0.17f, -0.17f, 0.0f), Colors.White),
-            new PositionColorVertex(new Vector3( 0.17f,  0.17f, 0.0f), Colors.White),
-            new PositionColorVertex(new Vector3( 0.17f, -0.17f, 0.0f), Colors.White)
+            new PositionColorVertex(new Vector3(-0.17f,  0.17f, 0.0f), SrgbColors.White),
+            new PositionColorVertex(new Vector3(-0.17f, -0.17f, 0.0f), SrgbColors.White),
+            new PositionColorVertex(new Vector3( 0.17f,  0.17f, 0.0f), SrgbColors.White),
+            new PositionColorVertex(new Vector3( 0.17f, -0.17f, 0.0f), SrgbColors.White)
         ];
 
         ushort[] indices =

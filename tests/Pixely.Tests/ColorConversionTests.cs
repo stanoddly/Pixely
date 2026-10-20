@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.Gpu;
 using SDL;
@@ -124,6 +125,20 @@ public class ColorConversionTests
             Assert.That((sdlColor.r, sdlColor.g, sdlColor.b, sdlColor.a), Is.EqualTo((0.1f, 0.2f, 0.3f, 0.4f)));
             Assert.That(color, Is.EqualTo(new LinearColor(0.1f, 0.2f, 0.3f, 0.4f)));
         });
+    }
+
+    [Test]
+    public void LinearColors_MatchSrgbColorsByName()
+    {
+        FieldInfo[] srgbFields = typeof(SrgbColors).GetFields(BindingFlags.Public | BindingFlags.Static);
+        FieldInfo[] linearFields = typeof(LinearColors).GetFields(BindingFlags.Public | BindingFlags.Static);
+
+        Assert.That(linearFields.Select(field => field.Name), Is.EquivalentTo(srgbFields.Select(field => field.Name)));
+        foreach (FieldInfo srgbField in srgbFields)
+        {
+            LinearColor expected = (SrgbColor)srgbField.GetValue(null)!;
+            Assert.That(typeof(LinearColors).GetField(srgbField.Name)!.GetValue(null), Is.EqualTo(expected), srgbField.Name);
+        }
     }
 
     [Test]

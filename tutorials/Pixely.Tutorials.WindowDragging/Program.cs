@@ -18,7 +18,7 @@ static partial class Program
                     Title: "Window Dragging",
                     Borderless: true));
 
-        builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(Colors.SkyBlue));
+        builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(LinearColors.SkyBlue));
 
         builder.OnBuilt((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {

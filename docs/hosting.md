@@ -293,7 +293,7 @@ once. The whole publish:
 dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives -p:PixelyBrowserWebGpu=true -p:WasmCachePath=/path/to/emcache
 ```
 
-Every window needs an sRGB swapchain (`SDR_LINEAR`, see [window-rendering.md](window-rendering.md#the-gpu-device)). A WebGPU canvas cannot be configured with an sRGB format, so the backend configures it as `bgra8unorm` or `rgba8unorm` and renders through an sRGB view of it, which needs the device feature `core-features-and-limits`. [stanoddly/XDL_wgpu](https://github.com/stanoddly/XDL_wgpu) does this from release `v20261020.072236`; link its `libXDL_wgpu.a` ahead of `SDL3.a` (see the `NativeUrlReference` example above). Without it, or on a device without the feature, window creation fails with `PixelyInitializationException`.
+Every window claimed for the GPU device needs an sRGB swapchain (`SDR_LINEAR`, see [window-rendering.md](window-rendering.md#the-gpu-device)). A WebGPU canvas cannot be configured with an sRGB format, so the backend configures it as `bgra8unorm` or `rgba8unorm` and renders through an sRGB view of it, which needs the device feature `core-features-and-limits`. [stanoddly/XDL_wgpu](https://github.com/stanoddly/XDL_wgpu) does this from release `v20261020.072236`; link its `libXDL_wgpu.a` ahead of `SDL3.a` (see the `NativeUrlReference` example above). Without it, or on a device without the feature, window creation fails with `PixelyInitializationException`.
 
 Requesting a WebGPU adapter and device is asynchronous, and SDL would wait it out by suspending the
 wasm stack, which no managed frame survives. So the page requests them: the generated `Main` awaits

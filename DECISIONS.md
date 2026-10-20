@@ -4,7 +4,7 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 
-Textures created from images default to `R8G8B8A8UnormSrgb`, every window has an `SDR_LINEAR` swapchain, and shaders work in linear light. `Color` and `FColor` became `SrgbColor` (bytes, as authored) and `LinearColor` (floats, what the GPU works with); `SrgbColor` converts to `LinearColor` implicitly. This reverses the closing of #647 and supersedes #648.
+Textures created from images default to `R8G8B8A8UnormSrgb`, every window claimed for the GPU device has an `SDR_LINEAR` swapchain, and shaders work in linear light. `Color` and `FColor` became `SrgbColor` (bytes, as authored) and `LinearColor` (floats, what the GPU works with); `SrgbColor` converts to `LinearColor` implicitly. The palette `Colors` became `SrgbColors`, and `LinearColors` replaces `FColors` with the same palette converted to linear light. This reverses the closing of #647 and supersedes #648.
 
 - An opt-in mixes formats, and every problem found in #647 and #648 came from that: Pixely.Ui writing sRGB values that an sRGB swapchain would encode twice, a sprite cache keyed by path that cannot hold one image in two formats, offscreen windows needing their own check, and a fallback that keeps the shader encode anyway. With one pipeline none of these exist.
 - There is no fallback to the SDR swapchain, because it would need every shader to encode. Window creation fails without `SDR_LINEAR`. The browser gets it from XDL_wgpu `v20261020.072236`, which renders through an sRGB view of the canvas.
@@ -12,7 +12,7 @@ Textures created from images default to `R8G8B8A8UnormSrgb`, every window has an
 - Vertex colors stay `SrgbColor` bytes and shaders decode them per vertex, because linear light in 8 bits bands in dark tones.
 - Textures an app creates itself keep explicit formats: a compute shader cannot write sRGB, so its target is UNORM or float, and a blit to the window encodes it.
 
-Cost: `Color`, `FColor` and `FColors` are gone, a breaking change across the public API. Data textures created through `ITextureLoader` or `ICopyPass` without a format are now sRGB and need `R8G8B8A8Unorm` passed explicitly. Translucent fills and anti-aliased text blend in linear light, so the UI looks slightly different. A uniform pushed as `SrgbColor` without a cast reaches the shader as bytes, because the push methods are generic. GPU behavior has no automated tests, since CI has no GPU. `FontRasterizationMode.Lcd` and color glyphs remain wrong, as before.
+Cost: `Color`, `FColor`, `Colors` and `FColors` are gone, a breaking change across the public API. Data textures created through `ITextureLoader`, `ICopyPass` or `GpuMemorySystem` (`CreateTexture`, `CreateTextureArray`) without a format are now sRGB and need `R8G8B8A8Unorm` passed explicitly. Translucent fills and anti-aliased text blend in linear light, so the UI looks slightly different. A uniform pushed as `SrgbColor` without a cast reaches the shader as bytes, because the push methods are generic. GPU behavior has no automated tests, since CI has no GPU. `FontRasterizationMode.Lcd` and color glyphs remain wrong, as before.
 
 ## 2026-10-12: The shader toolchain is imported as a project SDK
 

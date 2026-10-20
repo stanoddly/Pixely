@@ -62,7 +62,7 @@ public sealed record UiStyle
     public static SrgbColor DefaultSelection { get; } = new(51, 102, 170, 180);
 
     /// <inheritdoc cref="DefaultSelection"/>
-    public static SrgbColor DefaultForeground { get; } = Colors.White;
+    public static SrgbColor DefaultForeground { get; } = SrgbColors.White;
 
     /// <inheritdoc cref="DefaultSelection"/>
     public static SrgbColor DefaultDisabledForeground { get; } = new(130, 130, 130, 255);

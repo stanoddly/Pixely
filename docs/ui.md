@@ -167,7 +167,7 @@ A custom element overrides `MeasureContent` and `PaintContent`. Drawing content 
 ```csharp
 public sealed class Divider : Element
 {
-    private SrgbColor _color = Colors.White;
+    private SrgbColor _color = SrgbColors.White;
 
     protected override int MaxChildCount => 0;
 
@@ -358,7 +358,7 @@ root.Style = new UiStyle(body)
     Button = new ButtonAppearance
     {
         Background = new StateDrawables(new SolidDrawable(Idle)) { Hovered = new SolidDrawable(Lit) },
-        Foreground = new StateColors(Colors.White) { Hovered = Highlight }
+        Foreground = new StateColors(SrgbColors.White) { Hovered = Highlight }
     }
 };
 ```

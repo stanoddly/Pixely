@@ -162,7 +162,7 @@ public partial class PixelyFactory: IDisposable
 
                 if (sdlWindowId == 0)
                 {
-                    throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyInitializationException($"SDL_GetWindowID failed: {SDL3.SDL_GetError()}");
                 }
             }
 

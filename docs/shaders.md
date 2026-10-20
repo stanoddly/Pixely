@@ -104,9 +104,9 @@ Every graphics-program source declares exactly one `vertexMain` and one `fragmen
 
 ## Color spaces
 
-Shaders work in linear light. Every window's swapchain is an sRGB format, so the GPU encodes what a fragment shader writes to sRGB, and blends in linear light. Textures created from images (`ITextureLoader`, `GpuMemorySystem.CreateTexture(Image)`, sprites, glyphs) are `R8G8B8A8UnormSrgb`, so sampling returns linear values. Data that is not color, such as normal maps, masks or lookup tables, is created with `TextureFormat.R8G8B8A8Unorm` through the overloads that take a format, so it is read as stored.
+Shaders work in linear light. The swapchain of every window claimed for the GPU device is an sRGB format, so the GPU encodes what a fragment shader writes to sRGB, and blends in linear light. Textures created from images (`ITextureLoader`, `GpuMemorySystem.CreateTexture(Image)`, sprites, glyphs) are `R8G8B8A8UnormSrgb`, so sampling returns linear values. Data that is not color, such as normal maps, masks or lookup tables, is created with `TextureFormat.R8G8B8A8Unorm` through the overloads that take a format, so it is read as stored.
 
-In C#, `SrgbColor` holds a color as authored, in bytes, and `LinearColor` holds what the GPU works with, in floats. `SrgbColor` converts to `LinearColor` implicitly; the other way is an explicit cast that clamps and rounds. Alpha is linear in both. `Colors` names `SrgbColor` values.
+In C#, `SrgbColor` holds a color as authored, in bytes, and `LinearColor` holds what the GPU works with, in floats. `SrgbColor` converts to `LinearColor` implicitly; the other way is an explicit cast that clamps and rounds. Alpha is linear in both. `SrgbColors` names a palette of `SrgbColor` values, and `LinearColors` holds the same palette converted to `LinearColor`.
 
 A compute shader cannot write an sRGB format, so a texture it writes linear values into is `R8G8B8A8Unorm` or a float format. Blitting it to an sRGB target encodes the values on write. The `ComputeShader` tutorial does this.
 
@@ -130,10 +130,10 @@ float4 fragmentMain(VertexToFragment input) : SV_Target0
 
 ```csharp
 // Before drawing, push uniform data
-renderPass.PushFragmentUniformData(0, (LinearColor)Colors.Magenta);  // Slot 0
+commandBuffer.PushFragmentUniformData(0, LinearColors.Magenta);  // Slot 0
 ```
 
-A color pushed to a shader is a `LinearColor`. `PushFragmentUniformData<T>` is generic, so an `SrgbColor` is converted with an explicit cast, as above; without it the bytes of the sRGB color would be pushed.
+A color pushed to a shader is a `LinearColor`, such as one from `LinearColors`. `PushFragmentUniformData<T>` is generic, so an `SrgbColor` is not converted implicitly there: cast it with `(LinearColor)`, or the bytes of the sRGB color are pushed.
 
 **Available push methods:**
 - `CommandBuffer.PushFragmentUniformData<T>(uint slot, T data)`

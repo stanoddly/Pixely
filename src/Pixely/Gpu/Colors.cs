@@ -86,7 +86,8 @@ internal static class SrgbTransferFunction
     }
 }
 
-public static class Colors
+/// <summary>Named colors as authored, in sRGB. <see cref="LinearColors"/> holds the same palette in linear light.</summary>
+public static class SrgbColors
 {
     public static readonly SrgbColor AliceBlue = new(240, 248, 255, 255);
     public static readonly SrgbColor AntiqueWhite = new(250, 235, 215, 255);
@@ -135,4 +136,59 @@ public static class Colors
     public static readonly SrgbColor Violet = new(238, 130, 238, 255);
     public static readonly SrgbColor White = new(255, 255, 255, 255);
     public static readonly SrgbColor Yellow = new(255, 255, 0, 255);
+}
+
+/// <summary>
+/// The <see cref="SrgbColors"/> palette in linear light, for clear values, uniform and storage-buffer colors. Each value is converted from
+/// its <see cref="SrgbColors"/> twin, so the palette is defined once.
+/// </summary>
+public static class LinearColors
+{
+    public static readonly LinearColor AliceBlue = SrgbColors.AliceBlue;
+    public static readonly LinearColor AntiqueWhite = SrgbColors.AntiqueWhite;
+    public static readonly LinearColor Aqua = SrgbColors.Aqua;
+    public static readonly LinearColor Aquamarine = SrgbColors.Aquamarine;
+    public static readonly LinearColor Azure = SrgbColors.Azure;
+    public static readonly LinearColor Beige = SrgbColors.Beige;
+    public static readonly LinearColor Black = SrgbColors.Black;
+    public static readonly LinearColor Blue = SrgbColors.Blue;
+    public static readonly LinearColor Brown = SrgbColors.Brown;
+    public static readonly LinearColor Coral = SrgbColors.Coral;
+    public static readonly LinearColor Crimson = SrgbColors.Crimson;
+    public static readonly LinearColor Cyan = SrgbColors.Cyan;
+    public static readonly LinearColor DarkBlue = SrgbColors.DarkBlue;
+    public static readonly LinearColor DarkGrey = SrgbColors.DarkGrey;
+    public static readonly LinearColor DarkGreen = SrgbColors.DarkGreen;
+    public static readonly LinearColor DarkRed = SrgbColors.DarkRed;
+    public static readonly LinearColor DeepPink = SrgbColors.DeepPink;
+    public static readonly LinearColor ForestGreen = SrgbColors.ForestGreen;
+    public static readonly LinearColor Gold = SrgbColors.Gold;
+    public static readonly LinearColor Grey = SrgbColors.Grey;
+    public static readonly LinearColor Green = SrgbColors.Green;
+    public static readonly LinearColor HotPink = SrgbColors.HotPink;
+    public static readonly LinearColor Indigo = SrgbColors.Indigo;
+    public static readonly LinearColor Ivory = SrgbColors.Ivory;
+    public static readonly LinearColor LightBlue = SrgbColors.LightBlue;
+    public static readonly LinearColor LightGrey = SrgbColors.LightGrey;
+    public static readonly LinearColor LightGreen = SrgbColors.LightGreen;
+    public static readonly LinearColor LightPink = SrgbColors.LightPink;
+    public static readonly LinearColor Lime = SrgbColors.Lime;
+    public static readonly LinearColor Magenta = SrgbColors.Magenta;
+    public static readonly LinearColor Maroon = SrgbColors.Maroon;
+    public static readonly LinearColor Navy = SrgbColors.Navy;
+    public static readonly LinearColor Olive = SrgbColors.Olive;
+    public static readonly LinearColor Orange = SrgbColors.Orange;
+    public static readonly LinearColor Pink = SrgbColors.Pink;
+    public static readonly LinearColor Purple = SrgbColors.Purple;
+    public static readonly LinearColor Red = SrgbColors.Red;
+    public static readonly LinearColor RoyalBlue = SrgbColors.RoyalBlue;
+    public static readonly LinearColor Silver = SrgbColors.Silver;
+    public static readonly LinearColor SkyBlue = SrgbColors.SkyBlue;
+    public static readonly LinearColor Snow = SrgbColors.Snow;
+    public static readonly LinearColor Teal = SrgbColors.Teal;
+    public static readonly LinearColor Transparent = SrgbColors.Transparent;
+    public static readonly LinearColor Turquoise = SrgbColors.Turquoise;
+    public static readonly LinearColor Violet = SrgbColors.Violet;
+    public static readonly LinearColor White = SrgbColors.White;
+    public static readonly LinearColor Yellow = SrgbColors.Yellow;
 }

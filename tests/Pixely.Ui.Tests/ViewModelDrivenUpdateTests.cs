@@ -180,7 +180,7 @@ public class ViewModelDrivenUpdateTests
                 ThrowOnNextPaint = false;
                 // A quad the completed build does not have, so the working list differs from it
                 // and a root exposing the wrong list would show up.
-                context.FillRectangle(Bounds, Colors.Red);
+                context.FillRectangle(Bounds, SrgbColors.Red);
                 throw new InvalidOperationException("paint failed");
             }
         }
