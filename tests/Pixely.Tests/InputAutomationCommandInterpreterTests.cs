@@ -42,7 +42,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("@7 text hi", "7: text 'hi'")]
     [TestCase("gamepad connect|gamepad press east", "gamepad connected", "gamepad press East", "gamepad release East")]
     [TestCase("gamepad connect|gamepad down South|gamepad up South", "gamepad connected", "gamepad press South", "gamepad release South")]
-    [TestCase("gamepad connect|gamepad stick left 1 -0.5", "gamepad connected", "gamepad left stick <1, 0>", "gamepad left stick <1, -0.5>")]
+    [TestCase("gamepad connect|gamepad stick left 1 -0.5", "gamepad connected", "gamepad left stick <1, 0>", "gamepad left stick <0.8944272, -0.4472136>")]
     [TestCase("gamepad connect|gamepad stick right 0 1", "gamepad connected", "gamepad right stick <0, 1>")]
     [TestCase("gamepad connect|gamepad trigger left 0.25", "gamepad connected", "gamepad left trigger 0.25")]
     [TestCase("gamepad connect|gamepad trigger right 1", "gamepad connected", "gamepad right trigger 1")]

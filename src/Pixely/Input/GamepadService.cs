@@ -15,6 +15,8 @@ public class Gamepad
     public Vector2 RightStick { get; set; }
     public float LeftTrigger { get; set; }
     public float RightTrigger { get; set; }
+    internal Vector2 RawLeftStick { get; set; }
+    internal Vector2 RawRightStick { get; set; }
     internal int ButtonFlags { get; set; }
 
     public bool IsPressed(GamepadButton button)
@@ -52,6 +54,7 @@ public class GamepadService : IGamepadService
 
     private const float JoystickMinDivisor = -1 * SDL3.SDL_JOYSTICK_AXIS_MIN;
     private const float JoystickMaxDivisor = SDL3.SDL_JOYSTICK_AXIS_MAX;
+    private const float StickDeadZone = 0.2f;
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly GamepadButtonEventArgs _buttonEventArgs = new();
@@ -256,7 +259,8 @@ public class GamepadService : IGamepadService
         {
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX or SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTY:
             {
-                Vector2 leftStick = WithAxis(gamepad.LeftStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, ApplyDeadZone(value));
+                gamepad.RawLeftStick = WithAxis(gamepad.RawLeftStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, value);
+                Vector2 leftStick = ApplyDeadZone(gamepad.RawLeftStick);
                 if (leftStick == gamepad.LeftStick)
                 {
                     return;
@@ -268,7 +272,8 @@ public class GamepadService : IGamepadService
             }
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX or SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY:
             {
-                Vector2 rightStick = WithAxis(gamepad.RightStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX, ApplyDeadZone(value));
+                gamepad.RawRightStick = WithAxis(gamepad.RawRightStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX, value);
+                Vector2 rightStick = ApplyDeadZone(gamepad.RawRightStick);
                 if (rightStick == gamepad.RightStick)
                 {
                     return;
@@ -305,9 +310,17 @@ public class GamepadService : IGamepadService
         }
     }
 
-    private static float ApplyDeadZone(float value)
+    // Radial, so the direction is kept: the length is rescaled from the dead zone's edge to 1 and capped at 1.
+    private static Vector2 ApplyDeadZone(Vector2 stick)
     {
-        return value is < 0.2f and > -0.2f ? 0f : value;
+        float length = stick.Length();
+        if (length < StickDeadZone)
+        {
+            return Vector2.Zero;
+        }
+
+        float scaledLength = Math.Min((length - StickDeadZone) / (1 - StickDeadZone), 1);
+        return stick * (scaledLength / length);
     }
 
     private static Vector2 WithAxis(Vector2 stick, bool isX, float value)
