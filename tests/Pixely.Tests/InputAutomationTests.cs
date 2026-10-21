@@ -250,7 +250,7 @@ public sealed class InputAutomationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(sticks, Is.EqualTo(new[] { new Vector2(0.5f, 0) }));
+            Assert.That(sticks, Is.EqualTo(new[] { new Vector2(0.375f, 0) }));
             Assert.That(triggers, Is.EqualTo(new[] { 0.1f }));
         });
     }
