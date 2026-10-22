@@ -374,4 +374,47 @@ public sealed class TransientServiceTests
             $"disposing:{nameof(TransientDisposable)}"
         }));
     }
+
+    [Test]
+    public void Callbacks_RunForNonDisposableTransientDisposal()
+    {
+        List<object> disposing = new();
+
+        ServiceCollection collection = new();
+        collection.OnDisposing((instance, _) => disposing.Add(instance));
+        collection.AddTransient<TransientService>(static _ => new TransientService());
+
+        ServiceProvider provider = collection.BuildServiceProvider();
+
+        TransientService first = provider.GetRequiredService<TransientService>();
+        TransientService second = provider.GetRequiredService<TransientService>();
+        provider.Dispose();
+
+        Assert.That(disposing, Is.EqualTo(new object[] { second, first }));
+    }
+
+    [Test]
+    public void ChildDispose_RemovesNonDisposableTransientFromParentRegistry()
+    {
+        ServiceCollection parentCollection = new();
+        parentCollection.AddRegistry<ITransientContract>();
+        ServiceProvider parent = parentCollection.BuildServiceProvider();
+        ServiceRegistry<ITransientContract> registry = parent.GetRequiredService<ServiceRegistry<ITransientContract>>();
+
+        ServiceCollection childCollection = parent.CreateServiceCollection();
+        childCollection.AddTransient<ITransientContract, TransientService>(static _ => new TransientService());
+        ServiceProvider child = childCollection.BuildServiceProvider();
+        ITransientContract transient = child.GetRequiredService<ITransientContract>();
+        bool registered = registry.Contains(transient);
+
+        child.Dispose();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(registered, Is.True);
+            Assert.That(registry, Is.Empty);
+        });
+
+        parent.Dispose();
+    }
 }
