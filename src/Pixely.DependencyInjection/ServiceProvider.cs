@@ -386,7 +386,9 @@ public class ServiceProvider : IDisposable
             return null;
         }
 
-        if (instance is IDisposable)
+        // OnDisposing must reach every transient that OnActivated saw, such as one a registry added; without callbacks only
+        // disposables need the record.
+        if (instance is IDisposable || _disposingCallbacks != null)
         {
             _transientDisposalRecords.Add(new TransientDisposalRecord(instance, descriptor.ConcreteType!));
         }
