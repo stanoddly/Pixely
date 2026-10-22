@@ -65,6 +65,45 @@ public class AutomationCommandRegistrationTests
         Assert.That(stageManager.ApplyPendingTransition, Throws.InvalidOperationException.With.Message.Contains("'spawn'"));
     }
 
+    [Test]
+    public void FailedStageLoad_RemovesItsCommandsAndKeepsAppCommand()
+    {
+        PixelyAppBuilder builder = new();
+        builder.AddSingleton(new PixelyConfig(Headless: true));
+        SpawnCommand appSpawn = new();
+        builder.AddSingleton<AutomationCommand>(appSpawn);
+        using IPixelyApp app = builder.Build();
+        AutomationCommandRegistry registry = app.GetRequiredService<AutomationCommandRegistry>();
+        StageManager stageManager = app.GetRequiredService<StageManager>();
+
+        stageManager.Load(static stage =>
+        {
+            stage.AddSingleton<AutomationCommand>(new GiveCommand());
+            stage.AddSingleton<AutomationCommand>(new SpawnCommand());
+        });
+        Assert.That(stageManager.ApplyPendingTransition, Throws.InvalidOperationException);
+
+        bool giveRemoved = !registry.TryGet("give", out _);
+        bool appSpawnKept = registry.TryGet("spawn", out AutomationCommand? spawn) && ReferenceEquals(spawn, appSpawn);
+        GiveCommand give = new();
+        stageManager.Load(stage => stage.AddSingleton<AutomationCommand>(give));
+        stageManager.ApplyPendingTransition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(giveRemoved, Is.True);
+            Assert.That(appSpawnKept, Is.True);
+            Assert.That(registry.TryGet("give", out AutomationCommand? reloaded) ? reloaded : null, Is.SameAs(give));
+        });
+    }
+
+    private sealed class GiveCommand() : AutomationCommand("give")
+    {
+        public override void Execute(string arguments, ViewScope? viewScope)
+        {
+        }
+    }
+
     private sealed class SpawnCommand() : AutomationCommand("spawn")
     {
         public override void Execute(string arguments, ViewScope? viewScope)
