@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Pixely.Ecs.Benchmarks/Pixely.Ecs.Benchmarks.csproj" />
     <Project Path="benchmarks/Pixely.PathFinding.Benchmarks/Pixely.PathFinding.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/packaging/">
