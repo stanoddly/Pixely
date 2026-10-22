@@ -333,7 +333,7 @@ public partial class PixelyFactory: IDisposable
 
     [UnsupportedOSPlatform("browser")]
     internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter,
-        AppControl appControl, IFrameTimingRecorder frameTimingRecorder, IEnumerable<IAutomationCommand> commands)
+        AppControl appControl, IFrameTimingRecorder frameTimingRecorder, AutomationCommandRegistry commands)
     {
         if (inputAutomation is null || imageWriter is null)
         {

@@ -19,22 +19,20 @@ internal sealed class InputAutomationCommandInterpreter
     // language models write in scenarios. A side-less modifier such as "Ctrl" presses the left key.
     private static readonly FrozenDictionary<string, Scancode> ScancodeAliases = CreateScancodeAliases();
 
-    private static readonly FrozenSet<string> BuiltInCommandNames = FrozenSet.Create(StringComparer.Ordinal, "wait", "quit", "gamepad", "mouse", "key", "text", "screenshot");
-
     private readonly InputAutomation _automation;
     private readonly WindowRegistry _windowRegistry;
     private readonly IImageWriter _imageWriter;
     private readonly AppControl _appControl;
-    private readonly FrozenDictionary<string, IAutomationCommand> _commands;
+    private readonly AutomationCommandRegistry _commands;
 
     public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, AppControl appControl,
-        IEnumerable<IAutomationCommand> commands)
+        AutomationCommandRegistry commands)
     {
         _automation = automation;
         _windowRegistry = windowRegistry;
         _imageWriter = imageWriter;
         _appControl = appControl;
-        _commands = CreateCommandLookup(commands);
+        _commands = commands;
     }
 
     public int Execute(string command)
@@ -66,7 +64,7 @@ internal sealed class InputAutomationCommandInterpreter
         }
 
         string[] words = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length > 0 && _commands.TryGetValue(words[0], out IAutomationCommand? gameCommand))
+        if (words.Length > 0 && _commands.TryGet(words[0], out AutomationCommand? gameCommand))
         {
             gameCommand.Execute(command[words[0].Length..].Trim(), viewScope);
             return 0;
@@ -206,32 +204,6 @@ internal sealed class InputAutomationCommandInterpreter
         {
             throw new FormatException("gamepad is not connected");
         }
-    }
-
-    private static FrozenDictionary<string, IAutomationCommand> CreateCommandLookup(IEnumerable<IAutomationCommand> commands)
-    {
-        Dictionary<string, IAutomationCommand> lookup = new(StringComparer.Ordinal);
-        foreach (IAutomationCommand command in commands)
-        {
-            string? name = command.Name;
-            // The interpreter matches the first word of a command after an optional "@<n>", so any other name never runs.
-            if (string.IsNullOrEmpty(name) ||name[0] == '@' || name.Contains(';') || name.Any(char.IsWhiteSpace))
-            {
-                throw new InvalidOperationException($"Automation command '{name}' of {command.GetType()} is not a single word without '@' at its start or ';'.");
-            }
-
-            if (BuiltInCommandNames.Contains(name))
-            {
-                throw new InvalidOperationException($"Automation command '{name}' of {command.GetType()} has the name of a built-in command.");
-            }
-
-            if (!lookup.TryAdd(name, command))
-            {
-                throw new InvalidOperationException($"Automation command '{name}' is registered by both {lookup[name].GetType()} and {command.GetType()}.");
-            }
-        }
-
-        return lookup.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     private static void RejectViewScope(ViewScope? viewScope, string command)

@@ -27,6 +27,24 @@ public class PixelyAppBuilder : ServiceCollection
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<BasicRenderContext>>(static renderer => renderer.RenderOrder);
         AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
+
+        // Stage providers inherit these callbacks, so a stage's commands join on its load and leave on its unload.
+        AutomationCommandRegistry automationCommands = new();
+        AddSingleton(automationCommands);
+        OnActivated((instance, _) =>
+        {
+            if (instance is AutomationCommand command)
+            {
+                automationCommands.Add(command);
+            }
+        });
+        OnDisposing((instance, _) =>
+        {
+            if (instance is AutomationCommand command)
+            {
+                automationCommands.Remove(command);
+            }
+        });
     }
 
     public PixelyAppBuilder ConfigureContent(Action<ContentSourceBuilder> configure)
