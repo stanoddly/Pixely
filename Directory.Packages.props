@@ -4,6 +4,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageVersion Include="Arch" Version="2.1.0" />
         <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
         <PackageVersion Include="coverlet.collector" Version="10.1.0" />
         <PackageVersion Include="Fluidify" Version="1.0.1" />
