@@ -162,7 +162,7 @@ public sealed class InputAutomationCommandInterpreterTests
     {
         WindowRegistry windowRegistry = new();
         InputAutomation automation = InputAutomationTests.CreateAutomation(windowRegistry).Automation;
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl(), []);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl(), new AutomationCommandRegistry());
 
         Assert.Multiple(() =>
         {
@@ -232,40 +232,14 @@ public sealed class InputAutomationCommandInterpreterTests
         });
     }
 
-    [TestCase("wait")]
-    [TestCase("quit")]
-    [TestCase("gamepad")]
-    [TestCase("mouse")]
-    [TestCase("key")]
-    [TestCase("text")]
-    [TestCase("screenshot")]
-    public void Constructor_GameCommandWithBuiltInName_Throws(string name)
+    private static Fixture CreateInterpreter(params AutomationCommand[] commands)
     {
-        InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand(name)));
+        AutomationCommandRegistry commandRegistry = new();
+        foreach (AutomationCommand command in commands)
+        {
+            commandRegistry.Add(command);
+        }
 
-        Assert.That(exception!.Message, Does.Contain($"'{name}'").And.Contain("built-in"));
-    }
-
-    [Test]
-    public void Constructor_TwoGameCommandsWithSameName_Throws()
-    {
-        InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand("spawn"), new RecordingCommand("spawn")));
-
-        Assert.That(exception!.Message, Does.Contain("'spawn'"));
-    }
-
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("spawn enemy")]
-    [TestCase("spawn;")]
-    [TestCase("@spawn")]
-    public void Constructor_GameCommandWithNameThatCannotMatch_Throws(string? name)
-    {
-        Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand(name!)));
-    }
-
-    private static Fixture CreateInterpreter(params IAutomationCommand[] commands)
-    {
         ViewScope secondary = new(7);
         WindowRegistry windowRegistry = new();
         windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
@@ -296,7 +270,7 @@ public sealed class InputAutomationCommandInterpreterTests
         gamepadService.SubscribeRightTriggerMotion(0, eventArgs => events.Add($"gamepad right trigger {eventArgs.Value}"));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, commands);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, commandRegistry);
         return new Fixture(interpreter, events, keyboardService, appControl);
     }
 
@@ -307,19 +281,15 @@ public sealed class InputAutomationCommandInterpreterTests
         public void SavePng(Image image, string path) => throw new NotSupportedException();
     }
 
-    private sealed class RecordingCommand(string name) : IAutomationCommand
+    private sealed class RecordingCommand(string name) : AutomationCommand(name)
     {
         public List<(string Arguments, ViewScope? ViewScope)> Calls { get; } = new();
 
-        public string Name => name;
-
-        public void Execute(string arguments, ViewScope? viewScope) => Calls.Add((arguments, viewScope));
+        public override void Execute(string arguments, ViewScope? viewScope) => Calls.Add((arguments, viewScope));
     }
 
-    private sealed class FailingCommand : IAutomationCommand
+    private sealed class FailingCommand() : AutomationCommand("fail")
     {
-        public string Name => "fail";
-
-        public void Execute(string arguments, ViewScope? viewScope) => throw new FormatException("bad");
+        public override void Execute(string arguments, ViewScope? viewScope) => throw new FormatException("bad");
     }
 }

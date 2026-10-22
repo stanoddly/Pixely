@@ -42,14 +42,12 @@ A mouse `<button>` is a `MouseButton` name, a gamepad `<button>` a `GamepadButto
 
 ### Game commands
 
-A game adds its own commands by implementing `IAutomationCommand` and registering it through the service collection, one registration per command:
+A game adds its own commands by deriving from `AutomationCommand` and registering it through the service collection of the app or of a stage (`IStageManager.Load`), one registration per command:
 
 ```csharp
-public sealed class SpawnCommand(World world) : IAutomationCommand
+public sealed class SpawnCommand(World world) : AutomationCommand("spawn")
 {
-    public string Name => "spawn";
-
-    public void Execute(string arguments, ViewScope? viewScope)
+    public override void Execute(string arguments, ViewScope? viewScope)
     {
         if (viewScope != null)
         {
@@ -60,12 +58,14 @@ public sealed class SpawnCommand(World world) : IAutomationCommand
     }
 }
 
-builder.AddSingleton<IAutomationCommand, SpawnCommand>();
+stage.AddSingleton<AutomationCommand, SpawnCommand>();
 ```
 
 A command whose first word is the `Name` runs the game command, matched case-sensitively, in the same frame and order as the built-in commands around it. `Execute` receives the rest of the command after the name, trimmed, and parses it itself. It also receives the scope of an `@<n>` prefix, or null without one; the interpreter does not check that the scope has a window, so the command decides what the scope means and whether it accepts one. A game command cannot hold frames; a scenario uses `wait` for that. A game command reports a malformed command by throwing `FormatException`; any exception from `Execute` ends the app, the same as for a built-in command. A command that produces output writes it wherever it chooses, such as a file named in its arguments.
 
-The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode runs it. In headless mode the build also checks the names. A name that is null or empty, contains whitespace or `;`, or starts with `@` would never match, a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`) would hide it or be hidden, and two commands with the same name would hide one of them, so each of these fails at build with an `InvalidOperationException` that names the command.
+A command is active from when its provider creates it until that provider disposes it: the app's commands for the whole run, a stage's commands from the stage's load until it is unloaded or reloaded. After that its name is an unknown command again. The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode runs it.
+
+A name is checked when the command is created, in every run. The `AutomationCommand` constructor throws `ArgumentException` for a name that is null or empty, contains whitespace or `;`, or starts with `@`, because it would never match, and for a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`), because one would hide the other. A command with the name of another active command, of the app or of the current stage, throws `InvalidOperationException` that names both types, so the build of the app or the load of the stage fails.
 
 ### Scenarios
 
