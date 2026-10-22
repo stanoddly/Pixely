@@ -40,6 +40,33 @@ A mouse `<button>` is a `MouseButton` name, a gamepad `<button>` a `GamepadButto
 
 `gamepad connect` adds the synthetic gamepad to `IGamepadService.Gamepads` and raises `GamepadConnected`. Any other gamepad command before it is malformed, and so is a second connect. `stick` moves the two axes as two events, X first, the way SDL reports a physical stick, so a handler can see the new X with the old Y. Stick values go through the same dead zone as a physical gamepad. It applies to the stick's length, not to each axis: a stick shorter than 0.2 reads (0, 0), and a longer one keeps its direction while its length is rescaled from 0.2–1 to 0–1 and capped at 1. Triggers have no dead zone. `gamepad disconnect` does what SDL does when a gamepad is unplugged: held buttons are released, then sticks and triggers return to 0, before `GamepadDisconnected`. Headless mode does not start SDL's gamepad subsystem, so physical gamepads are not detected and the synthetic gamepad is the only one; a scenario behaves the same whether or not a pad is plugged in.
 
+### Game commands
+
+A game adds its own commands by implementing `IAutomationCommand` and registering it through the service collection, one registration per command:
+
+```csharp
+public sealed class SpawnCommand(World world) : IAutomationCommand
+{
+    public string Name => "spawn";
+
+    public void Execute(string arguments, ViewScope? viewScope)
+    {
+        if (viewScope != null)
+        {
+            throw new FormatException("'spawn' takes no view scope");
+        }
+
+        world.Spawn(arguments);
+    }
+}
+
+builder.AddSingleton<IAutomationCommand, SpawnCommand>();
+```
+
+A command whose first word is the `Name` runs the game command, matched case-sensitively, in the same frame and order as the built-in commands around it. `Execute` receives the rest of the command after the name, trimmed, and parses it itself. It also receives the scope of an `@<n>` prefix, or null without one; the interpreter does not check that the scope has a window, so the command decides what the scope means and whether it accepts one. A game command cannot hold frames; a scenario uses `wait` for that. A game command reports a malformed command by throwing `FormatException`; any exception from `Execute` ends the app, the same as for a built-in command. A command that produces output writes it wherever it chooses, such as a file named in its arguments.
+
+The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode runs it. In headless mode the build also checks the names. A name that is null or empty, contains whitespace or `;`, or starts with `@` would never match, a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`) would hide it or be hidden, and two commands with the same name would hide one of them, so each of these fails at build with an `InvalidOperationException` that names the command.
+
 ### Scenarios
 
 A scenario is a list of commands. This one holds the right arrow key for 2 seconds of game time, waits one frame so that the frame shows the release, saves a screenshot and ends the app at the end of its input:

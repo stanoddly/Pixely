@@ -165,7 +165,7 @@ public sealed class InputAutomationConsoleTests
         keyboardService.SubscribeKeyDown(0, eventArgs => presses.Enqueue(eventArgs.Scancode));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, []);
         return new Fixture(new InputAutomationConsole(interpreter, input, appControl, frameTimingRecorder ?? NullFrameTimingRecorder.Instance), presses, appControl);
     }
 

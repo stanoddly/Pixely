@@ -162,7 +162,7 @@ public sealed class InputAutomationCommandInterpreterTests
     {
         WindowRegistry windowRegistry = new();
         InputAutomation automation = InputAutomationTests.CreateAutomation(windowRegistry).Automation;
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl());
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl(), []);
 
         Assert.Multiple(() =>
         {
@@ -174,7 +174,97 @@ public sealed class InputAutomationCommandInterpreterTests
         });
     }
 
-    private static Fixture CreateInterpreter()
+    [TestCase("spawn enemy  3 4 ", "enemy  3 4", null)]
+    [TestCase("spawn", "", null)]
+    [TestCase("\n spawn\tenemy\n", "enemy", null)]
+    [TestCase("@0 spawn enemy", "enemy", 0)]
+    // A game command checks no window, so a scope without one reaches it.
+    [TestCase("@9 spawn enemy", "enemy", 9)]
+    public void Execute_GameCommand_ReceivesArgumentsAndViewScope(string command, string expectedArguments, int? expectedScope)
+    {
+        RecordingCommand spawn = new("spawn");
+        Fixture fixture = CreateInterpreter(spawn);
+
+        int heldFrames = fixture.Interpreter.Execute(command);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(heldFrames, Is.Zero);
+            Assert.That(spawn.Calls, Is.EqualTo(new[] { (expectedArguments, expectedScope is int value ? new ViewScope(value) : (ViewScope?)null) }));
+        });
+    }
+
+    [Test]
+    public void Execute_GameCommand_MatchesNameCaseSensitively()
+    {
+        RecordingCommand spawn = new("spawn");
+        Fixture fixture = CreateInterpreter(spawn);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => fixture.Interpreter.Execute("Spawn enemy"), Throws.TypeOf<FormatException>().With.Message.EqualTo("unknown command 'Spawn enemy'"));
+            Assert.That(() => fixture.Interpreter.Execute("spawnenemy"), Throws.TypeOf<FormatException>().With.Message.EqualTo("unknown command 'spawnenemy'"));
+            Assert.That(spawn.Calls, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Execute_GameCommand_PropagatesFailure()
+    {
+        Fixture fixture = CreateInterpreter(new FailingCommand());
+
+        Assert.Throws<FormatException>(() => fixture.Interpreter.Execute("fail now"));
+    }
+
+    [Test]
+    public void Execute_GameCommandsWithDifferentNames_RunTheirOwn()
+    {
+        RecordingCommand spawn = new("spawn");
+        RecordingCommand give = new("give");
+        Fixture fixture = CreateInterpreter(spawn, give);
+
+        fixture.Interpreter.Execute("give gold 100");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(give.Calls, Is.EqualTo(new[] { ("gold 100", (ViewScope?)null) }));
+            Assert.That(spawn.Calls, Is.Empty);
+        });
+    }
+
+    [TestCase("wait")]
+    [TestCase("quit")]
+    [TestCase("gamepad")]
+    [TestCase("mouse")]
+    [TestCase("key")]
+    [TestCase("text")]
+    [TestCase("screenshot")]
+    public void Constructor_GameCommandWithBuiltInName_Throws(string name)
+    {
+        InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand(name)));
+
+        Assert.That(exception!.Message, Does.Contain($"'{name}'").And.Contain("built-in"));
+    }
+
+    [Test]
+    public void Constructor_TwoGameCommandsWithSameName_Throws()
+    {
+        InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand("spawn"), new RecordingCommand("spawn")));
+
+        Assert.That(exception!.Message, Does.Contain("'spawn'"));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("spawn enemy")]
+    [TestCase("spawn;")]
+    [TestCase("@spawn")]
+    public void Constructor_GameCommandWithNameThatCannotMatch_Throws(string? name)
+    {
+        Assert.Throws<InvalidOperationException>(() => CreateInterpreter(new RecordingCommand(name!)));
+    }
+
+    private static Fixture CreateInterpreter(params IAutomationCommand[] commands)
     {
         ViewScope secondary = new(7);
         WindowRegistry windowRegistry = new();
@@ -206,7 +296,7 @@ public sealed class InputAutomationCommandInterpreterTests
         gamepadService.SubscribeRightTriggerMotion(0, eventArgs => events.Add($"gamepad right trigger {eventArgs.Value}"));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl);
+        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, commands);
         return new Fixture(interpreter, events, keyboardService, appControl);
     }
 
@@ -215,5 +305,21 @@ public sealed class InputAutomationCommandInterpreterTests
     private sealed class NoImageWriter : IImageWriter
     {
         public void SavePng(Image image, string path) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingCommand(string name) : IAutomationCommand
+    {
+        public List<(string Arguments, ViewScope? ViewScope)> Calls { get; } = new();
+
+        public string Name => name;
+
+        public void Execute(string arguments, ViewScope? viewScope) => Calls.Add((arguments, viewScope));
+    }
+
+    private sealed class FailingCommand : IAutomationCommand
+    {
+        public string Name => "fail";
+
+        public void Execute(string arguments, ViewScope? viewScope) => throw new FormatException("bad");
     }
 }

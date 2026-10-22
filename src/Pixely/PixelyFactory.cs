@@ -333,14 +333,14 @@ public partial class PixelyFactory: IDisposable
 
     [UnsupportedOSPlatform("browser")]
     internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter,
-        AppControl appControl, IFrameTimingRecorder frameTimingRecorder)
+        AppControl appControl, IFrameTimingRecorder frameTimingRecorder, IEnumerable<IAutomationCommand> commands)
     {
         if (inputAutomation is null || imageWriter is null)
         {
             return null;
         }
 
-        InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, appControl);
+        InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, appControl, commands);
         // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
         return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl, frameTimingRecorder);
     }
