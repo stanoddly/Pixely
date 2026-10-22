@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-22: Pixely.Ecs owns its archetype storage
+
+`Pixely.Ecs` is an experimental ECS with its own archetype storage on `Pixely.Collections`, not a wrapper over Arch or another ECS library. Queries are `ref partial struct` types with `[Query]`, whose `Span<T>` and `ReadOnlySpan<T>` fields a source generator fills per archetype.
+
+- A wrapper exposes the library's internals: the Meteorics experiment over Arch 1.2.8 depended on `Chunk.Entities`, `GetArray` and the arrays of `QueryDescription`, so it was tied to one Arch version.
+- Named fields replace positional columns such as `GetColumn1`, and `ReadOnlySpan<T>` makes read access a compile-time rule.
+- The generator rejects invalid queries at build (PXECS001 to PXECS005), including one that requires and excludes the same component.
+- There is no system base class, because Peach Systems are already `IUpdatable`.
+- Structural changes throw while a query runs and go through `EntityCommandBuffer`, so spans never point at moved rows. `Create` stays allowed, because every query requires a component and a new entity has none.
+
+Cost: one archetype is one table per component without fixed-size chunks, and each `Add` moves the entity, so building an entity with several components copies it several times. It is not packaged, so games reference the projects from source.
+
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 
 Textures created from images default to `R8G8B8A8UnormSrgb`, every window claimed for the GPU device has an `SDR_LINEAR` swapchain, and shaders work in linear light. `Color` and `FColor` became `SrgbColor` (bytes, as authored) and `LinearColor` (floats, what the GPU works with); `SrgbColor` converts to `LinearColor` implicitly. The palette `Colors` became `SrgbColors`, and `LinearColors` replaces `FColors` with the same palette converted to linear light. This reverses the closing of #647 and supersedes #648.

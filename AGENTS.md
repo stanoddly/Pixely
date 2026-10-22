@@ -9,6 +9,7 @@
 - `docs/static-factory-methods.md` - Static Create() method pattern
 - `docs/componentize.md` - Pixely.Componentize setup and usage
 - `docs/components.md` - GameWorld, GameObject, GameComponent lifecycle, Services<T>, UpdateSystem
+- `docs/ecs.md` - Pixely.Ecs, experimental and not packaged: World and entities, archetype storage, `[Query]` ref structs with `Span<T>`, `ReadOnlySpan<T>`, `[With<T>]` and `[Without<T>]`, the PXECS diagnostics, structural changes during a query and `EntityCommandBuffer`, what is unsupported
 - `docs/frame-order.md` - Update and render ordering: UpdateOrders/RenderOrders constants, the registration-order tie-break, input order as a separate axis
 - `docs/pipeline-configuration.md` - GraphicsPipelineBuilder API (vertex types, shaders, depth testing)
 - `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages)
