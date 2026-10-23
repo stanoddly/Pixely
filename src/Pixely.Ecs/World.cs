@@ -96,21 +96,23 @@ public sealed class World
             throw new InvalidOperationException($"{entity} already has a {ComponentType<T>.Name} component.");
         }
 
-        if (!source.AddEdges.TryGetValue(id, out Archetype? target))
+        ArchetypeEdge? edge = source.GetAddEdge(id);
+        if (edge is null)
         {
             ComponentSet components = source.Components.With(id);
-            if (!_archetypesBySet.TryGetValue(components, out target))
+            if (!_archetypesBySet.TryGetValue(components, out Archetype? target))
             {
                 target = CreateArchetype(components, source.GetColumnTypesWith(ColumnType<T>.Instance, components));
             }
 
-            source.AddEdges[id] = target;
+            edge = new ArchetypeEdge(source, target, id);
+            source.SetAddEdge(id, edge);
         }
 
         int row = record.Row;
-        record.Row = source.MoveRow(row, target);
-        record.Archetype = target;
-        target.GetColumnUnchecked<T>(target.GetColumnIndex(id)).Add(component);
+        record.Row = source.MoveRow(row, edge);
+        record.Archetype = edge.Target;
+        edge.Target.GetColumnUnchecked<T>(edge.AddedColumn).GetUnchecked(record.Row) = component;
         FixMovedRow(source, row);
     }
 
@@ -125,20 +127,22 @@ public sealed class World
             throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
         }
 
-        if (!source.RemoveEdges.TryGetValue(id, out Archetype? target))
+        ArchetypeEdge? edge = source.GetRemoveEdge(id);
+        if (edge is null)
         {
             ComponentSet components = source.Components.Without(id);
-            if (!_archetypesBySet.TryGetValue(components, out target))
+            if (!_archetypesBySet.TryGetValue(components, out Archetype? target))
             {
                 target = CreateArchetype(components, source.GetColumnTypesWithout(components));
             }
 
-            source.RemoveEdges[id] = target;
+            edge = new ArchetypeEdge(source, target, id);
+            source.SetRemoveEdge(id, edge);
         }
 
         int row = record.Row;
-        record.Row = source.MoveRow(row, target);
-        record.Archetype = target;
+        record.Row = source.MoveRow(row, edge);
+        record.Archetype = edge.Target;
         FixMovedRow(source, row);
     }
 

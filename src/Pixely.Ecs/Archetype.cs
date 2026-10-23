@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace Pixely.Ecs;
 
 // The entities that have exactly the same component types, with one column per type in the order of the set.
-// Rows are stored in chunks; a row's chunk is row >> ChunkShift.
+// Rows are stored in chunks; a row's chunk is row >> ChunkShift. The archetype counts the rows for all its columns and adds their chunks together.
 internal sealed class Archetype
 {
     private const int ChunkBytes = 16 * 1024;
@@ -16,6 +16,13 @@ internal sealed class Archetype
 
     // The column of each component id, or -1. Ids allocated after the archetype was created lie past its end.
     private readonly int[] _columnIndices;
+
+    // The edges reached by adding or removing each component id, or null until first used.
+    private ArchetypeEdge?[] _addEdges = [];
+    private ArchetypeEdge?[] _removeEdges = [];
+
+    // The rows the added chunks hold.
+    private int _capacity;
 
     public Archetype(ComponentSet components, ColumnType[] types)
     {
@@ -48,11 +55,7 @@ internal sealed class Archetype
 
     public int ChunkShift { get; }
 
-    // Archetypes reached by adding or removing one component type, cached so structural changes skip the set lookup.
-    public Dictionary<int, Archetype> AddEdges { get; } = new Dictionary<int, Archetype>();
-    public Dictionary<int, Archetype> RemoveEdges { get; } = new Dictionary<int, Archetype>();
-
-    public int Count => _entities.Count;
+    public int Count { get; private set; }
 
     public int ChunkCount => (Count + ChunkLength - 1) >> ChunkShift;
 
@@ -102,65 +105,139 @@ internal sealed class Archetype
         return types;
     }
 
+    public ArchetypeEdge? GetAddEdge(int componentId) => (uint)componentId < (uint)_addEdges.Length ? _addEdges[componentId] : null;
+
+    public ArchetypeEdge? GetRemoveEdge(int componentId) => (uint)componentId < (uint)_removeEdges.Length ? _removeEdges[componentId] : null;
+
+    public void SetAddEdge(int componentId, ArchetypeEdge edge) => SetEdge(ref _addEdges, componentId, edge);
+
+    public void SetRemoveEdge(int componentId, ArchetypeEdge edge) => SetEdge(ref _removeEdges, componentId, edge);
+
     // Only for an archetype without components, whose rows are entities alone.
     public int AddRow(Entity entity)
     {
         Debug.Assert(_columns.Length == 0);
-        return _entities.Add(entity);
+        int row = AddRow();
+        _entities.GetUnchecked(row) = entity;
+        return row;
     }
 
-    // Grows the entities and every column by count rows, for the caller to fill.
+    // Adds count rows at the end, for the caller to fill.
     public int AddRows(int count)
     {
         int firstRow = Count;
-        _entities.Grow(count);
-        foreach (Column column in _columns)
+        while (_capacity < firstRow + count)
         {
-            column.Grow(count);
+            AddChunk();
         }
 
+        Count = firstRow + count;
         return firstRow;
     }
 
     // Drops the last count rows, which AddRows added.
     public void RemoveLastRows(int count)
     {
-        _entities.Shrink(count);
+        Count -= count;
         foreach (Column column in _columns)
         {
-            column.Shrink(count);
+            column.ClearRows(Count, count);
         }
     }
 
-    // Appends the row to the target with the components both archetypes have and swap-removes it here.
-    // A column the target lacks drops its value, and a column only the target has is left for the caller to append.
-    public int MoveRow(int row, Archetype target)
+    // Copies the row straight into a new row of the edge's target, with the components both archetypes have, and swap-removes it here.
+    // A component only the target has is left for the caller to write.
+    public int MoveRow(int row, ArchetypeEdge edge)
     {
-        int targetRow = target._entities.Add(GetEntity(row));
-        for (int i = 0; i < _columns.Length; i++)
+        Archetype target = edge.Target;
+        int targetRow = target.AddRow();
+        int lastRow = Count - 1;
+        _entities.MoveRow(row, lastRow, target._entities, targetRow);
+        Column[] columns = _columns;
+        int[] targetColumns = edge.TargetColumns;
+        for (int i = 0; i < columns.Length; i++)
         {
-            int targetIndex = target.GetColumnIndex(Components.Ids[i]);
-            if (targetIndex < 0)
+            int targetColumn = targetColumns[i];
+            if (targetColumn < 0)
             {
-                _columns[i].RemoveRow(row);
+                columns[i].RemoveRow(row, lastRow);
             }
             else
             {
-                _columns[i].MoveRow(row, target._columns[targetIndex]);
+                columns[i].MoveRow(row, lastRow, target._columns[targetColumn], targetRow);
             }
         }
 
-        _entities.RemoveRow(row);
+        Count = lastRow;
         return targetRow;
     }
 
     public void RemoveRow(int row)
     {
+        int lastRow = Count - 1;
+        _entities.RemoveRow(row, lastRow);
         foreach (Column column in _columns)
         {
-            column.RemoveRow(row);
+            column.RemoveRow(row, lastRow);
         }
 
-        _entities.RemoveRow(row);
+        Count = lastRow;
     }
+
+    private int AddRow()
+    {
+        int row = Count;
+        if (row == _capacity)
+        {
+            AddChunk();
+        }
+
+        Count = row + 1;
+        return row;
+    }
+
+    private void AddChunk()
+    {
+        _entities.AddChunk();
+        foreach (Column column in _columns)
+        {
+            column.AddChunk();
+        }
+
+        _capacity += ChunkLength;
+    }
+
+    private static void SetEdge(ref ArchetypeEdge?[] edges, int componentId, ArchetypeEdge edge)
+    {
+        if (componentId >= edges.Length)
+        {
+            Array.Resize(ref edges, Math.Max(componentId + 1, edges.Length * 2));
+        }
+
+        edges[componentId] = edge;
+    }
+}
+
+// The archetype reached from a source by adding or removing one component type, with the target column of each source column.
+internal sealed class ArchetypeEdge
+{
+    public ArchetypeEdge(Archetype source, Archetype target, int componentId)
+    {
+        Target = target;
+        TargetColumns = new int[source.Components.Ids.Length];
+        for (int i = 0; i < TargetColumns.Length; i++)
+        {
+            TargetColumns[i] = target.GetColumnIndex(source.Components.Ids[i]);
+        }
+
+        AddedColumn = target.GetColumnIndex(componentId);
+    }
+
+    public Archetype Target { get; }
+
+    // The target column of each source column, or -1 for the removed component.
+    public int[] TargetColumns { get; }
+
+    // The target column of the added component, or -1 on an edge that removes one.
+    public int AddedColumn { get; }
 }
