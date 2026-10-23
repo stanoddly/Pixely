@@ -34,8 +34,7 @@ work relative to them instead of guessing.
 | `RenderOrders.Default` | 0 | nothing by default, the band a game draws in |
 | `RenderOrders.Ui` | 10 000 | `UiRenderer<T>` |
 
-Components that register with `UpdateSystem` run inside `UpdateOrders.Default`, in the order they
-called `Add`.
+Actions added to `UpdateSystem` run inside `UpdateOrders.Default`, in the order they were added.
 
 ## Placing your own
 

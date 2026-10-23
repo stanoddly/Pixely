@@ -33,7 +33,7 @@ public sealed record PixelyConventionsOptions(IReadOnlyList<Assembly> Assemblies
     public IReadOnlyList<GpuBorrower> GpuBorrowers { get; init; } = [];
 
     /// <summary>
-    /// Every updatable, renderer and event handler is registered by a registrar. Off by default: a delegate factory
+    /// Every updatable and renderer is registered by a registrar. Off by default: a delegate factory
     /// typed by an interface and a registration outside any registrar both hide the concrete type.
     /// </summary>
     public bool FrameParticipantsAreRegistered { get; init; } = false;

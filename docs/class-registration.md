@@ -126,7 +126,7 @@ services.AddSingleton<IRenderer, SpriteRenderer>(static sp =>
 ```
 
 Use when:
-- The service type is an interface or base class but the concrete implementation type should drive activation/disposal callbacks (e.g. for `EventBus.Subscribe` interface discovery).
+- The service type is an interface or base class but the concrete implementation type should drive activation/disposal callbacks.
 
 ---
 
@@ -334,7 +334,7 @@ Both delegates receive:
 
 `OnActivated` callbacks fire in the order services are constructed. `OnDisposing` callbacks fire in reverse construction order, matching service disposal. Transient `IDisposable` instances created by the provider are tracked and disposed by the provider that created them. A provider with `OnDisposing` callbacks, its own or merged from a parent, also tracks the transients that are not `IDisposable`, so every transient `OnActivated` saw reaches `OnDisposing`, and a registry built with `AddRegistry` drops it. Such a provider keeps every transient it creates until it is disposed. Multiple callbacks of the same kind run in registration order for each service.
 
-The annotated `Type` parameter is important for NativeAOT and trimming. Generator-emitted registrations pass a `typeof(T)` value from an annotated generic type parameter into the callback path, so consumers can inspect interface metadata without falling back to `instance.GetType()`. This is what allows integrations such as `Pixely.Events.AddEvents()` to discover `IEventHandler<T>` implementations in an AOT-clean way.
+The annotated `Type` parameter is important for NativeAOT and trimming. Generator-emitted registrations pass a `typeof(T)` value from an annotated generic type parameter into the callback path, so consumers can inspect interface metadata without falling back to `instance.GetType()`.
 
 ```csharp
 services.OnActivated(static (instance, type) =>
