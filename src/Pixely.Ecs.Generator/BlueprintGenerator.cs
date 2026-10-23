@@ -4,8 +4,8 @@ using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
 
-// Member is the field, or the auto-property whose backing field it is.
-readonly record struct BlueprintField(string Member, string ComponentType);
+// Member is the field, or the auto-property whose backing field it is. A tag has no column, so Write skips it.
+readonly record struct BlueprintField(string Member, string ComponentType, bool IsTag);
 
 readonly record struct BlueprintModel(TypeDeclaration Type, EquatableArray<BlueprintField> Fields);
 
@@ -76,7 +76,7 @@ public class BlueprintGenerator : IIncrementalGenerator
                 return Fail("PXECS008", $"The blueprint {type.Name} holds {component.Name} in more than one member.", declared.Locations[0]);
             }
 
-            fields.Add(new BlueprintField(GeneratorSupport.Escape(declared.Name), componentName));
+            fields.Add(new BlueprintField(GeneratorSupport.Escape(declared.Name), componentName, GeneratorSupport.IsTag(component)));
         }
 
         if (fields.Count == 0)
@@ -106,19 +106,24 @@ public class BlueprintGenerator : IIncrementalGenerator
             sb.AppendLine();
             sb.AppendLine($"{indent}static void {blueprintInterface}.Write(global::System.ReadOnlySpan<{name}> blueprints, global::Pixely.Ecs.BlueprintColumns columns)");
             sb.AppendLine($"{indent}{{");
-            for (int i = 0; i < blueprint.Fields.Length; i++)
+            List<int> written = [.. Enumerable.Range(0, blueprint.Fields.Length).Where(i => !blueprint.Fields[i].IsTag)];
+            foreach (int i in written)
             {
                 sb.AppendLine($"{indent}    global::System.Span<{blueprint.Fields[i].ComponentType}> column{i} = columns.Get<{blueprint.Fields[i].ComponentType}>({i});");
             }
 
-            sb.AppendLine($"{indent}    for (int i = 0; i < blueprints.Length; i++)");
-            sb.AppendLine($"{indent}    {{");
-            for (int i = 0; i < blueprint.Fields.Length; i++)
+            if (written.Count > 0)
             {
-                sb.AppendLine($"{indent}        column{i}[i] = blueprints[i].{blueprint.Fields[i].Member};");
+                sb.AppendLine($"{indent}    for (int i = 0; i < blueprints.Length; i++)");
+                sb.AppendLine($"{indent}    {{");
+                foreach (int i in written)
+                {
+                    sb.AppendLine($"{indent}        column{i}[i] = blueprints[i].{blueprint.Fields[i].Member};");
+                }
+
+                sb.AppendLine($"{indent}    }}");
             }
 
-            sb.AppendLine($"{indent}    }}");
             sb.AppendLine($"{indent}}}");
         });
     }

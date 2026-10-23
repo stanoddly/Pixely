@@ -4,11 +4,11 @@ public record struct Position(float X, float Y);
 
 public record struct Velocity(float X, float Y);
 
-public struct Player;
+public struct Player : ITag;
 
-public struct Enemy;
+public struct Enemy : ITag;
 
-public struct Frozen;
+public struct Frozen : ITag;
 
 [Query]
 public ref partial struct Movement

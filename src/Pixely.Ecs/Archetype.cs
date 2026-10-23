@@ -5,16 +5,22 @@ using System.Runtime.InteropServices;
 
 namespace Pixely.Ecs;
 
-// The entities that have exactly the same component types, with one column per type in the order of the set.
+// The entities that have exactly the same component types, with one column per component type that is not a tag, in the order of the set.
 // Rows are stored in chunks; a row's chunk is row >> ChunkShift. The archetype counts the rows for all its columns and adds their chunks together.
 internal sealed class Archetype
 {
+    // What GetColumnIndex returns for a component the archetype lacks, and for a tag it has, which has no column.
+    public const int Absent = -1;
+    public const int Tag = -2;
+
     private const int ChunkBytes = 16 * 1024;
 
+    private readonly ColumnType[] _types;
     private readonly Column<Entity> _entities;
     private readonly Column[] _columns;
+    private readonly int[] _columnComponentIds;
 
-    // The column of each component id, or -1. Ids allocated after the archetype was created lie past its end.
+    // The column of each component id, Absent or Tag. Ids allocated after the archetype was created lie past its end.
     private readonly int[] _columnIndices;
 
     // The edges reached by adding or removing each component id, or null until first used.
@@ -24,30 +30,44 @@ internal sealed class Archetype
     // The rows the added chunks hold.
     private int _capacity;
 
+    // The types are in the order of the set's ids.
     public Archetype(ComponentSet components, ColumnType[] types)
     {
         Components = components;
+        _types = types;
 
         // The largest power of two of rows that fits ChunkBytes, at least 64, so a full chunk of any component is a whole number of vectors up to 512 bits.
         int rowSize = Unsafe.SizeOf<Entity>();
+        int columnCount = 0;
         foreach (ColumnType type in types)
         {
-            rowSize += type.Size;
+            if (!type.IsTag)
+            {
+                rowSize += type.Size;
+                columnCount++;
+            }
         }
 
         ChunkShift = BitOperations.Log2((uint)Math.Max(64, ChunkBytes / rowSize));
         _entities = new Column<Entity>(ChunkShift);
-        _columns = new Column[types.Length];
+        _columns = new Column[columnCount];
+        _columnComponentIds = new int[columnCount];
+        _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
+        Array.Fill(_columnIndices, Absent);
+        int column = 0;
         for (int i = 0; i < types.Length; i++)
         {
-            _columns[i] = types[i].Create(ChunkShift);
-        }
-
-        _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
-        Array.Fill(_columnIndices, -1);
-        for (int i = 0; i < components.Ids.Length; i++)
-        {
-            _columnIndices[components.Ids[i]] = i;
+            int id = components.Ids[i];
+            if (types[i].IsTag)
+            {
+                _columnIndices[id] = Tag;
+            }
+            else
+            {
+                _columns[column] = types[i].Create(ChunkShift);
+                _columnComponentIds[column] = id;
+                _columnIndices[id] = column++;
+            }
         }
     }
 
@@ -56,6 +76,9 @@ internal sealed class Archetype
     public int ChunkShift { get; }
 
     public int Count { get; private set; }
+
+    // The component id of each column.
+    public ReadOnlySpan<int> ColumnComponentIds => _columnComponentIds;
 
     public int ChunkCount => (Count + ChunkLength - 1) >> ChunkShift;
 
@@ -71,7 +94,8 @@ internal sealed class Archetype
 
     public Span<Entity> GetEntities(int row, int count) => _entities.GetRows(row, count);
 
-    public int GetColumnIndex(int componentId) => (uint)componentId < (uint)_columnIndices.Length ? _columnIndices[componentId] : -1;
+    public int GetColumnIndex(int componentId) =>
+        (uint)componentId < (uint)_columnIndices.Length ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_columnIndices), componentId) : -1;
 
     public Column<T> GetColumn<T>(int index) where T : struct => (Column<T>)_columns[index];
 
@@ -87,8 +111,8 @@ internal sealed class Archetype
         ColumnType[] types = new ColumnType[target.Ids.Length];
         for (int i = 0; i < types.Length; i++)
         {
-            int sourceIndex = GetColumnIndex(target.Ids[i]);
-            types[i] = sourceIndex < 0 ? added : _columns[sourceIndex].Type;
+            int position = Components.IndexOf(target.Ids[i]);
+            types[i] = position < 0 ? added : _types[position];
         }
 
         return types;
@@ -99,7 +123,7 @@ internal sealed class Archetype
         ColumnType[] types = new ColumnType[target.Ids.Length];
         for (int i = 0; i < types.Length; i++)
         {
-            types[i] = _columns[GetColumnIndex(target.Ids[i])].Type;
+            types[i] = _types[Components.IndexOf(target.Ids[i])];
         }
 
         return types;
@@ -224,10 +248,10 @@ internal sealed class ArchetypeEdge
     public ArchetypeEdge(Archetype source, Archetype target, int componentId)
     {
         Target = target;
-        TargetColumns = new int[source.Components.Ids.Length];
+        TargetColumns = new int[source.ColumnComponentIds.Length];
         for (int i = 0; i < TargetColumns.Length; i++)
         {
-            TargetColumns[i] = target.GetColumnIndex(source.Components.Ids[i]);
+            TargetColumns[i] = target.GetColumnIndex(source.ColumnComponentIds[i]);
         }
 
         AddedColumn = target.GetColumnIndex(componentId);
@@ -235,9 +259,9 @@ internal sealed class ArchetypeEdge
 
     public Archetype Target { get; }
 
-    // The target column of each source column, or -1 for the removed component.
+    // The target column of each source column, or Absent for the removed component.
     public int[] TargetColumns { get; }
 
-    // The target column of the added component, or -1 on an edge that removes one.
+    // The target column of the added component, Tag for an added tag, or Absent on an edge that removes one.
     public int AddedColumn { get; }
 }
