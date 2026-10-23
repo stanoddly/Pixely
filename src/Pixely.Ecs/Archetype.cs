@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Pixely.Collections;
 
 namespace Pixely.Ecs;
@@ -8,10 +11,19 @@ public sealed class Archetype
     private readonly FastList<Entity> _entities = new FastList<Entity>();
     private readonly Column[] _columns;
 
+    // The column of each component id, or -1. Ids allocated after the archetype was created lie past its end.
+    private readonly int[] _columnIndices;
+
     internal Archetype(ComponentSet components, Column[] columns)
     {
         Components = components;
         _columns = columns;
+        _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
+        Array.Fill(_columnIndices, -1);
+        for (int i = 0; i < components.Ids.Length; i++)
+        {
+            _columnIndices[components.Ids[i]] = i;
+        }
     }
 
     internal ComponentSet Components { get; }
@@ -24,27 +36,36 @@ public sealed class Archetype
 
     public ReadOnlySpan<Entity> Entities => _entities.AsReadOnlySpan();
 
-    public bool Has<T>() where T : struct => Components.Contains(ComponentType<T>.Id);
+    public bool Has<T>() where T : struct => GetColumnIndex(ComponentType<T>.Id) >= 0;
 
     public Span<T> GetSpan<T>() where T : struct
     {
-        int index = Components.IndexOf(ComponentType<T>.Id);
+        int index = GetColumnIndex(ComponentType<T>.Id);
         if (index < 0)
         {
-            throw new InvalidOperationException($"The archetype has no {typeof(T).Name} component.");
+            throw new InvalidOperationException($"The archetype has no {ComponentType<T>.Name} component.");
         }
 
-        return ((Column<T>)_columns[index]).Values.AsSpan();
+        return GetColumnUnchecked<T>(index).AsSpan();
     }
 
+    internal int GetColumnIndex(int componentId) => (uint)componentId < (uint)_columnIndices.Length ? _columnIndices[componentId] : -1;
+
     internal Column<T> GetColumn<T>(int index) where T : struct => (Column<T>)_columns[index];
+
+    // The index must come from GetColumnIndex for T's id, so it is in range and the column holds T.
+    internal Column<T> GetColumnUnchecked<T>(int index) where T : struct
+    {
+        Debug.Assert(_columns[index] is Column<T>);
+        return Unsafe.As<Column<T>>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_columns), index));
+    }
 
     internal Column[] CreateColumnsWith(Column added, ComponentSet target)
     {
         Column[] columns = new Column[target.Ids.Length];
         for (int i = 0; i < columns.Length; i++)
         {
-            int sourceIndex = Components.IndexOf(target.Ids[i]);
+            int sourceIndex = GetColumnIndex(target.Ids[i]);
             columns[i] = sourceIndex < 0 ? added : _columns[sourceIndex].CreateEmpty();
         }
 
@@ -56,7 +77,7 @@ public sealed class Archetype
         Column[] columns = new Column[target.Ids.Length];
         for (int i = 0; i < columns.Length; i++)
         {
-            columns[i] = _columns[Components.IndexOf(target.Ids[i])].CreateEmpty();
+            columns[i] = _columns[GetColumnIndex(target.Ids[i])].CreateEmpty();
         }
 
         return columns;
@@ -64,19 +85,20 @@ public sealed class Archetype
 
     internal int AddRow(Entity entity) => _entities.Add(entity);
 
-    // Appends the entities and grows every column by as many rows, for the caller to fill.
-    internal int AddRows(ReadOnlySpan<Entity> entities)
+    // Grows the entities and every column by count rows, for the caller to fill.
+    internal int AddRows(int count)
     {
         int firstRow = _entities.Length;
-        _entities.Resize(firstRow + entities.Length);
-        entities.CopyTo(_entities.AsSpan()[firstRow..]);
+        _entities.Resize(firstRow + count);
         foreach (Column column in _columns)
         {
-            column.Grow(entities.Length);
+            column.Grow(count);
         }
 
         return firstRow;
     }
+
+    internal Span<Entity> GetEntities(int row, int count) => _entities.AsSpan().Slice(row, count);
 
     // Appends the row to the target with the components both archetypes have and swap-removes it here.
     // A column the target lacks drops its value, and a column only the target has is left for the caller to append.
@@ -85,7 +107,7 @@ public sealed class Archetype
         int targetRow = target._entities.Add(_entities[row]);
         for (int i = 0; i < _columns.Length; i++)
         {
-            int targetIndex = target.Components.IndexOf(Components.Ids[i]);
+            int targetIndex = target.GetColumnIndex(Components.Ids[i]);
             if (targetIndex < 0)
             {
                 _columns[i].RemoveRow(row);

@@ -19,7 +19,13 @@ internal interface IRecordedCommands
 // One system's structural changes, recorded by its writers and applied in recording order at a sync point.
 internal sealed class CommandBuffer
 {
-    private readonly record struct Command(IRecordedCommands Source, int Index);
+    // Consecutive commands from one writer share an entry, so a run of spawns keeps the log short.
+    private struct Command
+    {
+        public IRecordedCommands Source;
+        public int First;
+        public int Count;
+    }
 
     private readonly FastList<Command> _commands = new FastList<Command>(4);
     private readonly List<IRecordedCommands> _sources = [];
@@ -33,7 +39,20 @@ internal sealed class CommandBuffer
 
     public void AddSource(IRecordedCommands source) => _sources.Add(source);
 
-    public void Record(IRecordedCommands source, int index) => _commands.Add(new Command(source, index));
+    public void Record(IRecordedCommands source, int index)
+    {
+        if (_commands.Length > 0)
+        {
+            ref Command last = ref _commands[_commands.LastIndex];
+            if (ReferenceEquals(last.Source, source) && last.First + last.Count == index)
+            {
+                last.Count++;
+                return;
+            }
+        }
+
+        _commands.Add(new Command { Source = source, First = index, Count = 1 });
+    }
 
     // Hands each run of consecutive commands from one writer to it at once, so a run of spawns becomes one batch.
     // Clears the buffer even when a command throws, so a later sync point does not apply the commands before it twice.
@@ -42,25 +61,21 @@ internal sealed class CommandBuffer
         int applied = 0;
         try
         {
-            ReadOnlySpan<Command> commands = _commands.AsReadOnlySpan();
-            while (applied < commands.Length)
+            for (; applied < _commands.Length; applied++)
             {
-                Command first = commands[applied];
-                int count = 1;
-                while (applied + count < commands.Length && ReferenceEquals(commands[applied + count].Source, first.Source))
-                {
-                    count++;
-                }
-
-                first.Source.Apply(World, first.Index, count);
-                applied += count;
+                Command command = _commands[applied];
+                command.Source.Apply(World, command.First, command.Count);
             }
         }
         finally
         {
             for (int i = applied; i < _commands.Length; i++)
             {
-                _commands[i].Source.Discard(World, _commands[i].Index);
+                Command command = _commands[i];
+                for (int index = command.First; index < command.First + command.Count; index++)
+                {
+                    command.Source.Discard(World, index);
+                }
             }
 
             _commands.Resize(0);

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Pixely.Collections;
 
 namespace Pixely.Ecs;
@@ -15,7 +16,7 @@ public sealed class World
 
     private const int ReservedRow = -1;
 
-    private readonly FastList<EntityRecord> _records = new FastList<EntityRecord>();
+    private readonly ChunkedList<EntityRecord> _records = new ChunkedList<EntityRecord>();
     private readonly FastList<int> _freeIndices = new FastList<int>();
     private readonly Dictionary<ComponentSet, Archetype> _archetypesBySet = new Dictionary<ComponentSet, Archetype>();
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
@@ -56,22 +57,29 @@ public sealed class World
 
     public bool IsAlive(Entity entity)
     {
-        return (uint)entity.Index < (uint)_records.Length && _records[entity.Index].Version == entity.Version && _records[entity.Index].Archetype is not null;
+        if ((uint)entity.Index >= (uint)_records.Count)
+        {
+            return false;
+        }
+
+        ref EntityRecord record = ref _records[entity.Index];
+        return record.Version == entity.Version && record.Archetype is not null;
     }
 
-    public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.Has<T>();
+    public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) >= 0;
 
     // The reference stays valid until the next structural change: Create, Destroy, Add or Remove.
     public ref T Get<T>(Entity entity) where T : struct
     {
         ref EntityRecord record = ref GetRecord(entity);
-        int index = record.Archetype!.Components.IndexOf(ComponentType<T>.Id);
+        Archetype archetype = record.Archetype!;
+        int index = archetype.GetColumnIndex(ComponentType<T>.Id);
         if (index < 0)
         {
-            throw new InvalidOperationException($"{entity} has no {typeof(T).Name} component.");
+            throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
         }
 
-        return ref record.Archetype.GetColumn<T>(index).Values[record.Row];
+        return ref archetype.GetColumnUnchecked<T>(index).GetUnchecked(record.Row);
     }
 
     public void Add<T>(Entity entity, T component) where T : struct
@@ -80,9 +88,9 @@ public sealed class World
         ref EntityRecord record = ref GetRecord(entity);
         Archetype source = record.Archetype!;
         int id = ComponentType<T>.Id;
-        if (source.Components.Contains(id))
+        if (source.GetColumnIndex(id) >= 0)
         {
-            throw new InvalidOperationException($"{entity} already has a {typeof(T).Name} component.");
+            throw new InvalidOperationException($"{entity} already has a {ComponentType<T>.Name} component.");
         }
 
         if (!source.AddEdges.TryGetValue(id, out Archetype? target))
@@ -99,7 +107,7 @@ public sealed class World
         int row = record.Row;
         record.Row = source.MoveRow(row, target);
         record.Archetype = target;
-        target.GetColumn<T>(target.Components.IndexOf(id)).Values.Add(component);
+        target.GetColumnUnchecked<T>(target.GetColumnIndex(id)).Add(component);
         FixMovedRow(source, row);
     }
 
@@ -109,9 +117,9 @@ public sealed class World
         ref EntityRecord record = ref GetRecord(entity);
         Archetype source = record.Archetype!;
         int id = ComponentType<T>.Id;
-        if (!source.Components.Contains(id))
+        if (source.GetColumnIndex(id) < 0)
         {
-            throw new InvalidOperationException($"{entity} has no {typeof(T).Name} component.");
+            throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
         }
 
         if (!source.RemoveEdges.TryGetValue(id, out Archetype? target))
@@ -140,7 +148,7 @@ public sealed class World
 
     internal QueryState GetQueryState<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
     {
-        int id = QueryId<TQuery>.Value;
+        int id = QueryId<TQuery>.Id;
         if (id >= _queries.Length)
         {
             _queries.Resize(id + 1);
@@ -172,24 +180,33 @@ public sealed class World
         return new Entity(index, record.Version);
     }
 
-    // Spawns reserved entities together, so each column grows once and the blueprints are copied into it directly.
-    internal void Spawn<TBlueprint>(ReadOnlySpan<Entity> entities, ReadOnlySpan<TBlueprint> blueprints) where TBlueprint : struct, IBlueprint<TBlueprint>
+    // Spawns a run of reserved entities together, so each column grows once and the blueprints are copied into it directly.
+    // Only a Spawner of this world reserves, and only a failed sync point releases, so the entities are reserved without a check.
+    internal void Spawn<TBlueprint>(ChunkedList<Entity> entities, ChunkedList<TBlueprint> blueprints, int first, int count)
+        where TBlueprint : struct, IBlueprint<TBlueprint>
     {
         ThrowIfQueryRuns();
-        foreach (Entity entity in entities)
-        {
-            GetReservedRecord(entity);
-        }
-
         BlueprintState state = GetBlueprintState<TBlueprint>();
         Archetype archetype = state.Archetype;
-        int firstRow = archetype.AddRows(entities);
-        TBlueprint.Write(blueprints, new BlueprintColumns(archetype, state.Columns, firstRow, entities.Length));
-        for (int i = 0; i < entities.Length; i++)
+        int row = archetype.AddRows(count);
+        for (int index = first; index < first + count;)
         {
-            ref EntityRecord record = ref _records[entities[i].Index];
-            record.Archetype = archetype;
-            record.Row = firstRow + i;
+            ReadOnlySpan<Entity> entityRun = entities.GetRun(index, first + count - index);
+            ReadOnlySpan<TBlueprint> blueprintRun = blueprints.GetRun(index, entityRun.Length);
+            entityRun = entityRun[..blueprintRun.Length];
+
+            entityRun.CopyTo(archetype.GetEntities(row, entityRun.Length));
+            TBlueprint.Write(blueprintRun, new BlueprintColumns(archetype, state.Columns, row, blueprintRun.Length));
+            for (int i = 0; i < entityRun.Length; i++)
+            {
+                ref EntityRecord record = ref _records[entityRun[i].Index];
+                Debug.Assert(record.Version == entityRun[i].Version && record.Row == ReservedRow);
+                record.Archetype = archetype;
+                record.Row = row + i;
+            }
+
+            index += entityRun.Length;
+            row += entityRun.Length;
         }
     }
 
@@ -200,7 +217,7 @@ public sealed class World
 
     internal BlueprintState GetBlueprintState<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
     {
-        int id = BlueprintId<TBlueprint>.Value;
+        int id = BlueprintId<TBlueprint>.Id;
         if (id >= _blueprints.Length)
         {
             _blueprints.Resize(id + 1);
@@ -254,22 +271,30 @@ public sealed class World
 
     private ref EntityRecord GetRecord(Entity entity)
     {
-        if (!IsAlive(entity))
+        if ((uint)entity.Index < (uint)_records.Count)
         {
-            throw new ArgumentException($"{entity} is not alive.", nameof(entity));
+            ref EntityRecord record = ref _records[entity.Index];
+            if (record.Version == entity.Version && record.Archetype is not null)
+            {
+                return ref record;
+            }
         }
 
-        return ref _records[entity.Index];
+        throw new ArgumentException($"{entity} is not alive.", nameof(entity));
     }
 
     private ref EntityRecord GetReservedRecord(Entity entity)
     {
-        if ((uint)entity.Index >= (uint)_records.Length || _records[entity.Index].Version != entity.Version || _records[entity.Index].Row != ReservedRow)
+        if ((uint)entity.Index < (uint)_records.Count)
         {
-            throw new ArgumentException($"{entity} is not reserved.", nameof(entity));
+            ref EntityRecord record = ref _records[entity.Index];
+            if (record.Version == entity.Version && record.Row == ReservedRow)
+            {
+                return ref record;
+            }
         }
 
-        return ref _records[entity.Index];
+        throw new ArgumentException($"{entity} is not reserved.", nameof(entity));
     }
 
     private int TakeIndex()

@@ -100,6 +100,25 @@ public class WorldTests
         Assert.Throws<InvalidOperationException>(() => world.Get<Position>(entity));
     }
 
+    // No other test uses this component, so its id is allocated after the test creates its archetype.
+    private struct FirstUsedLate;
+
+    [Test]
+    public void ComponentFirstUsedAfterTheArchetypeIsAbsentAndCanBeAdded()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Position(1, 2));
+
+        Assert.That(world.Has<FirstUsedLate>(entity), Is.False);
+        Assert.Throws<InvalidOperationException>(() => world.Get<FirstUsedLate>(entity));
+
+        world.Add(entity, new FirstUsedLate());
+
+        Assert.That(world.Has<FirstUsedLate>(entity), Is.True);
+        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(1, 2)));
+    }
+
     [Test]
     public void EntitiesKeepTheirComponentsWhenAnotherLeavesTheArchetype()
     {
