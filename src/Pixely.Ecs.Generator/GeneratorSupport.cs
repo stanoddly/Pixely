@@ -29,7 +29,12 @@ static class GeneratorSupport
             Location.Create(diagnostic.FilePath, default, new LinePositionSpan(new LinePosition(diagnostic.Line, diagnostic.Column), new LinePosition(diagnostic.EndLine, diagnostic.EndColumn)))));
     }
 
-    // Null when the type or a type that contains it is not partial, or a containing type is generic.
+    private static readonly SymbolDisplayFormat HintFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted)
+        .RemoveMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
+
+    // Null when the type or a type that contains it is not partial, or a containing type is generic. A file-local type is null too,
+    // because the generated part would be another type in another file.
     public static TypeDeclaration? GetPartialDeclaration(INamedTypeSymbol type, TypeDeclarationSyntax syntax, string hintSuffix, CancellationToken cancellationToken)
     {
         List<INamedTypeSymbol> containingTypes = [];
@@ -38,17 +43,21 @@ static class GeneratorSupport
             containingTypes.Insert(0, containing);
         }
 
-        bool containingTypesArePartial = containingTypes.All(containing => !containing.IsGenericType && containing.DeclaringSyntaxReferences
+        bool containingTypesArePartial = containingTypes.All(containing => !containing.IsGenericType && !containing.IsFileLocal && containing.DeclaringSyntaxReferences
             .Any(reference => reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax declaration && declaration.Modifiers.Any(SyntaxKind.PartialKeyword)));
-        if (type.IsGenericType || !syntax.Modifiers.Any(SyntaxKind.PartialKeyword) || !containingTypesArePartial)
+        if (type.IsGenericType || type.IsFileLocal || !syntax.Modifiers.Any(SyntaxKind.PartialKeyword) || !containingTypesArePartial)
         {
             return null;
         }
 
         string? ns = type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString();
-        string hintName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "") + hintSuffix;
-        return new TypeDeclaration(ns, new EquatableArray<string>([.. containingTypes.Select(Declare)]), Declare(type), type.Name, hintName);
+        string hintName = type.ToDisplayString(HintFormat) + hintSuffix;
+        return new TypeDeclaration(ns, new EquatableArray<string>([.. containingTypes.Select(Declare)]), Declare(type), Escape(type.Name), hintName);
     }
+
+    // Prefixes a keyword with @, so a declared name such as @event stays an identifier in the generated code.
+    public static string Escape(string name) =>
+        SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None ? "@" + name : name;
 
     // Writes the namespace and the containing types around the generated part of the type, whose members body writes.
     public static string Generate(TypeDeclaration type, string baseList, Action<StringBuilder, string> body)
@@ -98,6 +107,6 @@ static class GeneratorSupport
 
         string readOnly = type.TypeKind == TypeKind.Struct && type.IsReadOnly ? "readonly " : "";
         string refLike = type.IsRefLikeType ? "ref " : "";
-        return $"{readOnly}{refLike}partial {keyword} {type.Name}";
+        return $"{readOnly}{refLike}partial {keyword} {Escape(type.Name)}";
     }
 }

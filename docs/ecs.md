@@ -43,7 +43,14 @@ Systems do not use these calls. They change the world through writers, described
 
 ## Storage
 
-Entities with exactly the same component types share an archetype. An archetype stores one array per component type, so a query reads each component as one contiguous span. Adding or removing a component moves the entity to another archetype. Archetypes are created on first use and never removed.
+Entities with exactly the same component types share an archetype. Adding or removing a component moves the entity to another archetype. Archetypes are created on first use and never removed.
+
+An archetype stores its entities in chunks. A chunk holds one array per component type, so a query reads each component of a chunk as one contiguous span.
+
+- A chunk holds a power of two of rows: the most whose entity and components fit 16 KB, and at least 64. A full chunk of any component is then a whole number of SIMD vectors up to 512 bits, so a vectorized loop needs a scalar tail only in an archetype's last chunk, which can hold fewer rows.
+- An archetype grows by adding chunks, so it never copies its rows and its arrays stay off the large object heap.
+- Removing an entity moves the archetype's last entity into its place, possibly from another chunk.
+- Chunks are kept for reuse when entities leave, and an archetype with one entity still has a whole chunk.
 
 ## Queries
 
@@ -66,11 +73,11 @@ internal ref partial struct Movement
 }
 ```
 
-A query yields one `Movement` per matching archetype. All fields have `Count` items, and index `i` is the same entity in each. A system enumerates a `Query<Movement>` from its constructor; other code enumerates `world.Query<Movement>()`.
+A query yields one `Movement` per chunk of each matching archetype. All fields have `Count` items, and index `i` is the same entity in each. A system enumerates a `Query<Movement>` from its constructor; other code enumerates `world.Query<Movement>()`.
 
 While a query runs, `Destroy`, `Add` and `Remove` on the world throw `InvalidOperationException`, because they would move rows under the spans. `Create` is allowed, because a new entity has no components and every query requires one. The query ends when `foreach` ends, including on `break` or an exception.
 
-A query can also implement `IQuery<TSelf>` by hand. It must require a component, or the query throws.
+A query can also implement `IQuery<TSelf>` by hand, creating itself from an `ArchetypeChunk`. It must require a component, or the query throws.
 
 ## Systems
 
@@ -203,17 +210,18 @@ The generator fails the build on these:
 
 | Id | Rule |
 |----|------|
-| PXECS001 | A query is a non-generic `ref partial struct`, and every type that contains it is partial and non-generic. |
+| PXECS001 | A query is a non-generic `ref partial struct` that is not `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
 | PXECS002 | Each instance field of a query is `Span<T>` or `ReadOnlySpan<T>` of a struct component, or `ReadOnlySpan<Entity>`. |
 | PXECS003 | No component appears in two fields of a query. |
 | PXECS004 | A query has at least one field and requires at least one component. |
 | PXECS005 | No component is both required and excluded by a query. |
-| PXECS006 | A blueprint is a non-generic partial struct that is not a `ref struct`, and every type that contains it is partial and non-generic. |
+| PXECS006 | A blueprint is a non-generic partial struct that is not a `ref struct` or `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
 | PXECS007 | Each member of a blueprint is a struct component, not `Entity`, a `ref struct` or a type parameter. |
 | PXECS008 | No component appears in two members of a blueprint. |
 | PXECS009 | A blueprint holds at least one component. |
-| PXECS010 | `AddSystem<T>` takes a concrete class without type parameters. |
-| PXECS011 | The system has exactly one constructor accessible where `AddSystem<T>` is called. |
+| PXECS010 | `AddSystem<T>` takes a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. |
+| PXECS011 | The system has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
+| PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
 
 ## Not supported yet
 

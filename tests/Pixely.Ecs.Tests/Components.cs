@@ -49,7 +49,19 @@ public ref struct EverythingQuery : IQuery<EverythingQuery>
     {
     }
 
-    public static EverythingQuery Create(Archetype archetype) => new EverythingQuery();
+    public static EverythingQuery Create(ArchetypeChunk chunk) => new EverythingQuery();
+}
+
+public ref struct ManualPositions : IQuery<ManualPositions>
+{
+    public ReadOnlySpan<Entity> Entities;
+    public Span<Position> Positions;
+    public bool HasVelocity;
+
+    public static void Describe(QueryDescription description) => description.With<Position>();
+
+    public static ManualPositions Create(ArchetypeChunk chunk) =>
+        new ManualPositions { Entities = chunk.Entities, Positions = chunk.GetSpan<Position>(), HasVelocity = chunk.Has<Velocity>() };
 }
 
 public struct Dead;

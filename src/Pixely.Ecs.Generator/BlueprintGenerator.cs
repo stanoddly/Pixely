@@ -45,7 +45,7 @@ public class BlueprintGenerator : IIncrementalGenerator
         TypeDeclaration? declaration = GeneratorSupport.GetPartialDeclaration(type, syntax, ".Blueprint.g.cs", cancellationToken);
         if (type.TypeKind != TypeKind.Struct || type.IsRefLikeType || declaration is null)
         {
-            return Fail("PXECS006", $"The blueprint {type.Name} must be a non-generic partial struct that is not a ref struct, and every type that contains it must be partial and non-generic.", typeLocation);
+            return Fail("PXECS006", $"The blueprint {type.Name} must be a non-generic, non-file-local partial struct that is not a ref struct, and every type that contains it must be partial, non-generic and not file-local.", typeLocation);
         }
 
         List<BlueprintField> fields = [];
@@ -74,7 +74,7 @@ public class BlueprintGenerator : IIncrementalGenerator
                 return Fail("PXECS008", $"The blueprint {type.Name} holds {component.Name} in more than one member.", declared.Locations[0]);
             }
 
-            fields.Add(new BlueprintField(declared.Name, componentName));
+            fields.Add(new BlueprintField(GeneratorSupport.Escape(declared.Name), componentName));
         }
 
         if (fields.Count == 0)

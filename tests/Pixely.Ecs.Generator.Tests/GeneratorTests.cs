@@ -79,6 +79,8 @@ public class GeneratorTests
     [TestCase("[Query] ref struct Q { public Span<Position> P; }", "PXECS001")]
     [TestCase("[Query] ref partial struct Q<T> { public Span<Position> P; }", "PXECS001")]
     [TestCase("class Outer { [Query] ref partial struct Q { public Span<Position> P; } }", "PXECS001")]
+    [TestCase("[Query] file ref partial struct Q { public Span<Position> P; }", "PXECS001")]
+    [TestCase("file partial class Outer { [Query] ref partial struct Q { public Span<Position> P; } }", "PXECS001")]
     [TestCase("[Query] ref partial struct Q { public int P; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<Entity> E; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<string> S; }", "PXECS002")]
@@ -129,7 +131,7 @@ public class GeneratorTests
                 internal sealed class Shooter : ISystem
                 {
                     public Shooter(Query<Movement> movement, Spawner<Bullet> bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop,
-                        EntityDestroyer destroyer, Log log, Log? optional, IEnumerable<Log> logs, Spawner<Blueprints.Corpse> corpses)
+                        EntityDestroyer destroyer, Log log, Log? optional, IEnumerable<Log> logs, Spawner<Blueprints.Corpse> corpses, in Log byValue)
                     {
                     }
 
@@ -160,6 +162,8 @@ public class GeneratorTests
     [TestCase("[Blueprint] ref partial struct B { public Position P; }", "PXECS006")]
     [TestCase("[Blueprint] partial struct B<T> { public Position P; }", "PXECS006")]
     [TestCase("class Outer { [Blueprint] partial struct B { public Position P; } }", "PXECS006")]
+    [TestCase("[Blueprint] file partial struct B { public Position P; }", "PXECS006")]
+    [TestCase("file partial class Outer { [Blueprint] partial struct B { public Position P; } }", "PXECS006")]
     [TestCase("[Blueprint] partial struct B { public string S; }", "PXECS007")]
     [TestCase("[Blueprint] partial struct B { public Entity E; }", "PXECS007")]
     [TestCase("[Blueprint] partial struct B { public Position A; public Position B2; }", "PXECS008")]
@@ -172,7 +176,11 @@ public class GeneratorTests
     }
 
     [TestCase("abstract class S : ISystem { public abstract void Update(); }", "S", "PXECS010")]
+    [TestCase("file sealed class S : ISystem { public void Update() { } }", "S", "PXECS010")]
     [TestCase("class S : ISystem { public S() { } public S(int value) { } public void Update() { } }", "S", "PXECS011")]
+    [TestCase("class S : ISystem { protected S() { } public void Update() { } }", "S", "PXECS011")]
+    [TestCase("class Log; class S : ISystem { public S(ref Log log) { } public void Update() { } }", "S", "PXECS012")]
+    [TestCase("class Log; class S : ISystem { public S(out Log log) { log = new Log(); } public void Update() { } }", "S", "PXECS012")]
     public void InvalidSystemRegistrationReportsDiagnostic(string declaration, string system, string expectedId)
     {
         string source = Components + declaration + $$"""
@@ -186,6 +194,75 @@ public class GeneratorTests
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    // The generated code is outside the system, so what the call site can reach inside the system does not count.
+    [TestCase("""
+        class S : ISystem
+        {
+            private S() { }
+            public void Update() { }
+            static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+        }
+        """, "PXECS011")]
+    [TestCase("""
+        class Outer
+        {
+            private sealed class S : ISystem { public void Update() { } }
+            static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+        }
+        """, "PXECS010")]
+    public void SystemAccessibleOnlyAtTheCallSiteReportsDiagnostic(string declaration, string expectedId)
+    {
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    [Test]
+    public void KeywordNamesCompile()
+    {
+        string source = Components + """
+            public static partial class @class
+            {
+                [Query]
+                public ref partial struct @event
+                {
+                    public ReadOnlySpan<Entity> @this;
+                    public Span<Position> @base;
+                }
+
+                [Blueprint]
+                public partial struct @struct
+                {
+                    public Position @in;
+                    public Velocity record;
+                }
+
+                [Blueprint]
+                public partial record struct @record(Position @out);
+
+                public sealed class @operator(Query<@event> query, Spawner<@struct> structs, Spawner<@record> records) : ISystem
+                {
+                    public void Update()
+                    {
+                        foreach (@event chunk in query)
+                        {
+                            chunk.@base[0] = chunk.@base[0];
+                            structs.Spawn(new @struct { @in = chunk.@base[0], record = default });
+                            records.Spawn(new @record(chunk.@base[0]));
+                        }
+                    }
+                }
+
+                public static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<@operator>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
     private static (ImmutableArray<Diagnostic> GeneratorDiagnostics, Compilation Output) Run(string source)

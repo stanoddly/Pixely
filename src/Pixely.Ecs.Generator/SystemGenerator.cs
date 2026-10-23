@@ -72,17 +72,25 @@ public class SystemGenerator : IIncrementalGenerator
             return null;
         }
 
+        // The generated code is outside the system, so the system and its constructor must be accessible anywhere in the assembly.
+        IAssemblySymbol assembly = context.SemanticModel.Compilation.Assembly;
         ITypeSymbol systemType = method.TypeArguments[0];
         string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        if (systemType is not INamedTypeSymbol { IsAbstract: false } namedType || ContainsTypeParameter(systemType))
+        if (systemType is not INamedTypeSymbol { IsAbstract: false } namedType || ContainsTypeParameter(systemType)
+            || !context.SemanticModel.Compilation.IsSymbolAccessibleWithin(namedType, assembly) || IsInFileLocalType(namedType))
         {
-            return Fail("PXECS010", $"AddSystem<{systemName}>() requires a concrete class without type parameters.", invocation);
+            return Fail("PXECS010", $"AddSystem<{systemName}>() requires a concrete class without type parameters, accessible anywhere in its assembly.", invocation);
         }
 
-        IMethodSymbol[] constructors = namedType.InstanceConstructors.Where(constructor => context.SemanticModel.IsAccessible(invocation.SpanStart, constructor)).ToArray();
+        IMethodSymbol[] constructors = namedType.InstanceConstructors.Where(constructor => context.SemanticModel.Compilation.IsSymbolAccessibleWithin(constructor, assembly)).ToArray();
         if (constructors.Length != 1)
         {
-            return Fail("PXECS011", $"AddSystem<{systemName}>() requires {systemName} to have exactly one constructor accessible at the call site.", invocation);
+            return Fail("PXECS011", $"AddSystem<{systemName}>() requires {systemName} to have exactly one public or internal constructor.", invocation);
+        }
+
+        if (constructors[0].Parameters.FirstOrDefault(parameter => parameter.RefKind is not (RefKind.None or RefKind.In)) is { } byReference)
+        {
+            return Fail("PXECS012", $"The constructor of {systemName} takes {byReference.Name} by reference, but its arguments are created for the call.", invocation);
         }
 
         ImmutableArray<string> arguments = [.. constructors[0].Parameters.Select(CreateArgument)];
@@ -123,6 +131,8 @@ public class SystemGenerator : IIncrementalGenerator
         INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter) || (named.ContainingType is not null && ContainsTypeParameter(named.ContainingType)),
         _ => false
     };
+
+    private static bool IsInFileLocalType(INamedTypeSymbol type) => type.IsFileLocal || (type.ContainingType is not null && IsInFileLocalType(type.ContainingType));
 
     private static SystemExtraction Fail(string id, string message, InvocationExpressionSyntax invocation) => new SystemExtraction(null, GeneratorSupport.CreateDiagnostic(id, message, invocation.GetLocation()));
 

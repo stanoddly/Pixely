@@ -50,7 +50,7 @@ public class QueryGenerator : IIncrementalGenerator
         TypeDeclaration? declaration = GeneratorSupport.GetPartialDeclaration(type, syntax, ".Query.g.cs", cancellationToken);
         if (!type.IsRefLikeType || declaration is null)
         {
-            return Fail("PXECS001", $"The query {type.Name} must be a non-generic ref partial struct, and every type that contains it must be partial and non-generic.", typeLocation);
+            return Fail("PXECS001", $"The query {type.Name} must be a non-generic, non-file-local ref partial struct, and every type that contains it must be partial, non-generic and not file-local.", typeLocation);
         }
 
         List<QueryField> fields = [];
@@ -71,7 +71,7 @@ public class QueryGenerator : IIncrementalGenerator
             bool isEntity = element.ToDisplayString() == GeneratorSupport.EntityName;
             if (isEntity && span == ReadOnlySpanName)
             {
-                fields.Add(new QueryField(field.Name, null));
+                fields.Add(new QueryField(GeneratorSupport.Escape(field.Name), null));
             }
             else if (!isEntity && element.IsValueType && element is not ITypeParameterSymbol && (span == SpanName || span == ReadOnlySpanName))
             {
@@ -81,7 +81,7 @@ public class QueryGenerator : IIncrementalGenerator
                     return Fail("PXECS003", $"The query {type.Name} reads {element.Name} through more than one field.", field.Locations[0]);
                 }
 
-                fields.Add(new QueryField(field.Name, component));
+                fields.Add(new QueryField(GeneratorSupport.Escape(field.Name), component));
             }
             else
             {
@@ -139,11 +139,11 @@ public class QueryGenerator : IIncrementalGenerator
         string queryInterface = $"global::Pixely.Ecs.IQuery<{name}>";
         return GeneratorSupport.Generate(query.Type, queryInterface, (sb, indent) =>
         {
-            sb.AppendLine($"{indent}private {name}(global::Pixely.Ecs.Archetype archetype)");
+            sb.AppendLine($"{indent}private {name}(global::Pixely.Ecs.ArchetypeChunk chunk)");
             sb.AppendLine($"{indent}{{");
             foreach (QueryField field in query.Fields)
             {
-                string value = field.ComponentType is null ? "archetype.Entities" : $"archetype.GetSpan<{field.ComponentType}>()";
+                string value = field.ComponentType is null ? "chunk.Entities" : $"chunk.GetSpan<{field.ComponentType}>()";
                 sb.AppendLine($"{indent}    {field.Name} = {value};");
             }
 
@@ -173,7 +173,7 @@ public class QueryGenerator : IIncrementalGenerator
 
             sb.AppendLine($"{indent}}}");
             sb.AppendLine();
-            sb.AppendLine($"{indent}static {name} {queryInterface}.Create(global::Pixely.Ecs.Archetype archetype) => new {name}(archetype);");
+            sb.AppendLine($"{indent}static {name} {queryInterface}.Create(global::Pixely.Ecs.ArchetypeChunk chunk) => new {name}(chunk);");
         });
     }
 }
