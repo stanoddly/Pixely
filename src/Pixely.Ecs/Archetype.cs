@@ -64,6 +64,17 @@ public sealed class Archetype
 
     internal int AddRow(Entity entity) => _entities.Add(entity);
 
+    // Appends the entity with a default value in every column, for the caller to fill.
+    internal int AddRowWithDefaults(Entity entity)
+    {
+        foreach (Column column in _columns)
+        {
+            column.AddDefault();
+        }
+
+        return _entities.Add(entity);
+    }
+
     // Appends the row to the target with the components both archetypes have and swap-removes it here.
     // A column the target lacks drops its value, and a column only the target has is left for the caller to append.
     internal int MoveRow(int row, Archetype target)

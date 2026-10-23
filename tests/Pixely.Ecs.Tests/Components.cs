@@ -51,3 +51,22 @@ public ref struct EverythingQuery : IQuery<EverythingQuery>
 
     public static EverythingQuery Create(Archetype archetype) => new EverythingQuery();
 }
+
+public struct Dead;
+
+[Query]
+[With<Dead>]
+public ref partial struct Corpses
+{
+    public ReadOnlySpan<Entity> Entities;
+}
+
+[Blueprint]
+public partial struct MovingBlueprint
+{
+    public Position Position;
+    public Velocity Velocity;
+}
+
+[Blueprint]
+public readonly partial record struct NamedBlueprint(Name Name, Position Position);

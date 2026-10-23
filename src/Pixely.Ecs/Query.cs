@@ -16,15 +16,17 @@ internal static class QueryId<TQuery> where TQuery : allows ref struct
 
 internal sealed class QueryState
 {
-    private readonly ComponentSet _required;
-    private readonly ComponentSet _excluded;
     private int _checkedArchetypes;
 
     public QueryState(ComponentSet required, ComponentSet excluded)
     {
-        _required = required;
-        _excluded = excluded;
+        Required = required;
+        Excluded = excluded;
     }
+
+    public ComponentSet Required { get; }
+
+    public ComponentSet Excluded { get; }
 
     public FastList<Archetype> Matches { get; } = new FastList<Archetype>(4);
 
@@ -34,12 +36,25 @@ internal sealed class QueryState
         for (; _checkedArchetypes < archetypes.Length; _checkedArchetypes++)
         {
             Archetype archetype = archetypes[_checkedArchetypes];
-            if (archetype.Components.ContainsAll(_required) && !archetype.Components.ContainsAny(_excluded))
+            if (archetype.Components.ContainsAll(Required) && !archetype.Components.ContainsAny(Excluded))
             {
                 Matches.Add(archetype);
             }
         }
     }
+}
+
+// A query a system declares in its constructor. Enumerate it with foreach, as World.Query.
+public sealed class Query<TQuery> where TQuery : IQuery<TQuery>, allows ref struct
+{
+    private readonly World _world;
+
+    internal Query(World world)
+    {
+        _world = world;
+    }
+
+    public QueryEnumerator<TQuery> GetEnumerator() => _world.Query<TQuery>().GetEnumerator();
 }
 
 public readonly struct QueryEnumerable<TQuery> where TQuery : IQuery<TQuery>, allows ref struct

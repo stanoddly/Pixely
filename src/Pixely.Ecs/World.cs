@@ -9,6 +9,9 @@ public sealed class World
         public int Version;
         public Archetype? Archetype;
         public int Row;
+
+        // Taken by a Spawner, without an archetype until the sync point spawns it.
+        public bool IsReserved;
     }
 
     private readonly FastList<EntityRecord> _records = new FastList<EntityRecord>();
@@ -16,6 +19,7 @@ public sealed class World
     private readonly Dictionary<ComponentSet, Archetype> _archetypesBySet = new Dictionary<ComponentSet, Archetype>();
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
     private readonly FastList<QueryState?> _queries = new FastList<QueryState?>(4);
+    private readonly FastList<BlueprintState?> _blueprints = new FastList<BlueprintState?>(4);
     private readonly Archetype _emptyArchetype;
     private int _activeQueries;
 
@@ -27,17 +31,7 @@ public sealed class World
     // Allowed while a query runs: a new entity is in the empty archetype, and no query matches it because each requires a component.
     public Entity Create()
     {
-        int index;
-        if (_freeIndices.Length > 0)
-        {
-            index = _freeIndices[_freeIndices.LastIndex];
-            _freeIndices.RemoveLast();
-        }
-        else
-        {
-            index = _records.Add(new EntityRecord { Version = 1 });
-        }
-
+        int index = TakeIndex();
         ref EntityRecord record = ref _records[index];
         Entity entity = new Entity(index, record.Version);
         record.Archetype = _emptyArchetype;
@@ -56,8 +50,7 @@ public sealed class World
         FixMovedRow(archetype, row);
 
         record.Archetype = null;
-        record.Version = record.Version == int.MaxValue ? 1 : record.Version + 1;
-        _freeIndices.Add(entity.Index);
+        FreeIndex(ref record, entity.Index);
     }
 
     public bool IsAlive(Entity entity)
@@ -139,6 +132,13 @@ public sealed class World
 
     public QueryEnumerable<TQuery> Query<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
     {
+        QueryState state = GetQueryState<TQuery>();
+        state.Update(_archetypes);
+        return new QueryEnumerable<TQuery>(this, state);
+    }
+
+    internal QueryState GetQueryState<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
+    {
         int id = QueryId<TQuery>.Value;
         if (id >= _queries.Length)
         {
@@ -159,8 +159,76 @@ public sealed class World
             state = new QueryState(required, description.Excluded);
         }
 
-        state.Update(_archetypes);
-        return new QueryEnumerable<TQuery>(this, state);
+        return state;
+    }
+
+    // Allowed while a query runs, because the entity gets no archetype until Spawn.
+    internal Entity Reserve()
+    {
+        int index = TakeIndex();
+        ref EntityRecord record = ref _records[index];
+        record.IsReserved = true;
+        return new Entity(index, record.Version);
+    }
+
+    internal void Spawn<TBlueprint>(Entity entity, in TBlueprint blueprint) where TBlueprint : struct, IBlueprint<TBlueprint>
+    {
+        ThrowIfQueryRuns();
+        ref EntityRecord record = ref GetReservedRecord(entity);
+        BlueprintState state = GetBlueprintState<TBlueprint>();
+        record.IsReserved = false;
+        record.Archetype = state.Archetype;
+        record.Row = state.Archetype.AddRowWithDefaults(entity);
+        TBlueprint.Write(blueprint, new BlueprintRow(state.Archetype, state.Columns, record.Row));
+    }
+
+    internal void ReleaseReservation(Entity entity)
+    {
+        ref EntityRecord record = ref GetReservedRecord(entity);
+        record.IsReserved = false;
+        FreeIndex(ref record, entity.Index);
+    }
+
+    internal BlueprintState GetBlueprintState<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
+    {
+        int id = BlueprintId<TBlueprint>.Value;
+        if (id >= _blueprints.Length)
+        {
+            _blueprints.Resize(id + 1);
+        }
+
+        ref BlueprintState? state = ref _blueprints[id];
+        if (state is null)
+        {
+            BlueprintDescription description = new BlueprintDescription();
+            TBlueprint.Describe(description);
+            ComponentSet components = ComponentSet.From(description.Ids);
+            if (components.Ids.Length != description.Ids.Count)
+            {
+                throw new InvalidOperationException($"The blueprint {typeof(TBlueprint).Name} describes a component more than once.");
+            }
+
+            if (!_archetypesBySet.TryGetValue(components, out Archetype? archetype))
+            {
+                Column[] columns = new Column[description.Ids.Count];
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    columns[components.IndexOf(description.Ids[i])] = description.Columns[i];
+                }
+
+                archetype = CreateArchetype(components, columns);
+            }
+
+            int[] fieldColumns = new int[description.Ids.Count];
+            for (int i = 0; i < fieldColumns.Length; i++)
+            {
+                fieldColumns[i] = components.IndexOf(description.Ids[i]);
+            }
+
+            state = new BlueprintState(archetype, fieldColumns);
+        }
+
+        return state;
     }
 
     internal void BeginQuery() => _activeQueries++;
@@ -171,7 +239,7 @@ public sealed class World
     {
         if (_activeQueries > 0)
         {
-            throw new InvalidOperationException("Structural changes are not allowed while a query runs. Record them in a EntityCommandBuffer and apply it after the query.");
+            throw new InvalidOperationException("Structural changes are not allowed while a query runs. A system makes them through its writers, which apply them at a sync point.");
         }
     }
 
@@ -183,6 +251,35 @@ public sealed class World
         }
 
         return ref _records[entity.Index];
+    }
+
+    private ref EntityRecord GetReservedRecord(Entity entity)
+    {
+        if ((uint)entity.Index >= (uint)_records.Length || _records[entity.Index].Version != entity.Version || !_records[entity.Index].IsReserved)
+        {
+            throw new ArgumentException($"{entity} is not reserved.", nameof(entity));
+        }
+
+        return ref _records[entity.Index];
+    }
+
+    private int TakeIndex()
+    {
+        if (_freeIndices.Length == 0)
+        {
+            return _records.Add(new EntityRecord { Version = 1 });
+        }
+
+        int index = _freeIndices[_freeIndices.LastIndex];
+        _freeIndices.RemoveLast();
+        return index;
+    }
+
+    // A new version keeps the handles of the freed entity dead after the index is reused.
+    private void FreeIndex(ref EntityRecord record, int index)
+    {
+        record.Version = record.Version == int.MaxValue ? 1 : record.Version + 1;
+        _freeIndices.Add(index);
     }
 
     // A swap-remove moves the archetype's last entity into the removed row.
