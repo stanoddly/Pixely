@@ -1,10 +1,17 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Pixely.Collections;
 
 namespace Pixely.Ecs;
 
 public sealed class World
 {
+    // What Get returns for a tag, which has no data to store.
+    private static class TagValue<T> where T : struct
+    {
+        public static T Value;
+    }
+
     private struct EntityRecord
     {
         public int Version;
@@ -69,9 +76,9 @@ public sealed class World
         return record.Version == entity.Version && record.Archetype is not null;
     }
 
-    public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) >= 0;
+    public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
-    // The reference stays valid until the next structural change: Create, Destroy, Add or Remove.
+    // The reference stays valid until the next structural change: Create, Destroy, Add or Remove. For a tag it is one value that all entities share.
     public ref T Get<T>(Entity entity) where T : struct
     {
         ref EntityRecord record = ref GetRecord(entity);
@@ -79,7 +86,12 @@ public sealed class World
         int index = archetype.GetColumnIndex(ComponentType<T>.Id);
         if (index < 0)
         {
-            throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
+            if (index == Archetype.Tag)
+            {
+                return ref TagValue<T>.Value;
+            }
+
+            ThrowMissing<T>(entity);
         }
 
         return ref archetype.GetColumnUnchecked<T>(index).GetUnchecked(record.Row);
@@ -91,9 +103,9 @@ public sealed class World
         ref EntityRecord record = ref GetRecord(entity);
         Archetype source = record.Archetype!;
         int id = ComponentType<T>.Id;
-        if (source.GetColumnIndex(id) >= 0)
+        if (source.GetColumnIndex(id) != Archetype.Absent)
         {
-            throw new InvalidOperationException($"{entity} already has a {ComponentType<T>.Name} component.");
+            ThrowPresent<T>(entity);
         }
 
         ArchetypeEdge? edge = source.GetAddEdge(id);
@@ -112,7 +124,10 @@ public sealed class World
         int row = record.Row;
         record.Row = source.MoveRow(row, edge);
         record.Archetype = edge.Target;
-        edge.Target.GetColumnUnchecked<T>(edge.AddedColumn).GetUnchecked(record.Row) = component;
+        if (edge.AddedColumn >= 0)
+        {
+            edge.Target.GetColumnUnchecked<T>(edge.AddedColumn).GetUnchecked(record.Row) = component;
+        }
         FixMovedRow(source, row);
     }
 
@@ -122,9 +137,9 @@ public sealed class World
         ref EntityRecord record = ref GetRecord(entity);
         Archetype source = record.Archetype!;
         int id = ComponentType<T>.Id;
-        if (source.GetColumnIndex(id) < 0)
+        if (source.GetColumnIndex(id) == Archetype.Absent)
         {
-            throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
+            ThrowMissing<T>(entity);
         }
 
         ArchetypeEdge? edge = source.GetRemoveEdge(id);
@@ -268,7 +283,7 @@ public sealed class World
             int[] fieldColumns = new int[description.Ids.Count];
             for (int i = 0; i < fieldColumns.Length; i++)
             {
-                fieldColumns[i] = components.IndexOf(description.Ids[i]);
+                fieldColumns[i] = archetype.GetColumnIndex(description.Ids[i]);
             }
 
             state = new BlueprintState(archetype, fieldColumns);
@@ -295,17 +310,29 @@ public sealed class World
 
     private ref EntityRecord GetRecord(Entity entity)
     {
-        if ((uint)entity.Index < (uint)_records.Count)
+        if ((uint)entity.Index >= (uint)_records.Count)
         {
-            ref EntityRecord record = ref _records[entity.Index];
-            if (record.Version == entity.Version && record.Archetype is not null)
-            {
-                return ref record;
-            }
+            ThrowNotAlive(entity);
         }
 
-        throw new ArgumentException($"{entity} is not alive.", nameof(entity));
+        ref EntityRecord record = ref _records[entity.Index];
+        if (record.Version != entity.Version || record.Archetype is null)
+        {
+            ThrowNotAlive(entity);
+        }
+
+        return ref record;
     }
+
+    // The throws live in their own methods, which the JIT never inlines, so a caller that inlines Get does not set up the messages.
+    [DoesNotReturn]
+    private static void ThrowNotAlive(Entity entity) => throw new ArgumentException($"{entity} is not alive.", nameof(entity));
+
+    [DoesNotReturn]
+    private static void ThrowMissing<T>(Entity entity) where T : struct => throw new InvalidOperationException($"{entity} has no {ComponentType<T>.Name} component.");
+
+    [DoesNotReturn]
+    private static void ThrowPresent<T>(Entity entity) where T : struct => throw new InvalidOperationException($"{entity} already has a {ComponentType<T>.Name} component.");
 
     private int TakeIndex()
     {

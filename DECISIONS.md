@@ -16,7 +16,9 @@ Design decisions with the constraints that decided them and their known costs, n
 
 Archetypes store rows in chunks of a power of two of rows, at least 64, so a full chunk is a whole number of SIMD vectors and an archetype grows without copying or reaching the large object heap.
 
-Cost: an archetype with one entity still has a whole chunk of up to 16 KB. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It is not packaged, so games reference the projects from source.
+Tags implement `ITag` and get no column. Spotting empty structs instead needs reflection on each component type, which Native AOT may strip unless every generic component parameter is annotated, and a wrong answer would drop component data silently. `default(T) is ITag` needs no reflection, and PXECS014 rejects a tag that holds data.
+
+Cost: an archetype with one entity still has a whole chunk of up to 16 KB. A tag must opt in with `ITag`; an empty struct without it takes one byte per row. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It is not packaged, so games reference the projects from source.
 
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 

@@ -87,6 +87,8 @@ public class GeneratorTests
     [TestCase("[Query] ref partial struct Q(int offset) { public Span<Position> P; public int Offset => offset; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<Position> P { get; set; } }", "PXECS002")]
     [TestCase("ref struct RefComponent; [Query] ref partial struct Q { public Span<RefComponent> R; }", "PXECS002")]
+    [TestCase("public struct T : ITag; [Query] ref partial struct Q { public Span<T> Tags; }", "PXECS002")]
+    [TestCase("public struct T : ITag; [Query] ref partial struct Q { public ReadOnlySpan<T> Tags; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<Position> A; public ReadOnlySpan<Position> B; }", "PXECS003")]
     [TestCase("[Query] [With<Position>] ref partial struct Q { }", "PXECS004")]
     [TestCase("[Query] ref partial struct Q { public ReadOnlySpan<Entity> E; }", "PXECS004")]
@@ -248,6 +250,55 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain("CS0452"));
+    }
+
+    [TestCase("public struct T : ITag { public int X; }")]
+    [TestCase("public struct T : ITag { public int X { get; set; } }")]
+    [TestCase("public record struct T(int X) : ITag;")]
+    [TestCase("public struct T(int x) : ITag { public int X => x; }")]
+    [TestCase("public partial struct T : ITag; public partial struct T : ITag { public int X; }")]
+    public void TagWithDataReportsDiagnostic(string declaration)
+    {
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS014" }));
+    }
+
+    // A tag has no column, so the generated Write leaves it out and writes only the other members.
+    [Test]
+    public void TagsCompileAndBlueprintsDoNotWriteThem()
+    {
+        string source = Components + """
+            public struct Marked : ITag;
+
+            public readonly record struct Flagged : ITag
+            {
+                public static int Count => 0;
+            }
+
+            [Blueprint]
+            public partial struct B
+            {
+                public Marked Marked;
+                public Position Position;
+            }
+
+            [Blueprint]
+            public partial struct OnlyTags
+            {
+                public Marked Marked;
+                public Flagged Flagged;
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string blueprint = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("B.Blueprint.g.cs")).ToString();
+        Assert.That(blueprint, Does.Contain("column1[i] = blueprints[i].Position;").And.Not.Contain("column0"));
+        string onlyTags = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("OnlyTags.Blueprint.g.cs")).ToString();
+        Assert.That(onlyTags, Does.Not.Contain("for ("));
     }
 
     [Test]
@@ -469,7 +520,8 @@ public class GeneratorTests
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithNullableContextOptions(NullableContextOptions.Enable));
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new QueryGenerator().AsSourceGenerator(), new BlueprintGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new QueryGenerator().AsSourceGenerator(), new BlueprintGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation output, out ImmutableArray<Diagnostic> diagnostics);
         return (diagnostics, output);
     }

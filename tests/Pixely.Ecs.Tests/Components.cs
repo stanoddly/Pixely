@@ -6,7 +6,7 @@ public record struct Velocity(float X, float Y);
 
 public record struct Name(string Value);
 
-public struct Frozen;
+public struct Frozen : ITag;
 
 public struct Player;
 
@@ -74,7 +74,7 @@ public ref struct VelocitiesOfPositions : IQuery<VelocitiesOfPositions>
     public static VelocitiesOfPositions Create(ArchetypeChunk chunk) => new VelocitiesOfPositions { Velocities = chunk.GetSpan<Velocity>() };
 }
 
-public struct Dead;
+public struct Dead : ITag;
 
 [Query]
 [With<Dead>]
@@ -92,3 +92,41 @@ public partial struct MovingBlueprint
 
 [Blueprint]
 public readonly partial record struct NamedBlueprint(Name Name, Position Position);
+
+[Blueprint]
+public partial struct FrozenBlueprint
+{
+    public Position Position;
+    public Frozen Frozen;
+}
+
+[Blueprint]
+public partial struct MarkerBlueprint
+{
+    public Frozen Frozen;
+}
+
+[Query]
+[With<Frozen>]
+public ref partial struct FrozenPositions
+{
+    public ReadOnlySpan<Entity> Entities;
+    public ReadOnlySpan<Position> Positions;
+}
+
+[Query]
+[With<Player>]
+public ref partial struct PlayerPositions
+{
+    public ReadOnlySpan<Position> Positions;
+}
+
+// Wrong on purpose: it reads a tag, which has no data.
+public ref struct FrozenSpans : IQuery<FrozenSpans>
+{
+    public Span<Frozen> Frozen;
+
+    public static void Describe(QueryDescription description) => description.With<Frozen>();
+
+    public static FrozenSpans Create(ArchetypeChunk chunk) => new FrozenSpans { Frozen = chunk.GetSpan<Frozen>() };
+}

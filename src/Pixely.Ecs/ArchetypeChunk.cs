@@ -17,14 +17,17 @@ public readonly struct ArchetypeChunk
 
     public ReadOnlySpan<Entity> Entities => _archetype.GetChunkEntities(_index);
 
-    public bool Has<T>() where T : struct => _archetype.GetColumnIndex(ComponentType<T>.Id) >= 0;
+    public bool Has<T>() where T : struct => _archetype.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
+    // Throws for a tag, which has no data to read.
     public Span<T> GetSpan<T>() where T : struct
     {
         int column = _archetype.GetColumnIndex(ComponentType<T>.Id);
         if (column < 0)
         {
-            throw new InvalidOperationException($"The archetype has no {ComponentType<T>.Name} component.");
+            throw new InvalidOperationException(column == Archetype.Tag
+                ? $"{ComponentType<T>.Name} is a tag, which has no data to read."
+                : $"The archetype has no {ComponentType<T>.Name} component.");
         }
 
         return _archetype.GetColumnUnchecked<T>(column).GetChunk(_index, Count);

@@ -17,12 +17,12 @@ It is not in the Pixely package yet. Reference `src/Pixely.Ecs` and, as an analy
 
 ## World and entities
 
-`World` holds the entities and their components. A component is any struct.
+`World` holds the entities and their components. A component is any struct. A component that implements `ITag` is a tag: it marks an entity and has no data.
 
 ```csharp
 public record struct Position(Vector2 Value);
 public record struct Velocity(Vector2 Value);
-public struct Frozen;
+public struct Frozen : ITag;
 
 World world = new World();
 Entity entity = world.Create();
@@ -37,6 +37,7 @@ world.Destroy(entity);
 
 - `Get<T>` returns a reference. It stays valid until the next structural change: `Create`, `Destroy`, `Add` or `Remove`.
 - `Add` throws when the entity already has the component. `Remove` and `Get` throw when it does not.
+- `Get<T>` of a tag returns one value that all entities share, because a tag stores nothing.
 - Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. `default(Entity)` is never alive.
 
 Systems do not use these calls. They change the world through writers, described below.
@@ -45,12 +46,13 @@ Systems do not use these calls. They change the world through writers, described
 
 Entities with exactly the same component types share an archetype. Adding or removing a component moves the entity to another archetype. Archetypes are created on first use and never removed.
 
-An archetype stores its entities in chunks. A chunk holds one array per component type, so a query reads each component of a chunk as one contiguous span.
+An archetype stores its entities in chunks. A chunk holds one array per component type that is not a tag, so a query reads each component of a chunk as one contiguous span.
 
 - A chunk holds a power of two of rows: the most whose entity and components fit 16 KB, and at least 64. A full chunk of any component is then a whole number of SIMD vectors up to 512 bits, so a vectorized loop needs a scalar tail only in an archetype's last chunk, which can hold fewer rows.
 - An archetype grows by adding chunks, so it never copies its rows and its arrays stay off the large object heap.
 - Removing an entity moves the archetype's last entity into its place, possibly from another chunk.
 - Chunks are kept for reuse when entities leave, and an archetype with one entity still has a whole chunk.
+- A tag has no array, so adding or removing one moves the entity's other components and nothing else. An empty struct without `ITag` still takes one byte per row.
 
 ## Queries
 
@@ -77,7 +79,9 @@ A query yields one `Movement` per chunk of each matching archetype. All fields h
 
 While a query runs, `Destroy`, `Add` and `Remove` on the world throw `InvalidOperationException`, because they would move rows under the spans. `Create` is allowed, because a new entity has no components and every query requires one. The query ends when `foreach` ends, including on `break` or an exception.
 
-A query can also implement `IQuery<TSelf>` by hand, creating itself from an `ArchetypeChunk`. It must require a component, or the query throws.
+A query filters on a tag with `[With<T>]` or `[Without<T>]`; a span of a tag is an error, because there is no data to read.
+
+A query can also implement `IQuery<TSelf>` by hand, creating itself from an `ArchetypeChunk`. It must require a component, or the query throws. `ArchetypeChunk.GetSpan<T>` throws for a tag.
 
 ## Systems
 
@@ -169,6 +173,8 @@ internal sealed class WeaponSystem(Query<Shooters> shooters, Spawner<Bullet> bul
 }
 ```
 
+A blueprint can hold a tag. The spawned entity gets the tag, and the generated code writes no value for it.
+
 A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
 
 ## Sync points
@@ -213,7 +219,7 @@ The generator fails the build on these:
 | Id | Rule |
 |----|------|
 | PXECS001 | A query is a non-generic `ref partial struct` that is not `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
-| PXECS002 | Each instance field of a query is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct`, or `ReadOnlySpan<Entity>`. A query has no auto-property and captures no primary constructor parameter. |
+| PXECS002 | Each instance field of a query is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct` or a tag, or `ReadOnlySpan<Entity>`. A query has no auto-property and captures no primary constructor parameter. |
 | PXECS003 | No component appears in two fields of a query. |
 | PXECS004 | A query has at least one field and requires at least one component. |
 | PXECS005 | No component is both required and excluded by a query. |
@@ -225,6 +231,7 @@ The generator fails the build on these:
 | PXECS011 | The system has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
 | PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
 | PXECS013 | A query declares no member named `Count`, because the generator adds it. |
+| PXECS014 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
 
 ## Not supported yet
 

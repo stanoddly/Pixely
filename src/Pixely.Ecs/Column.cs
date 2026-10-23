@@ -9,6 +9,9 @@ internal abstract class ColumnType
 {
     public abstract int Size { get; }
 
+    // A tag has no data, so an archetype keeps no column for it.
+    public abstract bool IsTag { get; }
+
     public abstract Column Create(int chunkShift);
 }
 
@@ -18,13 +21,13 @@ internal sealed class ColumnType<T> : ColumnType where T : struct
 
     public override int Size => Unsafe.SizeOf<T>();
 
+    public override bool IsTag => default(T) is ITag;
+
     public override Column Create(int chunkShift) => new Column<T>(chunkShift);
 }
 
 internal abstract class Column
 {
-    public abstract ColumnType Type { get; }
-
     public abstract void AddChunk();
 
     // Copies the row to the destination row of a column of the same type, then moves the last row into its place.
@@ -49,8 +52,6 @@ internal sealed class Column<T> : Column where T : struct
     {
         _shift = chunkShift;
     }
-
-    public override ColumnType Type => ColumnType<T>.Instance;
 
     private int Mask => (1 << _shift) - 1;
 

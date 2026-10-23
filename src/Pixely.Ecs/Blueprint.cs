@@ -47,8 +47,17 @@ public readonly ref struct BlueprintColumns
         _count = count;
     }
 
-    // The rows of the spawned entities in the column of the field at this index, in the order of the blueprints.
-    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).GetRows(_firstRow, _count);
+    // The rows of the spawned entities in the column of the field at this index, in the order of the blueprints. Throws for a tag, which has no column.
+    public Span<T> Get<T>(int field) where T : struct
+    {
+        int column = _columns[field];
+        if (column < 0)
+        {
+            throw new InvalidOperationException($"The field {field} is the tag {ComponentType<T>.Name}, which has no column to write.");
+        }
+
+        return _archetype.GetColumn<T>(column).GetRows(_firstRow, _count);
+    }
 }
 
 internal sealed class BlueprintIds : StaticTypeIdMap<BlueprintIds>;

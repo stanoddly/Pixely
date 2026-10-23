@@ -88,6 +88,10 @@ public class QueryGenerator : IIncrementalGenerator
             {
                 fields.Add(new QueryField(GeneratorSupport.Escape(field.Name), null));
             }
+            else if (!isEntity && GeneratorSupport.IsTag(element))
+            {
+                return Fail("PXECS002", $"The field {field.Name} of the query {type.Name} reads {element.Name}, a tag, which has no data. Use [With<{element.Name}>] instead.", field.Locations[0]);
+            }
             else if (!isEntity && element.IsValueType && !element.IsRefLikeType && element is not ITypeParameterSymbol && (span == SpanName || span == ReadOnlySpanName))
             {
                 string component = element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

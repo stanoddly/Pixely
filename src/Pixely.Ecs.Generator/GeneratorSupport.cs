@@ -15,6 +15,9 @@ readonly record struct TypeDeclaration(string? Namespace, EquatableArray<string>
 static class GeneratorSupport
 {
     public const string EntityName = "Pixely.Ecs.Entity";
+    public const string TagName = "Pixely.Ecs.ITag";
+
+    public static bool IsTag(ITypeSymbol type) => type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == TagName);
 
     public static DiagnosticInfo CreateDiagnostic(string id, string message, Location location)
     {
