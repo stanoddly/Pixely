@@ -56,10 +56,12 @@ public class BlueprintGenerator : IIncrementalGenerator
                 continue;
             }
 
+            // A captured primary constructor parameter is a hidden field without a member, so Write could not copy it.
             ISymbol? declared = field.IsImplicitlyDeclared ? field.AssociatedSymbol : field;
             if (declared is null)
             {
-                continue;
+                return Fail("PXECS007", $"The blueprint {type.Name} captures a primary constructor parameter, which would not be spawned. Assign the parameter to a field or property instead.",
+                    syntax.ParameterList?.GetLocation() ?? typeLocation);
             }
 
             ITypeSymbol component = field.Type;

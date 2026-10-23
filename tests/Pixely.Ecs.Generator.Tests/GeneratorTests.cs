@@ -168,6 +168,8 @@ public class GeneratorTests
     [TestCase("file partial class Outer { [Blueprint] partial struct B { public Position P; } }", "PXECS006")]
     [TestCase("[Blueprint] partial struct B { public string S; }", "PXECS007")]
     [TestCase("[Blueprint] partial struct B { public Entity E; }", "PXECS007")]
+    [TestCase("[Blueprint] partial struct B(Position p) { public Position Read => p; }", "PXECS007")]
+    [TestCase("[Blueprint] partial struct B(Position p) { public Velocity V; public Position Read => p; }", "PXECS007")]
     [TestCase("[Blueprint] partial struct B { public Position A; public Position B2; }", "PXECS008")]
     [TestCase("[Blueprint] partial struct B { }", "PXECS009")]
     public void InvalidBlueprintReportsDiagnostic(string declaration, string expectedId)
@@ -283,6 +285,26 @@ public class GeneratorTests
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
+    }
+
+    // A parameter that only initializes a member is not captured, so the member is the component.
+    [Test]
+    public void BlueprintWithAPrimaryConstructorInitializingItsMembersCompiles()
+    {
+        string source = Components + """
+            [Blueprint]
+            public partial struct B(Position position, float speed)
+            {
+                public Position Position = position;
+                public Velocity Velocity { get; } = new Velocity { X = speed };
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("column1[i] = blueprints[i].Velocity;")), Is.True);
     }
 
     [Test]

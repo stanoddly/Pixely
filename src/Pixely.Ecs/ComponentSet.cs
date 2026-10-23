@@ -56,8 +56,6 @@ internal readonly struct ComponentSet : IEquatable<ComponentSet>
 
     public bool Equals(ComponentSet other) => _ids.AsSpan().SequenceEqual(other._ids);
 
-    public override bool Equals(object? obj) => obj is ComponentSet other && Equals(other);
-
     public override int GetHashCode()
     {
         HashCode hash = new HashCode();
