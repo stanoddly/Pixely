@@ -50,6 +50,28 @@ public class SystemSchedulerTests
         public void Update() => update();
     }
 
+    // Hand-written, to throw from Write after writing the blueprints before the one that fails.
+    private struct FailingBlueprint : IBlueprint<FailingBlueprint>
+    {
+        public Position Position;
+        public bool Fails;
+
+        public static void Describe(BlueprintDescription description) => description.Add<Position>();
+
+        public static void Write(ReadOnlySpan<FailingBlueprint> blueprints, BlueprintColumns columns)
+        {
+            Span<Position> positions = columns.Get<Position>(0);
+            for (int i = 0; i < blueprints.Length; i++)
+            {
+                positions[i] = blueprints[i].Position;
+                if (blueprints[i].Fails)
+                {
+                    throw new InvalidOperationException("The blueprint failed.");
+                }
+            }
+        }
+    }
+
     [Test]
     public void ChangesApplyAtTheEndOfTheUpdate()
     {
@@ -274,6 +296,232 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void SystemRemovedDuringUpdateStillRunsInThatUpdate()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+        int updates = 0;
+        ActionSystem removed = null!;
+        scheduler.Add(_ => new ActionSystem(() => scheduler.Remove(removed)));
+        removed = scheduler.Add(_ => new ActionSystem(() => updates++));
+
+        scheduler.Update();
+        scheduler.Update();
+
+        Assert.That(updates, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SystemAddedDuringUpdateFirstRunsInTheNextUpdate()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+        int addedUpdates = 0;
+        bool added = false;
+        scheduler.Add(_ => new ActionSystem(() =>
+        {
+            if (!added)
+            {
+                added = true;
+                scheduler.Add(_ => new ActionSystem(() => addedUpdates++));
+            }
+        }));
+
+        scheduler.Update();
+        Assert.That(addedUpdates, Is.Zero);
+
+        scheduler.Update();
+        Assert.That(addedUpdates, Is.EqualTo(1));
+    }
+
+    // 1500 rows of Position span two chunks, so the second run fails after the first one was written.
+    [TestCase(1)]
+    [TestCase(1500)]
+    public void FailedBlueprintWriteDropsItsRowsAndReleasesItsEntities(int count)
+    {
+        World world = new World();
+        Entity existing = world.Create();
+        world.Add(existing, new Position(7, 7));
+        SystemScheduler scheduler = new SystemScheduler(world);
+        List<Entity> spawned = [];
+        bool fail = true;
+        Spawner<FailingBlueprint> spawner = null!;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<FailingBlueprint>();
+            return new ActionSystem(() =>
+            {
+                spawned.Clear();
+                for (int i = 0; i < count; i++)
+                {
+                    spawned.Add(spawner.Spawn(new FailingBlueprint { Position = new Position(i, 0), Fails = fail && i == count - 1 }));
+                }
+            });
+        });
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+
+        Assert.That(spawned.Where(world.IsAlive), Is.Empty);
+        Assert.That(CountPositions(world), Is.EqualTo(1));
+        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(7, 7)));
+
+        fail = false;
+        scheduler.Update();
+
+        Assert.That(spawned.All(world.IsAlive), Is.True);
+        Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
+        Assert.That(CountPositions(world), Is.EqualTo(count + 1));
+    }
+
+    [Test]
+    public void SpawnerForcesASyncPointBeforeALaterQueryOfItsComponents()
+    {
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        Spawner<MovingBlueprint> spawner = null!;
+        int count = -1;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<MovingBlueprint>();
+            return new ActionSystem(() => spawner.Spawn(new MovingBlueprint()));
+        });
+        scheduler.Add(builder =>
+        {
+            Query<Movement> movement = builder.Query<Movement>();
+            return new ActionSystem(() =>
+            {
+                count = 0;
+                foreach (Movement chunk in movement)
+                {
+                    count += chunk.Count;
+                }
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AddingAComponentALaterQueryExcludesForcesASyncPointBeforeIt()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Position());
+        SystemScheduler scheduler = new SystemScheduler(world);
+        ComponentAdder<Frozen> frozen = null!;
+        int visible = -1;
+        scheduler.Add(builder =>
+        {
+            frozen = builder.ComponentAdder<Frozen>();
+            return new ActionSystem(() => frozen.Add(entity, new Frozen()));
+        });
+        scheduler.Add(builder =>
+        {
+            Query<UnfrozenPositions> positions = builder.Query<UnfrozenPositions>();
+            return new ActionSystem(() =>
+            {
+                visible = 0;
+                foreach (UnfrozenPositions chunk in positions)
+                {
+                    visible += chunk.Count;
+                }
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(visible, Is.Zero);
+    }
+
+    [Test]
+    public void SpanWritesAreVisibleToLaterSystemsWithoutASyncPoint()
+    {
+        World world = new World();
+        CreateMoving(world);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        Position seen = default;
+        scheduler.Add(builder =>
+        {
+            Query<Movement> movement = builder.Query<Movement>();
+            return new ActionSystem(() =>
+            {
+                foreach (Movement chunk in movement)
+                {
+                    chunk.Positions[0] = new Position(7, 8);
+                }
+            });
+        });
+        scheduler.Add(builder =>
+        {
+            Query<Movement> movement = builder.Query<Movement>();
+            return new ActionSystem(() =>
+            {
+                foreach (Movement chunk in movement)
+                {
+                    seen = chunk.Positions[0];
+                }
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(seen, Is.EqualTo(new Position(7, 8)));
+    }
+
+    [Test]
+    public void RemoverRemovesAPresentComponentAndSkipsAnAbsentOne()
+    {
+        World world = new World();
+        Entity present = world.Create();
+        world.Add(present, new Position());
+        Entity absent = world.Create();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        ComponentRemover<Position> remover = null!;
+        scheduler.Add(builder =>
+        {
+            remover = builder.ComponentRemover<Position>();
+            return new ActionSystem(() =>
+            {
+                remover.Remove(present);
+                remover.Remove(absent);
+            });
+        });
+
+        Assert.DoesNotThrow(scheduler.Update);
+        Assert.That(world.Has<Position>(present), Is.False);
+        Assert.That(world.Has<Position>(absent), Is.False);
+    }
+
+    [Test]
+    public void AddsAndRemovesOfOneComponentApplyInRecordingOrder()
+    {
+        World world = new World();
+        Entity removedLast = world.Create();
+        Entity addedLast = world.Create();
+        world.Add(addedLast, new Dead());
+        SystemScheduler scheduler = new SystemScheduler(world);
+        ComponentAdder<Dead> adder = null!;
+        ComponentRemover<Dead> remover = null!;
+        scheduler.Add(builder =>
+        {
+            adder = builder.ComponentAdder<Dead>();
+            remover = builder.ComponentRemover<Dead>();
+            return new ActionSystem(() =>
+            {
+                adder.Add(removedLast, new Dead());
+                remover.Remove(removedLast);
+                remover.Remove(addedLast);
+                adder.Add(addedLast, new Dead());
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(world.Has<Dead>(removedLast), Is.False);
+        Assert.That(world.Has<Dead>(addedLast), Is.True);
+    }
+
+    [Test]
     public void SystemsRunInTheOrderTheyWereAdded()
     {
         World world = new World();
@@ -300,6 +548,17 @@ public class SystemSchedulerTests
         });
 
         Assert.Throws<InvalidOperationException>(() => builder.ComponentAdder<Dead>());
+    }
+
+    private static int CountPositions(World world)
+    {
+        int count = 0;
+        foreach (UnfrozenPositions chunk in world.Query<UnfrozenPositions>())
+        {
+            count += chunk.Count;
+        }
+
+        return count;
     }
 
     private static Entity CreateMoving(World world)

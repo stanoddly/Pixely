@@ -5,7 +5,7 @@ public interface IQuery<TSelf> where TSelf : IQuery<TSelf>, allows ref struct
 {
     static abstract void Describe(QueryDescription description);
 
-    static abstract TSelf Create(Archetype archetype);
+    static abstract TSelf Create(ArchetypeChunk chunk);
 }
 
 [AttributeUsage(AttributeTargets.Struct)]

@@ -138,6 +138,69 @@ public class QueryTests
     }
 
     [Test]
+    public void QueryAllowsStructuralChangesAfterItsBodyThrows()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world, new Position(), new Velocity());
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            foreach (Movement _ in world.Query<Movement>())
+            {
+                throw new InvalidOperationException("The body failed.");
+            }
+        });
+
+        Assert.DoesNotThrow(() => world.Destroy(entity));
+    }
+
+    [Test]
+    public void DisposingCopiesOfAnEnumeratorKeepsTheNextQueryRunning()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world, new Position(), new Velocity());
+        QueryEnumerator<Movement> first = world.Query<Movement>().GetEnumerator();
+        QueryEnumerator<Movement> copy = first;
+        first.Dispose();
+        copy.Dispose();
+
+        QueryEnumerator<Movement> next = world.Query<Movement>().GetEnumerator();
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => world.Destroy(entity));
+        }
+        finally
+        {
+            next.Dispose();
+        }
+
+        Assert.DoesNotThrow(() => world.Destroy(entity));
+    }
+
+    [Test]
+    public void HandWrittenQueryReadsTheSpansAndComponentsOfEachChunk()
+    {
+        World world = new World();
+        Entity still = world.Create();
+        world.Add(still, new Position(1, 0));
+        Entity moving = CreateMoving(world, new Position(2, 0), new Velocity());
+        List<(Entity Entity, bool HasVelocity)> visited = [];
+
+        foreach (ManualPositions chunk in world.Query<ManualPositions>())
+        {
+            for (int i = 0; i < chunk.Positions.Length; i++)
+            {
+                chunk.Positions[i].X++;
+                visited.Add((chunk.Entities[i], chunk.HasVelocity));
+            }
+        }
+
+        Assert.That(visited, Is.EquivalentTo(new[] { (still, false), (moving, true) }));
+        Assert.That(world.Get<Position>(still).X, Is.EqualTo(2));
+        Assert.That(world.Get<Position>(moving).X, Is.EqualTo(3));
+    }
+
+    [Test]
     public void QueryRequiringNoComponentThrows()
     {
         World world = new World();

@@ -64,29 +64,41 @@ public readonly struct QueryEnumerable<TQuery> where TQuery : IQuery<TQuery>, al
 }
 
 // Holds the world's structural changes off from creation until Dispose, which foreach calls even on break or exception.
+// Yields one query per chunk of each matching archetype.
 public ref struct QueryEnumerator<TQuery> where TQuery : IQuery<TQuery>, allows ref struct
 {
     private readonly World _world;
     private readonly FastList<Archetype> _archetypes;
-    private int _index;
-    private bool _disposed;
+    private readonly long _query;
+    private int _archetypeIndex;
+    private Archetype? _archetype;
+    private int _chunk;
+    private int _chunkCount;
 
     internal QueryEnumerator(World world, FastList<Archetype> archetypes)
     {
         _world = world;
         _archetypes = archetypes;
-        _index = -1;
-        world.BeginQuery();
+        _archetypeIndex = -1;
+        _query = world.BeginQuery();
     }
 
-    public TQuery Current => TQuery.Create(_archetypes[_index]);
+    public TQuery Current => TQuery.Create(new ArchetypeChunk(_archetype!, _chunk));
 
     public bool MoveNext()
     {
-        while (++_index < _archetypes.Length)
+        if (++_chunk < _chunkCount)
         {
-            if (_archetypes[_index].Count > 0)
+            return true;
+        }
+
+        while (++_archetypeIndex < _archetypes.Length)
+        {
+            _archetype = _archetypes[_archetypeIndex];
+            _chunkCount = _archetype.ChunkCount;
+            if (_chunkCount > 0)
             {
+                _chunk = 0;
                 return true;
             }
         }
@@ -94,12 +106,5 @@ public ref struct QueryEnumerator<TQuery> where TQuery : IQuery<TQuery>, allows 
         return false;
     }
 
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            _disposed = true;
-            _world.EndQuery();
-        }
-    }
+    public void Dispose() => _world.EndQuery(_query);
 }

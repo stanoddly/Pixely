@@ -14,7 +14,9 @@ Design decisions with the constraints that decided them and their known costs, n
 - Sync points follow Flecs: one after the last system, and one before a system that names a component changed since the last sync point. Bevy inserts one between explicitly ordered systems, and with every system ordered by registration that would be a sync point after every system with a writer.
 - Structural changes on the world throw while a query runs, so spans never point at moved rows. `Create` stays allowed, because every query requires a component and a new entity has none.
 
-Cost: one archetype is one table per component without fixed-size chunks. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It is not packaged, so games reference the projects from source.
+Archetypes store rows in chunks of a power of two of rows, at least 64, so a full chunk is a whole number of SIMD vectors and an archetype grows without copying or reaching the large object heap.
+
+Cost: an archetype with one entity still has a whole chunk of up to 16 KB. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It is not packaged, so games reference the projects from source.
 
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 

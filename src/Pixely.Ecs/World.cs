@@ -23,7 +23,10 @@ public sealed class World
     private readonly FastList<QueryState?> _queries = new FastList<QueryState?>(4);
     private readonly FastList<BlueprintState?> _blueprints = new FastList<BlueprintState?>(4);
     private readonly Archetype _emptyArchetype;
-    private int _activeQueries;
+
+    // Each running query has an id, so ending a query twice, as copies of its enumerator do, ends it once.
+    private readonly HashSet<long> _activeQueries = [];
+    private long _lastQuery;
 
     public World()
     {
@@ -98,7 +101,7 @@ public sealed class World
             ComponentSet components = source.Components.With(id);
             if (!_archetypesBySet.TryGetValue(components, out target))
             {
-                target = CreateArchetype(components, source.CreateColumnsWith(new Column<T>(), components));
+                target = CreateArchetype(components, source.GetColumnTypesWith(ColumnType<T>.Instance, components));
             }
 
             source.AddEdges[id] = target;
@@ -127,7 +130,7 @@ public sealed class World
             ComponentSet components = source.Components.Without(id);
             if (!_archetypesBySet.TryGetValue(components, out target))
             {
-                target = CreateArchetype(components, source.CreateColumnsWithout(components));
+                target = CreateArchetype(components, source.GetColumnTypesWithout(components));
             }
 
             source.RemoveEdges[id] = target;
@@ -182,31 +185,41 @@ public sealed class World
 
     // Spawns a run of reserved entities together, so each column grows once and the blueprints are copied into it directly.
     // Only a Spawner of this world reserves, and only a failed sync point releases, so the entities are reserved without a check.
+    // When a blueprint's Write throws, the rows are dropped and the entities stay reserved, for the failed sync point to release.
     internal void Spawn<TBlueprint>(ChunkedList<Entity> entities, ChunkedList<TBlueprint> blueprints, int first, int count)
         where TBlueprint : struct, IBlueprint<TBlueprint>
     {
         ThrowIfQueryRuns();
         BlueprintState state = GetBlueprintState<TBlueprint>();
         Archetype archetype = state.Archetype;
-        int row = archetype.AddRows(count);
-        for (int index = first; index < first + count;)
+        int firstRow = archetype.AddRows(count);
+        try
         {
-            ReadOnlySpan<Entity> entityRun = entities.GetRun(index, first + count - index);
-            ReadOnlySpan<TBlueprint> blueprintRun = blueprints.GetRun(index, entityRun.Length);
-            entityRun = entityRun[..blueprintRun.Length];
-
-            entityRun.CopyTo(archetype.GetEntities(row, entityRun.Length));
-            TBlueprint.Write(blueprintRun, new BlueprintColumns(archetype, state.Columns, row, blueprintRun.Length));
-            for (int i = 0; i < entityRun.Length; i++)
+            int row = firstRow;
+            for (int index = first; index < first + count;)
             {
-                ref EntityRecord record = ref _records[entityRun[i].Index];
-                Debug.Assert(record.Version == entityRun[i].Version && record.Row == ReservedRow);
-                record.Archetype = archetype;
-                record.Row = row + i;
+                ReadOnlySpan<Entity> entityRun = entities.GetRun(index, first + count - index);
+                ReadOnlySpan<TBlueprint> blueprintRun = blueprints.GetRun(index, entityRun.Length);
+                int length = Math.Min(blueprintRun.Length, archetype.GetRowsLeftInChunk(row));
+                entityRun[..length].CopyTo(archetype.GetEntities(row, length));
+                TBlueprint.Write(blueprintRun[..length], new BlueprintColumns(archetype, state.Columns, row, length));
+                index += length;
+                row += length;
             }
+        }
+        catch
+        {
+            archetype.RemoveLastRows(count);
+            throw;
+        }
 
-            index += entityRun.Length;
-            row += entityRun.Length;
+        for (int row = firstRow; row < firstRow + count; row++)
+        {
+            Entity entity = archetype.GetEntity(row);
+            ref EntityRecord record = ref _records[entity.Index];
+            Debug.Assert(record.Version == entity.Version && record.Row == ReservedRow);
+            record.Archetype = archetype;
+            record.Row = row;
         }
     }
 
@@ -236,13 +249,13 @@ public sealed class World
 
             if (!_archetypesBySet.TryGetValue(components, out Archetype? archetype))
             {
-                Column[] columns = new Column[description.Ids.Count];
-                for (int i = 0; i < columns.Length; i++)
+                ColumnType[] types = new ColumnType[description.Ids.Count];
+                for (int i = 0; i < types.Length; i++)
                 {
-                    columns[components.IndexOf(description.Ids[i])] = description.Columns[i];
+                    types[components.IndexOf(description.Ids[i])] = description.Types[i];
                 }
 
-                archetype = CreateArchetype(components, columns);
+                archetype = CreateArchetype(components, types);
             }
 
             int[] fieldColumns = new int[description.Ids.Count];
@@ -257,13 +270,17 @@ public sealed class World
         return state;
     }
 
-    internal void BeginQuery() => _activeQueries++;
+    internal long BeginQuery()
+    {
+        _activeQueries.Add(++_lastQuery);
+        return _lastQuery;
+    }
 
-    internal void EndQuery() => _activeQueries--;
+    internal void EndQuery(long query) => _activeQueries.Remove(query);
 
     private void ThrowIfQueryRuns()
     {
-        if (_activeQueries > 0)
+        if (_activeQueries.Count > 0)
         {
             throw new InvalidOperationException("Structural changes are not allowed while a query runs. A system makes them through its writers, which apply them at a sync point.");
         }
@@ -322,13 +339,13 @@ public sealed class World
     {
         if (row < archetype.Count)
         {
-            _records[archetype.Entities[row].Index].Row = row;
+            _records[archetype.GetEntity(row).Index].Row = row;
         }
     }
 
-    private Archetype CreateArchetype(ComponentSet components, Column[] columns)
+    private Archetype CreateArchetype(ComponentSet components, ColumnType[] types)
     {
-        Archetype archetype = new Archetype(components, columns);
+        Archetype archetype = new Archetype(components, types);
         _archetypesBySet.Add(components, archetype);
         _archetypes.Add(archetype);
         return archetype;

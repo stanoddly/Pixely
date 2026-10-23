@@ -14,7 +14,7 @@ public sealed class BlueprintAttribute : Attribute;
 public sealed class BlueprintDescription
 {
     private readonly List<int> _ids = [];
-    private readonly List<Column> _columns = [];
+    private readonly List<ColumnType> _types = [];
 
     internal BlueprintDescription()
     {
@@ -22,13 +22,13 @@ public sealed class BlueprintDescription
 
     internal IReadOnlyList<int> Ids => _ids;
 
-    internal IReadOnlyList<Column> Columns => _columns;
+    internal IReadOnlyList<ColumnType> Types => _types;
 
     // Each call describes the next field, whose column Write then gets from BlueprintColumns by the same index.
     public void Add<T>() where T : struct
     {
         _ids.Add(ComponentType<T>.Id);
-        _columns.Add(new Column<T>());
+        _types.Add(ColumnType<T>.Instance);
     }
 }
 
@@ -48,7 +48,7 @@ public readonly ref struct BlueprintColumns
     }
 
     // The rows of the spawned entities in the column of the field at this index, in the order of the blueprints.
-    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).AsSpan().Slice(_firstRow, _count);
+    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).GetRows(_firstRow, _count);
 }
 
 internal sealed class BlueprintIds : StaticTypeIdMap<BlueprintIds>;

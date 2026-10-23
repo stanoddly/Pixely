@@ -106,6 +106,19 @@ public class SystemRegistrationTests
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Cleaner) }));
     }
 
+    [Test]
+    public void AddEcsRegistersTheSchedulerAsAnUpdatableAtTheDefaultOrder()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
+        services.AddEcs();
+        using ServiceProvider provider = services.BuildServiceProvider();
+        SystemScheduler scheduler = provider.GetRequiredService<SystemScheduler>();
+
+        Assert.That(provider.GetRequiredService<ServiceRegistry<IUpdatable>>(), Is.EqualTo(new IUpdatable[] { scheduler }));
+        Assert.That(((IUpdatable)scheduler).UpdateOrder, Is.Zero);
+    }
+
     private static int CountMoving(World world)
     {
         int count = 0;

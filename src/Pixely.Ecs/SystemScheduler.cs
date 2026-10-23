@@ -54,7 +54,7 @@ public sealed class SystemScheduler : IUpdatable
         return system;
     }
 
-    // A system removed during Update is skipped from then on; the commands it already recorded still apply.
+    // A system removed during Update still runs in that Update and leaves from the next one.
     public void Remove(ISystem system)
     {
         foreach (SystemEntry entry in _entries.AsReadOnlySpan())
@@ -86,10 +86,7 @@ public sealed class SystemScheduler : IUpdatable
                 segmentStart = i;
             }
 
-            if (!entry.Removed)
-            {
-                entry.System.Update();
-            }
+            entry.System.Update();
         }
 
         ApplyCommands(segmentStart, count);
