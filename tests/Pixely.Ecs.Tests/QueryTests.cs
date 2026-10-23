@@ -201,6 +201,21 @@ public class QueryTests
     }
 
     [Test]
+    public void HandWrittenQueryReadingAComponentTheChunkLacksThrows()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Position());
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            foreach (VelocitiesOfPositions _ in world.Query<VelocitiesOfPositions>())
+            {
+            }
+        });
+    }
+
+    [Test]
     public void QueryRequiringNoComponentThrows()
     {
         World world = new World();

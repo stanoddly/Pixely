@@ -64,6 +64,16 @@ public ref struct ManualPositions : IQuery<ManualPositions>
         new ManualPositions { Entities = chunk.Entities, Positions = chunk.GetSpan<Position>(), HasVelocity = chunk.Has<Velocity>() };
 }
 
+// Wrong on purpose: it reads Velocity without requiring it.
+public ref struct VelocitiesOfPositions : IQuery<VelocitiesOfPositions>
+{
+    public Span<Velocity> Velocities;
+
+    public static void Describe(QueryDescription description) => description.With<Position>();
+
+    public static VelocitiesOfPositions Create(ArchetypeChunk chunk) => new VelocitiesOfPositions { Velocities = chunk.GetSpan<Velocity>() };
+}
+
 public struct Dead;
 
 [Query]

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Pixely.DependencyInjection;
 
 namespace Pixely.Ecs.Tests;
@@ -117,6 +118,16 @@ public class SystemRegistrationTests
 
         Assert.That(provider.GetRequiredService<ServiceRegistry<IUpdatable>>(), Is.EqualTo(new IUpdatable[] { scheduler }));
         Assert.That(((IUpdatable)scheduler).UpdateOrder, Is.Zero);
+    }
+
+    [Test]
+    public void AddSystemThatWasNotInterceptedThrows()
+    {
+        MethodInfo addSystem = typeof(EcsServiceCollectionExtensions).GetMethod(nameof(EcsServiceCollectionExtensions.AddSystem))!.MakeGenericMethod(typeof(Cleaner));
+
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => addSystem.Invoke(null, [new ServiceCollection()]))!;
+
+        Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
     }
 
     private static int CountMoving(World world)

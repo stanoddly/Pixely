@@ -131,7 +131,8 @@ public class GeneratorTests
                 internal sealed class Shooter : ISystem
                 {
                     public Shooter(Query<Movement> movement, Spawner<Bullet> bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop,
-                        EntityDestroyer destroyer, Log log, Log? optional, IEnumerable<Log> logs, Spawner<Blueprints.Corpse> corpses, in Log byValue)
+                        EntityDestroyer destroyer, Log log, Log? optional, IEnumerable<Log> logs, Spawner<Blueprints.Corpse> corpses, in Log byValue,
+                        IReadOnlyList<Log> list)
                     {
                     }
 
@@ -156,6 +157,7 @@ public class GeneratorTests
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::Game.Bullet>()")), Is.True);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::Game.Log>>()")), Is.True);
     }
 
     [TestCase("[Blueprint] struct B { public Position P; }", "PXECS006")]
@@ -177,6 +179,8 @@ public class GeneratorTests
 
     [TestCase("abstract class S : ISystem { public abstract void Update(); }", "S", "PXECS010")]
     [TestCase("file sealed class S : ISystem { public void Update() { } }", "S", "PXECS010")]
+    [TestCase("class Outer<T> { public sealed class S : ISystem { public void Update() { } } }", "Outer<T>.S", "PXECS010")]
+    [TestCase("class Outer<T> { public sealed class S : ISystem { public void Update() { } } }", "Outer<T[]>.S", "PXECS010")]
     [TestCase("class S : ISystem { public S() { } public S(int value) { } public void Update() { } }", "S", "PXECS011")]
     [TestCase("class S : ISystem { protected S() { } public void Update() { } }", "S", "PXECS011")]
     [TestCase("class Log; class S : ISystem { public S(ref Log log) { } public void Update() { } }", "S", "PXECS012")]
@@ -187,13 +191,127 @@ public class GeneratorTests
 
             static class Registration
             {
-                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<{{system}}>();
+                static void Register<T>(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<{{system}}>();
             }
             """;
 
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    [Test]
+    public void TypeParameterSystemReportsDiagnostic()
+    {
+        string source = Components + """
+            static class Registration
+            {
+                static void Register<T>(Pixely.DependencyInjection.ServiceCollection services) where T : class, ISystem => services.AddSystem<T>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS010" }));
+    }
+
+    [Test]
+    public void EveryAddSystemCallGetsItsOwnInterceptor()
+    {
+        string source = Components + """
+            public class Outer<T>
+            {
+                public sealed class Nested : ISystem
+                {
+                    public void Update()
+                    {
+                    }
+                }
+            }
+
+            public sealed class First : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services)
+                {
+                    services.AddEcs();
+                    services.AddSystem<First>();
+                    services.AddSystem<Outer<int>.Nested>();
+                    services.AddSystem<Outer<dynamic>.Nested>();
+                }
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
+        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("AddSystem_1").And.Contain("AddSystem_2"));
+        Assert.That(interceptors, Does.Contain("new global::First(").And.Contain("new global::Outer<int>.Nested(").And.Contain("new global::Outer<dynamic>.Nested("));
+    }
+
+    [Test]
+    public void AnotherMethodNamedAddSystemIsNotIntercepted()
+    {
+        string source = Components + """
+            public sealed class S : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            static class Other
+            {
+                public static void AddSystem<T>(this Pixely.DependencyInjection.ServiceCollection services)
+                {
+                }
+
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
+    }
+
+    [Test]
+    public void TypesInsideRecordsAndInterfacesCompile()
+    {
+        string source = Components + """
+            public partial record Outer
+            {
+                [Query]
+                public ref partial struct Q
+                {
+                    public Span<Position> Positions;
+                }
+            }
+
+            public partial interface IOuter
+            {
+                [Blueprint]
+                public partial struct B
+                {
+                    public Velocity Velocity;
+                }
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
     // The generated code is outside the system, so what the call site can reach inside the system does not count.
