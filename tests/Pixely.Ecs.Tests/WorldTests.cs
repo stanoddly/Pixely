@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Pixely.Ecs.Tests;
 
 public class WorldTests
@@ -154,6 +156,64 @@ public class WorldTests
     }
 
     [Test]
+    public void MovingTheLastRowOfAnArchetypeKeepsEveryRecord()
+    {
+        World world = new World();
+        Entity first = world.Create();
+        world.Add(first, new Position(1, 2));
+        Entity last = world.Create();
+        world.Add(last, new Position(3, 4));
+
+        world.Add(last, new Velocity(5, 6));
+
+        Assert.That(world.Get<Position>(first), Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Get<Position>(last), Is.EqualTo(new Position(3, 4)));
+        Assert.That(world.Get<Velocity>(last), Is.EqualTo(new Velocity(5, 6)));
+
+        world.Remove<Velocity>(last);
+
+        Assert.That(world.Get<Position>(first), Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Get<Position>(last), Is.EqualTo(new Position(3, 4)));
+        Assert.That(world.Has<Velocity>(last), Is.False);
+    }
+
+    [Test]
+    public void RemovingAReferenceComponentReleasesOnlyTheRemovedValue()
+    {
+        World world = new World();
+        Entity first = world.Create();
+        WeakReference removed = AddUniqueName(world, first, 'a');
+        Entity last = world.Create();
+        world.Add(last, new Name(new string('b', 100)));
+
+        world.Remove<Name>(first);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.That(removed.IsAlive, Is.False);
+        Assert.That(world.Get<Name>(last), Is.EqualTo(new Name(new string('b', 100))));
+    }
+
+    // No other test uses this component, so its id is past the edge arrays of every archetype the test creates.
+    private struct AddedAndRemovedLate;
+
+    [Test]
+    public void ComponentFirstUsedAfterTheArchetypeCanBeAddedAndRemovedAgain()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Position(1, 2));
+
+        world.Add(entity, new AddedAndRemovedLate());
+        world.Remove<AddedAndRemovedLate>(entity);
+        world.Add(entity, new AddedAndRemovedLate());
+
+        Assert.That(world.Has<AddedAndRemovedLate>(entity), Is.True);
+        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(1, 2)));
+    }
+
+    [Test]
     public void EntitiesKeepTheirComponentsWhenAnotherLeavesTheArchetype()
     {
         World world = new World();
@@ -170,5 +230,14 @@ public class WorldTests
         Assert.That(world.Get<Position>(entities[2]), Is.EqualTo(new Position(2, 2)));
         Assert.That(world.Get<Position>(entities[3]), Is.EqualTo(new Position(3, 3)));
         Assert.That(world.Has<Position>(entities[1]), Is.False);
+    }
+
+    // Creates the string here, so nothing but the world references it once this returns.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference AddUniqueName(World world, Entity entity, char character)
+    {
+        string value = new string(character, 100);
+        world.Add(entity, new Name(value));
+        return new WeakReference(value);
     }
 }

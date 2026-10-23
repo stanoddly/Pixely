@@ -84,10 +84,15 @@ public class GeneratorTests
     [TestCase("[Query] ref partial struct Q { public int P; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<Entity> E; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<string> S; }", "PXECS002")]
+    [TestCase("[Query] ref partial struct Q(int offset) { public Span<Position> P; public int Offset => offset; }", "PXECS002")]
+    [TestCase("[Query] ref partial struct Q { public Span<Position> P { get; set; } }", "PXECS002")]
+    [TestCase("ref struct RefComponent; [Query] ref partial struct Q { public Span<RefComponent> R; }", "PXECS002")]
     [TestCase("[Query] ref partial struct Q { public Span<Position> A; public ReadOnlySpan<Position> B; }", "PXECS003")]
     [TestCase("[Query] [With<Position>] ref partial struct Q { }", "PXECS004")]
     [TestCase("[Query] ref partial struct Q { public ReadOnlySpan<Entity> E; }", "PXECS004")]
     [TestCase("[Query] [Without<Position>] ref partial struct Q { public Span<Position> P; }", "PXECS005")]
+    [TestCase("[Query] ref partial struct Q { public Span<Position> Count; }", "PXECS013")]
+    [TestCase("[Query] ref partial struct Q { public Span<Position> P; public int Count() => 0; }", "PXECS013")]
     public void InvalidQueryReportsDiagnostic(string declaration, string expectedId)
     {
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
@@ -200,6 +205,49 @@ public class GeneratorTests
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    // The generated constructor takes a chunk parameter and must still assign a field of that name, and it sets required fields.
+    [Test]
+    public void QueryFieldsNamedChunkOrRequiredCompile()
+    {
+        string source = Components + """
+            [Query]
+            ref partial struct Q
+            {
+                public Span<Position> chunk;
+                public required ReadOnlySpan<Velocity> Velocities;
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+    }
+
+    // AddSystem's class constraint rejects a struct before the generator sees the call.
+    [Test]
+    public void StructSystemIsRejectedByTheCompiler()
+    {
+        string source = Components + """
+            struct S : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain("CS0452"));
     }
 
     [Test]

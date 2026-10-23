@@ -181,6 +181,8 @@ Writers record their changes, and the scheduler applies them at sync points:
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
 
+When a change throws, the exception leaves `Update`, and the rest of that sync point's changes are dropped, including those of later systems. An entity whose spawn is dropped never becomes alive.
+
 So with `DeathSystem`, `MovementSystem` and then a `CleanupSystem` whose query has `[With<Dead>]`:
 
 - `MovementSystem` does not name `Dead`, so it runs without a sync point and does not see this update's deaths.
@@ -211,7 +213,7 @@ The generator fails the build on these:
 | Id | Rule |
 |----|------|
 | PXECS001 | A query is a non-generic `ref partial struct` that is not `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
-| PXECS002 | Each instance field of a query is `Span<T>` or `ReadOnlySpan<T>` of a struct component, or `ReadOnlySpan<Entity>`. |
+| PXECS002 | Each instance field of a query is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct`, or `ReadOnlySpan<Entity>`. A query has no auto-property and captures no primary constructor parameter. |
 | PXECS003 | No component appears in two fields of a query. |
 | PXECS004 | A query has at least one field and requires at least one component. |
 | PXECS005 | No component is both required and excluded by a query. |
@@ -222,6 +224,7 @@ The generator fails the build on these:
 | PXECS010 | `AddSystem<T>` takes a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. |
 | PXECS011 | The system has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
 | PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
+| PXECS013 | A query declares no member named `Count`, because the generator adds it. |
 
 ## Not supported yet
 
