@@ -17,7 +17,8 @@ public class Font : IFont, IDisposable
         string path,
         ushort size,
         FontRasterizationMode rasterizationMode,
-        FontHintingMode hintingMode)
+        FontHintingMode hintingMode,
+        FontStyle style)
     {
         _fontSystem = fontSystem;
         _ttfFont = ttfFont;
@@ -26,6 +27,7 @@ public class Font : IFont, IDisposable
         Size = size;
         RasterizationMode = rasterizationMode;
         HintingMode = hintingMode;
+        Style = style;
     }
 
     internal Pointer<TTF_Font> TtfFont => _ttfFont;
@@ -33,6 +35,7 @@ public class Font : IFont, IDisposable
     public ushort Size { get; }
     public FontRasterizationMode RasterizationMode { get; }
     public FontHintingMode HintingMode { get; }
+    public FontStyle Style { get; }
 
     /// <summary>
     /// Rasterises <paramref name="text"/> with this font. Results are cached by the font system,

@@ -21,6 +21,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Include="..\..\tutorials\Pixely.Tutorials.Hotbar\Content\fonts\GohuFont-Medium.ttf" Link="Fonts\GohuFont-Medium.ttf" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Ui\Pixely.Ui.csproj" />
