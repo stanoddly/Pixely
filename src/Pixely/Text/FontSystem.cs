@@ -14,7 +14,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly GpuMemorySystem _gpuMemorySystem;
     private readonly ContentSource _contentSource;
     private readonly List<Font> _fonts = new();
-    private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode), Font> _fontCache = new();
+    private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style), Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
     // Cleared after every Update, so the per-frame sweep allocates nothing.
@@ -40,10 +40,11 @@ internal class FontSystem: IFontSystem, IUpdatable
         string path,
         ushort size,
         FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended,
-        FontHintingMode hintingMode = FontHintingMode.Normal)
+        FontHintingMode hintingMode = FontHintingMode.Normal,
+        FontStyle style = FontStyle.Normal)
     {
-        (string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode) cacheKey =
-            (path, size, rasterizationMode, hintingMode);
+        (string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style) cacheKey =
+            (path, size, rasterizationMode, hintingMode, style);
         if (_fontCache.TryGetValue(cacheKey, out Font? cachedFont))
         {
             return cachedFont;
@@ -75,6 +76,8 @@ internal class FontSystem: IFontSystem, IUpdatable
                 }
 
                 SDL3_ttf.TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
+                // FontStyle mirrors the values of TTF_FontStyleFlags.
+                SDL3_ttf.TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
             }
             catch
             {
@@ -87,7 +90,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 throw;
             }
 
-            Font font = new Font(this, ttfFont, nativeFontData, path, size, rasterizationMode, hintingMode);
+            Font font = new Font(this, ttfFont, nativeFontData, path, size, rasterizationMode, hintingMode, style);
             _fonts.Add(font);
             _fontCache[cacheKey] = font;
 
@@ -290,7 +293,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     public void ReleaseFont(Font font)
     {
         _fonts.Remove(font);
-        _fontCache.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode));
+        _fontCache.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
 
         unsafe
         {
