@@ -1,13 +1,11 @@
-using Pixely.Collections;
-
 namespace Pixely.Ecs;
 
 // Adds T at the next sync point. The value replaces T when the entity has it by then, and a dead entity is skipped.
 public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
 {
     private readonly CommandBuffer _commands;
-    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
-    private readonly FastList<T> _values = new FastList<T>(4);
+    private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
+    private readonly ChunkedList<T> _values = new ChunkedList<T>();
 
     internal ComponentAdder(CommandBuffer commands)
     {
@@ -42,12 +40,10 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
         }
     }
 
-    // Resize keeps the old values in the array, so clear them first to release what they reference.
     void IRecordedCommands.Clear()
     {
-        _entities.Resize(0);
-        _values.AsSpan().Clear();
-        _values.Resize(0);
+        _entities.Clear();
+        _values.Clear();
     }
 }
 
@@ -55,7 +51,7 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
 public sealed class ComponentRemover<T> : IRecordedCommands where T : struct
 {
     private readonly CommandBuffer _commands;
-    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
+    private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
 
     internal ComponentRemover(CommandBuffer commands)
     {
@@ -77,14 +73,14 @@ public sealed class ComponentRemover<T> : IRecordedCommands where T : struct
         }
     }
 
-    void IRecordedCommands.Clear() => _entities.Resize(0);
+    void IRecordedCommands.Clear() => _entities.Clear();
 }
 
 // Destroys entities at the next sync point. An entity that is dead by then is skipped.
 public sealed class EntityDestroyer : IRecordedCommands
 {
     private readonly CommandBuffer _commands;
-    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
+    private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
 
     internal EntityDestroyer(CommandBuffer commands)
     {
@@ -106,15 +102,15 @@ public sealed class EntityDestroyer : IRecordedCommands
         }
     }
 
-    void IRecordedCommands.Clear() => _entities.Resize(0);
+    void IRecordedCommands.Clear() => _entities.Clear();
 }
 
 // Creates entities from a blueprint at the next sync point, directly in the archetype of its components.
 public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : struct, IBlueprint<TBlueprint>
 {
     private readonly CommandBuffer _commands;
-    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
-    private readonly FastList<TBlueprint> _values = new FastList<TBlueprint>(4);
+    private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
+    private readonly ChunkedList<TBlueprint> _values = new ChunkedList<TBlueprint>();
 
     internal Spawner(CommandBuffer commands)
     {
@@ -131,17 +127,13 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
         return entity;
     }
 
-    void IRecordedCommands.Apply(World world, int first, int count)
-    {
-        world.Spawn(_entities.AsReadOnlySpan().Slice(first, count), _values.AsReadOnlySpan().Slice(first, count));
-    }
+    void IRecordedCommands.Apply(World world, int first, int count) => world.Spawn(_entities, _values, first, count);
 
     void IRecordedCommands.Discard(World world, int index) => world.ReleaseReservation(_entities[index]);
 
     void IRecordedCommands.Clear()
     {
-        _entities.Resize(0);
-        _values.AsSpan().Clear();
-        _values.Resize(0);
+        _entities.Clear();
+        _values.Clear();
     }
 }

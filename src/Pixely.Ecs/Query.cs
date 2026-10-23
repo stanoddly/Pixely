@@ -2,17 +2,9 @@ using Pixely.Collections;
 
 namespace Pixely.Ecs;
 
-internal static class QueryIds
-{
-    private static int _count;
+internal sealed class QueryIds : StaticTypeIdMap<QueryIds>;
 
-    internal static int Next() => Interlocked.Increment(ref _count) - 1;
-}
-
-internal static class QueryId<TQuery> where TQuery : allows ref struct
-{
-    internal static readonly int Value = QueryIds.Next();
-}
+internal sealed class QueryId<TQuery> : StaticTypeIdMap<QueryIds, TQuery> where TQuery : allows ref struct;
 
 internal sealed class QueryState
 {

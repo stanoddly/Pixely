@@ -48,20 +48,12 @@ public readonly ref struct BlueprintColumns
     }
 
     // The rows of the spawned entities in the column of the field at this index, in the order of the blueprints.
-    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).Values.AsSpan().Slice(_firstRow, _count);
+    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).AsSpan().Slice(_firstRow, _count);
 }
 
-internal static class BlueprintIds
-{
-    private static int _count;
+internal sealed class BlueprintIds : StaticTypeIdMap<BlueprintIds>;
 
-    internal static int Next() => Interlocked.Increment(ref _count) - 1;
-}
-
-internal static class BlueprintId<TBlueprint>
-{
-    internal static readonly int Value = BlueprintIds.Next();
-}
+internal sealed class BlueprintId<TBlueprint> : StaticTypeIdMap<BlueprintIds, TBlueprint>;
 
 // The archetype a blueprint spawns into, and the column of each of its fields.
 internal sealed class BlueprintState
