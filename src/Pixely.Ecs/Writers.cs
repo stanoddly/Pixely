@@ -6,6 +6,7 @@ namespace Pixely.Ecs;
 public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
 {
     private readonly CommandBuffer _commands;
+    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
     private readonly FastList<T> _values = new FastList<T>(4);
 
     internal ComponentAdder(CommandBuffer commands)
@@ -14,28 +15,37 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
         commands.AddSource(this);
     }
 
-    public void Add(Entity entity, T component) => _commands.Record(entity, this, _values.Add(component));
-
-    void IRecordedCommands.Apply(World world, Entity entity, int valueIndex)
+    public void Add(Entity entity, T component)
     {
-        if (!world.IsAlive(entity))
-        {
-            return;
-        }
+        _values.Add(component);
+        _commands.Record(this, _entities.Add(entity));
+    }
 
-        if (world.Has<T>(entity))
+    void IRecordedCommands.Apply(World world, int first, int count)
+    {
+        for (int i = first; i < first + count; i++)
         {
-            world.Get<T>(entity) = _values[valueIndex];
-        }
-        else
-        {
-            world.Add(entity, _values[valueIndex]);
+            Entity entity = _entities[i];
+            if (!world.IsAlive(entity))
+            {
+                continue;
+            }
+
+            if (world.Has<T>(entity))
+            {
+                world.Get<T>(entity) = _values[i];
+            }
+            else
+            {
+                world.Add(entity, _values[i]);
+            }
         }
     }
 
     // Resize keeps the old values in the array, so clear them first to release what they reference.
     void IRecordedCommands.Clear()
     {
+        _entities.Resize(0);
         _values.AsSpan().Clear();
         _values.Resize(0);
     }
@@ -45,56 +55,65 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
 public sealed class ComponentRemover<T> : IRecordedCommands where T : struct
 {
     private readonly CommandBuffer _commands;
+    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
 
     internal ComponentRemover(CommandBuffer commands)
     {
         _commands = commands;
+        commands.AddSource(this);
     }
 
-    public void Remove(Entity entity) => _commands.Record(entity, this, 0);
+    public void Remove(Entity entity) => _commands.Record(this, _entities.Add(entity));
 
-    void IRecordedCommands.Apply(World world, Entity entity, int valueIndex)
+    void IRecordedCommands.Apply(World world, int first, int count)
     {
-        if (world.IsAlive(entity) && world.Has<T>(entity))
+        for (int i = first; i < first + count; i++)
         {
-            world.Remove<T>(entity);
+            Entity entity = _entities[i];
+            if (world.IsAlive(entity) && world.Has<T>(entity))
+            {
+                world.Remove<T>(entity);
+            }
         }
     }
 
-    void IRecordedCommands.Clear()
-    {
-    }
+    void IRecordedCommands.Clear() => _entities.Resize(0);
 }
 
 // Destroys entities at the next sync point. An entity that is dead by then is skipped.
 public sealed class EntityDestroyer : IRecordedCommands
 {
     private readonly CommandBuffer _commands;
+    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
 
     internal EntityDestroyer(CommandBuffer commands)
     {
         _commands = commands;
+        commands.AddSource(this);
     }
 
-    public void Destroy(Entity entity) => _commands.Record(entity, this, 0);
+    public void Destroy(Entity entity) => _commands.Record(this, _entities.Add(entity));
 
-    void IRecordedCommands.Apply(World world, Entity entity, int valueIndex)
+    void IRecordedCommands.Apply(World world, int first, int count)
     {
-        if (world.IsAlive(entity))
+        for (int i = first; i < first + count; i++)
         {
-            world.Destroy(entity);
+            Entity entity = _entities[i];
+            if (world.IsAlive(entity))
+            {
+                world.Destroy(entity);
+            }
         }
     }
 
-    void IRecordedCommands.Clear()
-    {
-    }
+    void IRecordedCommands.Clear() => _entities.Resize(0);
 }
 
 // Creates entities from a blueprint at the next sync point, directly in the archetype of its components.
 public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : struct, IBlueprint<TBlueprint>
 {
     private readonly CommandBuffer _commands;
+    private readonly FastList<Entity> _entities = new FastList<Entity>(4);
     private readonly FastList<TBlueprint> _values = new FastList<TBlueprint>(4);
 
     internal Spawner(CommandBuffer commands)
@@ -107,16 +126,21 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
     public Entity Spawn(in TBlueprint blueprint)
     {
         Entity entity = _commands.World.Reserve();
-        _commands.Record(entity, this, _values.Add(blueprint));
+        _values.Add(blueprint);
+        _commands.Record(this, _entities.Add(entity));
         return entity;
     }
 
-    void IRecordedCommands.Apply(World world, Entity entity, int valueIndex) => world.Spawn(entity, _values[valueIndex]);
+    void IRecordedCommands.Apply(World world, int first, int count)
+    {
+        world.Spawn(_entities.AsReadOnlySpan().Slice(first, count), _values.AsReadOnlySpan().Slice(first, count));
+    }
 
-    void IRecordedCommands.Discard(World world, Entity entity) => world.ReleaseReservation(entity);
+    void IRecordedCommands.Discard(World world, int index) => world.ReleaseReservation(_entities[index]);
 
     void IRecordedCommands.Clear()
     {
+        _entities.Resize(0);
         _values.AsSpan().Clear();
         _values.Resize(0);
     }

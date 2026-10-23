@@ -5,7 +5,7 @@ public interface IBlueprint<TSelf> where TSelf : struct, IBlueprint<TSelf>
 {
     static abstract void Describe(BlueprintDescription description);
 
-    static abstract void Write(in TSelf blueprint, BlueprintRow row);
+    static abstract void Write(ReadOnlySpan<TSelf> blueprints, BlueprintColumns columns);
 }
 
 [AttributeUsage(AttributeTargets.Struct)]
@@ -24,7 +24,7 @@ public sealed class BlueprintDescription
 
     internal IReadOnlyList<Column> Columns => _columns;
 
-    // Each call describes the next field, which Write then passes to BlueprintRow.Set by the same index.
+    // Each call describes the next field, whose column Write then gets from BlueprintColumns by the same index.
     public void Add<T>() where T : struct
     {
         _ids.Add(ComponentType<T>.Id);
@@ -32,20 +32,23 @@ public sealed class BlueprintDescription
     }
 }
 
-public readonly ref struct BlueprintRow
+public readonly ref struct BlueprintColumns
 {
     private readonly Archetype _archetype;
     private readonly ReadOnlySpan<int> _columns;
-    private readonly int _row;
+    private readonly int _firstRow;
+    private readonly int _count;
 
-    internal BlueprintRow(Archetype archetype, ReadOnlySpan<int> columns, int row)
+    internal BlueprintColumns(Archetype archetype, ReadOnlySpan<int> columns, int firstRow, int count)
     {
         _archetype = archetype;
         _columns = columns;
-        _row = row;
+        _firstRow = firstRow;
+        _count = count;
     }
 
-    public void Set<T>(int field, in T value) where T : struct => _archetype.GetColumn<T>(_columns[field]).Values[_row] = value;
+    // The rows of the spawned entities in the column of the field at this index, in the order of the blueprints.
+    public Span<T> Get<T>(int field) where T : struct => _archetype.GetColumn<T>(_columns[field]).Values.AsSpan().Slice(_firstRow, _count);
 }
 
 internal static class BlueprintIds

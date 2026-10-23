@@ -139,6 +139,38 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void RunsOfSpawnsBetweenOtherCommandsApplyInRecordingOrder()
+    {
+        World world = new World();
+        Entity existing = world.Create();
+        world.Add(existing, new Position());
+        SystemScheduler scheduler = new SystemScheduler(world);
+        List<Entity> spawned = [];
+        Spawner<MovingBlueprint> spawner = null!;
+        ComponentAdder<Name> names = null!;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<MovingBlueprint>();
+            names = builder.ComponentAdder<Name>();
+            return new ActionSystem(() =>
+            {
+                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(1, 0) }));
+                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(2, 0) }));
+                names.Add(spawned[1], new Name("second"));
+                names.Add(existing, new Name("existing"));
+                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(3, 0) }));
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(new[] { 1f, 2f, 3f }));
+        Assert.That(world.Get<Name>(spawned[1]), Is.EqualTo(new Name("second")));
+        Assert.That(world.Has<Name>(spawned[0]), Is.False);
+        Assert.That(world.Get<Name>(existing), Is.EqualTo(new Name("existing")));
+    }
+
+    [Test]
     public void BlueprintWithPositionalPropertiesSpawnsTheirValues()
     {
         World world = new World();

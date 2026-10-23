@@ -64,15 +64,18 @@ public sealed class Archetype
 
     internal int AddRow(Entity entity) => _entities.Add(entity);
 
-    // Appends the entity with a default value in every column, for the caller to fill.
-    internal int AddRowWithDefaults(Entity entity)
+    // Appends the entities and grows every column by as many rows, for the caller to fill.
+    internal int AddRows(ReadOnlySpan<Entity> entities)
     {
+        int firstRow = _entities.Length;
+        _entities.Resize(firstRow + entities.Length);
+        entities.CopyTo(_entities.AsSpan()[firstRow..]);
         foreach (Column column in _columns)
         {
-            column.AddDefault();
+            column.Grow(entities.Length);
         }
 
-        return _entities.Add(entity);
+        return firstRow;
     }
 
     // Appends the row to the target with the components both archetypes have and swap-removes it here.
