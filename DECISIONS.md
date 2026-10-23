@@ -2,17 +2,19 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-10-22: Pixely.Ecs owns its archetype storage
+## 2026-10-23: Pixely.Ecs owns its archetype storage, and a system's constructor is its contract
 
-`Pixely.Ecs` is an experimental ECS with its own archetype storage on `Pixely.Collections`, not a wrapper over Arch or another ECS library. Queries are `ref partial struct` types with `[Query]`, whose `Span<T>` and `ReadOnlySpan<T>` fields a source generator fills per archetype.
+`Pixely.Ecs` is an experimental ECS with its own archetype storage on `Pixely.Collections`, not a wrapper over Arch or another ECS library. Queries are `ref partial struct` types with `[Query]`, whose `Span<T>` and `ReadOnlySpan<T>` fields a source generator fills per archetype. A system is an `ISystem` whose constructor takes `Query<TQuery>`, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` and `Spawner<TBlueprint>`; a `SystemScheduler` runs the systems in registration order and applies their structural changes at sync points.
 
 - A wrapper exposes the library's internals: the Meteorics experiment over Arch 1.2.8 depended on `Chunk.Entities`, `GetArray` and the arrays of `QueryDescription`, so it was tied to one Arch version.
 - Named fields replace positional columns such as `GetColumn1`, and `ReadOnlySpan<T>` makes read access a compile-time rule.
-- The generator rejects invalid queries at build (PXECS001 to PXECS005), including one that requires and excludes the same component.
-- There is no system base class, because Peach Systems are already `IUpdatable`.
-- Structural changes throw while a query runs and go through `EntityCommandBuffer`, so spans never point at moved rows. `Create` stays allowed, because every query requires a component and a new entity has none.
+- The constructor states what a system reads and which structural changes it makes, for reviews and for a parallel scheduler later. Typed writers make the changes as exact as the reads; Bevy's `Commands` can make any change.
+- Pixely's DI resolves each parameter by its exact type and has no open-generic registration, so the generator intercepts `AddSystem<T>()` and creates the queries and writers itself instead of registering every closed type.
+- Systems have no `UpdateOrder`: their order is their registration order, so the order of their changes at a sync point is the order they run in, without a writer knowing its system.
+- Sync points follow Flecs: one after the last system, and one before a system that names a component changed since the last sync point. Bevy inserts one between explicitly ordered systems, and with every system ordered by registration that would be a sync point after every system with a writer.
+- Structural changes on the world throw while a query runs, so spans never point at moved rows. `Create` stays allowed, because every query requires a component and a new entity has none.
 
-Cost: one archetype is one table per component without fixed-size chunks, and each `Add` moves the entity, so building an entity with several components copies it several times. It is not packaged, so games reference the projects from source.
+Cost: one archetype is one table per component without fixed-size chunks. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It is not packaged, so games reference the projects from source.
 
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 

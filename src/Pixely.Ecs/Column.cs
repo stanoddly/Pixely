@@ -6,6 +6,8 @@ internal abstract class Column
 {
     public abstract Column CreateEmpty();
 
+    public abstract void AddDefault();
+
     // Appends the row to the destination, which holds the same component type, and swap-removes it here.
     public abstract void MoveRow(int row, Column destination);
 
@@ -17,6 +19,8 @@ internal sealed class Column<T> : Column where T : struct
     public FastList<T> Values { get; } = new FastList<T>();
 
     public override Column CreateEmpty() => new Column<T>();
+
+    public override void AddDefault() => Values.Add(default);
 
     public override void MoveRow(int row, Column destination)
     {

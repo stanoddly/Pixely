@@ -1,34 +1,21 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
 
-readonly record struct DiagnosticInfo(string Id, string Message, string FilePath, int Line, int Column, int EndLine, int EndColumn);
-
 // A null component type marks the entities field.
 readonly record struct QueryField(string Name, string? ComponentType);
 
-readonly record struct QueryModel(
-    string HintName,
-    string? Namespace,
-    EquatableArray<string> ContainingTypeDeclarations,
-    string Declaration,
-    string Name,
-    EquatableArray<QueryField> Fields,
-    EquatableArray<string> With,
-    EquatableArray<string> Without);
+readonly record struct QueryModel(TypeDeclaration Type, EquatableArray<QueryField> Fields, EquatableArray<string> With, EquatableArray<string> Without);
 
-readonly record struct ExtractionResult(QueryModel? Query, DiagnosticInfo? Diagnostic);
+readonly record struct QueryExtraction(QueryModel? Query, DiagnosticInfo? Diagnostic);
 
 [Generator]
 public class QueryGenerator : IIncrementalGenerator
 {
     private const string QueryAttributeName = "Pixely.Ecs.QueryAttribute";
-    private const string EntityName = "Pixely.Ecs.Entity";
     private const string SpanName = "System.Span<T>";
     private const string ReadOnlySpanName = "System.ReadOnlySpan<T>";
     private const string WithAttributeName = "Pixely.Ecs.WithAttribute<T>";
@@ -36,7 +23,7 @@ public class QueryGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        IncrementalValuesProvider<ExtractionResult> results = context.SyntaxProvider.ForAttributeWithMetadataName(
+        IncrementalValuesProvider<QueryExtraction> results = context.SyntaxProvider.ForAttributeWithMetadataName(
             QueryAttributeName,
             predicate: static (node, _) => node is StructDeclarationSyntax,
             transform: static (ctx, ct) => Extract(ctx, ct));
@@ -45,32 +32,23 @@ public class QueryGenerator : IIncrementalGenerator
         {
             if (result.Diagnostic is { } diagnostic)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(diagnostic.Id, "Pixely.Ecs", diagnostic.Message, "Pixely.Ecs", DiagnosticSeverity.Error, isEnabledByDefault: true),
-                    Location.Create(diagnostic.FilePath, default, new LinePositionSpan(new LinePosition(diagnostic.Line, diagnostic.Column), new LinePosition(diagnostic.EndLine, diagnostic.EndColumn)))));
+                GeneratorSupport.Report(spc, diagnostic);
                 return;
             }
 
             QueryModel query = result.Query!.Value;
-            spc.AddSource(query.HintName, Generate(query));
+            spc.AddSource(query.Type.HintName, Generate(query));
         });
     }
 
-    private static ExtractionResult Extract(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    private static QueryExtraction Extract(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
     {
         INamedTypeSymbol type = (INamedTypeSymbol)context.TargetSymbol;
         StructDeclarationSyntax syntax = (StructDeclarationSyntax)context.TargetNode;
         Location typeLocation = syntax.Identifier.GetLocation();
 
-        List<INamedTypeSymbol> containingTypes = [];
-        for (INamedTypeSymbol? containing = type.ContainingType; containing is not null; containing = containing.ContainingType)
-        {
-            containingTypes.Insert(0, containing);
-        }
-
-        bool containingTypesArePartial = containingTypes.All(containing => !containing.IsGenericType && containing.DeclaringSyntaxReferences
-            .Any(reference => reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax declaration && declaration.Modifiers.Any(SyntaxKind.PartialKeyword)));
-        if (!type.IsRefLikeType || type.IsGenericType || !syntax.Modifiers.Any(SyntaxKind.PartialKeyword) || !containingTypesArePartial)
+        TypeDeclaration? declaration = GeneratorSupport.GetPartialDeclaration(type, syntax, ".Query.g.cs", cancellationToken);
+        if (!type.IsRefLikeType || declaration is null)
         {
             return Fail("PXECS001", $"The query {type.Name} must be a non-generic ref partial struct, and every type that contains it must be partial and non-generic.", typeLocation);
         }
@@ -90,7 +68,7 @@ public class QueryGenerator : IIncrementalGenerator
 
             string span = fieldType.ConstructedFrom.ToDisplayString();
             ITypeSymbol element = fieldType.TypeArguments[0];
-            bool isEntity = element.ToDisplayString() == EntityName;
+            bool isEntity = element.ToDisplayString() == GeneratorSupport.EntityName;
             if (isEntity && span == ReadOnlySpanName)
             {
                 fields.Add(new QueryField(field.Name, null));
@@ -145,114 +123,57 @@ public class QueryGenerator : IIncrementalGenerator
             return Fail("PXECS005", $"The query {type.Name} both requires and excludes {contradiction}, so it matches no entity.", typeLocation);
         }
 
-        string? ns = type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString();
-        string hintName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "") + ".Query.g.cs";
-
-        return new ExtractionResult(new QueryModel(
-            hintName,
-            ns,
-            new EquatableArray<string>([.. containingTypes.Select(Declare)]),
-            Declare(type),
-            type.Name,
-            new EquatableArray<QueryField>([.. fields]),
-            new EquatableArray<string>([.. with]),
-            new EquatableArray<string>([.. without])), null);
+        return new QueryExtraction(new QueryModel(declaration.Value, new EquatableArray<QueryField>([.. fields]), new EquatableArray<string>([.. with]), new EquatableArray<string>([.. without])), null);
     }
 
-    private static string Declare(INamedTypeSymbol type)
-    {
-        string keyword = (type.IsRecord, type.TypeKind) switch
-        {
-            (true, TypeKind.Struct) => "record struct",
-            (true, _) => "record",
-            (_, TypeKind.Struct) => "struct",
-            (_, TypeKind.Interface) => "interface",
-            _ => "class"
-        };
-
-        string readOnly = type.TypeKind == TypeKind.Struct && type.IsReadOnly ? "readonly " : "";
-        string refLike = type.IsRefLikeType ? "ref " : "";
-        return $"{readOnly}{refLike}partial {keyword} {type.Name}";
-    }
-
-    private static ExtractionResult FailField(IFieldSymbol field, INamedTypeSymbol type)
+    private static QueryExtraction FailField(IFieldSymbol field, INamedTypeSymbol type)
     {
         return Fail("PXECS002", $"The field {field.Name} of the query {type.Name} must be a Span<T> or ReadOnlySpan<T> of a struct component, or ReadOnlySpan<Entity>.", field.Locations[0]);
     }
 
-    private static ExtractionResult Fail(string id, string message, Location location)
-    {
-        FileLinePositionSpan span = location.GetLineSpan();
-        return new ExtractionResult(null, new DiagnosticInfo(id, message, span.Path, span.StartLinePosition.Line, span.StartLinePosition.Character, span.EndLinePosition.Line, span.EndLinePosition.Character));
-    }
+    private static QueryExtraction Fail(string id, string message, Location location) => new QueryExtraction(null, GeneratorSupport.CreateDiagnostic(id, message, location));
 
     private static string Generate(QueryModel query)
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("// <auto-generated/>");
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine();
-        if (query.Namespace is not null)
-        {
-            sb.AppendLine($"namespace {query.Namespace};");
-            sb.AppendLine();
-        }
-
-        string indent = "";
-        foreach (string declaration in query.ContainingTypeDeclarations)
-        {
-            sb.AppendLine($"{indent}{declaration}");
-            sb.AppendLine($"{indent}{{");
-            indent += "    ";
-        }
-
-        string name = query.Name;
+        string name = query.Type.Name;
         string queryInterface = $"global::Pixely.Ecs.IQuery<{name}>";
-        sb.AppendLine($"{indent}{query.Declaration} : {queryInterface}");
-        sb.AppendLine($"{indent}{{");
-        sb.AppendLine($"{indent}    private {name}(global::Pixely.Ecs.Archetype archetype)");
-        sb.AppendLine($"{indent}    {{");
-        foreach (QueryField field in query.Fields)
+        return GeneratorSupport.Generate(query.Type, queryInterface, (sb, indent) =>
         {
-            string value = field.ComponentType is null ? "archetype.Entities" : $"archetype.GetSpan<{field.ComponentType}>()";
-            sb.AppendLine($"{indent}        {field.Name} = {value};");
-        }
-
-        sb.AppendLine($"{indent}    }}");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    public int Count => {query.Fields[0].Name}.Length;");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    static void {queryInterface}.Describe(global::Pixely.Ecs.QueryDescription description)");
-        sb.AppendLine($"{indent}    {{");
-        foreach (QueryField field in query.Fields)
-        {
-            if (field.ComponentType is not null)
+            sb.AppendLine($"{indent}private {name}(global::Pixely.Ecs.Archetype archetype)");
+            sb.AppendLine($"{indent}{{");
+            foreach (QueryField field in query.Fields)
             {
-                sb.AppendLine($"{indent}        description.With<{field.ComponentType}>();");
+                string value = field.ComponentType is null ? "archetype.Entities" : $"archetype.GetSpan<{field.ComponentType}>()";
+                sb.AppendLine($"{indent}    {field.Name} = {value};");
             }
-        }
 
-        foreach (string component in query.With)
-        {
-            sb.AppendLine($"{indent}        description.With<{component}>();");
-        }
-
-        foreach (string component in query.Without)
-        {
-            sb.AppendLine($"{indent}        description.Without<{component}>();");
-        }
-
-        sb.AppendLine($"{indent}    }}");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    static {name} {queryInterface}.Create(global::Pixely.Ecs.Archetype archetype) => new {name}(archetype);");
-        sb.AppendLine($"{indent}}}");
-
-        while (indent.Length > 0)
-        {
-            indent = indent.Substring(4);
             sb.AppendLine($"{indent}}}");
-        }
+            sb.AppendLine();
+            sb.AppendLine($"{indent}public int Count => {query.Fields[0].Name}.Length;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}static void {queryInterface}.Describe(global::Pixely.Ecs.QueryDescription description)");
+            sb.AppendLine($"{indent}{{");
+            foreach (QueryField field in query.Fields)
+            {
+                if (field.ComponentType is not null)
+                {
+                    sb.AppendLine($"{indent}    description.With<{field.ComponentType}>();");
+                }
+            }
 
-        return sb.ToString();
+            foreach (string component in query.With)
+            {
+                sb.AppendLine($"{indent}    description.With<{component}>();");
+            }
+
+            foreach (string component in query.Without)
+            {
+                sb.AppendLine($"{indent}    description.Without<{component}>();");
+            }
+
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}static {name} {queryInterface}.Create(global::Pixely.Ecs.Archetype archetype) => new {name}(archetype);");
+        });
     }
 }

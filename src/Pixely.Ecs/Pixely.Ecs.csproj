@@ -8,6 +8,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Pixely.Collections\Pixely.Collections.csproj" />
+      <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
+      <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
     </ItemGroup>
 
 </Project>
