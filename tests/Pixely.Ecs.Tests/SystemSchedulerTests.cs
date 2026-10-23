@@ -437,6 +437,41 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void CommandsOfLaterSystemsAreDroppedWhenAnEarlierOneFails()
+    {
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        bool fail = true;
+        Spawner<FailingBlueprint<Position>> failing = null!;
+        scheduler.Add(builder =>
+        {
+            failing = builder.Spawner<FailingBlueprint<Position>>();
+            return new ActionSystem(() =>
+            {
+                if (fail)
+                {
+                    failing.Spawn(new FailingBlueprint<Position> { Fails = true });
+                }
+            });
+        });
+        List<Entity> recorded = [];
+        Spawner<MovingBlueprint> later = null!;
+        scheduler.Add(builder =>
+        {
+            later = builder.Spawner<MovingBlueprint>();
+            return new ActionSystem(() => recorded.Add(later.Spawn(new MovingBlueprint())));
+        });
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        fail = false;
+        scheduler.Update();
+
+        Assert.That(world.IsAlive(recorded[0]), Is.False);
+        Assert.That(world.IsAlive(recorded[1]), Is.True);
+        Assert.That(CountPositions(world), Is.EqualTo(1));
+    }
+
+    [Test]
     public void BlueprintDescribingAComponentTwiceThrows()
     {
         SystemScheduler scheduler = new SystemScheduler(new World());

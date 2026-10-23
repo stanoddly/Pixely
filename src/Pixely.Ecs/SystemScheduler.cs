@@ -92,11 +92,23 @@ public sealed class SystemScheduler : IUpdatable
         ApplyCommands(segmentStart, count);
     }
 
+    // When a command throws, its buffer drops the commands after it and the later systems' buffers are dropped, so no later sync point applies them.
     private void ApplyCommands(int start, int end)
     {
-        for (int i = start; i < end; i++)
+        int i = start;
+        try
         {
-            _entries[i].Commands.Apply();
+            for (; i < end; i++)
+            {
+                _entries[i].Commands.Apply();
+            }
+        }
+        finally
+        {
+            for (int later = i + 1; later < end; later++)
+            {
+                _entries[later].Commands.Discard();
+            }
         }
     }
 

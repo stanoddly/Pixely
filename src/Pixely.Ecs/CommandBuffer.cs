@@ -69,20 +69,28 @@ internal sealed class CommandBuffer
         }
         finally
         {
-            for (int i = applied; i < _commands.Length; i++)
-            {
-                Command command = _commands[i];
-                for (int index = command.First; index < command.First + command.Count; index++)
-                {
-                    command.Source.Discard(World, index);
-                }
-            }
+            DiscardFrom(applied);
+        }
+    }
 
-            _commands.Resize(0);
-            foreach (IRecordedCommands source in _sources)
+    // Drops every command, for a sync point where an earlier system's command threw.
+    public void Discard() => DiscardFrom(0);
+
+    private void DiscardFrom(int first)
+    {
+        for (int i = first; i < _commands.Length; i++)
+        {
+            Command command = _commands[i];
+            for (int index = command.First; index < command.First + command.Count; index++)
             {
-                source.Clear();
+                command.Source.Discard(World, index);
             }
+        }
+
+        _commands.Resize(0);
+        foreach (IRecordedCommands source in _sources)
+        {
+            source.Clear();
         }
     }
 }

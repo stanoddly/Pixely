@@ -53,12 +53,27 @@ public class QueryGenerator : IIncrementalGenerator
             return Fail("PXECS001", $"The query {type.Name} must be a non-generic, non-file-local ref partial struct, and every type that contains it must be partial, non-generic and not file-local.", typeLocation);
         }
 
+        // The generator adds Count, so a member of that name would collide with it.
+        if (!type.GetMembers("Count").IsEmpty)
+        {
+            return Fail("PXECS013", $"The query {type.Name} must not declare a member named Count, which the generator adds.", type.GetMembers("Count")[0].Locations[0]);
+        }
+
         List<QueryField> fields = [];
         foreach (ISymbol member in type.GetMembers())
         {
-            if (member is not IFieldSymbol field || field.IsStatic || field.IsConst || field.IsImplicitlyDeclared)
+            if (member is not IFieldSymbol field || field.IsStatic || field.IsConst)
             {
                 continue;
+            }
+
+            // An auto-property's backing field or a captured primary constructor parameter, which the generated constructor would leave unset.
+            if (field.IsImplicitlyDeclared)
+            {
+                return field.AssociatedSymbol is { } property
+                    ? Fail("PXECS002", $"The property {property.Name} of the query {type.Name} must be a field.", property.Locations[0])
+                    : Fail("PXECS002", $"The query {type.Name} captures a primary constructor parameter, which would be left unset. A query holds only fields.",
+                        syntax.ParameterList?.GetLocation() ?? typeLocation);
             }
 
             if (field.Type is not INamedTypeSymbol { IsGenericType: true } fieldType)
@@ -73,7 +88,7 @@ public class QueryGenerator : IIncrementalGenerator
             {
                 fields.Add(new QueryField(GeneratorSupport.Escape(field.Name), null));
             }
-            else if (!isEntity && element.IsValueType && element is not ITypeParameterSymbol && (span == SpanName || span == ReadOnlySpanName))
+            else if (!isEntity && element.IsValueType && !element.IsRefLikeType && element is not ITypeParameterSymbol && (span == SpanName || span == ReadOnlySpanName))
             {
                 string component = element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 if (fields.Any(existing => existing.ComponentType == component))
@@ -128,7 +143,7 @@ public class QueryGenerator : IIncrementalGenerator
 
     private static QueryExtraction FailField(IFieldSymbol field, INamedTypeSymbol type)
     {
-        return Fail("PXECS002", $"The field {field.Name} of the query {type.Name} must be a Span<T> or ReadOnlySpan<T> of a struct component, or ReadOnlySpan<Entity>.", field.Locations[0]);
+        return Fail("PXECS002", $"The field {field.Name} of the query {type.Name} must be a Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct, or ReadOnlySpan<Entity>.", field.Locations[0]);
     }
 
     private static QueryExtraction Fail(string id, string message, Location location) => new QueryExtraction(null, GeneratorSupport.CreateDiagnostic(id, message, location));
@@ -139,17 +154,18 @@ public class QueryGenerator : IIncrementalGenerator
         string queryInterface = $"global::Pixely.Ecs.IQuery<{name}>";
         return GeneratorSupport.Generate(query.Type, queryInterface, (sb, indent) =>
         {
+            sb.AppendLine($"{indent}[global::System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
             sb.AppendLine($"{indent}private {name}(global::Pixely.Ecs.ArchetypeChunk chunk)");
             sb.AppendLine($"{indent}{{");
             foreach (QueryField field in query.Fields)
             {
                 string value = field.ComponentType is null ? "chunk.Entities" : $"chunk.GetSpan<{field.ComponentType}>()";
-                sb.AppendLine($"{indent}    {field.Name} = {value};");
+                sb.AppendLine($"{indent}    this.{field.Name} = {value};");
             }
 
             sb.AppendLine($"{indent}}}");
             sb.AppendLine();
-            sb.AppendLine($"{indent}public int Count => {query.Fields[0].Name}.Length;");
+            sb.AppendLine($"{indent}public int Count => this.{query.Fields[0].Name}.Length;");
             sb.AppendLine();
             sb.AppendLine($"{indent}static void {queryInterface}.Describe(global::Pixely.Ecs.QueryDescription description)");
             sb.AppendLine($"{indent}{{");
