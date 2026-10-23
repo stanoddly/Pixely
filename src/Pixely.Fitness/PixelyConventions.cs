@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.DependencyInjection;
-using Pixely.Events;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using Pixely.Shaders;
@@ -22,7 +21,7 @@ public static class PixelyConventions
     // The GPU objects a type owns when it holds them; the device and a command buffer are held but never owned.
     private static readonly Type[] OwnedGpuTypes = [typeof(Texture), typeof(GpuVertexBuffer), typeof(GpuIndexBuffer), typeof(GpuStorageBuffer), typeof(GraphicsPipeline), typeof(ComputePipeline), typeof(Sampler), typeof(GraphicsShaderProgram)];
 
-    private static readonly Type[] FrameParticipantTypes = [typeof(IUpdatable), typeof(IRenderer<>), typeof(IEventHandler<>)];
+    private static readonly Type[] FrameParticipantTypes = [typeof(IUpdatable), typeof(IRenderer<>)];
 
     public static FitnessReport Evaluate(PixelyConventionsOptions options)
     {

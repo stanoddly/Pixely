@@ -688,7 +688,7 @@ public class ServiceProvider : IDisposable
     }
 
     // Disposing callbacks fire before IDisposable.Dispose so callers can still use the
-    // service (e.g. unsubscribe from event buses) while it is operational.
+    // service (e.g. remove it from a registry) while it is operational.
     // A throwing callback still lets the service dispose, so a bad callback cannot leak the service.
     private void DisposeService(
         object service,

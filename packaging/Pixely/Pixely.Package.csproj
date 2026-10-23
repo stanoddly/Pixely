@@ -44,10 +44,8 @@
         <ProjectReference Include="..\..\src\Pixely.Fitness\Pixely.Fitness.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Audio\Pixely.Audio.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Collections\Pixely.Collections.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
-        <ProjectReference Include="..\..\src\Pixely.Componentize\Pixely.Componentize.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Core\Pixely.Core.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
-        <ProjectReference Include="..\..\src\Pixely.Events\Pixely.Events.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Models\Pixely.Models.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Observations\Pixely.Observations.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />

@@ -12,8 +12,6 @@
     <Project Path="src/Pixely.Collections/Pixely.Collections.csproj" />
     <Project Path="src/Pixely.Core/Pixely.Core.csproj" />
     <Project Path="src/Pixely.Observations/Pixely.Observations.csproj" />
-    <Project Path="src/Pixely.Componentize/Pixely.Componentize.csproj" />
-    <Project Path="src/Pixely.Events/Pixely.Events.csproj" />
     <Project Path="src/Pixely.SdlangCompiler/Pixely.SdlangCompiler.csproj" />
     <Project Path="src/Pixely.ShaderCommon/Pixely.ShaderCommon.csproj" />
     <Project Path="src/Pixely.DependencyInjection/Pixely.DependencyInjection.csproj" />
@@ -29,14 +27,12 @@
     <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
     <Project Path="tests/Pixely.Observations.Tests/Pixely.Observations.Tests.csproj" />
-    <Project Path="tests/Pixely.Componentize.Tests/Pixely.Componentize.Tests.csproj" />
     <Project Path="tests/Pixely.Content.Tests/Pixely.Content.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangCompiler.Tests/Pixely.SdlangCompiler.Tests.csproj" />
     <Project Path="tests/Pixely.DependencyInjection.Generator.Tests/Pixely.DependencyInjection.Generator.Tests.csproj" />
     <Project Path="tests/Pixely.DependencyInjection.Tests/Pixely.DependencyInjection.Tests.csproj" />
     <Project Path="tests/Pixely.Ui.Tests/Pixely.Ui.Tests.csproj" />
-    <Project Path="tests/Pixely.Events.Tests/Pixely.Events.Tests.csproj" />
     <Project Path="tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj" />
     <Project Path="tests/Pixely.Models.Tests/Pixely.Models.Tests.csproj" />
     <Project Path="tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj" />

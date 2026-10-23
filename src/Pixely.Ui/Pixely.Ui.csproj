@@ -15,7 +15,6 @@
     <ItemGroup>
         <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
         <ProjectReference Include="..\Pixely\Pixely.csproj" />
-        <ProjectReference Include="..\Pixely.Componentize\Pixely.Componentize.csproj" />
         <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
         <ProjectReference Include="..\Pixely.SdlangCompiler\Pixely.SdlangCompiler.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"

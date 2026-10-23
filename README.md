@@ -10,7 +10,7 @@ helps the projects it serves.
 
 The project collects ideas and patterns that grew out of years of game and tool
 prototyping: rendering helpers, shader compilation, input/windowing,
-immediate-mode UI experiments, audio, content loading, events, dependency
+immediate-mode UI experiments, audio, content loading, dependency
 injection, and architecture/testing utilities.
 
 ## Status
