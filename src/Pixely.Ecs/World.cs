@@ -223,9 +223,12 @@ public sealed class World
         }
     }
 
+    // Only a failed sync point releases, and only entities its spawner reserved, so the entity is reserved without a check.
     internal void ReleaseReservation(Entity entity)
     {
-        FreeIndex(ref GetReservedRecord(entity), entity.Index);
+        ref EntityRecord record = ref _records[entity.Index];
+        Debug.Assert(record.Version == entity.Version && record.Row == ReservedRow);
+        FreeIndex(ref record, entity.Index);
     }
 
     internal BlueprintState GetBlueprintState<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
@@ -298,20 +301,6 @@ public sealed class World
         }
 
         throw new ArgumentException($"{entity} is not alive.", nameof(entity));
-    }
-
-    private ref EntityRecord GetReservedRecord(Entity entity)
-    {
-        if ((uint)entity.Index < (uint)_records.Count)
-        {
-            ref EntityRecord record = ref _records[entity.Index];
-            if (record.Version == entity.Version && record.Row == ReservedRow)
-            {
-                return ref record;
-            }
-        }
-
-        throw new ArgumentException($"{entity} is not reserved.", nameof(entity));
     }
 
     private int TakeIndex()

@@ -216,7 +216,7 @@ The generator fails the build on these:
 | PXECS004 | A query has at least one field and requires at least one component. |
 | PXECS005 | No component is both required and excluded by a query. |
 | PXECS006 | A blueprint is a non-generic partial struct that is not a `ref struct` or `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
-| PXECS007 | Each member of a blueprint is a struct component, not `Entity`, a `ref struct` or a type parameter. |
+| PXECS007 | Each member of a blueprint is a struct component, not `Entity`, a `ref struct` or a type parameter, and a blueprint captures no primary constructor parameter. |
 | PXECS008 | No component appears in two members of a blueprint. |
 | PXECS009 | A blueprint holds at least one component. |
 | PXECS010 | `AddSystem<T>` takes a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. |
