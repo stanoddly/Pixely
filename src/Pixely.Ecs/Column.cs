@@ -25,18 +25,20 @@ internal abstract class Column
 {
     public abstract ColumnType Type { get; }
 
-    public abstract void Grow(int count);
+    public abstract void AddChunk();
 
-    public abstract void Shrink(int count);
+    // Copies the row to the destination row of a column of the same type, then moves the last row into its place.
+    public abstract void MoveRow(int row, int lastRow, Column destination, int destinationRow);
 
-    // Appends the row to the destination, which holds the same component type, and swap-removes it here.
-    public abstract void MoveRow(int row, Column destination);
+    // Moves the last row into the row and clears the last row, so the column stops referencing what it held.
+    public abstract void RemoveRow(int row, int lastRow);
 
-    public abstract void RemoveRow(int row);
+    // Clears the rows when they can hold references, so the column stops referencing what they held.
+    public abstract void ClearRows(int first, int count);
 }
 
 // Stores rows in chunks of 1 << chunkShift, so it grows without copying and a row is a shift and a mask away.
-// Rows passed to the unchecked members must be below Count, which the world's records guarantee.
+// The archetype counts the rows and adds the chunks; rows passed to the unchecked members lie in an added chunk.
 internal sealed class Column<T> : Column where T : struct
 {
     private readonly int _shift;
@@ -47,8 +49,6 @@ internal sealed class Column<T> : Column where T : struct
     {
         _shift = chunkShift;
     }
-
-    public int Count { get; private set; }
 
     public override ColumnType Type => ColumnType<T>.Instance;
 
@@ -62,70 +62,46 @@ internal sealed class Column<T> : Column where T : struct
 
     public ref T GetUnchecked(int row)
     {
-        Debug.Assert((uint)row < (uint)Count);
+        Debug.Assert((uint)row < (uint)(_chunkCount << _shift));
         T[] chunk = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunks), row >> _shift);
         return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), row & Mask);
     }
 
-    public int Add(in T value)
+    public override void AddChunk()
     {
-        int row = Count;
-        EnsureCapacity(row + 1);
-        Count = row + 1;
-        GetUnchecked(row) = value;
-        return row;
+        if (_chunkCount == _chunks.Length)
+        {
+            Array.Resize(ref _chunks, _chunks.Length * 2);
+        }
+
+        _chunks[_chunkCount++] = new T[1 << _shift];
     }
 
-    public override void Grow(int count)
+    public override void MoveRow(int row, int lastRow, Column destination, int destinationRow)
     {
-        EnsureCapacity(Count + count);
-        Count += count;
+        Debug.Assert(destination is Column<T>);
+        Unsafe.As<Column<T>>(destination).GetUnchecked(destinationRow) = GetUnchecked(row);
+        RemoveRow(row, lastRow);
     }
 
-    // Drops the last count rows, clearing them so the column stops referencing what they held.
-    public override void Shrink(int count)
+    public override void RemoveRow(int row, int lastRow)
+    {
+        ref T last = ref GetUnchecked(lastRow);
+        GetUnchecked(row) = last;
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            last = default;
+        }
+    }
+
+    public override void ClearRows(int first, int count)
     {
         if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            for (int row = Count - count; row < Count; row++)
+            for (int row = first; row < first + count; row++)
             {
                 GetUnchecked(row) = default;
             }
-        }
-
-        Count -= count;
-    }
-
-    public override void MoveRow(int row, Column destination)
-    {
-        Debug.Assert(destination is Column<T>);
-        Unsafe.As<Column<T>>(destination).Add(GetUnchecked(row));
-        RemoveRow(row);
-    }
-
-    // Clears the vacated last row, so the column stops referencing what it held.
-    public override void RemoveRow(int row)
-    {
-        int last = Count - 1;
-        GetUnchecked(row) = GetUnchecked(last);
-        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            GetUnchecked(last) = default;
-        }
-
-        Count = last;
-    }
-
-    private void EnsureCapacity(int rows)
-    {
-        while (_chunkCount << _shift < rows)
-        {
-            if (_chunkCount == _chunks.Length)
-            {
-                Array.Resize(ref _chunks, _chunks.Length * 2);
-            }
-
-            _chunks[_chunkCount++] = new T[1 << _shift];
         }
     }
 }
