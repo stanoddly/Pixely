@@ -25,6 +25,40 @@ public class WorldTests
     }
 
     [Test]
+    public void EntityOfAnotherWorldPastItsEntitiesIsNotAlive()
+    {
+        World other = new World();
+        Entity entity = default;
+        for (int i = 0; i < 10; i++)
+        {
+            entity = other.Create();
+        }
+
+        World world = new World();
+        world.Create();
+
+        Assert.That(world.IsAlive(entity), Is.False);
+        Assert.Throws<ArgumentException>(() => world.Destroy(entity));
+    }
+
+    [Test]
+    public void EntitiesAreEqualOnlyWithTheSameIndexAndVersion()
+    {
+        World world = new World();
+        Entity destroyed = world.Create();
+        world.Destroy(destroyed);
+        Entity reused = world.Create();
+        Entity copy = reused;
+
+        Assert.That(reused == copy, Is.True);
+        Assert.That(reused != destroyed, Is.True);
+        Assert.That(reused.Equals((object)copy), Is.True);
+        Assert.That(reused.Equals((object)destroyed), Is.False);
+        Assert.That(reused.GetHashCode(), Is.EqualTo(copy.GetHashCode()));
+        Assert.That(reused.ToString(), Is.EqualTo("Entity { Index=0, Version=2 }"));
+    }
+
+    [Test]
     public void DestroyedEntityStaysDeadAfterItsIndexIsReused()
     {
         World world = new World();

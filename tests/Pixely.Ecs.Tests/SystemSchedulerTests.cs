@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Pixely.Ecs.Tests;
 
 public class SystemSchedulerTests
@@ -50,25 +52,38 @@ public class SystemSchedulerTests
         public void Update() => update();
     }
 
-    // Hand-written, to throw from Write after writing the blueprints before the one that fails.
-    private struct FailingBlueprint : IBlueprint<FailingBlueprint>
+    // Hand-written, to throw from Write after writing the blueprints before the one that fails and the one that fails.
+    private struct FailingBlueprint<T> : IBlueprint<FailingBlueprint<T>> where T : struct
     {
-        public Position Position;
+        public T Component;
         public bool Fails;
 
-        public static void Describe(BlueprintDescription description) => description.Add<Position>();
+        public static void Describe(BlueprintDescription description) => description.Add<T>();
 
-        public static void Write(ReadOnlySpan<FailingBlueprint> blueprints, BlueprintColumns columns)
+        public static void Write(ReadOnlySpan<FailingBlueprint<T>> blueprints, BlueprintColumns columns)
         {
-            Span<Position> positions = columns.Get<Position>(0);
+            Span<T> components = columns.Get<T>(0);
             for (int i = 0; i < blueprints.Length; i++)
             {
-                positions[i] = blueprints[i].Position;
+                components[i] = blueprints[i].Component;
                 if (blueprints[i].Fails)
                 {
                     throw new InvalidOperationException("The blueprint failed.");
                 }
             }
+        }
+    }
+
+    private struct DuplicateBlueprint : IBlueprint<DuplicateBlueprint>
+    {
+        public static void Describe(BlueprintDescription description)
+        {
+            description.Add<Position>();
+            description.Add<Position>();
+        }
+
+        public static void Write(ReadOnlySpan<DuplicateBlueprint> blueprints, BlueprintColumns columns)
+        {
         }
     }
 
@@ -343,16 +358,16 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
         bool fail = true;
-        Spawner<FailingBlueprint> spawner = null!;
+        Spawner<FailingBlueprint<Position>> spawner = null!;
         scheduler.Add(builder =>
         {
-            spawner = builder.Spawner<FailingBlueprint>();
+            spawner = builder.Spawner<FailingBlueprint<Position>>();
             return new ActionSystem(() =>
             {
                 spawned.Clear();
                 for (int i = 0; i < count; i++)
                 {
-                    spawned.Add(spawner.Spawn(new FailingBlueprint { Position = new Position(i, 0), Fails = fail && i == count - 1 }));
+                    spawned.Add(spawner.Spawn(new FailingBlueprint<Position> { Component = new Position(i, 0), Fails = fail && i == count - 1 }));
                 }
             });
         });
@@ -369,6 +384,68 @@ public class SystemSchedulerTests
         Assert.That(spawned.All(world.IsAlive), Is.True);
         Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
         Assert.That(CountPositions(world), Is.EqualTo(count + 1));
+    }
+
+    [Test]
+    public void FailedBlueprintWriteKeepsNoReferenceToTheComponentsItWrote()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+        WeakReference written = null!;
+        Spawner<FailingBlueprint<Name>> spawner = null!;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<FailingBlueprint<Name>>();
+            return new ActionSystem(() => written = SpawnFailingName(spawner));
+        });
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.That(written.IsAlive, Is.False);
+    }
+
+    [Test]
+    public void CommandsRecordedAfterAFailedOneAreDropped()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        Spawner<FailingBlueprint<Position>> spawner = null!;
+        ComponentAdder<Name> names = null!;
+        bool fail = true;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<FailingBlueprint<Position>>();
+            names = builder.ComponentAdder<Name>();
+            return new ActionSystem(() =>
+            {
+                if (fail)
+                {
+                    spawner.Spawn(new FailingBlueprint<Position> { Fails = true });
+                    names.Add(entity, new Name("dropped"));
+                }
+            });
+        });
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        fail = false;
+        scheduler.Update();
+
+        Assert.That(world.Has<Name>(entity), Is.False);
+    }
+
+    [Test]
+    public void BlueprintDescribingAComponentTwiceThrows()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        {
+            builder.Spawner<DuplicateBlueprint>();
+            return new ActionSystem(() => { });
+        }));
     }
 
     [Test]
@@ -548,6 +625,15 @@ public class SystemSchedulerTests
         });
 
         Assert.Throws<InvalidOperationException>(() => builder.ComponentAdder<Dead>());
+    }
+
+    // Creates the component's string here, so nothing but the world and the spawner can reference it once this returns.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference SpawnFailingName(Spawner<FailingBlueprint<Name>> spawner)
+    {
+        string value = new string('x', 8);
+        spawner.Spawn(new FailingBlueprint<Name> { Component = new Name(value), Fails = true });
+        return new WeakReference(value);
     }
 
     private static int CountPositions(World world)

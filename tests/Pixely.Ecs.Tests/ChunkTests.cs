@@ -122,6 +122,33 @@ public class ChunkTests
         Assert.That(CountMovement(world), Is.EqualTo(2003));
     }
 
+    // 10,000 entities need more than the four chunks each list and column starts with room for.
+    [Test]
+    public void SpawningMoreThanTheInitialChunksKeepsEveryValue()
+    {
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        List<Entity> spawned = [];
+        Spawner<MovingBlueprint> spawner = null!;
+        scheduler.Add(builder =>
+        {
+            spawner = builder.Spawner<MovingBlueprint>();
+            return new ActionSystem(() =>
+            {
+                for (int i = 0; i < 10000; i++)
+                {
+                    spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0), Velocity = new Velocity(0, i) }));
+                }
+            });
+        });
+
+        scheduler.Update();
+
+        Assert.That(CountMovement(world), Is.EqualTo(10000));
+        Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.Get<Velocity>(entity).Y), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
+    }
+
     private static Entity[] CreateMoving(World world, int count)
     {
         Entity[] entities = new Entity[count];
