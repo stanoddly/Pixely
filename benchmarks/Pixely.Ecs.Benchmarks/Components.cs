@@ -16,3 +16,10 @@ public ref partial struct Movement
     public Span<Position> Positions;
     public ReadOnlySpan<Velocity> Velocities;
 }
+
+[Blueprint]
+public partial struct MovingBlueprint
+{
+    public Position Position;
+    public Velocity Velocity;
+}

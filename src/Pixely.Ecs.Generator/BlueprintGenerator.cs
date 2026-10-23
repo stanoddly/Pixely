@@ -102,13 +102,21 @@ public class BlueprintGenerator : IIncrementalGenerator
 
             sb.AppendLine($"{indent}}}");
             sb.AppendLine();
-            sb.AppendLine($"{indent}static void {blueprintInterface}.Write(in {name} blueprint, global::Pixely.Ecs.BlueprintRow row)");
+            sb.AppendLine($"{indent}static void {blueprintInterface}.Write(global::System.ReadOnlySpan<{name}> blueprints, global::Pixely.Ecs.BlueprintColumns columns)");
             sb.AppendLine($"{indent}{{");
             for (int i = 0; i < blueprint.Fields.Length; i++)
             {
-                sb.AppendLine($"{indent}    row.Set({i}, blueprint.{blueprint.Fields[i].Member});");
+                sb.AppendLine($"{indent}    global::System.Span<{blueprint.Fields[i].ComponentType}> column{i} = columns.Get<{blueprint.Fields[i].ComponentType}>({i});");
             }
 
+            sb.AppendLine($"{indent}    for (int i = 0; i < blueprints.Length; i++)");
+            sb.AppendLine($"{indent}    {{");
+            for (int i = 0; i < blueprint.Fields.Length; i++)
+            {
+                sb.AppendLine($"{indent}        column{i}[i] = blueprints[i].{blueprint.Fields[i].Member};");
+            }
+
+            sb.AppendLine($"{indent}    }}");
             sb.AppendLine($"{indent}}}");
         });
     }

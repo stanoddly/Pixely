@@ -8,11 +8,12 @@ public sealed class World
     {
         public int Version;
         public Archetype? Archetype;
-        public int Row;
 
-        // Taken by a Spawner, without an archetype until the sync point spawns it.
-        public bool IsReserved;
+        // ReservedRow, without an archetype, marks an entity a Spawner took and the sync point has not spawned yet.
+        public int Row;
     }
+
+    private const int ReservedRow = -1;
 
     private readonly FastList<EntityRecord> _records = new FastList<EntityRecord>();
     private readonly FastList<int> _freeIndices = new FastList<int>();
@@ -167,26 +168,34 @@ public sealed class World
     {
         int index = TakeIndex();
         ref EntityRecord record = ref _records[index];
-        record.IsReserved = true;
+        record.Row = ReservedRow;
         return new Entity(index, record.Version);
     }
 
-    internal void Spawn<TBlueprint>(Entity entity, in TBlueprint blueprint) where TBlueprint : struct, IBlueprint<TBlueprint>
+    // Spawns reserved entities together, so each column grows once and the blueprints are copied into it directly.
+    internal void Spawn<TBlueprint>(ReadOnlySpan<Entity> entities, ReadOnlySpan<TBlueprint> blueprints) where TBlueprint : struct, IBlueprint<TBlueprint>
     {
         ThrowIfQueryRuns();
-        ref EntityRecord record = ref GetReservedRecord(entity);
+        foreach (Entity entity in entities)
+        {
+            GetReservedRecord(entity);
+        }
+
         BlueprintState state = GetBlueprintState<TBlueprint>();
-        record.IsReserved = false;
-        record.Archetype = state.Archetype;
-        record.Row = state.Archetype.AddRowWithDefaults(entity);
-        TBlueprint.Write(blueprint, new BlueprintRow(state.Archetype, state.Columns, record.Row));
+        Archetype archetype = state.Archetype;
+        int firstRow = archetype.AddRows(entities);
+        TBlueprint.Write(blueprints, new BlueprintColumns(archetype, state.Columns, firstRow, entities.Length));
+        for (int i = 0; i < entities.Length; i++)
+        {
+            ref EntityRecord record = ref _records[entities[i].Index];
+            record.Archetype = archetype;
+            record.Row = firstRow + i;
+        }
     }
 
     internal void ReleaseReservation(Entity entity)
     {
-        ref EntityRecord record = ref GetReservedRecord(entity);
-        record.IsReserved = false;
-        FreeIndex(ref record, entity.Index);
+        FreeIndex(ref GetReservedRecord(entity), entity.Index);
     }
 
     internal BlueprintState GetBlueprintState<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
@@ -255,7 +264,7 @@ public sealed class World
 
     private ref EntityRecord GetReservedRecord(Entity entity)
     {
-        if ((uint)entity.Index >= (uint)_records.Length || _records[entity.Index].Version != entity.Version || !_records[entity.Index].IsReserved)
+        if ((uint)entity.Index >= (uint)_records.Length || _records[entity.Index].Version != entity.Version || _records[entity.Index].Row != ReservedRow)
         {
             throw new ArgumentException($"{entity} is not reserved.", nameof(entity));
         }
@@ -278,6 +287,7 @@ public sealed class World
     // A new version keeps the handles of the freed entity dead after the index is reused.
     private void FreeIndex(ref EntityRecord record, int index)
     {
+        record.Row = 0;
         record.Version = record.Version == int.MaxValue ? 1 : record.Version + 1;
         _freeIndices.Add(index);
     }
