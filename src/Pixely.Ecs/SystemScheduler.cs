@@ -8,14 +8,17 @@ public sealed class SystemScheduler : IUpdatable
 {
     private sealed class SystemEntry
     {
-        public SystemEntry(ISystem system, SystemContract contract, CommandBuffer commands)
+        public SystemEntry(object system, Action update, SystemContract contract, CommandBuffer commands)
         {
             System = system;
+            Update = update;
             Contract = contract;
             Commands = commands;
         }
 
-        public ISystem System { get; }
+        public object System { get; }
+
+        public Action Update { get; }
 
         public SystemContract Contract { get; }
 
@@ -35,27 +38,41 @@ public sealed class SystemScheduler : IUpdatable
         _world = world;
     }
 
+    // Adds an ISystem. For an ISystem<...>, the Pixely.Ecs generator intercepts this call and passes the queries and writers of its type arguments.
     // A system added during Update runs from the next Update.
-    public TSystem Add<TSystem>(Func<SystemBuilder, TSystem> create) where TSystem : ISystem
+    public TSystem Add<TSystem>(TSystem system) where TSystem : class
+    {
+        if (system is not ISystem)
+        {
+            throw new InvalidOperationException(
+                $"Add({typeof(TSystem).Name}) was not intercepted by the source generator, which an ISystem<...> needs. Reference Pixely.Ecs.Generator as an analyzer and add Pixely.Ecs.Generated to InterceptorsNamespaces.");
+        }
+
+        return Add(system, static _ => static system => ((ISystem)system).Update());
+    }
+
+    // bind creates the system's queries and writers through the builder, which records them as its contract, and returns the call of its Update with them.
+    // The generated code of Add and AddSystem calls it.
+    public TSystem Add<TSystem>(TSystem system, Func<SystemBuilder, Action<TSystem>> bind) where TSystem : class
     {
         SystemBuilder builder = new SystemBuilder(_world);
-        TSystem system;
+        Action<TSystem> update;
         try
         {
-            system = create(builder);
+            update = bind(builder);
         }
         finally
         {
             builder.Close();
         }
 
-        _entries.Add(new SystemEntry(system, builder.Contract, builder.Commands));
+        _entries.Add(new SystemEntry(system, () => update(system), builder.Contract, builder.Commands));
         _planIsStale = true;
         return system;
     }
 
     // A system removed during Update still runs in that Update and leaves from the next one.
-    public void Remove(ISystem system)
+    public void Remove(object system)
     {
         foreach (SystemEntry entry in _entries.AsReadOnlySpan())
         {
@@ -86,7 +103,16 @@ public sealed class SystemScheduler : IUpdatable
                 segmentStart = i;
             }
 
-            entry.System.Update();
+            // A writer records only while its system updates, so one kept past Update throws instead of applying its change at an unexpected sync point.
+            entry.Commands.IsRecording = true;
+            try
+            {
+                entry.Update();
+            }
+            finally
+            {
+                entry.Commands.IsRecording = false;
+            }
         }
 
         ApplyCommands(segmentStart, count);

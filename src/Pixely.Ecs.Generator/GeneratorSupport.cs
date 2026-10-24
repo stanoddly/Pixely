@@ -7,6 +7,15 @@ using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
 
+enum SpanKind
+{
+    Entities,
+    Span,
+    ReadOnlySpan,
+    Tag,
+    Invalid
+}
+
 readonly record struct DiagnosticInfo(string Id, string Message, string FilePath, int Line, int Column, int EndLine, int EndColumn);
 
 // Where a generated partial type goes: its namespace, the types that contain it and its own declaration.
@@ -16,8 +25,54 @@ static class GeneratorSupport
 {
     public const string EntityName = "Pixely.Ecs.Entity";
     public const string TagName = "Pixely.Ecs.ITag";
+    public const string QueryName = "Pixely.Ecs.Query";
+    private const string SpanName = "System.Span<T>";
+    private const string ReadOnlySpanName = "System.ReadOnlySpan<T>";
 
     public static bool IsTag(ITypeSymbol type) => type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == TagName);
+
+    // What a type argument of Query<...> reads: ReadOnlySpan<Entity>, or Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct,
+    // a type parameter or a tag. element is the T of a span.
+    public static SpanKind ClassifySpan(ITypeSymbol type, out ITypeSymbol? element)
+    {
+        element = null;
+        if (type is not INamedTypeSymbol { IsGenericType: true } named)
+        {
+            return SpanKind.Invalid;
+        }
+
+        string span = named.ConstructedFrom.ToDisplayString();
+        if (span != SpanName && span != ReadOnlySpanName)
+        {
+            return SpanKind.Invalid;
+        }
+
+        element = named.TypeArguments[0];
+        if (element.ToDisplayString() == EntityName)
+        {
+            return span == ReadOnlySpanName ? SpanKind.Entities : SpanKind.Invalid;
+        }
+
+        if (IsTag(element))
+        {
+            return SpanKind.Tag;
+        }
+
+        if (!element.IsValueType || element.IsRefLikeType || ContainsTypeParameter(element))
+        {
+            return SpanKind.Invalid;
+        }
+
+        return span == SpanName ? SpanKind.Span : SpanKind.ReadOnlySpan;
+    }
+
+    public static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+    {
+        ITypeParameterSymbol => true,
+        IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+        INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter) || (named.ContainingType is not null && ContainsTypeParameter(named.ContainingType)),
+        _ => false
+    };
 
     public static DiagnosticInfo CreateDiagnostic(string id, string message, Location location)
     {

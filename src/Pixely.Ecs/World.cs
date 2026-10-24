@@ -27,7 +27,7 @@ public sealed class World
     private readonly FastList<int> _freeIndices = new FastList<int>();
     private readonly Dictionary<ComponentSet, Archetype> _archetypesBySet = new Dictionary<ComponentSet, Archetype>();
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
-    private readonly FastList<QueryState?> _queries = new FastList<QueryState?>(4);
+    private readonly FastList<Query?> _queries = new FastList<Query?>(4);
     private readonly FastList<BlueprintState?> _blueprints = new FastList<BlueprintState?>(4);
     private readonly Archetype _emptyArchetype;
 
@@ -161,14 +161,8 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
-    public QueryEnumerable<TQuery> Query<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
-    {
-        QueryState state = GetQueryState<TQuery>();
-        state.Update(_archetypes);
-        return new QueryEnumerable<TQuery>(this, state);
-    }
-
-    internal QueryState GetQueryState<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
+    // One instance per world and query type, created on first use. Enumerate it with foreach.
+    public TQuery Query<TQuery>() where TQuery : Query, new()
     {
         int id = QueryId<TQuery>.Id;
         if (id >= _queries.Length)
@@ -176,21 +170,21 @@ public sealed class World
             _queries.Resize(id + 1);
         }
 
-        ref QueryState? state = ref _queries[id];
-        if (state is null)
+        ref Query? query = ref _queries[id];
+        if (query is null)
         {
-            QueryDescription description = new QueryDescription();
-            TQuery.Describe(description);
-            ComponentSet required = description.Required;
-            if (required.Ids.IsEmpty)
-            {
-                throw new InvalidOperationException($"The query {typeof(TQuery).Name} must require at least one component.");
-            }
-
-            state = new QueryState(required, description.Excluded);
+            TQuery created = new TQuery();
+            created.Initialize(this);
+            query = created;
         }
 
-        return state;
+        return (TQuery)query;
+    }
+
+    internal ChunkEnumerator QueryChunks(QueryState state)
+    {
+        state.Update(_archetypes);
+        return new ChunkEnumerator(this, state.Matches);
     }
 
     // Allowed while a query runs, because the entity gets no archetype until Spawn.

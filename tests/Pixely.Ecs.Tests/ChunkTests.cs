@@ -4,11 +4,6 @@ namespace Pixely.Ecs.Tests;
 
 public class ChunkTests
 {
-    private sealed class ActionSystem(Action update) : ISystem
-    {
-        public void Update() => update();
-    }
-
     [Test]
     public void QueryVisitsEveryEntityAcrossChunksOfAPowerOfTwoRows()
     {
@@ -17,13 +12,13 @@ public class ChunkTests
 
         List<int> counts = [];
         HashSet<Entity> visited = [];
-        foreach (Movement chunk in world.Query<Movement>())
+        foreach ((ReadOnlySpan<Entity> chunkEntities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in world.Query<Movement>())
         {
-            counts.Add(chunk.Count);
-            for (int i = 0; i < chunk.Count; i++)
+            counts.Add(positions.Length);
+            for (int i = 0; i < positions.Length; i++)
             {
-                chunk.Positions[i].X += chunk.Velocities[i].X;
-                visited.Add(chunk.Entities[i]);
+                positions[i].X += velocities[i].X;
+                visited.Add(chunkEntities[i]);
             }
         }
 
@@ -100,19 +95,14 @@ public class ChunkTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        Spawner<MovingBlueprint> spawner = null!;
         int count = 3;
-        scheduler.Add(builder =>
+        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
         {
-            spawner = builder.Spawner<MovingBlueprint>();
-            return new ActionSystem(() =>
+            for (int i = 0; i < count; i++)
             {
-                for (int i = 0; i < count; i++)
-                {
-                    spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(spawned.Count, 0), Velocity = new Velocity(1, 0) }));
-                }
-            });
-        });
+                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(spawned.Count, 0), Velocity = new Velocity(1, 0) }));
+            }
+        }));
 
         scheduler.Update();
         count = 2000;
@@ -129,18 +119,13 @@ public class ChunkTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        Spawner<MovingBlueprint> spawner = null!;
-        scheduler.Add(builder =>
+        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
         {
-            spawner = builder.Spawner<MovingBlueprint>();
-            return new ActionSystem(() =>
+            for (int i = 0; i < 10000; i++)
             {
-                for (int i = 0; i < 10000; i++)
-                {
-                    spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0), Velocity = new Velocity(0, i) }));
-                }
-            });
-        });
+                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0), Velocity = new Velocity(0, i) }));
+            }
+        }));
 
         scheduler.Update();
 
@@ -165,9 +150,9 @@ public class ChunkTests
     private static int CountMovement(World world)
     {
         int count = 0;
-        foreach (Movement chunk in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> columns in world.Query<Movement>())
         {
-            count += chunk.Count;
+            count += columns.Count;
         }
 
         return count;

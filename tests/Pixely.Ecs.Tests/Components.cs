@@ -10,78 +10,18 @@ public struct Frozen : ITag;
 
 public struct Player;
 
-[Query]
-public ref partial struct Movement
-{
-    public ReadOnlySpan<Entity> Entities;
-    public Span<Position> Positions;
-    public ReadOnlySpan<Velocity> Velocities;
-}
+public sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>;
 
-[Query]
-[Without<Frozen>]
-public ref partial struct UnfrozenPositions
-{
-    public ReadOnlySpan<Entity> Entities;
-    public ReadOnlySpan<Position> Positions;
-}
+public sealed class UnfrozenPositions : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>>, IWithout<Frozen>;
 
-[Query]
-[With<Player>]
-public readonly ref partial struct PlayerEntities
-{
-    public readonly ReadOnlySpan<Entity> Entities;
-}
+public sealed class PlayerEntities : Query<ReadOnlySpan<Entity>>, IWith<Player>;
 
-public partial class Container
-{
-    [Query]
-    internal ref partial struct NestedNames
-    {
-        public ReadOnlySpan<Name> Names;
-    }
-}
-
-// Hand-written, because the generator rejects a query that requires no component.
-public ref struct EverythingQuery : IQuery<EverythingQuery>
-{
-    public static void Describe(QueryDescription description)
-    {
-    }
-
-    public static EverythingQuery Create(ArchetypeChunk chunk) => new EverythingQuery();
-}
-
-public ref struct ManualPositions : IQuery<ManualPositions>
-{
-    public ReadOnlySpan<Entity> Entities;
-    public Span<Position> Positions;
-    public bool HasVelocity;
-
-    public static void Describe(QueryDescription description) => description.With<Position>();
-
-    public static ManualPositions Create(ArchetypeChunk chunk) =>
-        new ManualPositions { Entities = chunk.Entities, Positions = chunk.GetSpan<Position>(), HasVelocity = chunk.Has<Velocity>() };
-}
-
-// Wrong on purpose: it reads Velocity without requiring it.
-public ref struct VelocitiesOfPositions : IQuery<VelocitiesOfPositions>
-{
-    public Span<Velocity> Velocities;
-
-    public static void Describe(QueryDescription description) => description.With<Position>();
-
-    public static VelocitiesOfPositions Create(ArchetypeChunk chunk) => new VelocitiesOfPositions { Velocities = chunk.GetSpan<Velocity>() };
-}
+// Wrong on purpose: it requires no component.
+public sealed class EntitiesOnly : Query<ReadOnlySpan<Entity>>;
 
 public struct Dead : ITag;
 
-[Query]
-[With<Dead>]
-public ref partial struct Corpses
-{
-    public ReadOnlySpan<Entity> Entities;
-}
+public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
 
 [Blueprint]
 public partial struct MovingBlueprint
@@ -106,27 +46,11 @@ public partial struct MarkerBlueprint
     public Frozen Frozen;
 }
 
-[Query]
-[With<Frozen>]
-public ref partial struct FrozenPositions
-{
-    public ReadOnlySpan<Entity> Entities;
-    public ReadOnlySpan<Position> Positions;
-}
+public sealed class FrozenPositions : Query<ReadOnlySpan<Position>>, IWith<Frozen>;
 
-[Query]
-[With<Player>]
-public ref partial struct PlayerPositions
-{
-    public ReadOnlySpan<Position> Positions;
-}
+public sealed class PlayerPositions : Query<ReadOnlySpan<Position>>, IWith<Player>;
 
-// Wrong on purpose: it reads a tag, which has no data.
-public ref struct FrozenSpans : IQuery<FrozenSpans>
-{
-    public Span<Frozen> Frozen;
+public sealed class Positions : Query<ReadOnlySpan<Position>>;
 
-    public static void Describe(QueryDescription description) => description.With<Frozen>();
-
-    public static FrozenSpans Create(ArchetypeChunk chunk) => new FrozenSpans { Frozen = chunk.GetSpan<Frozen>() };
-}
+// Wrong on purpose: it requires and excludes Position. No system names it, so only the world checks it.
+public sealed class ExcludedPositions : Query<ReadOnlySpan<Position>>, IWithout<Position>;

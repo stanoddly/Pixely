@@ -121,6 +121,7 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
     // The entity is reserved now and becomes alive at the sync point, so other commands of the same system can already target it.
     public Entity Spawn(in TBlueprint blueprint)
     {
+        _commands.ThrowIfNotRecording();
         Entity entity = _commands.World.Reserve();
         _values.Add(blueprint);
         _commands.Record(this, _entities.Add(entity));
