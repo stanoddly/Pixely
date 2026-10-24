@@ -54,3 +54,12 @@ public sealed class Positions : Query<ReadOnlySpan<Position>>;
 
 // Wrong on purpose: it requires and excludes Position. No system names it, so only the world checks it.
 public sealed class ExcludedPositions : Query<ReadOnlySpan<Position>>, IWithout<Position>;
+
+public record struct Mass(float Value);
+
+// Queries whose Query<...> comes through a generic base, so the generator registers their spans through the derived class or the closed type.
+public abstract class ComponentQuery<T> : Query<ReadOnlySpan<T>> where T : struct;
+
+public sealed class Masses : ComponentQuery<Mass>;
+
+public sealed class Writable<T> : Query<Span<T>> where T : struct;

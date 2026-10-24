@@ -88,7 +88,7 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
 
-The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A type argument that nothing registered throws when its query is created; this happens only without the generator.
+The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that an `ISystem<...>` or `world.Query<T>()` names. A type argument that nothing registered throws when its query is created.
 
 A system gets its queries through `Update`. Other code, such as a renderer, gets one from `world.Query<Movement>()`. The world creates one instance of each query class, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
 
@@ -158,8 +158,9 @@ services.AddSystem<MovementSystem>();
 ```
 
 - `AddEcs` registers a `World` and a `SystemScheduler`. The scheduler is an `IUpdatable` at the default `UpdateOrder` and updates every system once per frame. A child collection that calls `AddEcs` keeps its parent's world and scheduler.
-- `AddSystem<T>` is intercepted by the generator. The generated code creates `T` with services for its constructor, registers it as a singleton of its own type, and adds it to the scheduler with the queries and writers of its `ISystem<...>`, which the scheduler records as the contract.
-- Systems run in the order of their `AddSystem` calls. A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice.
+- `AddSystem<T>` is intercepted by the generator, also through `?.`. The generated code registers `T` as a singleton of its own type, created with services for its constructor, and adds it to the scheduler with the queries and writers of its `ISystem<...>` when the provider creates it, before any `OnBuilt` callback runs. The scheduler records them as the contract.
+- Systems run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
+- A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS017 reports one that does.
 - A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
 
 ## Blueprints
@@ -209,7 +210,7 @@ Writers record their changes, and the scheduler applies them at sync points:
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
 
-When a change throws, the exception leaves `Update`, and the rest of that sync point's changes are dropped, including those of later systems. An entity whose spawn is dropped never becomes alive.
+When a change throws, the exception leaves `Update`, and the rest of that sync point's changes are dropped, including those of later systems. When a system's `Update` throws, the changes recorded since the last sync point are dropped, including those of earlier systems, and the exception leaves the scheduler's `Update`; changes applied at earlier sync points stay. An entity whose spawn is dropped never becomes alive.
 
 So with `DeathSystem`, `MovementSystem` and then a `CleanupSystem` whose query has `IWith<Dead>`:
 
@@ -234,7 +235,7 @@ scheduler.Update();
 
 - An `ISystem` needs no generated code, so `Add` works for it without the generator.
 - `Add` returns the system. `Remove` takes a system out; a system added or removed during `Update` takes effect from the next `Update`.
-- The generated code calls an overload of `Add` that also takes a function of a `SystemBuilder`. It creates the queries and writers once, which the builder records as the contract, and returns the call of `Update` with them. The builder works only during that call.
+- The generated code calls an overload of `Add` that also takes a function of a `SystemBuilder` and an order from `SystemScheduler.ReserveOrder()`. The function creates the queries and writers once, which the builder records as the contract, and returns the call of `Update` with them. The builder works only during that call. The scheduler runs its systems sorted by order, and `AddSystem` reserves the order when it is called, because the provider does not create singletons in call order.
 
 ## Diagnostics
 
@@ -258,6 +259,8 @@ The generator fails the build on these:
 | PXECS014 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
 | PXECS015 | A system implements exactly one of `ISystem` and `ISystem<...>`. |
 | PXECS016 | Each type argument of `ISystem<...>` is a query, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` or `Spawner<TBlueprint>`. |
+| PXECS017 | A system does not implement `IUpdatable`, which would update it a second time. |
+| PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, or they would throw. |
 
 PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime.
 

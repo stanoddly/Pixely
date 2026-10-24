@@ -66,6 +66,22 @@ static class GeneratorSupport
         return span == SpanName ? SpanKind.Span : SpanKind.ReadOnlySpan;
     }
 
+    public static bool IsQueryType(INamedTypeSymbol type) => type.IsGenericType && type.ConstructedFrom.ToDisplayString().StartsWith(QueryName + "<");
+
+    // The Query<...> that a query class derives from, with the type arguments of its base classes substituted.
+    public static INamedTypeSymbol? GetQueryBase(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? current = type; current is not null; current = current.BaseType)
+        {
+            if (IsQueryType(current))
+            {
+                return current;
+            }
+        }
+
+        return null;
+    }
+
     public static bool ContainsTypeParameter(ITypeSymbol type) => type switch
     {
         ITypeParameterSymbol => true,

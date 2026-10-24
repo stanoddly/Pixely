@@ -538,9 +538,64 @@ public class SystemSchedulerTests
         {
             builder = created;
             return static system => system.Update();
-        });
+        }, SystemScheduler.ReserveOrder());
 
         Assert.Throws<InvalidOperationException>(() => builder.ComponentAdder<Dead>());
+    }
+
+    // The commands recorded since the last sync point are dropped, so the next successful update does not apply them, and the spawn's entity is released.
+    [Test]
+    public void SystemThatThrowsDropsTheCommandsSinceTheLastSyncPoint()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        bool fail = true;
+        Entity spawned = default;
+        scheduler.Add(new ActionSystem<ComponentAdder<Name>>(names =>
+        {
+            if (fail)
+            {
+                names.Add(entity, new Name("dropped"));
+            }
+        }));
+        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
+        {
+            if (fail)
+            {
+                spawned = spawner.Spawn(new MovingBlueprint());
+                throw new InvalidOperationException("The system failed.");
+            }
+        }));
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        fail = false;
+        scheduler.Update();
+
+        Assert.That(world.Has<Name>(entity), Is.False);
+        Assert.That(world.IsAlive(spawned), Is.False);
+        Assert.That(CountPositions(world), Is.Zero);
+
+        // A released reservation frees its index, so the next entity reuses it with a newer version. ToString shows the index, which is internal.
+        Entity next = world.Create();
+        string spawnedIndex = spawned.ToString()[..spawned.ToString().IndexOf(',')];
+        Assert.That(next.ToString(), Does.StartWith(spawnedIndex));
+        Assert.That(next, Is.Not.EqualTo(spawned));
+    }
+
+    // Changes applied at a sync point before the failing system stay.
+    [Test]
+    public void SystemThatThrowsKeepsTheChangesOfEarlierSyncPoints()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        scheduler.Add(new Killer());
+        scheduler.Add(new ActionSystem<Corpses>(_ => throw new InvalidOperationException("The system failed.")));
+
+        Assert.Throws<InvalidOperationException>(scheduler.Update);
+
+        Assert.That(world.Has<Dead>(entity), Is.True);
     }
 
     [Test]

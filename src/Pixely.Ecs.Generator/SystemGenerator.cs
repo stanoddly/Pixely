@@ -36,9 +36,7 @@ public class SystemGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         IncrementalValuesProvider<SystemExtraction?> results = context.SyntaxProvider.CreateSyntaxProvider(
-            predicate: static (node, _) => node is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "AddSystem" } } }
-                or InvocationExpressionSyntax { Expression: GenericNameSyntax { Identifier.Text: "AddSystem" } }
-                or InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "Add" }, ArgumentList.Arguments.Count: 1 },
+            predicate: static (node, _) => IsCandidate(node),
             transform: static (ctx, ct) => Extract(ctx, ct)).Where(static result => result is not null);
 
         context.RegisterSourceOutput(results.Collect(), static (spc, results) =>
@@ -61,6 +59,25 @@ public class SystemGenerator : IIncrementalGenerator
                 spc.AddSource("SystemInterceptors.g.cs", Generate(registrations));
             }
         });
+    }
+
+    // AddSystem<T>() or Add(system), called directly, on a receiver or through ?.
+    private static bool IsCandidate(SyntaxNode node)
+    {
+        if (node is not InvocationExpressionSyntax invocation)
+        {
+            return false;
+        }
+
+        SimpleNameSyntax? name = invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name,
+            MemberBindingExpressionSyntax memberBinding => memberBinding.Name,
+            SimpleNameSyntax simpleName => simpleName,
+            _ => null
+        };
+
+        return name is GenericNameSyntax { Identifier.Text: "AddSystem" } || (name?.Identifier.Text == "Add" && invocation.ArgumentList.Arguments.Count == 1);
     }
 
     private static SystemExtraction? Extract(GeneratorSyntaxContext context, CancellationToken cancellationToken)
@@ -107,6 +124,12 @@ public class SystemGenerator : IIncrementalGenerator
             return Fail("PXECS015", $"{call} requires {systemName} to implement exactly one of ISystem and ISystem<...>.", invocation);
         }
 
+        // The registry of IUpdatable would update it too, so it would update twice per frame.
+        if (namedType.AllInterfaces.Any(implemented => implemented.ToDisplayString() == "Pixely.IUpdatable"))
+        {
+            return Fail("PXECS017", $"{systemName} implements IUpdatable, so it would update twice per frame: once as an IUpdatable and once through the SystemScheduler. Remove IUpdatable.", invocation);
+        }
+
         // SystemScheduler.Add handles an ISystem at runtime.
         if (isSchedulerAdd && isSystem)
         {
@@ -149,7 +172,7 @@ public class SystemGenerator : IIncrementalGenerator
         InterceptableLocation? location = context.SemanticModel.GetInterceptableLocation(invocation, cancellationToken);
         if (location is null)
         {
-            return null;
+            return Fail("PXECS018", $"{call} cannot be intercepted where it is called, so it would throw. Call it as a method of its receiver.", invocation);
         }
 
         return new SystemExtraction(new SystemRegistration(location.GetInterceptsLocationAttributeSyntax(), systemType.ToDisplayString(TypeFormat), constructorArguments, binding), null);
@@ -204,7 +227,7 @@ public class SystemGenerator : IIncrementalGenerator
         }
 
         List<string> required = [];
-        foreach (ITypeSymbol typeArgument in GetQueryBase(query)!.TypeArguments)
+        foreach (ITypeSymbol typeArgument in GeneratorSupport.GetQueryBase(query)!.TypeArguments)
         {
             if (GeneratorSupport.ClassifySpan(typeArgument, out ITypeSymbol? element) is SpanKind.Span or SpanKind.ReadOnlySpan)
             {
@@ -227,20 +250,7 @@ public class SystemGenerator : IIncrementalGenerator
         return null;
     }
 
-    private static bool IsQuery(ITypeSymbol type) => type is INamedTypeSymbol named && GetQueryBase(named) is not null;
-
-    private static INamedTypeSymbol? GetQueryBase(INamedTypeSymbol type)
-    {
-        for (INamedTypeSymbol? current = type; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.ConstructedFrom.ToDisplayString().StartsWith(GeneratorSupport.QueryName + "<"))
-            {
-                return current;
-            }
-        }
-
-        return null;
-    }
+    private static bool IsQuery(ITypeSymbol type) => type is INamedTypeSymbol named && GeneratorSupport.GetQueryBase(named) is not null;
 
     private static string? GetWriterCall(ITypeSymbol type)
     {
@@ -308,10 +318,13 @@ public class SystemGenerator : IIncrementalGenerator
             sb.AppendLine($"        {registration.InterceptsLocationAttribute}");
             if (registration.ConstructorArguments is { } arguments)
             {
-                string bind = registration.Binding is { } binding ? ", " + GenerateBind(binding, "target", "            ") : "";
+                // The provider creates singletons grouped by service type, and earlier when another service needs one, so the order is reserved when
+                // AddSystem runs and the scheduler sorts by it. The system joins the scheduler when it is created, before any OnBuilt callback.
+                string bind = registration.Binding is { } binding ? GenerateBind(binding, "target", "            ") : "static _ => static target => ((global::Pixely.Ecs.ISystem)target).Update()";
                 sb.AppendLine($"        public static void AddSystem_{i}<TSystem>(this global::Pixely.DependencyInjection.ServiceCollection services) where TSystem : class");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            services.AddSingleton<{system}>(static sp => sp.GetRequiredService<global::Pixely.Ecs.SystemScheduler>().Add(new {system}({string.Join(", ", arguments)}){bind}));");
+                sb.AppendLine("            long order = global::Pixely.Ecs.SystemScheduler.ReserveOrder();");
+                sb.AppendLine($"            services.AddSingleton<{system}>(sp => sp.GetRequiredService<global::Pixely.Ecs.SystemScheduler>().Add(new {system}({string.Join(", ", arguments)}), {bind}, order));");
                 sb.AppendLine("        }");
             }
             else
@@ -319,7 +332,7 @@ public class SystemGenerator : IIncrementalGenerator
                 // The interceptor is generic like Add, so the system reaches Update through object.
                 sb.AppendLine($"        public static TSystem Add_{i}<TSystem>(this global::Pixely.Ecs.SystemScheduler scheduler, TSystem system) where TSystem : class");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            return scheduler.Add(system, {GenerateBind(registration.Binding!.Value, "(object)target", "            ")});");
+                sb.AppendLine($"            return scheduler.Add(system, {GenerateBind(registration.Binding!.Value, "(object)target", "            ")}, global::Pixely.Ecs.SystemScheduler.ReserveOrder());");
                 sb.AppendLine("        }");
             }
         }
