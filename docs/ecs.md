@@ -38,7 +38,9 @@ world.Destroy(entity);
 - `Get<T>` returns a reference. It stays valid until the next structural change: `Create`, `Destroy`, `Add` or `Remove`.
 - `Add` throws when the entity already has the component. `Remove` and `Get` throw when it does not.
 - `Get<T>` of a tag returns one value that all entities share, because a tag stores nothing.
-- Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. `default(Entity)` is never alive.
+- Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
+- An entity belongs to the world that created it. Another world does not detect it: when an entity of its own has the same index and version, the call acts on that entity.
+- `UnsafeGet<T>` is `Get<T>` without its checks, for lookups in hot loops. The entity must be alive in this world and have the component, which only Debug builds assert. Otherwise the reference points into another entity's data or outside the storage.
 
 Systems do not use these calls. They change the world through writers, described below.
 

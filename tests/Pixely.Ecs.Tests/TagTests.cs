@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Pixely.Ecs.Tests;
 
 public class TagTests
@@ -90,6 +92,16 @@ public class TagTests
 
         Assert.That(world.Get<Frozen>(frozen), Is.EqualTo(default(Frozen)));
         Assert.Throws<InvalidOperationException>(() => world.Get<Frozen>(other));
+    }
+
+    [Test]
+    public void UnsafeGetOfATagReturnsTheSharedValue()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Frozen());
+
+        Assert.That(Unsafe.AreSame(ref world.UnsafeGet<Frozen>(entity), ref world.Get<Frozen>(entity)), Is.True);
     }
 
     [Test]

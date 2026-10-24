@@ -53,4 +53,17 @@ public class RandomAccessBenchmarks
 
         return sum;
     }
+
+    // Skips the checks that Arch's Get skips too: bounds, version and the component's presence.
+    [Benchmark]
+    public float PixelyUnsafe()
+    {
+        float sum = 0;
+        foreach (Entity entity in _pixelyEntities)
+        {
+            sum += _pixely.UnsafeGet<Position>(entity).X;
+        }
+
+        return sum;
+    }
 }

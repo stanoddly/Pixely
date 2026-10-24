@@ -43,6 +43,42 @@ public class WorldTests
         Assert.Throws<ArgumentException>(() => world.Destroy(entity));
     }
 
+    // Takes about 15 seconds in Release and minutes in Debug: the index is reused until its version runs out.
+    [Test, Explicit]
+    public void IndexIsRetiredWhenItsVersionRunsOut()
+    {
+        World world = new World();
+        Entity first = world.Create();
+        Entity entity = first;
+        for (int version = 1; version < int.MaxValue; version++)
+        {
+            world.Destroy(entity);
+            entity = world.Create();
+        }
+
+        Assert.That(entity.ToString(), Is.EqualTo($"Entity {{ Index=0, Version={int.MaxValue} }}"));
+        world.Destroy(entity);
+
+        Entity next = world.Create();
+
+        Assert.That(next.ToString(), Does.StartWith("Entity { Index=1,"));
+        Assert.That(world.IsAlive(first), Is.False);
+    }
+
+    [Test]
+    public void UnsafeGetReturnsTheReferenceGetReturns()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Position(1, 2));
+        world.Add(entity, new Velocity(3, 4));
+
+        world.UnsafeGet<Velocity>(entity).X = 5;
+
+        Assert.That(Unsafe.AreSame(ref world.UnsafeGet<Position>(entity), ref world.Get<Position>(entity)), Is.True);
+        Assert.That(world.Get<Velocity>(entity), Is.EqualTo(new Velocity(5, 4)));
+    }
+
     [Test]
     public void EntitiesAreEqualOnlyWithTheSameIndexAndVersion()
     {
@@ -98,6 +134,25 @@ public class WorldTests
         world.Get<Position>(entity).X = 5;
 
         Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(5, 2)));
+    }
+
+    // A column starts with room for four chunks and grows that array as the archetype adds chunks, so Get must not keep reading the first one.
+    [Test]
+    public void GetAndUnsafeGetReadEveryRowAfterTheArchetypeAddsManyChunks()
+    {
+        World world = new World();
+        Entity[] entities = new Entity[20_000];
+        for (int i = 0; i < entities.Length; i++)
+        {
+            entities[i] = world.Create();
+            world.Add(entities[i], new Position(i, 0));
+        }
+
+        for (int i = 0; i < entities.Length; i++)
+        {
+            Assert.That(world.Get<Position>(entities[i]).X, Is.EqualTo(i));
+            Assert.That(world.UnsafeGet<Position>(entities[i]).X, Is.EqualTo(i));
+        }
     }
 
     [Test]
