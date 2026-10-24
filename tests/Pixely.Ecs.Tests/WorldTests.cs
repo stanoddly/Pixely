@@ -208,6 +208,41 @@ public class WorldTests
 
         Assert.That(world.Has<FirstUsedLate>(entity), Is.True);
         Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.UnsafeGet<FirstUsedLate>(entity), Is.EqualTo(default(FirstUsedLate)));
+        Assert.That(world.UnsafeGet<Position>(entity), Is.EqualTo(new Position(1, 2)));
+    }
+
+    private record struct SpacedFirst(int Value);
+
+    private record struct SpacedGap(int Value);
+
+    private record struct SpacedSecond(int Value);
+
+    // The archetype lacks the id between its two data columns and has a tag, so each column's chunks sit at their own component id, which the
+    // archetype must refresh as it adds chunks.
+    [Test]
+    public void EachColumnReadsItsOwnRowsWhenComponentIdsHaveGapsAndTags()
+    {
+        World world = new World();
+        Entity[] entities = new Entity[5000];
+        for (int i = 0; i < entities.Length; i++)
+        {
+            entities[i] = world.Create();
+            world.Add(entities[i], new SpacedFirst(i));
+            Assert.That(world.Has<SpacedGap>(entities[i]), Is.False);
+            world.Add(entities[i], new Frozen());
+            world.Add(entities[i], new SpacedSecond(-i));
+            world.Add(entities[i], new Position(i, 0));
+        }
+
+        for (int i = 0; i < entities.Length; i++)
+        {
+            Assert.That(world.Get<SpacedFirst>(entities[i]).Value, Is.EqualTo(i));
+            Assert.That(world.Get<SpacedSecond>(entities[i]).Value, Is.EqualTo(-i));
+            Assert.That(world.UnsafeGet<SpacedFirst>(entities[i]).Value, Is.EqualTo(i));
+            Assert.That(world.UnsafeGet<SpacedSecond>(entities[i]).Value, Is.EqualTo(-i));
+            Assert.That(world.UnsafeGet<Position>(entities[i]).X, Is.EqualTo(i));
+        }
     }
 
     [Test]

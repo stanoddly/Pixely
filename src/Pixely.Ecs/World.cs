@@ -103,8 +103,8 @@ public sealed class World
         return ref archetype.GetRowUnchecked(chunks, record.Row);
     }
 
-    // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert:
-    // otherwise the reference points into another entity's data or outside the storage.
+    // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert.
+    // Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
     public ref T UnsafeGet<T>(Entity entity) where T : struct
     {
         Debug.Assert(IsAlive(entity) && Has<T>(entity));

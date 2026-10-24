@@ -132,6 +132,8 @@ public class ChunkTests
         Assert.That(CountMovement(world), Is.EqualTo(10000));
         Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
         Assert.That(spawned.Select(entity => world.Get<Velocity>(entity).Y), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.UnsafeGet<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.UnsafeGet<Velocity>(entity).Y), Is.EqualTo(Enumerable.Range(0, 10000).Select(i => (float)i)));
     }
 
     private static Entity[] CreateMoving(World world, int count)

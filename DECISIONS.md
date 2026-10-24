@@ -40,6 +40,16 @@ Cost: a hosted app's Release build and an app with its own `Main` that does not 
 
 Cost: each GPU call goes through one virtual call, which the JIT's dynamic PGO turns into a guarded direct call where only the SDL subclass is seen; Mono AOT keeps the virtual call. Code outside the SDL subclasses that needs an SDL object, the swapchain window and window creation, casts to the SDL type. `SDL_BeginGPURenderPass` and `SDL_BeginGPUComputePass` returning no pass now throw instead of handing out a pass that throws `ObjectDisposedException` on first use, so `RenderPass.IsDefault()`, which reported such a pass, is removed. The stub runs no shader and has no SDL validation, so GPU behavior still has no automated tests. `Pixely.Testing` is built for the desktop and copied into the browser folder of the package, where it cannot load; the assembly is marked unsupported in the browser.
 
+## 2026-10-24: Pixely.Ecs lookups favor speed: an Entity has no world id, and archetypes index column chunks by component id
+
+An `Entity` is an index and a version, 8 bytes. Each archetype keeps the chunk array of each column in a table indexed by component id, which `World.Get<T>` and `UnsafeGet<T>` read through. `UnsafeGet<T>` skips every check of `Get<T>`.
+
+- A world id made `Entity` 12 bytes and cost 2 to 8% on creation and structural changes. Arch 2.1.0 carries one, but its `Get` and `IsAlive` ignore it. `AddEcs` creates one world per app, and child collections reuse it, so only worlds created by hand can mix entities.
+- The table replaces the path through the column index, the `Column<T>` object and its chunk shift. Random access by entity went from 1.06 to 0.79–0.88 of Arch's `Get`, which checks neither the version nor the component, and `UnsafeGet` to 0.72–0.81.
+- An index whose version reaches `int.MaxValue` is retired, because wrapping the version would revive the oldest handles.
+
+Cost: an entity of another world is not detected: when the world has an entity with the same index and version, the call acts on that entity. The table takes 8 bytes per component id, up to the archetype's highest, in every archetype, and the archetype refreshes it whenever it adds a chunk, because a column replaces its chunk array when it grows. A retired index keeps its record forever. Misusing `UnsafeGet` is undefined behavior.
+
 ## 2026-10-23: Pixely.Ecs owns its archetype storage, and the type arguments of a system's ISystem<...> are its contract
 
 `Pixely.Ecs` is an experimental ECS with its own archetype storage on `Pixely.Collections`, not a wrapper over Arch or another ECS library. Queries are classes that derive from `Query<...>`, whose `Span<T>` and `ReadOnlySpan<T>` type arguments `foreach` deconstructs per chunk, filtered by `IWith<...>` and `IWithout<...>`. A system implements `ISystem<...>`, whose type arguments are queries, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` and `Spawner<TBlueprint>`, which the scheduler passes to `Update`; its constructor takes only services. A `SystemScheduler` runs the systems in registration order and applies their structural changes at sync points.

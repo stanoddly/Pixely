@@ -110,7 +110,7 @@ internal sealed class Archetype
     // GetChunks for an id the archetype has a column for.
     public T[][] GetChunksUnchecked<T>(int componentId) where T : struct
     {
-        Debug.Assert(GetChunks<T>(componentId) is not null);
+        Debug.Assert((uint)componentId < (uint)_chunksById.Length && _chunksById[componentId] is T[][]);
         return Unsafe.As<T[][]>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunksById), componentId)!);
     }
 
