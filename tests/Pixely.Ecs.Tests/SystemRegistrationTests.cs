@@ -294,6 +294,38 @@ public class SystemRegistrationTests
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(PlainSystem) }));
     }
 
+    // The interceptor runs only when the receiver is not null, as the call it replaces would.
+    [Test]
+    public void ConditionalAccessOnANullReceiverDoesNothing()
+    {
+        ServiceCollection? services = null;
+        SystemScheduler? scheduler = null;
+
+        Assert.DoesNotThrow(() => services?.AddSystem<Cleaner>());
+        Assert.DoesNotThrow(() => scheduler?.Add(new Cleaner(new UpdateLog())));
+    }
+
+    // The systems a failed child build added leave the parent's scheduler when the build disposes what it created.
+    [Test]
+    public void SystemsOfAChildWhoseBuildFailsLeaveTheScheduler()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<First>();
+        using ServiceProvider root = services.BuildServiceProvider();
+        ServiceCollection stage = root.CreateServiceCollection();
+        stage.AddEcs();
+        stage.AddSystem<Second>();
+        stage.OnBuilt(static _ => throw new InvalidOperationException("The stage failed."));
+
+        Assert.Throws<InvalidOperationException>(() => stage.BuildServiceProvider());
+        root.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(First) }));
+    }
+
     [Test]
     public void AddSystemThatWasNotInterceptedThrows()
     {

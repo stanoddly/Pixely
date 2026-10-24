@@ -586,6 +586,8 @@ public class GeneratorTests
                 static void Register(SystemScheduler scheduler) => scheduler.Add(new S());
 
                 static void Register<T>(SystemScheduler scheduler, T system) where T : class => scheduler.Add(system);
+
+                static void RegisterSystem<T>(SystemScheduler scheduler, T system) where T : class, ISystem => scheduler.Add(system);
             }
             """;
 
@@ -594,6 +596,89 @@ public class GeneratorTests
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
+    }
+
+    // Add of a type parameter is intercepted only where the generic code is called, so a constraint to an ISystem<...> means it always throws.
+    [Test]
+    public void SchedulerAddOfATypeParameterConstrainedToAnISystemWithTypeArgumentsReportsDiagnostic()
+    {
+        string source = Components + """
+            public sealed class Q : Query<ReadOnlySpan<Position>>;
+
+            public abstract class Base : ISystem<Q>
+            {
+                public abstract void Update(Q query);
+            }
+
+            static class Registration
+            {
+                static void Register<T>(SystemScheduler scheduler, T system) where T : class, ISystem<Q> => scheduler.Add(system);
+
+                static void RegisterBase<T>(SystemScheduler scheduler, T system) where T : Base => scheduler.Add(system);
+
+                static void RegisterNested<T, U>(SystemScheduler scheduler, T system) where T : class, U where U : ISystem<Q> => scheduler.Add(system);
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS010", "PXECS010", "PXECS010" }));
+    }
+
+    // A method group is not a call, so there is nothing to intercept.
+    [Test]
+    public void MethodGroupsOfAddSystemAndAddReportDiagnostic()
+    {
+        string source = Components + """
+            public sealed class S : ISystem<EntityDestroyer>
+            {
+                public void Update(EntityDestroyer destroyer)
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services, SystemScheduler scheduler)
+                {
+                    System.Action add = services.AddSystem<S>;
+                    System.Action<Pixely.DependencyInjection.ServiceCollection> addStatic = EcsServiceCollectionExtensions.AddSystem<S>;
+                    System.Func<S, S> schedule = scheduler.Add;
+                }
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS018", "PXECS018", "PXECS018" }));
+    }
+
+    // SystemScheduler.Add handles an ISystem at runtime, and nameof calls nothing.
+    [Test]
+    public void MethodGroupOfAddForAnISystemAndNameofReportNothing()
+    {
+        string source = Components + """
+            public sealed class P : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static string Register(SystemScheduler scheduler)
+                {
+                    System.Func<P, P> schedule = scheduler.Add;
+                    return nameof(scheduler.Add) + nameof(EcsServiceCollectionExtensions.AddSystem);
+                }
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
     [Test]
