@@ -159,6 +159,33 @@ public class QueryTests
     }
 
     [Test]
+    public void QueryWithAGenericBaseReadsItsSpans()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Add(entity, new Mass(3));
+        Entity other = world.Create();
+        world.Add(other, new Name("other"));
+
+        List<float> masses = [];
+        foreach (Columns<ReadOnlySpan<Mass>> columns in world.Query<Masses>())
+        {
+            foreach (Mass mass in columns.Item1)
+            {
+                masses.Add(mass.Value);
+            }
+        }
+
+        foreach (Columns<Span<Name>> columns in world.Query<Writable<Name>>())
+        {
+            columns.Item1[0] = new Name("written");
+        }
+
+        Assert.That(masses, Is.EqualTo(new[] { 3f }));
+        Assert.That(world.Get<Name>(other), Is.EqualTo(new Name("written")));
+    }
+
+    [Test]
     public void WorldReturnsOneInstanceOfEachQuery()
     {
         World world = new World();

@@ -2,21 +2,24 @@ using Pixely.Collections;
 
 namespace Pixely.Ecs;
 
-// Updates its systems in the order they were added and applies their structural changes at sync points.
+// Updates its systems in the order of their order numbers, which follow the AddSystem and Add calls, and applies their structural changes at sync points.
 // A sync point runs before a system that names a component an earlier system changed since the last one, and after the last system.
 public sealed class SystemScheduler : IUpdatable
 {
     private sealed class SystemEntry
     {
-        public SystemEntry(object system, Action update, SystemContract contract, CommandBuffer commands)
+        public SystemEntry(object system, long order, Action update, SystemContract contract, CommandBuffer commands)
         {
             System = system;
+            Order = order;
             Update = update;
             Contract = contract;
             Commands = commands;
         }
 
         public object System { get; }
+
+        public long Order { get; }
 
         public Action Update { get; }
 
@@ -28,6 +31,8 @@ public sealed class SystemScheduler : IUpdatable
 
         public bool Removed { get; set; }
     }
+
+    private static long s_lastOrder;
 
     private readonly World _world;
     private readonly FastList<SystemEntry> _entries = new FastList<SystemEntry>(4);
@@ -48,12 +53,16 @@ public sealed class SystemScheduler : IUpdatable
                 $"Add({typeof(TSystem).Name}) was not intercepted by the source generator, which an ISystem<...> needs. Reference Pixely.Ecs.Generator as an analyzer and add Pixely.Ecs.Generated to InterceptorsNamespaces.");
         }
 
-        return Add(system, static _ => static system => ((ISystem)system).Update());
+        return Add(system, static _ => static system => ((ISystem)system).Update(), ReserveOrder());
     }
 
+    // An order number for a system, unique in the process and larger than every earlier one. AddSystem's generated code takes it when AddSystem is called,
+    // because the provider creates singletons grouped by type, and earlier when another service needs one, so creation order is not call order.
+    public static long ReserveOrder() => Interlocked.Increment(ref s_lastOrder);
+
     // bind creates the system's queries and writers through the builder, which records them as its contract, and returns the call of its Update with them.
-    // The generated code of Add and AddSystem calls it.
-    public TSystem Add<TSystem>(TSystem system, Func<SystemBuilder, Action<TSystem>> bind) where TSystem : class
+    // The system runs among the others by its order from ReserveOrder. The generated code of Add and AddSystem calls it.
+    public TSystem Add<TSystem>(TSystem system, Func<SystemBuilder, Action<TSystem>> bind, long order) where TSystem : class
     {
         SystemBuilder builder = new SystemBuilder(_world);
         Action<TSystem> update;
@@ -66,7 +75,7 @@ public sealed class SystemScheduler : IUpdatable
             builder.Close();
         }
 
-        _entries.Add(new SystemEntry(system, () => update(system), builder.Contract, builder.Commands));
+        _entries.Add(new SystemEntry(system, order, () => update(system), builder.Contract, builder.Commands));
         _planIsStale = true;
         return system;
     }
@@ -104,10 +113,21 @@ public sealed class SystemScheduler : IUpdatable
             }
 
             // A writer records only while its system updates, so one kept past Update throws instead of applying its change at an unexpected sync point.
+            // When a system throws, the commands recorded since the last sync point are dropped, so no later sync point applies them, and a spawn's
+            // reserved entity is released.
             entry.Commands.IsRecording = true;
             try
             {
                 entry.Update();
+            }
+            catch
+            {
+                for (int recorded = segmentStart; recorded <= i; recorded++)
+                {
+                    _entries[recorded].Commands.Discard();
+                }
+
+                throw;
             }
             finally
             {
@@ -138,7 +158,7 @@ public sealed class SystemScheduler : IUpdatable
         }
     }
 
-    // Drops removed systems and places the sync points. For a fixed order, a sync point as late as possible gives the fewest.
+    // Drops removed systems, sorts the rest by order and places the sync points. For a fixed order, a sync point as late as possible gives the fewest.
     private void Plan()
     {
         int kept = 0;
@@ -153,6 +173,9 @@ public sealed class SystemScheduler : IUpdatable
 
         _entries.AsSpan()[kept..].Clear();
         _entries.Resize(kept);
+
+        // Add appends, so that a system added during Update leaves the running loop alone. Order numbers are unique, so the order is total.
+        _entries.AsSpan().Sort(static (left, right) => left.Order.CompareTo(right.Order));
 
         HashSet<int> changed = [];
         bool destroyed = false;

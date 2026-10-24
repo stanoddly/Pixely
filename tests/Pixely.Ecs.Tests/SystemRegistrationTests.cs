@@ -8,6 +8,8 @@ public class SystemRegistrationTests
     public sealed class UpdateLog
     {
         public List<string> Entries { get; } = [];
+
+        public List<object> Systems { get; } = [];
     }
 
     public sealed class Killer(UpdateLog log) : ISystem<Movement, ComponentAdder<Dead>>
@@ -68,6 +70,30 @@ public class SystemRegistrationTests
     public sealed class PlainSystem(UpdateLog log) : ISystem
     {
         public void Update() => log.Entries.Add(nameof(PlainSystem));
+    }
+
+    public sealed class First(UpdateLog log) : ISystem
+    {
+        public void Update()
+        {
+            log.Entries.Add(nameof(First));
+            log.Systems.Add(this);
+        }
+    }
+
+    public sealed class Second(UpdateLog log) : ISystem
+    {
+        public void Update()
+        {
+            log.Entries.Add(nameof(Second));
+            log.Systems.Add(this);
+        }
+    }
+
+    // A service that needs a system, so the provider creates that system early.
+    public sealed class SecondUser(Second second)
+    {
+        public Second Second { get; } = second;
     }
 
     [Test]
@@ -194,6 +220,78 @@ public class SystemRegistrationTests
         TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => add.Invoke(new SystemScheduler(new World()), [new Killer(new UpdateLog())]))!;
 
         Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    // The provider creates singletons grouped by type, and earlier when another service needs one; the scheduler still follows the AddSystem calls.
+    [Test]
+    public void SystemsRunInTheOrderOfTheirAddSystemCalls()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddSingleton<SecondUser>(static sp => new SecondUser(sp.GetRequiredService<Second>()));
+        services.AddEcs();
+        services.AddSystem<First>();
+        services.AddSystem<Second>();
+        services.AddSystem<First>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(First), nameof(Second), nameof(First) }));
+        Assert.That(log.Systems[2], Is.Not.SameAs(log.Systems[0]));
+        Assert.That(log.Systems[1], Is.SameAs(provider.GetRequiredService<SecondUser>().Second));
+    }
+
+    // Systems join the scheduler while the provider creates its singletons, so even an OnBuilt callback registered before them sees them.
+    [Test]
+    public void OnBuiltCallbacksSeeEverySystem()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.OnBuilt(static sp => sp.GetRequiredService<SystemScheduler>().Update());
+        services.AddSystem<PlainSystem>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(PlainSystem) }));
+    }
+
+    [Test]
+    public void SystemsOfAStageRunAfterThoseOfItsParent()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<First>();
+        using ServiceProvider root = services.BuildServiceProvider();
+        ServiceCollection stage = root.CreateServiceCollection();
+        stage.AddEcs();
+        stage.AddSystem<Second>();
+        stage.AddSystem<First>();
+        using ServiceProvider child = stage.BuildServiceProvider();
+
+        root.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(First), nameof(Second), nameof(First) }));
+        Assert.That(log.Systems[2], Is.Not.SameAs(log.Systems[0]));
+    }
+
+    [Test]
+    public void AddSystemThroughConditionalAccessIsIntercepted()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection? services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services?.AddSystem<PlainSystem>();
+        using ServiceProvider provider = services!.BuildServiceProvider();
+
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(PlainSystem) }));
     }
 
     [Test]

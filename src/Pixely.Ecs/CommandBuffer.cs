@@ -84,7 +84,7 @@ internal sealed class CommandBuffer
         }
     }
 
-    // Drops every command, for a sync point where an earlier system's command threw.
+    // Drops every command, when an earlier command of the sync point threw or a system's Update threw before it.
     public void Discard() => DiscardFrom(0);
 
     private void DiscardFrom(int first)
