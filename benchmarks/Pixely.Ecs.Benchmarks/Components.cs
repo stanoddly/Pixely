@@ -10,6 +10,8 @@ public struct Enemy : ITag;
 
 public struct Frozen : ITag;
 
+public record struct Health(float Value);
+
 public sealed class Movement : Query<Span<Position>, ReadOnlySpan<Velocity>>;
 
 [Blueprint]

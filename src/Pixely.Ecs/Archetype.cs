@@ -23,6 +23,10 @@ internal sealed class Archetype
     // The column of each component id, Absent or Tag. Ids allocated after the archetype was created lie past its end.
     private readonly int[] _columnIndices;
 
+    // The chunks of each component id's column, as the T[][] of its Column<T>, or null for a component the archetype lacks and for a tag.
+    // Get reaches a row through them without loading the Column. AddChunk refreshes them, because a column replaces its T[][] when it grows.
+    private readonly object?[] _chunksById;
+
     // The edges reached by adding or removing each component id, or null until first used.
     private ArchetypeEdge?[] _addEdges = [];
     private ArchetypeEdge?[] _removeEdges = [];
@@ -54,6 +58,7 @@ internal sealed class Archetype
         _columnComponentIds = new int[columnCount];
         _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
         Array.Fill(_columnIndices, Absent);
+        _chunksById = new object?[_columnIndices.Length];
         int column = 0;
         for (int i = 0; i < types.Length; i++)
         {
@@ -66,6 +71,7 @@ internal sealed class Archetype
             {
                 _columns[column] = types[i].Create(ChunkShift);
                 _columnComponentIds[column] = id;
+                _chunksById[id] = _columns[column].Chunks;
                 _columnIndices[id] = column++;
             }
         }
@@ -96,6 +102,25 @@ internal sealed class Archetype
 
     public int GetColumnIndex(int componentId) =>
         (uint)componentId < (uint)_columnIndices.Length ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_columnIndices), componentId) : -1;
+
+    // The chunks of T's column, or null when the archetype lacks T. The id must be T's, and T must not be a tag.
+    public T[][]? GetChunks<T>(int componentId) where T : struct =>
+        (uint)componentId < (uint)_chunksById.Length ? Unsafe.As<T[][]?>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunksById), componentId)) : null;
+
+    // GetChunks for an id the archetype has a column for.
+    public T[][] GetChunksUnchecked<T>(int componentId) where T : struct
+    {
+        Debug.Assert(GetChunks<T>(componentId) is not null);
+        return Unsafe.As<T[][]>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunksById), componentId)!);
+    }
+
+    // The row of chunks from GetChunks, which lies in an added chunk.
+    public ref T GetRowUnchecked<T>(T[][] chunks, int row) where T : struct
+    {
+        Debug.Assert((uint)row < (uint)_capacity);
+        T[] chunk = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunks), row >> ChunkShift);
+        return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), row & (ChunkLength - 1));
+    }
 
     public Column<T> GetColumn<T>(int index) where T : struct => (Column<T>)_columns[index];
 
@@ -223,9 +248,10 @@ internal sealed class Archetype
     private void AddChunk()
     {
         _entities.AddChunk();
-        foreach (Column column in _columns)
+        for (int i = 0; i < _columns.Length; i++)
         {
-            column.AddChunk();
+            _columns[i].AddChunk();
+            _chunksById[_columnComponentIds[i]] = _columns[i].Chunks;
         }
 
         _capacity += ChunkLength;

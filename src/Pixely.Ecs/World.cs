@@ -83,18 +83,39 @@ public sealed class World
     {
         ref EntityRecord record = ref GetRecord(entity);
         Archetype archetype = record.Archetype!;
-        int index = archetype.GetColumnIndex(ComponentType<T>.Id);
-        if (index < 0)
+        // The JIT removes the branch that does not apply to T.
+        if (default(T) is ITag)
         {
-            if (index == Archetype.Tag)
+            if (archetype.GetColumnIndex(ComponentType<T>.Id) == Archetype.Absent)
             {
-                return ref TagValue<T>.Value;
+                ThrowMissing<T>(entity);
             }
 
+            return ref TagValue<T>.Value;
+        }
+
+        T[][]? chunks = archetype.GetChunks<T>(ComponentType<T>.Id);
+        if (chunks is null)
+        {
             ThrowMissing<T>(entity);
         }
 
-        return ref archetype.GetColumnUnchecked<T>(index).GetUnchecked(record.Row);
+        return ref archetype.GetRowUnchecked(chunks, record.Row);
+    }
+
+    // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert:
+    // otherwise the reference points into another entity's data or outside the storage.
+    public ref T UnsafeGet<T>(Entity entity) where T : struct
+    {
+        Debug.Assert(IsAlive(entity) && Has<T>(entity));
+        if (default(T) is ITag)
+        {
+            return ref TagValue<T>.Value;
+        }
+
+        ref EntityRecord record = ref _records[entity.Index];
+        Archetype archetype = record.Archetype!;
+        return ref archetype.GetRowUnchecked(archetype.GetChunksUnchecked<T>(ComponentType<T>.Id), record.Row);
     }
 
     public void Add<T>(Entity entity, T component) where T : struct
@@ -340,11 +361,17 @@ public sealed class World
         return index;
     }
 
-    // A new version keeps the handles of the freed entity dead after the index is reused.
+    // A new version keeps the handles of the freed entity dead after the index is reused. An index whose version runs out is never reused, because
+    // wrapping the version would revive the oldest handles; its record keeps the last version without an archetype, so those handles stay dead.
     private void FreeIndex(ref EntityRecord record, int index)
     {
         record.Row = 0;
-        record.Version = record.Version == int.MaxValue ? 1 : record.Version + 1;
+        if (record.Version == int.MaxValue)
+        {
+            return;
+        }
+
+        record.Version++;
         _freeIndices.Add(index);
     }
 

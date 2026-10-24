@@ -28,6 +28,9 @@ internal sealed class ColumnType<T> : ColumnType where T : struct
 
 internal abstract class Column
 {
+    // The T[][] of a Column<T>, which AddChunk replaces when it grows.
+    public abstract object Chunks { get; }
+
     public abstract void AddChunk();
 
     // Copies the row to the destination row of a column of the same type, then moves the last row into its place.
@@ -54,6 +57,8 @@ internal sealed class Column<T> : Column where T : struct
     }
 
     private int Mask => (1 << _shift) - 1;
+
+    public override object Chunks => _chunks;
 
     // The first count rows of a chunk.
     public Span<T> GetChunk(int chunk, int count) => _chunks[chunk].AsSpan(0, count);

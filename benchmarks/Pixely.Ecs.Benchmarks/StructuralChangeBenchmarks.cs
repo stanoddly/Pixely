@@ -1,11 +1,14 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using ArchEntity = Arch.Core.Entity;
 using ArchWorld = Arch.Core.World;
 
 namespace Pixely.Ecs.Benchmarks;
 
-// Adds a tag component to every entity and removes it again, so each operation leaves the worlds as it found them.
+// Adds a component to every entity and removes it again, so each operation leaves the worlds as it found them. Pixely moves no value for the tag
+// Frozen, while Arch stores it like any component, so the Health case compares moving a component with data.
 [Config(typeof(BenchmarkConfiguration))]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class StructuralChangeBenchmarks
 {
     private World _pixely = null!;
@@ -26,8 +29,8 @@ public class StructuralChangeBenchmarks
     [GlobalCleanup]
     public void Cleanup() => ArchWorld.Destroy(_arch);
 
-    [Benchmark(Baseline = true)]
-    public void Arch()
+    [Benchmark(Baseline = true), BenchmarkCategory("Tag")]
+    public void Arch_Tag()
     {
         foreach (ArchEntity entity in _archEntities)
         {
@@ -40,8 +43,8 @@ public class StructuralChangeBenchmarks
         }
     }
 
-    [Benchmark]
-    public void Pixely()
+    [Benchmark, BenchmarkCategory("Tag")]
+    public void Pixely_Tag()
     {
         foreach (Entity entity in _pixelyEntities)
         {
@@ -51,6 +54,34 @@ public class StructuralChangeBenchmarks
         foreach (Entity entity in _pixelyEntities)
         {
             _pixely.Remove<Frozen>(entity);
+        }
+    }
+
+    [Benchmark(Baseline = true), BenchmarkCategory("Data")]
+    public void Arch_Data()
+    {
+        foreach (ArchEntity entity in _archEntities)
+        {
+            _arch.Add(entity, new Health(100));
+        }
+
+        foreach (ArchEntity entity in _archEntities)
+        {
+            _arch.Remove<Health>(entity);
+        }
+    }
+
+    [Benchmark, BenchmarkCategory("Data")]
+    public void Pixely_Data()
+    {
+        foreach (Entity entity in _pixelyEntities)
+        {
+            _pixely.Add(entity, new Health(100));
+        }
+
+        foreach (Entity entity in _pixelyEntities)
+        {
+            _pixely.Remove<Health>(entity);
         }
     }
 }
