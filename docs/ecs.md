@@ -40,7 +40,7 @@ world.Destroy(entity);
 - `Get<T>` of a tag returns one value that all entities share, because a tag stores nothing.
 - Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
 - An entity belongs to the world that created it. Another world does not detect it: when an entity of its own has the same index and version, the call acts on that entity.
-- `UnsafeGet<T>` is `Get<T>` without its checks, for lookups in hot loops. The entity must be alive in this world and have the component, which only Debug builds assert. Otherwise the reference points into another entity's data or outside the storage.
+- `UnsafeGet<T>` is `Get<T>` without its checks, for lookups in hot loops. The entity must be alive in this world and have the component, which only Debug builds assert. Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
 
 Systems do not use these calls. They change the world through writers, described below.
 

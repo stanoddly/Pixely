@@ -297,9 +297,11 @@ public class SystemSchedulerTests
         Assert.That(addedUpdates, Is.EqualTo(1));
     }
 
-    // 1500 rows of Position span two chunks, so the second run fails after the first one was written.
+    // 1500 rows of Position span two chunks, so the second run fails after the first one was written. 5000 rows need more chunks than a column
+    // starts with room for, so the retry writes into chunks added before the failure.
     [TestCase(1)]
     [TestCase(1500)]
+    [TestCase(5000)]
     public void FailedBlueprintWriteDropsItsRowsAndReleasesItsEntities(int count)
     {
         World world = new World();
@@ -328,6 +330,7 @@ public class SystemSchedulerTests
 
         Assert.That(spawned.All(world.IsAlive), Is.True);
         Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.UnsafeGet<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
         Assert.That(CountPositions(world), Is.EqualTo(count + 1));
     }
 
