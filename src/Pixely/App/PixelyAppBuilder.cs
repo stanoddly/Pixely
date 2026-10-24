@@ -81,6 +81,9 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<CursorService, PixelyFactory>();
         AddAlias<ICursorService, CursorService>();
 
+        AddSingleton<LocaleService, PixelyFactory>();
+        AddAlias<ILocaleService, LocaleService>();
+
         AddSingleton<TextInputService, PixelyFactory>();
         AddAlias<ITextInputService, TextInputService>();
 

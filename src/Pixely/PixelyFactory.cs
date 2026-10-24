@@ -300,6 +300,13 @@ public partial class PixelyFactory: IDisposable
         return new CursorService();
     }
 
+    internal LocaleService CreateLocaleService()
+    {
+        EnsureSdlInitialized();
+
+        return new LocaleService();
+    }
+
     internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
     {
         EnsureSdlInitialized();
