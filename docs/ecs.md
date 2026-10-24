@@ -254,7 +254,7 @@ The generator fails the build on these:
 | PXECS007 | Each member of a blueprint is a struct component, not `Entity`, a `ref struct` or a type parameter, and a blueprint captures no primary constructor parameter. |
 | PXECS008 | No component appears in two members of a blueprint. |
 | PXECS009 | A blueprint holds at least one component. |
-| PXECS010 | `AddSystem<T>` and `SystemScheduler.Add` take a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. |
+| PXECS010 | `AddSystem<T>` and `SystemScheduler.Add` take a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. `SystemScheduler.Add` also takes a type parameter, unless its constraints make it an `ISystem<...>`, which only an intercepted call can add. |
 | PXECS011 | The system of `AddSystem<T>` has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
 | PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
 | PXECS013 | The constructor takes no query or writer. They go in the system's `ISystem<...>`, which passes them to `Update`. |
@@ -262,7 +262,7 @@ The generator fails the build on these:
 | PXECS015 | A system implements exactly one of `ISystem` and `ISystem<...>`. |
 | PXECS016 | Each type argument of `ISystem<...>` is a query, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` or `Spawner<TBlueprint>`. |
 | PXECS017 | A system does not implement `IUpdatable`, which would update it a second time. |
-| PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, or they would throw. |
+| PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, and not used as method groups, such as `Action add = services.AddSystem<T>;`, or they would throw. A method group of `SystemScheduler.Add` for an `ISystem` is allowed. |
 
 PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime.
 

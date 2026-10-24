@@ -586,19 +586,38 @@ public class SystemSchedulerTests
         Assert.That(next, Is.Not.EqualTo(spawned));
     }
 
-    // Changes applied at a sync point before the failing system stay.
+    // Changes applied at a sync point before the failing system stay, while the commands the failing system recorded after it are dropped.
     [Test]
     public void SystemThatThrowsKeepsTheChangesOfEarlierSyncPoints()
     {
         World world = new World();
         Entity entity = CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
+        bool fail = true;
+        Entity spawned = default;
+        ComponentAdder<Name> keptNames = null!;
         scheduler.Add(new Killer());
-        scheduler.Add(new ActionSystem<Corpses>(_ => throw new InvalidOperationException("The system failed.")));
+        scheduler.Add(new ActionSystem<Corpses, ComponentAdder<Name>, Spawner<MovingBlueprint>>((_, names, spawner) =>
+        {
+            keptNames = names;
+            if (fail)
+            {
+                names.Add(entity, new Name("dropped"));
+                spawned = spawner.Spawn(new MovingBlueprint());
+                throw new InvalidOperationException("The system failed.");
+            }
+        }));
 
         Assert.Throws<InvalidOperationException>(scheduler.Update);
 
         Assert.That(world.Has<Dead>(entity), Is.True);
+        Assert.Throws<InvalidOperationException>(() => keptNames.Add(entity, new Name("kept")));
+
+        fail = false;
+        scheduler.Update();
+
+        Assert.That(world.Has<Name>(entity), Is.False);
+        Assert.That(world.IsAlive(spawned), Is.False);
     }
 
     [Test]

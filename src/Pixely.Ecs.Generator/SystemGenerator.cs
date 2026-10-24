@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
@@ -61,12 +62,12 @@ public class SystemGenerator : IIncrementalGenerator
         });
     }
 
-    // AddSystem<T>() or Add(system), called directly, on a receiver or through ?.
+    // AddSystem<T>() or Add(system), called directly, on a receiver or through ?., or either named without a call, as a method group.
     private static bool IsCandidate(SyntaxNode node)
     {
         if (node is not InvocationExpressionSyntax invocation)
         {
-            return false;
+            return IsMethodGroupCandidate(node);
         }
 
         SimpleNameSyntax? name = invocation.Expression switch
@@ -80,9 +81,33 @@ public class SystemGenerator : IIncrementalGenerator
         return name is GenericNameSyntax { Identifier.Text: "AddSystem" } || (name?.Identifier.Text == "Add" && invocation.ArgumentList.Arguments.Count == 1);
     }
 
+    // A name of AddSystem or Add that no invocation calls. The name part of a member access is covered by the member access, and the name after ?.
+    // is always called.
+    private static bool IsMethodGroupCandidate(SyntaxNode node)
+    {
+        if (node.Parent is MemberBindingExpressionSyntax || (node.Parent is MemberAccessExpressionSyntax { Name: var accessedName } && accessedName == node))
+        {
+            return false;
+        }
+
+        SimpleNameSyntax? name = node switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name,
+            SimpleNameSyntax simpleName => simpleName,
+            _ => null
+        };
+
+        bool isCalled = node.Parent is InvocationExpressionSyntax parentInvocation && parentInvocation.Expression == node;
+        return name?.Identifier.Text is "AddSystem" or "Add" && !isCalled;
+    }
+
     private static SystemExtraction? Extract(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
-        InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
+        if (context.Node is not InvocationExpressionSyntax invocation)
+        {
+            return ExtractMethodGroup(context, cancellationToken);
+        }
+
         // Generators do not see each other's output, so a type argument such as Spawner<TBlueprint> of a [Blueprint] struct breaks its constraint here
         // and the call resolves only to a candidate. The final compilation, with the blueprint's generated part, resolves it to the same method.
         SymbolInfo symbolInfo = context.SemanticModel.GetSymbolInfo(invocation, cancellationToken);
@@ -100,24 +125,30 @@ public class SystemGenerator : IIncrementalGenerator
         }
 
         // A candidate of Add has no inferred type argument, so the system type comes from the argument.
-        // A type parameter is known only where the generic code is called, so Add throws for it at runtime unless it is an ISystem.
         ITypeSymbol? systemType = isAddSystem ? method.TypeArguments[0] : context.SemanticModel.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression, cancellationToken).Type;
-        if (systemType is null || (isSchedulerAdd && systemType is ITypeParameterSymbol))
+        if (systemType is null)
+        {
+            return null;
+        }
+
+        // A type parameter is known only where the generic code is called, so Add throws for it at runtime unless it is an ISystem. A constraint to an
+        // ISystem<...> means it always throws.
+        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        string call = isAddSystem ? $"AddSystem<{systemName}>()" : $"Add({systemName})";
+        if (isSchedulerAdd && systemType is ITypeParameterSymbol parameter && !GetConstraintInterfaces(parameter).Any(IsBindingInterface))
         {
             return null;
         }
 
         // The generated code is outside the system, so the system must be accessible anywhere in the assembly.
         Compilation compilation = context.SemanticModel.Compilation;
-        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        string call = isAddSystem ? $"AddSystem<{systemName}>()" : $"Add({systemName})";
         if (systemType is not INamedTypeSymbol { IsAbstract: false } namedType || GeneratorSupport.ContainsTypeParameter(systemType)
             || !compilation.IsSymbolAccessibleWithin(namedType, compilation.Assembly) || IsInFileLocalType(namedType))
         {
             return Fail("PXECS010", $"{call} requires a concrete class without type parameters, accessible anywhere in its assembly.", invocation);
         }
 
-        INamedTypeSymbol[] bindingInterfaces = [.. namedType.AllInterfaces.Where(implemented => implemented.IsGenericType && implemented.ConstructedFrom.ToDisplayString().StartsWith(SystemName + "<"))];
+        INamedTypeSymbol[] bindingInterfaces = [.. namedType.AllInterfaces.Where(IsBindingInterface)];
         bool isSystem = namedType.AllInterfaces.Any(implemented => implemented.ToDisplayString() == SystemName);
         if (bindingInterfaces.Length + (isSystem ? 1 : 0) != 1)
         {
@@ -177,6 +208,50 @@ public class SystemGenerator : IIncrementalGenerator
 
         return new SystemExtraction(new SystemRegistration(location.GetInterceptsLocationAttributeSyntax(), systemType.ToDisplayString(TypeFormat), constructorArguments, binding), null);
     }
+
+    // A method group of AddSystem, or of Add for a system that needs its queries and writers, would throw when called, because no call can be
+    // intercepted. nameof calls nothing.
+    private static SystemExtraction? ExtractMethodGroup(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    {
+        SyntaxNode group = context.Node;
+        if (context.SemanticModel.GetSymbolInfo(group, cancellationToken).Symbol is not IMethodSymbol { TypeArguments.Length: 1 } method
+            || group.Ancestors().OfType<InvocationExpressionSyntax>().Any(ancestor => context.SemanticModel.GetOperation(ancestor, cancellationToken) is INameOfOperation))
+        {
+            return null;
+        }
+
+        string? containingType = method.ContainingType?.ToDisplayString();
+        ITypeSymbol systemType = method.TypeArguments[0];
+        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        if (method.Name == "AddSystem" && containingType == ExtensionsName)
+        {
+            return Fail("PXECS018", $"AddSystem<{systemName}>() is used as a method group, which cannot be intercepted, so it would throw. Call it directly.", group);
+        }
+
+        IEnumerable<INamedTypeSymbol> interfaces = systemType switch
+        {
+            ITypeParameterSymbol parameter => GetConstraintInterfaces(parameter),
+            _ => systemType.AllInterfaces
+        };
+
+        if (method.Name == "Add" && containingType == SchedulerName && method.Parameters.Length == 1 && interfaces.Any(IsBindingInterface))
+        {
+            return Fail("PXECS018", $"Add({systemName}) is used as a method group, which cannot be intercepted, so it would throw. Call it directly.", group);
+        }
+
+        return null;
+    }
+
+    private static bool IsBindingInterface(INamedTypeSymbol type) => type.IsGenericType && type.ConstructedFrom.ToDisplayString().StartsWith(SystemName + "<");
+
+    // The interfaces and base types a type parameter's constraints guarantee, also through other type parameters.
+    private static IEnumerable<INamedTypeSymbol> GetConstraintInterfaces(ITypeParameterSymbol parameter) =>
+        parameter.ConstraintTypes.SelectMany(constraint => constraint switch
+        {
+            ITypeParameterSymbol other => GetConstraintInterfaces(other),
+            INamedTypeSymbol named => named.AllInterfaces.Prepend(named),
+            _ => []
+        });
 
     private static SystemExtraction? ExtractBinding(INamedTypeSymbol bindingInterface, string systemName, Compilation compilation, InvocationExpressionSyntax invocation, out SystemBinding? binding)
     {
@@ -286,7 +361,7 @@ public class SystemGenerator : IIncrementalGenerator
 
     private static bool IsInFileLocalType(INamedTypeSymbol type) => type.IsFileLocal || (type.ContainingType is not null && IsInFileLocalType(type.ContainingType));
 
-    private static SystemExtraction Fail(string id, string message, InvocationExpressionSyntax invocation) => new SystemExtraction(null, GeneratorSupport.CreateDiagnostic(id, message, invocation.GetLocation()));
+    private static SystemExtraction Fail(string id, string message, SyntaxNode node) => new SystemExtraction(null, GeneratorSupport.CreateDiagnostic(id, message, node.GetLocation()));
 
     private static string Generate(List<SystemRegistration> registrations)
     {
