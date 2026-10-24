@@ -7,9 +7,9 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class CreationBenchmarks
 {
-    private sealed class SpawnSystem(Spawner<MovingBlueprint> spawner, int count) : ISystem
+    internal sealed class SpawnSystem(int count) : ISystem<Spawner<MovingBlueprint>>
     {
-        public void Update()
+        public void Update(Spawner<MovingBlueprint> spawner)
         {
             for (int i = 0; i < count; i++)
             {
@@ -72,13 +72,13 @@ public class CreationBenchmarks
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingBlueprint>(), Count));
+        scheduler.Add(new SpawnSystem(Count));
         scheduler.Update();
 
         int count = 0;
-        foreach (Movement chunk in world.Query<Movement>())
+        foreach (Columns<Span<Position>, ReadOnlySpan<Velocity>> columns in world.Query<Movement>())
         {
-            count += chunk.Count;
+            count += columns.Count;
         }
 
         return count;

@@ -4,7 +4,7 @@ namespace Pixely.Ecs;
 
 internal sealed class QueryIds : StaticTypeIdMap<QueryIds>;
 
-internal sealed class QueryId<TQuery> : StaticTypeIdMap<QueryIds, TQuery> where TQuery : allows ref struct;
+internal sealed class QueryId<TQuery> : StaticTypeIdMap<QueryIds, TQuery>;
 
 internal sealed class QueryState
 {
@@ -36,36 +36,90 @@ internal sealed class QueryState
     }
 }
 
-// A query a system declares in its constructor. Enumerate it with foreach, as World.Query.
-public sealed class Query<TQuery> where TQuery : IQuery<TQuery>, allows ref struct
+// A query of the components its Span<T> and ReadOnlySpan<T> type arguments name, filtered by IWith<...> and IWithout<...>. A query derives from Query<...>;
+// World.Query creates one instance per world and type, so a query class needs a public parameterless constructor.
+public abstract class Query
 {
-    private readonly World _world;
+    private World? _world;
+    private QueryState? _state;
 
-    internal Query(World world)
+    private protected Query()
     {
+    }
+
+    internal QueryState State => _state!;
+
+    internal void Initialize(World world)
+    {
+        QueryDescription description = new QueryDescription($"The query {GetType().Name}");
+        DescribeTerms(description);
+        if (this is IWith with)
+        {
+            with.DescribeWith(description);
+        }
+
+        if (this is IWithout without)
+        {
+            without.DescribeWithout(description);
+        }
+
+        _state = description.CreateState();
         _world = world;
     }
 
-    public QueryEnumerator<TQuery> GetEnumerator() => _world.Query<TQuery>().GetEnumerator();
+    private protected abstract void DescribeTerms(QueryDescription description);
+
+    private protected void DescribeTerm<TSpan>(QueryDescription description) where TSpan : allows ref struct
+    {
+        if (QueryTerm<TSpan>.Instance is not { } term)
+        {
+            throw new InvalidOperationException(
+                $"The type argument {FormatType(typeof(TSpan))} of the query {GetType().Name} is not registered. The Pixely.Ecs generator registers every Span<T> and ReadOnlySpan<T> of a component it sees in a Query<...>; reference it as an analyzer.");
+        }
+
+        term.Describe(description);
+    }
+
+    private protected ColumnsEnumerator<TColumns> Enumerate<TColumns>() where TColumns : IColumns<TColumns>, allows ref struct
+    {
+        if (_world is null)
+        {
+            throw new InvalidOperationException($"The query {GetType().Name} was created with new. Get it from World.Query or through a system's Update.");
+        }
+
+        return new ColumnsEnumerator<TColumns>(_world.QueryChunks(_state!));
+    }
+
+    private static string FormatType(Type type) =>
+        type.IsGenericType ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(FormatType))}>" : type.Name;
 }
 
-public readonly struct QueryEnumerable<TQuery> where TQuery : IQuery<TQuery>, allows ref struct
+// The spans of one chunk, which Query<...> yields. The member is internal, so only the Columns<...> types implement it.
+public interface IColumns<TSelf> where TSelf : IColumns<TSelf>, allows ref struct
 {
-    private readonly World _world;
-    private readonly QueryState _state;
-
-    internal QueryEnumerable(World world, QueryState state)
-    {
-        _world = world;
-        _state = state;
-    }
-
-    public QueryEnumerator<TQuery> GetEnumerator() => new QueryEnumerator<TQuery>(_world, _state.Matches);
+    internal static abstract TSelf Create(ArchetypeChunk chunk);
 }
 
 // Holds the world's structural changes off from creation until Dispose, which foreach calls even on break or exception.
-// Yields one query per chunk of each matching archetype.
-public ref struct QueryEnumerator<TQuery> where TQuery : IQuery<TQuery>, allows ref struct
+// Yields the columns of each chunk of each matching archetype.
+public ref struct ColumnsEnumerator<TColumns> where TColumns : IColumns<TColumns>, allows ref struct
+{
+    private ChunkEnumerator _chunks;
+
+    internal ColumnsEnumerator(ChunkEnumerator chunks)
+    {
+        _chunks = chunks;
+    }
+
+    public TColumns Current => TColumns.Create(_chunks.Current);
+
+    public bool MoveNext() => _chunks.MoveNext();
+
+    public void Dispose() => _chunks.Dispose();
+}
+
+// Holds the world's structural changes off from creation until Dispose, and yields each chunk of each matching archetype.
+internal ref struct ChunkEnumerator
 {
     private readonly World _world;
     private readonly FastList<Archetype> _archetypes;
@@ -75,7 +129,7 @@ public ref struct QueryEnumerator<TQuery> where TQuery : IQuery<TQuery>, allows 
     private int _chunk;
     private int _chunkCount;
 
-    internal QueryEnumerator(World world, FastList<Archetype> archetypes)
+    public ChunkEnumerator(World world, FastList<Archetype> archetypes)
     {
         _world = world;
         _archetypes = archetypes;
@@ -83,7 +137,7 @@ public ref struct QueryEnumerator<TQuery> where TQuery : IQuery<TQuery>, allows 
         _query = world.BeginQuery();
     }
 
-    public TQuery Current => TQuery.Create(new ArchetypeChunk(_archetype!, _chunk));
+    public ArchetypeChunk Current => new ArchetypeChunk(_archetype!, _chunk);
 
     public bool MoveNext()
     {

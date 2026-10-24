@@ -51,10 +51,8 @@ public class IterationBenchmarks
     public int Pixely()
     {
         int visited = 0;
-        foreach (Movement chunk in _pixely.Query<Movement>())
+        foreach ((Span<Position> positions, ReadOnlySpan<Velocity> velocities) in _pixely.Query<Movement>())
         {
-            Span<Position> positions = chunk.Positions;
-            ReadOnlySpan<Velocity> velocities = chunk.Velocities;
             for (int i = 0; i < positions.Length; i++)
             {
                 positions[i].X += velocities[i].X;

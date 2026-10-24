@@ -16,18 +16,12 @@ public static class EcsServiceCollectionExtensions
         SystemScheduler scheduler = new SystemScheduler(world);
         services.AddSingleton(world);
         services.AddSingleton(scheduler);
-        services.OnDisposing((instance, _) =>
-        {
-            if (instance is ISystem system)
-            {
-                scheduler.Remove(system);
-            }
-        });
+        services.OnDisposing((instance, _) => scheduler.Remove(instance));
     }
 
-    // The Pixely.Ecs generator intercepts this call and creates TSystem with the queries and writers its constructor declares.
-    // Systems run in the order of these calls.
-    public static void AddSystem<TSystem>(this ServiceCollection services) where TSystem : class, ISystem
+    // The Pixely.Ecs generator intercepts this call. It creates TSystem, an ISystem or ISystem<...>, with services for its constructor, and adds it to the
+    // SystemScheduler with the queries and writers of its ISystem<...>. Systems run in the order of these calls.
+    public static void AddSystem<TSystem>(this ServiceCollection services) where TSystem : class
     {
         throw new InvalidOperationException(
             $"AddSystem<{typeof(TSystem).Name}>() was not intercepted by the source generator. Reference Pixely.Ecs.Generator as an analyzer and add Pixely.Ecs.Generated to InterceptorsNamespaces.");

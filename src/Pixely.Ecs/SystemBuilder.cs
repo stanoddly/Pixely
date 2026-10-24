@@ -1,6 +1,6 @@
 namespace Pixely.Ecs;
 
-// What a system's constructor declares: the components its queries name and the structural changes its writers make.
+// What a system's ISystem<...> declares: the components its queries name and the structural changes its writers make.
 internal sealed class SystemContract
 {
     public HashSet<int> Touched { get; } = [];
@@ -10,7 +10,7 @@ internal sealed class SystemContract
     public bool Destroys { get; set; }
 }
 
-// Creates the queries and writers of one system while its constructor runs, and records its contract.
+// Creates the queries and writers of one system while it is added to a SystemScheduler, and records its contract.
 public sealed class SystemBuilder
 {
     private readonly World _world;
@@ -26,13 +26,13 @@ public sealed class SystemBuilder
 
     internal SystemContract Contract { get; } = new SystemContract();
 
-    public Query<TQuery> Query<TQuery>() where TQuery : IQuery<TQuery>, allows ref struct
+    public TQuery Query<TQuery>() where TQuery : Query, new()
     {
         ThrowIfClosed();
-        QueryState state = _world.GetQueryState<TQuery>();
-        AddAll(Contract.Touched, state.Required);
-        AddAll(Contract.Touched, state.Excluded);
-        return new Query<TQuery>(_world);
+        TQuery query = _world.Query<TQuery>();
+        AddAll(Contract.Touched, query.State.Required);
+        AddAll(Contract.Touched, query.State.Excluded);
+        return query;
     }
 
     public ComponentAdder<T> ComponentAdder<T>() where T : struct
@@ -69,7 +69,7 @@ public sealed class SystemBuilder
     {
         if (_closed)
         {
-            throw new InvalidOperationException("A SystemBuilder creates queries and writers only while its system is created.");
+            throw new InvalidOperationException("A SystemBuilder creates queries and writers only while its system is added.");
         }
     }
 

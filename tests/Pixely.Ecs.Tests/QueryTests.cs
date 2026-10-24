@@ -13,13 +13,13 @@ public class QueryTests
         world.Add(still, new Position(0, 0));
 
         List<Entity> visited = [];
-        foreach (Movement chunk in world.Query<Movement>())
+        foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in world.Query<Movement>())
         {
-            for (int i = 0; i < chunk.Count; i++)
+            for (int i = 0; i < positions.Length; i++)
             {
-                chunk.Positions[i].X += chunk.Velocities[i].X;
-                chunk.Positions[i].Y += chunk.Velocities[i].Y;
-                visited.Add(chunk.Entities[i]);
+                positions[i].X += velocities[i].X;
+                positions[i].Y += velocities[i].Y;
+                visited.Add(entities[i]);
             }
         }
 
@@ -39,7 +39,7 @@ public class QueryTests
         world.Add(frozen, new Position());
         world.Add(frozen, new Frozen());
 
-        Assert.That(Collect<UnfrozenPositions>(world, chunk => chunk.Entities), Is.EquivalentTo(new[] { free }));
+        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Is.EquivalentTo(new[] { free }));
     }
 
     [Test]
@@ -51,9 +51,9 @@ public class QueryTests
         world.Create();
 
         List<Entity> visited = [];
-        foreach (PlayerEntities chunk in world.Query<PlayerEntities>())
+        foreach (Columns<ReadOnlySpan<Entity>> columns in world.Query<PlayerEntities>())
         {
-            visited.AddRange(chunk.Entities.ToArray());
+            visited.AddRange(columns.Item1.ToArray());
         }
 
         Assert.That(visited, Is.EquivalentTo(new[] { player }));
@@ -65,32 +65,13 @@ public class QueryTests
         World world = new World();
         Entity first = world.Create();
         world.Add(first, new Position());
-        Assert.That(Collect<UnfrozenPositions>(world, chunk => chunk.Entities), Has.Count.EqualTo(1));
+        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Has.Count.EqualTo(1));
 
         Entity second = world.Create();
         world.Add(second, new Name("late"));
         world.Add(second, new Position());
 
-        Assert.That(Collect<UnfrozenPositions>(world, chunk => chunk.Entities), Is.EquivalentTo(new[] { first, second }));
-    }
-
-    [Test]
-    public void NestedQueryIsGenerated()
-    {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Name("nested"));
-
-        List<string> names = [];
-        foreach (Container.NestedNames chunk in world.Query<Container.NestedNames>())
-        {
-            foreach (Name name in chunk.Names)
-            {
-                names.Add(name.Value);
-            }
-        }
-
-        Assert.That(names, Is.EqualTo(new[] { "nested" }));
+        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Is.EquivalentTo(new[] { first, second }));
     }
 
     [Test]
@@ -99,7 +80,7 @@ public class QueryTests
         World world = new World();
         Entity entity = CreateMoving(world, new Position(), new Velocity());
 
-        foreach (Movement _ in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
         {
             Assert.Throws<InvalidOperationException>(() => world.Add(entity, new Frozen()));
             Assert.Throws<InvalidOperationException>(() => world.Remove<Velocity>(entity));
@@ -114,7 +95,7 @@ public class QueryTests
         CreateMoving(world, new Position(), new Velocity());
 
         Entity created = default;
-        foreach (Movement _ in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
         {
             created = world.Create();
         }
@@ -128,7 +109,7 @@ public class QueryTests
         World world = new World();
         Entity entity = CreateMoving(world, new Position(), new Velocity());
 
-        foreach (Movement _ in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
         {
             break;
         }
@@ -145,7 +126,7 @@ public class QueryTests
 
         Assert.Throws<InvalidOperationException>(() =>
         {
-            foreach (Movement _ in world.Query<Movement>())
+            foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
             {
                 throw new InvalidOperationException("The body failed.");
             }
@@ -159,12 +140,12 @@ public class QueryTests
     {
         World world = new World();
         Entity entity = CreateMoving(world, new Position(), new Velocity());
-        QueryEnumerator<Movement> first = world.Query<Movement>().GetEnumerator();
-        QueryEnumerator<Movement> copy = first;
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> first = world.Query<Movement>().GetEnumerator();
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> copy = first;
         first.Dispose();
         copy.Dispose();
 
-        QueryEnumerator<Movement> next = world.Query<Movement>().GetEnumerator();
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> next = world.Query<Movement>().GetEnumerator();
         try
         {
             Assert.Throws<InvalidOperationException>(() => world.Destroy(entity));
@@ -178,38 +159,24 @@ public class QueryTests
     }
 
     [Test]
-    public void HandWrittenQueryReadsTheSpansAndComponentsOfEachChunk()
+    public void WorldReturnsOneInstanceOfEachQuery()
     {
         World world = new World();
-        Entity still = world.Create();
-        world.Add(still, new Position(1, 0));
-        Entity moving = CreateMoving(world, new Position(2, 0), new Velocity());
-        List<(Entity Entity, bool HasVelocity)> visited = [];
+        Movement first = world.Query<Movement>();
+        Movement second = world.Query<Movement>();
 
-        foreach (ManualPositions chunk in world.Query<ManualPositions>())
-        {
-            for (int i = 0; i < chunk.Positions.Length; i++)
-            {
-                chunk.Positions[i].X++;
-                visited.Add((chunk.Entities[i], chunk.HasVelocity));
-            }
-        }
-
-        Assert.That(visited, Is.EquivalentTo(new[] { (still, false), (moving, true) }));
-        Assert.That(world.Get<Position>(still).X, Is.EqualTo(2));
-        Assert.That(world.Get<Position>(moving).X, Is.EqualTo(3));
+        Assert.That(second, Is.SameAs(first));
+        Assert.That(new World().Query<Movement>(), Is.Not.SameAs(first));
     }
 
     [Test]
-    public void HandWrittenQueryReadingAComponentTheChunkLacksThrows()
+    public void QueryCreatedWithNewThrowsWhenEnumerated()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Position());
+        Movement movement = new Movement();
 
         Assert.Throws<InvalidOperationException>(() =>
         {
-            foreach (VelocitiesOfPositions _ in world.Query<VelocitiesOfPositions>())
+            foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in movement)
             {
             }
         });
@@ -218,9 +185,13 @@ public class QueryTests
     [Test]
     public void QueryRequiringNoComponentThrows()
     {
-        World world = new World();
+        Assert.Throws<InvalidOperationException>(() => new World().Query<EntitiesOnly>());
+    }
 
-        Assert.Throws<InvalidOperationException>(() => world.Query<EverythingQuery>());
+    [Test]
+    public void QueryRequiringAndExcludingAComponentThrows()
+    {
+        Assert.Throws<InvalidOperationException>(() => new World().Query<ExcludedPositions>());
     }
 
     private static Entity CreateMoving(World world, Position position, Velocity velocity)
@@ -231,14 +202,12 @@ public class QueryTests
         return entity;
     }
 
-    private delegate ReadOnlySpan<Entity> EntitiesSelector<TQuery>(TQuery chunk) where TQuery : allows ref struct;
-
-    private static List<Entity> Collect<TQuery>(World world, EntitiesSelector<TQuery> select) where TQuery : IQuery<TQuery>, allows ref struct
+    private static List<Entity> CollectEntities(Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> query)
     {
         List<Entity> entities = [];
-        foreach (TQuery chunk in world.Query<TQuery>())
+        foreach ((ReadOnlySpan<Entity> chunkEntities, _) in query)
         {
-            entities.AddRange(select(chunk).ToArray());
+            entities.AddRange(chunkEntities.ToArray());
         }
 
         return entities;

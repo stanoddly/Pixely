@@ -2,13 +2,8 @@ namespace Pixely.Ecs.Tests;
 
 public class TagTests
 {
-    private sealed class ActionSystem(Action update) : ISystem
-    {
-        public void Update() => update();
-    }
-
     // Hand-written, to ask for the column of its tag field.
-    private struct TagColumnBlueprint : IBlueprint<TagColumnBlueprint>
+    internal struct TagColumnBlueprint : IBlueprint<TagColumnBlueprint>
     {
         public static void Describe(BlueprintDescription description) => description.Add<Frozen>();
 
@@ -32,9 +27,9 @@ public class TagTests
             world.Add(player, new Player());
         }
 
-        int plainRows = FirstChunkCount<UnfrozenPositions>(world, chunk => chunk.Positions.Length);
-        int frozenRows = FirstChunkCount<FrozenPositions>(world, chunk => chunk.Positions.Length);
-        int playerRows = FirstChunkCount<PlayerPositions>(world, chunk => chunk.Positions.Length);
+        int plainRows = FirstChunkCount(world.Query<UnfrozenPositions>());
+        int frozenRows = FirstChunkCount(world.Query<FrozenPositions>());
+        int playerRows = FirstChunkCount(world.Query<PlayerPositions>());
 
         Assert.That(frozenRows, Is.EqualTo(plainRows));
         Assert.That(playerRows, Is.LessThan(plainRows));
@@ -104,25 +99,18 @@ public class TagTests
         Entity entity = world.Create();
         world.Add(entity, new Frozen());
         SystemScheduler scheduler = new SystemScheduler(world);
-        ComponentAdder<Frozen> adder = null!;
-        ComponentRemover<Frozen> remover = null!;
         bool remove = false;
-        scheduler.Add(builder =>
+        scheduler.Add(new ActionSystem<ComponentAdder<Frozen>, ComponentRemover<Frozen>>((adder, remover) =>
         {
-            adder = builder.ComponentAdder<Frozen>();
-            remover = builder.ComponentRemover<Frozen>();
-            return new ActionSystem(() =>
+            if (remove)
             {
-                if (remove)
-                {
-                    remover.Remove(entity);
-                }
-                else
-                {
-                    adder.Add(entity, new Frozen());
-                }
-            });
-        });
+                remover.Remove(entity);
+            }
+            else
+            {
+                adder.Add(entity, new Frozen());
+            }
+        }));
 
         Assert.DoesNotThrow(scheduler.Update);
         Assert.That(world.Has<Frozen>(entity), Is.True);
@@ -139,18 +127,11 @@ public class TagTests
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity withPosition = default;
         Entity onlyTag = default;
-        Spawner<FrozenBlueprint> frozen = null!;
-        Spawner<MarkerBlueprint> markers = null!;
-        scheduler.Add(builder =>
+        scheduler.Add(new ActionSystem<Spawner<FrozenBlueprint>, Spawner<MarkerBlueprint>>((frozen, markers) =>
         {
-            frozen = builder.Spawner<FrozenBlueprint>();
-            markers = builder.Spawner<MarkerBlueprint>();
-            return new ActionSystem(() =>
-            {
-                withPosition = frozen.Spawn(new FrozenBlueprint { Position = new Position(1, 2) });
-                onlyTag = markers.Spawn(new MarkerBlueprint());
-            });
-        });
+            withPosition = frozen.Spawn(new FrozenBlueprint { Position = new Position(1, 2) });
+            onlyTag = markers.Spawn(new MarkerBlueprint());
+        }));
 
         scheduler.Update();
 
@@ -165,38 +146,26 @@ public class TagTests
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        Spawner<TagColumnBlueprint> spawner = null!;
-        scheduler.Add(builder =>
-        {
-            spawner = builder.Spawner<TagColumnBlueprint>();
-            return new ActionSystem(() => spawner.Spawn(new TagColumnBlueprint()));
-        });
+        scheduler.Add(new ActionSystem<Spawner<TagColumnBlueprint>>(spawner => spawner.Spawn(new TagColumnBlueprint())));
 
         Assert.Throws<InvalidOperationException>(scheduler.Update);
     }
 
-    [Test]
-    public void ReadingTheSpanOfATagThrows()
+    private static int FirstChunkCount<T1>(Query<T1> query) where T1 : allows ref struct
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Frozen());
-
-        Assert.Throws<InvalidOperationException>(() =>
+        foreach (Columns<T1> columns in query)
         {
-            foreach (FrozenSpans _ in world.Query<FrozenSpans>())
-            {
-            }
-        });
+            return columns.Count;
+        }
+
+        return 0;
     }
 
-    private delegate int RowsSelector<TQuery>(TQuery chunk) where TQuery : allows ref struct;
-
-    private static int FirstChunkCount<TQuery>(World world, RowsSelector<TQuery> rows) where TQuery : IQuery<TQuery>, allows ref struct
+    private static int FirstChunkCount<T1, T2>(Query<T1, T2> query) where T1 : allows ref struct where T2 : allows ref struct
     {
-        foreach (TQuery chunk in world.Query<TQuery>())
+        foreach (Columns<T1, T2> columns in query)
         {
-            return rows(chunk);
+            return columns.Count;
         }
 
         return 0;

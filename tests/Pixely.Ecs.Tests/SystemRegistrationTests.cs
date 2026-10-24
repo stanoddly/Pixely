@@ -10,43 +10,64 @@ public class SystemRegistrationTests
         public List<string> Entries { get; } = [];
     }
 
-    public sealed class Killer(Query<Movement> movement, ComponentAdder<Dead> dead, UpdateLog log) : ISystem
+    public sealed class Killer(UpdateLog log) : ISystem<Movement, ComponentAdder<Dead>>
     {
-        public void Update()
+        public void Update(Movement movement, ComponentAdder<Dead> dead)
         {
             log.Entries.Add(nameof(Killer));
-            foreach (Movement chunk in movement)
+            foreach ((ReadOnlySpan<Entity> entities, _, _) in movement)
             {
-                for (int i = 0; i < chunk.Count; i++)
+                for (int i = 0; i < entities.Length; i++)
                 {
-                    dead.Add(chunk.Entities[i], new Dead());
+                    dead.Add(entities[i], new Dead());
                 }
             }
         }
     }
 
-    public sealed class Cleaner(Query<Corpses> corpses, EntityDestroyer destroyer, UpdateLog log) : ISystem
+    public sealed class Cleaner(UpdateLog log) : ISystem<Corpses, EntityDestroyer>
     {
-        public void Update()
+        public void Update(Corpses corpses, EntityDestroyer destroyer)
         {
             log.Entries.Add(nameof(Cleaner));
-            foreach (Corpses chunk in corpses)
+            foreach (Columns<ReadOnlySpan<Entity>> columns in corpses)
             {
-                for (int i = 0; i < chunk.Count; i++)
+                ReadOnlySpan<Entity> entities = columns.Item1;
+                for (int i = 0; i < entities.Length; i++)
                 {
-                    destroyer.Destroy(chunk.Entities[i]);
+                    destroyer.Destroy(entities[i]);
                 }
             }
         }
     }
 
-    public sealed class Spawning(Spawner<MovingBlueprint> spawner, IEnumerable<UpdateLog> logs, UpdateLog? log) : ISystem
+    public sealed class Spawning(IEnumerable<UpdateLog> logs, UpdateLog? log) : ISystem<Spawner<MovingBlueprint>>
     {
-        public void Update()
+        public void Update(Spawner<MovingBlueprint> spawner)
         {
             log!.Entries.Add(nameof(Spawning) + logs.Count());
             spawner.Spawn(new MovingBlueprint());
         }
+    }
+
+    // Explicit, so the generated code calls Update through the interface.
+    public sealed class ExplicitMover : ISystem<Movement>
+    {
+        void ISystem<Movement>.Update(Movement movement)
+        {
+            foreach ((_, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
+            {
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    positions[i].X += velocities[i].X;
+                }
+            }
+        }
+    }
+
+    public sealed class PlainSystem(UpdateLog log) : ISystem
+    {
+        public void Update() => log.Entries.Add(nameof(PlainSystem));
     }
 
     [Test]
@@ -121,6 +142,61 @@ public class SystemRegistrationTests
     }
 
     [Test]
+    public void ExplicitlyImplementedUpdateIsCalled()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddSystem<ExplicitMover>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+        World world = provider.GetRequiredService<World>();
+        Entity entity = world.Create();
+        world.Add(entity, new Position(1, 0));
+        world.Add(entity, new Velocity(2, 0));
+
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(3, 0)));
+    }
+
+    [Test]
+    public void SystemWithoutQueriesOrWritersGetsServices()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<PlainSystem>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(PlainSystem) }));
+    }
+
+    [Test]
+    public void RegisteredSystemResolvesAsItsOwnType()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<Killer>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<Killer>(), Is.Not.Null);
+    }
+
+    [Test]
+    public void SchedulerAddOfAnISystemWithTypeArgumentsThatWasNotInterceptedThrows()
+    {
+        MethodInfo add = typeof(SystemScheduler).GetMethods().Single(method => method.Name == nameof(SystemScheduler.Add) && method.GetParameters().Length == 1).MakeGenericMethod(typeof(Killer));
+
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => add.Invoke(new SystemScheduler(new World()), [new Killer(new UpdateLog())]))!;
+
+        Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
     public void AddSystemThatWasNotInterceptedThrows()
     {
         MethodInfo addSystem = typeof(EcsServiceCollectionExtensions).GetMethod(nameof(EcsServiceCollectionExtensions.AddSystem))!.MakeGenericMethod(typeof(Cleaner));
@@ -133,9 +209,9 @@ public class SystemRegistrationTests
     private static int CountMoving(World world)
     {
         int count = 0;
-        foreach (Movement chunk in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> columns in world.Query<Movement>())
         {
-            count += chunk.Count;
+            count += columns.Count;
         }
 
         return count;

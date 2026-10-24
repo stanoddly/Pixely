@@ -10,12 +10,7 @@ public struct Enemy : ITag;
 
 public struct Frozen : ITag;
 
-[Query]
-public ref partial struct Movement
-{
-    public Span<Position> Positions;
-    public ReadOnlySpan<Velocity> Velocities;
-}
+public sealed class Movement : Query<Span<Position>, ReadOnlySpan<Velocity>>;
 
 [Blueprint]
 public partial struct MovingBlueprint

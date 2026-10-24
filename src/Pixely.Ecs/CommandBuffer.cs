@@ -37,10 +37,21 @@ internal sealed class CommandBuffer
 
     public World World { get; }
 
+    public bool IsRecording { get; set; }
+
+    public void ThrowIfNotRecording()
+    {
+        if (!IsRecording)
+        {
+            throw new InvalidOperationException("A writer records changes only during its system's Update.");
+        }
+    }
+
     public void AddSource(IRecordedCommands source) => _sources.Add(source);
 
     public void Record(IRecordedCommands source, int index)
     {
+        ThrowIfNotRecording();
         if (_commands.Length > 0)
         {
             ref Command last = ref _commands[_commands.LastIndex];

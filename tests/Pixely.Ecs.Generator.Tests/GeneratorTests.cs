@@ -17,55 +17,45 @@ public class GeneratorTests
         """;
 
     [Test]
-    public void ValidQueriesCompile()
+    public void ValidQueriesAndSystemsCompile()
     {
         string source = Components + """
             namespace Game
             {
-                [Query]
-                [With<Velocity>]
-                [Without<Frozen>]
-                internal ref partial struct Movement
+                using Pixely.DependencyInjection;
+
+                public struct Dead : ITag;
+
+                internal sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>, IWithout<Frozen>;
+
+                public static class Queries
                 {
-                    public ReadOnlySpan<Entity> Entities;
-                    public Span<Position> Positions;
+                    public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
                 }
 
-                public static partial class Systems
+                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>>
                 {
-                    [Query]
-                    private readonly ref partial struct Velocities
+                    public void Update(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities)
                     {
-                        public readonly ReadOnlySpan<Velocity> Values;
-                    }
-
-                    public static int Count(World world)
-                    {
-                        int count = 0;
-                        foreach (Velocities chunk in world.Query<Velocities>())
+                        foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> speeds) in movement)
                         {
-                            count += chunk.Count;
+                            for (int i = 0; i < positions.Length; i++)
+                            {
+                                positions[i].X += speeds[i].X;
+                            }
                         }
-
-                        foreach (Movement chunk in world.Query<Movement>())
-                        {
-                            count += chunk.Count;
-                        }
-
-                        foreach (GlobalQuery chunk in world.Query<GlobalQuery>())
-                        {
-                            count += chunk.Count;
-                        }
-
-                        return count;
                     }
                 }
-            }
 
-            [Query]
-            ref partial struct GlobalQuery
-            {
-                public Span<Position> Positions;
+                internal static class Registration
+                {
+                    public static void Register(ServiceCollection services, SystemScheduler scheduler)
+                    {
+                        services.AddEcs();
+                        services.AddSystem<Mover>();
+                        scheduler.Add(new Mover());
+                    }
+                }
             }
             """;
 
@@ -73,33 +63,111 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
+        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("Add_1"));
+        Assert.That(interceptors, Does.Contain("builder.Query<global::Game.Queries.Corpses>()").And.Contain("builder.Query<global::Pixely.Ecs.Query<global::System.ReadOnlySpan<global::Velocity>>>()"));
     }
 
-    [TestCase("[Query] partial struct Q { public Span<Position> P; }", "PXECS001")]
-    [TestCase("[Query] ref struct Q { public Span<Position> P; }", "PXECS001")]
-    [TestCase("[Query] ref partial struct Q<T> { public Span<Position> P; }", "PXECS001")]
-    [TestCase("class Outer { [Query] ref partial struct Q { public Span<Position> P; } }", "PXECS001")]
-    [TestCase("[Query] file ref partial struct Q { public Span<Position> P; }", "PXECS001")]
-    [TestCase("file partial class Outer { [Query] ref partial struct Q { public Span<Position> P; } }", "PXECS001")]
-    [TestCase("[Query] ref partial struct Q { public int P; }", "PXECS002")]
-    [TestCase("[Query] ref partial struct Q { public Span<Entity> E; }", "PXECS002")]
-    [TestCase("[Query] ref partial struct Q { public Span<string> S; }", "PXECS002")]
-    [TestCase("[Query] ref partial struct Q(int offset) { public Span<Position> P; public int Offset => offset; }", "PXECS002")]
-    [TestCase("[Query] ref partial struct Q { public Span<Position> P { get; set; } }", "PXECS002")]
-    [TestCase("ref struct RefComponent; [Query] ref partial struct Q { public Span<RefComponent> R; }", "PXECS002")]
-    [TestCase("public struct T : ITag; [Query] ref partial struct Q { public Span<T> Tags; }", "PXECS002")]
-    [TestCase("public struct T : ITag; [Query] ref partial struct Q { public ReadOnlySpan<T> Tags; }", "PXECS002")]
-    [TestCase("[Query] ref partial struct Q { public Span<Position> A; public ReadOnlySpan<Position> B; }", "PXECS003")]
-    [TestCase("[Query] [With<Position>] ref partial struct Q { }", "PXECS004")]
-    [TestCase("[Query] ref partial struct Q { public ReadOnlySpan<Entity> E; }", "PXECS004")]
-    [TestCase("[Query] [Without<Position>] ref partial struct Q { public Span<Position> P; }", "PXECS005")]
-    [TestCase("[Query] ref partial struct Q { public Span<Position> Count; }", "PXECS013")]
-    [TestCase("[Query] ref partial struct Q { public Span<Position> P; public int Count() => 0; }", "PXECS013")]
-    public void InvalidQueryReportsDiagnostic(string declaration, string expectedId)
+    [TestCase("abstract class Q : Query<ReadOnlySpan<Position>>;", "PXECS001")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>> { public Q(int value) { } }", "PXECS001")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>> { internal Q() { } }", "PXECS001")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Entity>>;", "PXECS004")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Entity>>, IWithout<Position>;", "PXECS004")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>, IWithout<Position>;", "PXECS005")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Entity>>, IWith<Frozen>, IWithout<Frozen>;", "PXECS005")]
+    public void InvalidQueryOfASystemReportsDiagnostic(string declaration, string expectedId)
+    {
+        string source = Components + declaration + """
+
+            sealed class S : ISystem<Q>
+            {
+                public void Update(Q query)
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    // Both would implement the same internal member, so a query has at most one IWith<...> and one IWithout<...>.
+    [TestCase("IWith<Position>, IWith<Velocity>")]
+    [TestCase("IWithout<Position>, IWithout<Velocity>")]
+    public void TwoFiltersOfOneKindAreRejectedByTheCompiler(string filters)
+    {
+        string source = Components + $"sealed class Q : Query<ReadOnlySpan<Entity>>, {filters};";
+
+        (_, Compilation output) = Run(source);
+
+        Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain("CS8705"));
+    }
+
+    // Only IWith<...> implements the internal member of IWith.
+    [Test]
+    public void HandWrittenFilterIsRejectedByTheCompiler()
+    {
+        (_, Compilation output) = Run(Components + "sealed class Q : Query<ReadOnlySpan<Position>>, IWith;");
+
+        Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain("CS0535"));
+    }
+
+    [TestCase("sealed class Q : Query<Span<Entity>, ReadOnlySpan<Position>>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<int>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<Span<string>>;", "PXECS002")]
+    [TestCase("public struct T : ITag; sealed class Q : Query<ReadOnlySpan<T>>;", "PXECS002")]
+    [TestCase("ref struct R; sealed class Q : Query<Span<R>>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Span<Position>>;", "PXECS003")]
+    [TestCase("static class R { static void Read(World world) => world.Query<Query<Span<Entity>>>(); }", "PXECS002")]
+    [TestCase("static class R { static void Read(World world) => world.Query<Query<ReadOnlySpan<Position>, ReadOnlySpan<Position>>>(); }", "PXECS003")]
+    public void InvalidSpanTypeArgumentReportsDiagnostic(string declaration, string expectedId)
     {
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
+    }
+
+    // Every span a Query<...> names is registered once, wherever it is written. An open type argument is registered where it is closed.
+    [Test]
+    public void SpansOfEveryQueryAreRegisteredOnce()
+    {
+        string source = Components + """
+            sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>;
+
+            sealed class Positions : Query<ReadOnlySpan<Position>>;
+
+            sealed class S : ISystem<Query<Span<Velocity>>>
+            {
+                public void Update(Query<Span<Velocity>> velocities)
+                {
+                }
+            }
+
+            static class Helpers
+            {
+                static int Count<T1>(Query<T1> query) where T1 : allows ref struct => 0;
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string registration = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("QueryTerms.g.cs")).ToString();
+        string[] calls = registration.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith("global::Pixely.Ecs.QueryTerms.")).ToArray();
+        Assert.That(calls, Is.EquivalentTo(new[]
+        {
+            "global::Pixely.Ecs.QueryTerms.RegisterSpan<global::Position>();",
+            "global::Pixely.Ecs.QueryTerms.RegisterReadOnlySpan<global::Position>();",
+            "global::Pixely.Ecs.QueryTerms.RegisterReadOnlySpan<global::Velocity>();",
+            "global::Pixely.Ecs.QueryTerms.RegisterSpan<global::Velocity>();"
+        }));
     }
 
     [Test]
@@ -126,24 +194,18 @@ public class GeneratorTests
                     internal readonly partial record struct Corpse(Position Position, Dead Dead);
                 }
 
-                [Query]
-                internal ref partial struct Movement
-                {
-                    public ReadOnlySpan<Entity> Entities;
-                    public Span<Position> Positions;
-                }
+                internal sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>>;
 
                 public sealed class Log;
 
-                internal sealed class Shooter : ISystem
+                internal sealed class Shooter : ISystem<Movement, Spawner<Bullet>, ComponentAdder<Dead>, ComponentRemover<Velocity>, EntityDestroyer, Spawner<Blueprints.Corpse>>
                 {
-                    public Shooter(Query<Movement> movement, Spawner<Bullet> bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop,
-                        EntityDestroyer destroyer, Log log, Log? optional, IEnumerable<Log> logs, Spawner<Blueprints.Corpse> corpses, in Log byValue,
-                        IReadOnlyList<Log> list)
+                    public Shooter(Log log, Log? optional, IEnumerable<Log> logs, in Log byValue, IReadOnlyList<Log> list)
                     {
                     }
 
-                    public void Update()
+                    public void Update(Movement movement, Spawner<Bullet> bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop, EntityDestroyer destroyer,
+                        Spawner<Blueprints.Corpse> corpses)
                     {
                     }
                 }
@@ -194,6 +256,13 @@ public class GeneratorTests
     [TestCase("class S : ISystem { protected S() { } public void Update() { } }", "S", "PXECS011")]
     [TestCase("class Log; class S : ISystem { public S(ref Log log) { } public void Update() { } }", "S", "PXECS012")]
     [TestCase("class Log; class S : ISystem { public S(out Log log) { log = new Log(); } public void Update() { } }", "S", "PXECS012")]
+    [TestCase("class S : ISystem { public S(ComponentAdder<Position> adder) { } public void Update() { } }", "S", "PXECS013")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>; class S : ISystem { public S(Q query) { } public void Update() { } }", "S", "PXECS013")]
+    [TestCase("class S { }", "S", "PXECS015")]
+    [TestCase("class S : ISystem, ISystem<EntityDestroyer> { public void Update() { } public void Update(EntityDestroyer d) { } }", "S", "PXECS015")]
+    [TestCase("class S : ISystem<EntityDestroyer>, ISystem<ComponentAdder<Position>> { public void Update(EntityDestroyer d) { } public void Update(ComponentAdder<Position> a) { } }", "S", "PXECS015")]
+    [TestCase("class Log; class S : ISystem<Log> { public void Update(Log log) { } }", "S", "PXECS016")]
+    [TestCase("class S : ISystem<World> { public void Update(World world) { } }", "S", "PXECS016")]
     public void InvalidSystemRegistrationReportsDiagnostic(string declaration, string system, string expectedId)
     {
         string source = Components + declaration + $$"""
@@ -207,25 +276,6 @@ public class GeneratorTests
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
-    }
-
-    // The generated constructor takes a chunk parameter and must still assign a field of that name, and it sets required fields.
-    [Test]
-    public void QueryFieldsNamedChunkOrRequiredCompile()
-    {
-        string source = Components + """
-            [Query]
-            ref partial struct Q
-            {
-                public Span<Position> chunk;
-                public required ReadOnlySpan<Velocity> Velocities;
-            }
-            """;
-
-        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
-
-        Assert.That(generatorDiagnostics, Is.Empty);
-        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
     // AddSystem's class constraint rejects a struct before the generator sees the call.
@@ -410,15 +460,6 @@ public class GeneratorTests
     public void TypesInsideRecordsAndInterfacesCompile()
     {
         string source = Components + """
-            public partial record Outer
-            {
-                [Query]
-                public ref partial struct Q
-                {
-                    public Span<Position> Positions;
-                }
-            }
-
             public partial interface IOuter
             {
                 [Blueprint]
@@ -464,12 +505,7 @@ public class GeneratorTests
         string source = Components + """
             public static partial class @class
             {
-                [Query]
-                public ref partial struct @event
-                {
-                    public ReadOnlySpan<Entity> @this;
-                    public Span<Position> @base;
-                }
+                public sealed class @event : Query<ReadOnlySpan<Entity>, Span<Position>>;
 
                 [Blueprint]
                 public partial struct @struct
@@ -481,15 +517,15 @@ public class GeneratorTests
                 [Blueprint]
                 public partial record struct @record(Position @out);
 
-                public sealed class @operator(Query<@event> query, Spawner<@struct> structs, Spawner<@record> records) : ISystem
+                public sealed class @operator : ISystem<@event, Spawner<@struct>, Spawner<@record>>
                 {
-                    public void Update()
+                    public void Update(@event query, Spawner<@struct> structs, Spawner<@record> records)
                     {
-                        foreach (@event chunk in query)
+                        foreach ((ReadOnlySpan<Entity> @this, Span<Position> @base) in query)
                         {
-                            chunk.@base[0] = chunk.@base[0];
-                            structs.Spawn(new @struct { @in = chunk.@base[0], record = default });
-                            records.Spawn(new @record(chunk.@base[0]));
+                            @base[0] = @base[0];
+                            structs.Spawn(new @struct { @in = @base[0], record = default });
+                            records.Spawn(new @record(@base[0]));
                         }
                     }
                 }
@@ -502,6 +538,62 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+    }
+
+    // Generators do not see each other's output, so the generator sees Spawner<B> break its constraint until the blueprint's part exists.
+    [Test]
+    public void SchedulerAddOfAGenericSystemWithASpawnerOfAGeneratedBlueprintIsIntercepted()
+    {
+        string source = Components + """
+            [Blueprint]
+            public partial struct B
+            {
+                public Position Position;
+            }
+
+            public sealed class Generic<T>(System.Action<T> update) : ISystem<T>
+            {
+                public void Update(T item1) => update(item1);
+            }
+
+            static class Registration
+            {
+                static void Register(SystemScheduler scheduler) => scheduler.Add(new Generic<Spawner<B>>(spawner => spawner.Spawn(new B())));
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::B>()")), Is.True);
+    }
+
+    // SystemScheduler.Add handles an ISystem at runtime, and a type parameter is known only where the generic code is called.
+    [Test]
+    public void SchedulerAddOfAnISystemOrATypeParameterIsNotIntercepted()
+    {
+        string source = Components + """
+            public sealed class S : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(SystemScheduler scheduler) => scheduler.Add(new S());
+
+                static void Register<T>(SystemScheduler scheduler, T system) where T : class => scheduler.Add(system);
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
     }
 
     private static (ImmutableArray<Diagnostic> GeneratorDiagnostics, Compilation Output) Run(string source)
@@ -520,7 +612,7 @@ public class GeneratorTests
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithNullableContextOptions(NullableContextOptions.Enable));
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new QueryGenerator().AsSourceGenerator(), new BlueprintGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new QueryTermGenerator().AsSourceGenerator(), new BlueprintGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
             parseOptions: parseOptions);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation output, out ImmutableArray<Diagnostic> diagnostics);
         return (diagnostics, output);
