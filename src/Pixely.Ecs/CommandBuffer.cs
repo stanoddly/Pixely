@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Pixely.Collections;
 
 namespace Pixely.Ecs;
@@ -16,6 +17,14 @@ internal interface IRecordedCommands
     void Clear();
 }
 
+// A spawner's request for room in its archetype, which the buffer makes before the system's commands.
+internal interface IRoomRequest
+{
+    int Room { get; }
+
+    Archetype GetArchetype(World world);
+}
+
 // One system's structural changes, recorded by its writers and applied in recording order at a sync point.
 internal sealed class CommandBuffer
 {
@@ -29,6 +38,8 @@ internal sealed class CommandBuffer
 
     private readonly FastList<Command> _commands = new FastList<Command>(4);
     private readonly List<IRecordedCommands> _sources = [];
+    private readonly List<IRoomRequest> _roomRequests = [];
+    private readonly Dictionary<Archetype, int> _roomByArchetype = [];
 
     public CommandBuffer(World world)
     {
@@ -65,6 +76,8 @@ internal sealed class CommandBuffer
         _commands.Add(new Command { Source = source, First = index, Count = 1 });
     }
 
+    public void RequestRoom(IRoomRequest request) => _roomRequests.Add(request);
+
     // Hands each run of consecutive commands from one writer to it at once, so a run of spawns becomes one batch.
     // Clears the buffer even when a command throws, so a later sync point does not apply the commands before it twice.
     public void Apply()
@@ -72,6 +85,7 @@ internal sealed class CommandBuffer
         int applied = 0;
         try
         {
+            MakeRequestedRoom();
             for (; applied < _commands.Length; applied++)
             {
                 Command command = _commands[applied];
@@ -81,6 +95,27 @@ internal sealed class CommandBuffer
         finally
         {
             DiscardFrom(applied);
+        }
+    }
+
+    // Sums the requests for each archetype before growing it, so the room covers every spawn of the system, whatever the order of its commands.
+    // Entities the system destroys in the same archetype are not subtracted, so the archetype can grow a little more than needed.
+    private void MakeRequestedRoom()
+    {
+        if (_roomRequests.Count == 0)
+        {
+            return;
+        }
+
+        foreach (IRoomRequest request in _roomRequests)
+        {
+            ref int room = ref CollectionsMarshal.GetValueRefOrAddDefault(_roomByArchetype, request.GetArchetype(World), out _);
+            room = checked(room + request.Room);
+        }
+
+        foreach ((Archetype archetype, int room) in _roomByArchetype)
+        {
+            World.EnsureRoom(archetype, room);
         }
     }
 
@@ -99,6 +134,8 @@ internal sealed class CommandBuffer
         }
 
         _commands.Resize(0);
+        _roomRequests.Clear();
+        _roomByArchetype.Clear();
         foreach (IRecordedCommands source in _sources)
         {
             source.Clear();
