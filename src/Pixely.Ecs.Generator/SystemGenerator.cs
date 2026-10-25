@@ -25,10 +25,13 @@ public class SystemGenerator : IIncrementalGenerator
     private const string SchedulerName = "Pixely.Ecs.SystemScheduler";
     private const string SystemName = "Pixely.Ecs.ISystem";
 
-    private static readonly Dictionary<string, string> Writers = new Dictionary<string, string>
+    // The generic writers and lookups, each created by the SystemBuilder method of its name.
+    private static readonly Dictionary<string, string> BuilderMethods = new Dictionary<string, string>
     {
         ["Pixely.Ecs.ComponentAdder<T>"] = "ComponentAdder",
-        ["Pixely.Ecs.ComponentRemover<T>"] = "ComponentRemover"
+        ["Pixely.Ecs.ComponentRemover<T>"] = "ComponentRemover",
+        ["Pixely.Ecs.ComponentLookup<T>"] = "ComponentLookup",
+        ["Pixely.Ecs.ReadOnlyComponentLookup<T>"] = "ReadOnlyComponentLookup"
     };
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat;
@@ -189,9 +192,9 @@ public class SystemGenerator : IIncrementalGenerator
                 return Fail("PXECS012", $"The constructor of {systemName} takes {byReference.Name} by reference, but its arguments are created for the call.", invocation);
             }
 
-            if (constructors[0].Parameters.FirstOrDefault(parameter => IsQuery(parameter.Type) || IsSpawner(parameter.Type) || GetWriterCall(parameter.Type) is not null) is { } contract)
+            if (constructors[0].Parameters.FirstOrDefault(parameter => IsQuery(parameter.Type) || IsSpawner(parameter.Type) || GetBuilderCall(parameter.Type) is not null) is { } contract)
             {
-                return Fail("PXECS013", $"The constructor of {systemName} takes {contract.Name}, a query or writer. Name its type in the ISystem<...> of {systemName}, which passes it to Update; the constructor takes only services.",
+                return Fail("PXECS013", $"The constructor of {systemName} takes {contract.Name}, a query, writer or lookup. Name its type in the ISystem<...> of {systemName}, which passes it to Update; the constructor takes only services.",
                     invocation);
             }
 
@@ -280,13 +283,13 @@ public class SystemGenerator : IIncrementalGenerator
 
                 calls.Add($"builder.Spawner<{type}>()");
             }
-            else if (GetWriterCall(typeArgument) is { } writerCall)
+            else if (GetBuilderCall(typeArgument) is { } builderCall)
             {
-                calls.Add(writerCall);
+                calls.Add(builderCall);
             }
             else
             {
-                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T> or EntityDestroyer. A service goes in the constructor.",
+                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T>, EntityDestroyer, ComponentLookup<T> or ReadOnlyComponentLookup<T>. A service goes in the constructor.",
                     invocation);
             }
 
@@ -388,14 +391,14 @@ public class SystemGenerator : IIncrementalGenerator
 
     private static bool IsSpawner(ITypeSymbol type) => type is INamedTypeSymbol named && GeneratorSupport.GetSpawnerBase(named) is not null;
 
-    private static string? GetWriterCall(ITypeSymbol type)
+    private static string? GetBuilderCall(ITypeSymbol type)
     {
         if (type.ToDisplayString() == "Pixely.Ecs.EntityDestroyer")
         {
             return "builder.EntityDestroyer()";
         }
 
-        return type is INamedTypeSymbol { IsGenericType: true } generic && Writers.TryGetValue(generic.ConstructedFrom.ToDisplayString(), out string? method)
+        return type is INamedTypeSymbol { IsGenericType: true } generic && BuilderMethods.TryGetValue(generic.ConstructedFrom.ToDisplayString(), out string? method)
             ? $"builder.{method}<{generic.TypeArguments[0].ToDisplayString(TypeFormat)}>()"
             : null;
     }

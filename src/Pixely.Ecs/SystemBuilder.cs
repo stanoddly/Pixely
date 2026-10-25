@@ -1,6 +1,6 @@
 namespace Pixely.Ecs;
 
-// What a system's ISystem<...> declares: the components its queries name and the structural changes its writers make.
+// What a system's ISystem<...> declares: the components its queries and lookups name and the structural changes its writers make.
 internal sealed class SystemContract
 {
     public HashSet<int> Touched { get; } = [];
@@ -10,7 +10,7 @@ internal sealed class SystemContract
     public bool Destroys { get; set; }
 }
 
-// Creates the queries and writers of one system while it is added to a SystemScheduler, and records its contract.
+// Creates the queries, lookups and writers of one system while it is added to a SystemScheduler, and records its contract.
 public sealed class SystemBuilder
 {
     private readonly World _world;
@@ -49,6 +49,20 @@ public sealed class SystemBuilder
         return new ComponentRemover<T>(Commands);
     }
 
+    public ComponentLookup<T> ComponentLookup<T>() where T : struct
+    {
+        ThrowIfClosed();
+        Contract.Touched.Add(ComponentType<T>.Id);
+        return new ComponentLookup<T>(Commands);
+    }
+
+    public ReadOnlyComponentLookup<T> ReadOnlyComponentLookup<T>() where T : struct
+    {
+        ThrowIfClosed();
+        Contract.Touched.Add(ComponentType<T>.Id);
+        return new ReadOnlyComponentLookup<T>(Commands);
+    }
+
     public EntityDestroyer EntityDestroyer()
     {
         ThrowIfClosed();
@@ -72,7 +86,7 @@ public sealed class SystemBuilder
     {
         if (_closed)
         {
-            throw new InvalidOperationException("A SystemBuilder creates queries and writers only while its system is added.");
+            throw new InvalidOperationException("A SystemBuilder creates queries, lookups and writers only while its system is added.");
         }
     }
 

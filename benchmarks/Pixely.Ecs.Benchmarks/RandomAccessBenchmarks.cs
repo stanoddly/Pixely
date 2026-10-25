@@ -8,8 +8,26 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class RandomAccessBenchmarks
 {
+    internal sealed class LookupSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position>>
+    {
+        public float Sum { get; private set; }
+
+        public void Update(ReadOnlyComponentLookup<Position> positions)
+        {
+            float sum = 0;
+            foreach (Entity entity in entities)
+            {
+                sum += positions[entity].X;
+            }
+
+            Sum = sum;
+        }
+    }
+
     private World _pixely = null!;
     private Entity[] _pixelyEntities = [];
+    private SystemScheduler _scheduler = null!;
+    private LookupSystem _lookupSystem = null!;
     private ArchWorld _arch = null!;
     private ArchEntity[] _archEntities = [];
 
@@ -25,6 +43,8 @@ public class RandomAccessBenchmarks
         new Random(42).Shuffle(order);
         _pixelyEntities = order.Select(i => _pixelyEntities[i]).ToArray();
         _archEntities = order.Select(i => _archEntities[i]).ToArray();
+        _scheduler = new SystemScheduler(_pixely);
+        _lookupSystem = _scheduler.Add(new LookupSystem(_pixelyEntities));
     }
 
     [GlobalCleanup]
@@ -65,5 +85,13 @@ public class RandomAccessBenchmarks
         }
 
         return sum;
+    }
+
+    // A system reads the positions through its ReadOnlyComponentLookup, which checks that its Update runs before each Get.
+    [Benchmark]
+    public float PixelyLookup()
+    {
+        _scheduler.Update();
+        return _lookupSystem.Sum;
     }
 }

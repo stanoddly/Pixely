@@ -602,6 +602,84 @@ public class SystemSchedulerTests
         Assert.That(world.Has<Dead>(entity), Is.False);
     }
 
+    [Test]
+    public void LookupReadsAndWritesTheComponentsOfAGivenEntity()
+    {
+        World world = new World();
+        Entity moving = CreateMoving(world);
+        world.Get<Velocity>(moving) = new Velocity(1, 2);
+        Entity still = world.Create();
+        world.Add(still, new Position(5, 5));
+        SystemScheduler scheduler = new SystemScheduler(world);
+        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>((positions, velocities) =>
+        {
+            foreach (Entity entity in (Entity[])[moving, still])
+            {
+                if (velocities.Has(entity))
+                {
+                    ref Position position = ref positions[entity];
+                    position = new Position(position.X + velocities[entity].X, position.Y + velocities[entity].Y);
+                }
+            }
+        }));
+
+        scheduler.Update();
+
+        Assert.That(world.Get<Position>(moving), Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Get<Position>(still), Is.EqualTo(new Position(5, 5)));
+    }
+
+    [Test]
+    public void LookupSeesTheChangesOfAnEarlierSystemInTheSameUpdate()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        bool sawDead = false;
+        scheduler.Add(new Killer());
+        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Dead>>(dead => sawDead = dead.Has(entity)));
+
+        scheduler.Update();
+
+        Assert.That(sawDead, Is.True);
+    }
+
+    [Test]
+    public void LookupHasIsFalseForADestroyedEntity()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        world.Destroy(entity);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        bool has = true;
+        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Position>>(positions => has = positions.Has(entity)));
+
+        scheduler.Update();
+
+        Assert.That(has, Is.False);
+    }
+
+    [Test]
+    public void LookupKeptPastUpdateThrows()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        ComponentLookup<Position> keptPositions = null!;
+        ReadOnlyComponentLookup<Velocity> keptVelocities = null!;
+        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>((positions, velocities) =>
+        {
+            keptPositions = positions;
+            keptVelocities = velocities;
+        }));
+        scheduler.Update();
+
+        Assert.Throws<InvalidOperationException>(() => keptPositions.Has(entity));
+        Assert.Throws<InvalidOperationException>(() => _ = keptPositions[entity]);
+        Assert.Throws<InvalidOperationException>(() => keptVelocities.Has(entity));
+        Assert.Throws<InvalidOperationException>(() => _ = keptVelocities[entity]);
+    }
+
     // Creates the component's string here, so nothing but the world and the spawner can reference it once this returns.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference SpawnName(Spawner<Name> spawner)
