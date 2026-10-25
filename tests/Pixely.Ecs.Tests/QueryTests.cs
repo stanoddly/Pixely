@@ -232,9 +232,9 @@ public class QueryTests
     private static List<Entity> CollectEntities(Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> query)
     {
         List<Entity> entities = [];
-        foreach ((ReadOnlySpan<Entity> chunkEntities, _) in query)
+        foreach ((ReadOnlySpan<Entity> matched, _) in query)
         {
-            entities.AddRange(chunkEntities.ToArray());
+            entities.AddRange(matched.ToArray());
         }
 
         return entities;

@@ -1,36 +1,33 @@
-using System.Numerics;
-
 namespace Pixely.Ecs.Tests;
 
-public class ChunkTests
+public class StorageTests
 {
+    // An archetype stores each component in one array, so a query yields one span per archetype.
     [Test]
-    public void QueryVisitsEveryEntityAcrossChunksOfAPowerOfTwoRows()
+    public void QueryVisitsEveryEntityOfAnArchetypeInOneSpan()
     {
         World world = new World();
         Entity[] entities = CreateMoving(world, 1000);
 
         List<int> counts = [];
         HashSet<Entity> visited = [];
-        foreach ((ReadOnlySpan<Entity> chunkEntities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in world.Query<Movement>())
+        foreach ((ReadOnlySpan<Entity> matched, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in world.Query<Movement>())
         {
             counts.Add(positions.Length);
             for (int i = 0; i < positions.Length; i++)
             {
                 positions[i].X += velocities[i].X;
-                visited.Add(chunkEntities[i]);
+                visited.Add(matched[i]);
             }
         }
 
-        Assert.That(counts, Has.Count.GreaterThan(1));
-        Assert.That(counts[..^1], Has.All.Matches<int>(count => count >= 64 && BitOperations.IsPow2(count)));
-        Assert.That(counts[..^1], Has.All.EqualTo(counts[0]));
+        Assert.That(counts, Is.EqualTo(new[] { 1000 }));
         Assert.That(visited.SetEquals(entities), Is.True);
         Assert.That(entities.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(1, 1000).Select(i => (float)i)));
     }
 
     [Test]
-    public void DestroyingMovesTheLastRowAcrossChunksAndKeepsEveryValue()
+    public void DestroyingMovesTheLastRowIntoTheGapAndKeepsEveryValue()
     {
         World world = new World();
         Entity[] entities = CreateMoving(world, 1000);
@@ -53,9 +50,9 @@ public class ChunkTests
         Assert.That(CountMovement(world), Is.EqualTo(600));
     }
 
-    // Both archetypes span chunks of different sizes, so moves leave and enter rows in several chunks of each.
+    // Both archetypes grow while entities move between them, so moves read from and write to replaced arrays.
     [Test]
-    public void AddingAndRemovingAcrossChunksKeepsEveryValue()
+    public void AddingAndRemovingWhileArchetypesGrowKeepsEveryValue()
     {
         World world = new World();
         Entity[] entities = new Entity[1500];
@@ -90,7 +87,7 @@ public class ChunkTests
     }
 
     [Test]
-    public void SpawnBatchFillsAPartlyUsedChunkAndContinuesInNewOnes()
+    public void SpawnBatchGrowsAPartlyFilledArchetype()
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
@@ -112,9 +109,9 @@ public class ChunkTests
         Assert.That(CountMovement(world), Is.EqualTo(2003));
     }
 
-    // 10,000 entities need more than the four chunks each list and column starts with room for.
+    // 10,000 entities need more than the four chunks each list of the spawner starts with room for, and grow the columns many times.
     [Test]
-    public void SpawningMoreThanTheInitialChunksKeepsEveryValue()
+    public void SpawningPastTheInitialCapacityKeepsEveryValue()
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);

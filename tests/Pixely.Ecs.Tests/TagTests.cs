@@ -12,33 +12,8 @@ public class TagTests
         public static void Write(ReadOnlySpan<TagColumnBlueprint> blueprints, BlueprintColumns columns) => columns.Get<Frozen>(0);
     }
 
-    // A tag adds no bytes to a row, so its chunks hold as many rows as without it, unlike an empty struct that is not a tag.
     [Test]
-    public void TagTakesNoRowSpace()
-    {
-        World world = new World();
-        for (int i = 0; i < 2000; i++)
-        {
-            Entity plain = world.Create();
-            world.Add(plain, new Position(i, 0));
-            Entity frozen = world.Create();
-            world.Add(frozen, new Position(i, 0));
-            world.Add(frozen, new Frozen());
-            Entity player = world.Create();
-            world.Add(player, new Position(i, 0));
-            world.Add(player, new Player());
-        }
-
-        int plainRows = FirstChunkCount(world.Query<UnfrozenPositions>());
-        int frozenRows = FirstChunkCount(world.Query<FrozenPositions>());
-        int playerRows = FirstChunkCount(world.Query<PlayerPositions>());
-
-        Assert.That(frozenRows, Is.EqualTo(plainRows));
-        Assert.That(playerRows, Is.LessThan(plainRows));
-    }
-
-    [Test]
-    public void AddingAndRemovingATagAcrossChunksKeepsEveryValue()
+    public void AddingAndRemovingATagKeepsEveryValue()
     {
         World world = new World();
         Entity[] entities = new Entity[1500];
@@ -161,25 +136,5 @@ public class TagTests
         scheduler.Add(new ActionSystem<Spawner<TagColumnBlueprint>>(spawner => spawner.Spawn(new TagColumnBlueprint())));
 
         Assert.Throws<InvalidOperationException>(scheduler.Update);
-    }
-
-    private static int FirstChunkCount<T1>(Query<T1> query) where T1 : allows ref struct
-    {
-        foreach (Columns<T1> columns in query)
-        {
-            return columns.Count;
-        }
-
-        return 0;
-    }
-
-    private static int FirstChunkCount<T1, T2>(Query<T1, T2> query) where T1 : allows ref struct where T2 : allows ref struct
-    {
-        foreach (Columns<T1, T2> columns in query)
-        {
-            return columns.Count;
-        }
-
-        return 0;
     }
 }

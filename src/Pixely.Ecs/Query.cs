@@ -87,72 +87,61 @@ public abstract class Query
             throw new InvalidOperationException($"The query {GetType().Name} was created with new. Get it from World.Query or through a system's Update.");
         }
 
-        return new ColumnsEnumerator<TColumns>(_world.QueryChunks(_state!));
+        return new ColumnsEnumerator<TColumns>(_world.QueryArchetypes(_state!));
     }
 
     private static string FormatType(Type type) =>
         type.IsGenericType ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(FormatType))}>" : type.Name;
 }
 
-// The spans of one chunk, which Query<...> yields. The member is internal, so only the Columns<...> types implement it.
+// The spans of one matching archetype, which Query<...> yields. The member is internal, so only the Columns<...> types implement it.
 public interface IColumns<TSelf> where TSelf : IColumns<TSelf>, allows ref struct
 {
-    internal static abstract TSelf Create(ArchetypeChunk chunk);
+    internal static abstract TSelf Create(Archetype archetype);
 }
 
 // Holds the world's structural changes off from creation until Dispose, which foreach calls even on break or exception.
-// Yields the columns of each chunk of each matching archetype.
+// Yields the columns of each matching archetype that has entities.
 public ref struct ColumnsEnumerator<TColumns> where TColumns : IColumns<TColumns>, allows ref struct
 {
-    private ChunkEnumerator _chunks;
+    private ArchetypeEnumerator _archetypes;
 
-    internal ColumnsEnumerator(ChunkEnumerator chunks)
+    internal ColumnsEnumerator(ArchetypeEnumerator archetypes)
     {
-        _chunks = chunks;
+        _archetypes = archetypes;
     }
 
-    public TColumns Current => TColumns.Create(_chunks.Current);
+    public TColumns Current => TColumns.Create(_archetypes.Current);
 
-    public bool MoveNext() => _chunks.MoveNext();
+    public bool MoveNext() => _archetypes.MoveNext();
 
-    public void Dispose() => _chunks.Dispose();
+    public void Dispose() => _archetypes.Dispose();
 }
 
-// Holds the world's structural changes off from creation until Dispose, and yields each chunk of each matching archetype.
-internal ref struct ChunkEnumerator
+// Holds the world's structural changes off from creation until Dispose, and yields each matching archetype that has entities.
+internal ref struct ArchetypeEnumerator
 {
     private readonly World _world;
     private readonly FastList<Archetype> _archetypes;
     private readonly long _query;
-    private int _archetypeIndex;
-    private Archetype? _archetype;
-    private int _chunk;
-    private int _chunkCount;
+    private int _index;
 
-    public ChunkEnumerator(World world, FastList<Archetype> archetypes)
+    public ArchetypeEnumerator(World world, FastList<Archetype> archetypes)
     {
         _world = world;
         _archetypes = archetypes;
-        _archetypeIndex = -1;
+        _index = -1;
         _query = world.BeginQuery();
     }
 
-    public ArchetypeChunk Current => new ArchetypeChunk(_archetype!, _chunk);
+    public Archetype Current => _archetypes[_index];
 
     public bool MoveNext()
     {
-        if (++_chunk < _chunkCount)
+        while (++_index < _archetypes.Length)
         {
-            return true;
-        }
-
-        while (++_archetypeIndex < _archetypes.Length)
-        {
-            _archetype = _archetypes[_archetypeIndex];
-            _chunkCount = _archetype.ChunkCount;
-            if (_chunkCount > 0)
+            if (_archetypes[_index].Count > 0)
             {
-                _chunk = 0;
                 return true;
             }
         }

@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-25: Pixely.Ecs archetypes store each component in one array that doubles, with EnsureCapacity for a known size
+
+Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TBlueprint>` and `Spawner<TBlueprint>.EnsureCapacity` grow a blueprint's archetype to an exact size. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
+
+- Chunks only help while a column grows: it never copies its rows, and its arrays stay off the large object heap. Their costs apply to every frame. Against chunks, flat columns made `Get` 26 to 27% faster, `UnsafeGet` 30 to 32%, adding and removing a component 21 to 24%, and iteration 3 to 6%.
+- Unity's chunks live in native memory, so its reasons do not carry over to the .NET garbage collector. Flecs and Bevy store flat columns.
+- Growing one archetype to 1,000,000 entities in frames of 2,000 kept the slowest frame of chunks, about 1.5 ms, and cut the total GC pause from about 2.4 ms to 0.3 ms. It allocated 1.6 times as much, with two background gen 2 collections. With `EnsureCapacity`, the slowest frame was about 0.1 ms and the allocation matched chunks.
+- A strategy chosen per world would cost a branch in `Get` or a generic `World<TStorage>` throughout the API. A capacity hint gets the one benefit of chunks without either.
+
+Cost: growing without a hint copies the rows and leaves the old arrays as garbage, and arrays over 85 KB go on the large object heap, so growth from nothing to 100,000 entities triggers gen 2 collections. A column can be up to half empty after doubling, and keeps its size when entities leave. A query can no longer split one archetype into chunks for parallel work; it would split the span instead.
+
 ## 2026-10-24: Pixely.Ecs lookups favor speed: an Entity has no world id, and archetypes index column chunks by component id
 
 An `Entity` is an index and a version, 8 bytes. Each archetype keeps the chunk array of each column in a table indexed by component id, which `World.Get<T>` and `UnsafeGet<T>` read through. `UnsafeGet<T>` skips every check of `Get<T>`.
