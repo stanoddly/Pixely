@@ -35,7 +35,7 @@ world.Remove<Velocity>(entity);
 world.Destroy(entity);
 ```
 
-- `Get<T>` returns a reference. It stays valid until the next structural change: `Create`, `Destroy`, `Add` or `Remove`.
+- `Get<T>` returns a reference. It stays valid until the next structural change: `Create`, `Destroy`, `Add`, `Remove`, `EnsureCapacity` or a sync point.
 - `Add` throws when the entity already has the component. `Remove` and `Get` throw when it does not.
 - `Get<T>` of a tag returns one value that all entities share, because a tag stores nothing.
 - Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
@@ -56,7 +56,7 @@ An archetype stores each component type that is not a tag in one array, with a r
 - The room is kept when entities leave.
 - A tag has no array, so adding or removing one moves the entity's other components and nothing else. An empty struct without `ITag` still takes one byte per row.
 
-`EnsureCapacity<TBlueprint>(capacity)` grows the archetype of a blueprint's components to exactly `capacity` entities, and returns its capacity. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use the `EnsureCapacity` of a `Spawner<TBlueprint>` instead, described under blueprints.
+`EnsureCapacity<TBlueprint>(capacity)` grows the archetype of a blueprint's components to hold at least `capacity` entities, and returns its capacity. An archetype that is smaller grows to exactly `capacity`. One that is already larger keeps its size. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use `EnsureRoomFor` of a `Spawner<TBlueprint>` instead, described under blueprints.
 
 ## Queries
 
@@ -204,7 +204,7 @@ A blueprint can hold a tag. The spawned entity gets the tag, and the generated c
 
 A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
 
-`Spawner<TBlueprint>.EnsureCapacity(capacity)` grows the blueprint's archetype to `capacity` entities at the next sync point, before the spawns recorded after it, so a wave spread over many frames grows the arrays once. A system that throws drops the request with its other changes. The spawns applied at one sync point already grow the arrays at most once.
+`Spawner<TBlueprint>.EnsureRoomFor(count)` grows the blueprint's archetype at the next sync point, before the spawns recorded after it, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The count adds to the entities of earlier changes, so systems that spawn into one archetype each ask for room for their own spawns. A system that throws drops the request with its other changes.
 
 ## Sync points
 
