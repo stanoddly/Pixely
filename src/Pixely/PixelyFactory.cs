@@ -300,11 +300,11 @@ public partial class PixelyFactory: IDisposable
         return new CursorService();
     }
 
-    internal LocaleService CreateLocaleService()
+    internal PlatformSettings CreatePlatformSettings()
     {
         EnsureSdlInitialized();
 
-        return new LocaleService();
+        return new PlatformSettings(_config.Headless);
     }
 
     internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
@@ -357,6 +357,7 @@ public partial class PixelyFactory: IDisposable
         GamepadService gamepadService,
         MouseService mouseService,
         TextInputService textInputService,
+        PlatformSettings platformSettings,
         WindowRegistry windowRegistry,
         AppControl appControl)
     {
@@ -367,6 +368,7 @@ public partial class PixelyFactory: IDisposable
             gamepadService,
             mouseService,
             textInputService,
+            platformSettings,
             windowRegistry,
             appControl);
     }
