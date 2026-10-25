@@ -217,6 +217,13 @@ public sealed class World
         return new ArchetypeEnumerator(this, state.Matches);
     }
 
+    // Grows the archetype to hold count entities more than it holds, for the room that spawners ask for at a sync point.
+    internal void EnsureRoom(Archetype archetype, int count)
+    {
+        ThrowIfQueryRuns();
+        archetype.EnsureCapacity(checked(archetype.Count + count));
+    }
+
     // Allowed while a query runs, because the entity gets no archetype until Spawn.
     internal Entity Reserve()
     {

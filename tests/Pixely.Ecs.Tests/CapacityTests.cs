@@ -105,6 +105,31 @@ public class CapacityTests
         Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(0, 0)));
     }
 
+    // Both requests come before the spawns, so each must add to the other rather than to the entities the archetype holds when it applies.
+    [Test]
+    public void RoomOfSpawnersSharingAnArchetypeAddsUpWhateverTheOrder()
+    {
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        Entity existing = CreateMoving(world, 0);
+        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>, Spawner<SecondMovingBlueprint>>((first, second) =>
+        {
+            first.EnsureRoomFor(100);
+            second.EnsureRoomFor(60);
+            second.EnsureRoomFor(40);
+            for (int i = 0; i < 100; i++)
+            {
+                first.Spawn(new MovingBlueprint { Position = new Position(i, 0) });
+                second.Spawn(new SecondMovingBlueprint { Position = new Position(-i, 0) });
+            }
+        }));
+
+        scheduler.Update();
+
+        Assert.That(world.EnsureCapacity<SecondMovingBlueprint>(0), Is.EqualTo(201));
+        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(0, 0)));
+    }
+
     [Test]
     public void SpawnerRequestOfASystemThatThrowsIsDropped()
     {

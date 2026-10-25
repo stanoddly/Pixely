@@ -108,28 +108,37 @@ public sealed class EntityDestroyer : IRecordedCommands
 }
 
 // Creates entities from a blueprint at the next sync point, directly in the archetype of its components.
-public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : struct, IBlueprint<TBlueprint>
+public sealed class Spawner<TBlueprint> : IRecordedCommands, IRoomRequest where TBlueprint : struct, IBlueprint<TBlueprint>
 {
     private readonly CommandBuffer _commands;
     private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
     private readonly ChunkedList<TBlueprint> _values = new ChunkedList<TBlueprint>();
-    private readonly CapacityRequests _capacityRequests = new CapacityRequests();
+    private int _room;
 
     internal Spawner(CommandBuffer commands)
     {
         _commands = commands;
         commands.AddSource(this);
-        commands.AddSource(_capacityRequests);
     }
 
-    // Grows the archetype to hold count entities more than it holds at the sync point, in the order of the commands, so it never replaces the
-    // arrays under a running query. The count adds to the entities of earlier commands, so systems that spawn into one archetype each ask for
-    // their own spawns. A system that throws drops the request with its other commands.
+    // Grows the archetype at the sync point, before any of the system's commands, so it never replaces the arrays under a running query.
+    // The buffer sums the requests of the system for each archetype, so spawners that share one each get room for their own spawns.
+    // A system that throws drops the request with its other commands.
     public void EnsureRoomFor(int count)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         _commands.ThrowIfNotRecording();
-        _commands.Record(_capacityRequests, _capacityRequests.Add(count));
+        if (count == 0)
+        {
+            return;
+        }
+
+        if (_room == 0)
+        {
+            _commands.RequestRoom(this);
+        }
+
+        _room = checked(_room + count);
     }
 
     // The entity is reserved now and becomes alive at the sync point, so other commands of the same system can already target it.
@@ -150,23 +159,11 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
     {
         _entities.Clear();
         _values.Clear();
+        _room = 0;
     }
 
-    private sealed class CapacityRequests : IRecordedCommands
-    {
-        private readonly FastList<int> _counts = new FastList<int>(1);
+    int IRoomRequest.Room => _room;
 
-        public int Add(int count) => _counts.Add(count);
-
-        public void Apply(World world, int first, int count)
-        {
-            Archetype archetype = world.GetBlueprintState<TBlueprint>().Archetype;
-            for (int i = first; i < first + count; i++)
-            {
-                world.EnsureCapacity<TBlueprint>(checked(archetype.Count + _counts[i]));
-            }
-        }
-
-        public void Clear() => _counts.Resize(0);
-    }
+    // Resolved at the sync point, because creating the archetype while a query runs would change the archetypes it enumerates.
+    Archetype IRoomRequest.GetArchetype(World world) => world.GetBlueprintState<TBlueprint>().Archetype;
 }

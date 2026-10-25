@@ -30,6 +30,14 @@ public partial struct MovingBlueprint
     public Velocity Velocity;
 }
 
+// Describes the components of MovingBlueprint, so both spawn into one archetype.
+[Blueprint]
+public partial struct SecondMovingBlueprint
+{
+    public Position Position;
+    public Velocity Velocity;
+}
+
 [Blueprint]
 public readonly partial record struct NamedBlueprint(Name Name, Position Position);
 
