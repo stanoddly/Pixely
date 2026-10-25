@@ -1,19 +1,18 @@
 using System.Diagnostics;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Pixely.Ecs;
 
 // The entities that have exactly the same component types, with one column per component type that is not a tag, in the order of the set.
-// Rows are stored in chunks; a row's chunk is row >> ChunkShift. The archetype counts the rows for all its columns and adds their chunks together.
+// Each column stores its rows in one array. The archetype counts the rows for all its columns and grows them together, doubling their capacity.
 internal sealed class Archetype
 {
     // What GetColumnIndex returns for a component the archetype lacks, and for a tag it has, which has no column.
     public const int Absent = -1;
     public const int Tag = -2;
 
-    private const int ChunkBytes = 16 * 1024;
+    private const int InitialCapacity = 8;
 
     private readonly ColumnType[] _types;
     private readonly Column<Entity> _entities;
@@ -23,16 +22,16 @@ internal sealed class Archetype
     // The column of each component id, Absent or Tag. Ids allocated after the archetype was created lie past its end.
     private readonly int[] _columnIndices;
 
-    // The chunks of each component id's column, as the T[][] of its Column<T>, or null for a component the archetype lacks and for a tag.
-    // Get reaches a row through them without loading the Column. AddChunk refreshes them, because a column replaces its T[][] when it grows.
-    private readonly object?[] _chunksById;
+    // The rows of each component id's column, as the T[] of its Column<T>, or null for a component the archetype lacks and for a tag.
+    // Get reaches a row through them without loading the Column. Grow refreshes them, because a column replaces its T[] when it grows.
+    private readonly object?[] _itemsById;
 
     // The edges reached by adding or removing each component id, or null until first used.
     private ArchetypeEdge?[] _addEdges = [];
     private ArchetypeEdge?[] _removeEdges = [];
 
-    // The rows the added chunks hold.
-    private int _capacity;
+    // The rows each column has room for.
+    private int _capacity = InitialCapacity;
 
     // The types are in the order of the set's ids.
     public Archetype(ComponentSet components, ColumnType[] types)
@@ -40,25 +39,13 @@ internal sealed class Archetype
         Components = components;
         _types = types;
 
-        // The largest power of two of rows that fits ChunkBytes, at least 64, so a full chunk of any component is a whole number of vectors up to 512 bits.
-        int rowSize = Unsafe.SizeOf<Entity>();
-        int columnCount = 0;
-        foreach (ColumnType type in types)
-        {
-            if (!type.IsTag)
-            {
-                rowSize += type.Size;
-                columnCount++;
-            }
-        }
-
-        ChunkShift = BitOperations.Log2((uint)Math.Max(64, ChunkBytes / rowSize));
-        _entities = new Column<Entity>(ChunkShift);
+        int columnCount = types.Count(type => !type.IsTag);
+        _entities = new Column<Entity>(InitialCapacity);
         _columns = new Column[columnCount];
         _columnComponentIds = new int[columnCount];
         _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
         Array.Fill(_columnIndices, Absent);
-        _chunksById = new object?[_columnIndices.Length];
+        _itemsById = new object?[_columnIndices.Length];
         int column = 0;
         for (int i = 0; i < types.Length; i++)
         {
@@ -69,9 +56,9 @@ internal sealed class Archetype
             }
             else
             {
-                _columns[column] = types[i].Create(ChunkShift);
+                _columns[column] = types[i].Create(InitialCapacity);
                 _columnComponentIds[column] = id;
-                _chunksById[id] = _columns[column].Chunks;
+                _itemsById[id] = _columns[column].Items;
                 _columnIndices[id] = column++;
             }
         }
@@ -79,22 +66,26 @@ internal sealed class Archetype
 
     public ComponentSet Components { get; }
 
-    public int ChunkShift { get; }
-
     public int Count { get; private set; }
 
     // The component id of each column.
     public ReadOnlySpan<int> ColumnComponentIds => _columnComponentIds;
 
-    public int ChunkCount => (Count + ChunkLength - 1) >> ChunkShift;
+    public ReadOnlySpan<Entity> Entities => _entities.GetRows(0, Count);
 
-    private int ChunkLength => 1 << ChunkShift;
+    // The rows of T, which a query reads as one span. Throws for a tag, which has no data to read.
+    public Span<T> GetSpan<T>() where T : struct
+    {
+        int column = GetColumnIndex(ComponentType<T>.Id);
+        if (column < 0)
+        {
+            throw new InvalidOperationException(column == Tag
+                ? $"{ComponentType<T>.Name} is a tag, which has no data to read."
+                : $"The archetype has no {ComponentType<T>.Name} component.");
+        }
 
-    public int GetChunkCount(int chunk) => Math.Min(ChunkLength, Count - (chunk << ChunkShift));
-
-    public ReadOnlySpan<Entity> GetChunkEntities(int chunk) => _entities.GetChunk(chunk, GetChunkCount(chunk));
-
-    public int GetRowsLeftInChunk(int row) => ChunkLength - (row & (ChunkLength - 1));
+        return GetColumnUnchecked<T>(column).GetRows(0, Count);
+    }
 
     public Entity GetEntity(int row) => _entities.GetUnchecked(row);
 
@@ -103,23 +94,22 @@ internal sealed class Archetype
     public int GetColumnIndex(int componentId) =>
         (uint)componentId < (uint)_columnIndices.Length ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_columnIndices), componentId) : -1;
 
-    // The chunks of T's column, or null when the archetype lacks T. The id must be T's, and T must not be a tag.
-    public T[][]? GetChunks<T>(int componentId) where T : struct =>
-        (uint)componentId < (uint)_chunksById.Length ? Unsafe.As<T[][]?>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunksById), componentId)) : null;
+    // The rows of T's column, or null when the archetype lacks T. The id must be T's, and T must not be a tag.
+    public T[]? GetItems<T>(int componentId) where T : struct =>
+        (uint)componentId < (uint)_itemsById.Length ? Unsafe.As<T[]?>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_itemsById), componentId)) : null;
 
-    // GetChunks for an id the archetype has a column for.
-    public T[][] GetChunksUnchecked<T>(int componentId) where T : struct
+    // GetItems for an id the archetype has a column for.
+    public T[] GetItemsUnchecked<T>(int componentId) where T : struct
     {
-        Debug.Assert((uint)componentId < (uint)_chunksById.Length && _chunksById[componentId] is T[][]);
-        return Unsafe.As<T[][]>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunksById), componentId)!);
+        Debug.Assert((uint)componentId < (uint)_itemsById.Length && _itemsById[componentId] is T[]);
+        return Unsafe.As<T[]>(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_itemsById), componentId)!);
     }
 
-    // The row of chunks from GetChunks, which lies in an added chunk.
-    public ref T GetRowUnchecked<T>(T[][] chunks, int row) where T : struct
+    // The row of the items from GetItems, below the capacity.
+    public static ref T GetRowUnchecked<T>(T[] items, int row) where T : struct
     {
-        Debug.Assert((uint)row < (uint)_capacity);
-        T[] chunk = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunks), row >> ChunkShift);
-        return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), row & (ChunkLength - 1));
+        Debug.Assert((uint)row < (uint)items.Length);
+        return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(items), row);
     }
 
     public Column<T> GetColumn<T>(int index) where T : struct => (Column<T>)_columns[index];
@@ -175,10 +165,7 @@ internal sealed class Archetype
     public int AddRows(int count)
     {
         int firstRow = Count;
-        while (_capacity < firstRow + count)
-        {
-            AddChunk();
-        }
+        GrowFor(firstRow + count);
 
         Count = firstRow + count;
         return firstRow;
@@ -236,25 +223,43 @@ internal sealed class Archetype
     private int AddRow()
     {
         int row = Count;
-        if (row == _capacity)
-        {
-            AddChunk();
-        }
+        GrowFor(row + 1);
 
         Count = row + 1;
         return row;
     }
 
-    private void AddChunk()
+    // Grows the columns to exactly the capacity, for a known number of rows, so they grow once and leave no smaller arrays behind.
+    public int EnsureCapacity(int capacity)
     {
-        _entities.AddChunk();
-        for (int i = 0; i < _columns.Length; i++)
+        if (capacity > _capacity)
         {
-            _columns[i].AddChunk();
-            _chunksById[_columnComponentIds[i]] = _columns[i].Chunks;
+            Grow(capacity);
         }
 
-        _capacity += ChunkLength;
+        return _capacity;
+    }
+
+    // Doubles the capacity, or grows it to the rows if that is more, so adding rows one by one copies each row a constant number of times.
+    private void GrowFor(int rows)
+    {
+        if (rows > _capacity)
+        {
+            Grow(Math.Max(rows, _capacity * 2));
+        }
+    }
+
+    // Copies the existing rows into new arrays of the capacity.
+    private void Grow(int capacity)
+    {
+        _entities.Grow(capacity, Count);
+        for (int i = 0; i < _columns.Length; i++)
+        {
+            _columns[i].Grow(capacity, Count);
+            _itemsById[_columnComponentIds[i]] = _columns[i].Items;
+        }
+
+        _capacity = capacity;
     }
 
     private static void SetEdge(ref ArchetypeEdge?[] edges, int componentId, ArchetypeEdge edge)

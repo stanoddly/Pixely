@@ -12,7 +12,7 @@ internal abstract class ColumnType
     // A tag has no data, so an archetype keeps no column for it.
     public abstract bool IsTag { get; }
 
-    public abstract Column Create(int chunkShift);
+    public abstract Column Create(int capacity);
 }
 
 internal sealed class ColumnType<T> : ColumnType where T : struct
@@ -23,15 +23,16 @@ internal sealed class ColumnType<T> : ColumnType where T : struct
 
     public override bool IsTag => default(T) is ITag;
 
-    public override Column Create(int chunkShift) => new Column<T>(chunkShift);
+    public override Column Create(int capacity) => new Column<T>(capacity);
 }
 
 internal abstract class Column
 {
-    // The T[][] of a Column<T>, which AddChunk replaces when it grows.
-    public abstract object Chunks { get; }
+    // The T[] of a Column<T>, which Grow replaces.
+    public abstract object Items { get; }
 
-    public abstract void AddChunk();
+    // Replaces the rows with an array of the capacity that holds the first count of them.
+    public abstract void Grow(int capacity, int count);
 
     // Copies the row to the destination row of a column of the same type, then moves the last row into its place.
     public abstract void MoveRow(int row, int lastRow, Column destination, int destinationRow);
@@ -43,44 +44,33 @@ internal abstract class Column
     public abstract void ClearRows(int first, int count);
 }
 
-// Stores rows in chunks of 1 << chunkShift, so it grows without copying and a row is a shift and a mask away.
-// The archetype counts the rows and adds the chunks; rows passed to the unchecked members lie in an added chunk.
+// Stores rows in one array, which Grow replaces with a larger one. The archetype counts the rows and grows the columns together; rows passed to
+// the unchecked members lie below the capacity.
 internal sealed class Column<T> : Column where T : struct
 {
-    private readonly int _shift;
-    private T[][] _chunks = new T[4][];
-    private int _chunkCount;
+    private T[] _items;
 
-    public Column(int chunkShift)
+    public Column(int capacity)
     {
-        _shift = chunkShift;
+        _items = new T[capacity];
     }
 
-    private int Mask => (1 << _shift) - 1;
+    public override object Items => _items;
 
-    public override object Chunks => _chunks;
-
-    // The first count rows of a chunk.
-    public Span<T> GetChunk(int chunk, int count) => _chunks[chunk].AsSpan(0, count);
-
-    // Count rows from row on, all in row's chunk.
-    public Span<T> GetRows(int row, int count) => _chunks[row >> _shift].AsSpan(row & Mask, count);
+    // Count rows from row on.
+    public Span<T> GetRows(int row, int count) => _items.AsSpan(row, count);
 
     public ref T GetUnchecked(int row)
     {
-        Debug.Assert((uint)row < (uint)(_chunkCount << _shift));
-        T[] chunk = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunks), row >> _shift);
-        return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), row & Mask);
+        Debug.Assert((uint)row < (uint)_items.Length);
+        return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_items), row);
     }
 
-    public override void AddChunk()
+    public override void Grow(int capacity, int count)
     {
-        if (_chunkCount == _chunks.Length)
-        {
-            Array.Resize(ref _chunks, _chunks.Length * 2);
-        }
-
-        _chunks[_chunkCount++] = new T[1 << _shift];
+        T[] items = new T[capacity];
+        _items.AsSpan(0, count).CopyTo(items);
+        _items = items;
     }
 
     public override void MoveRow(int row, int lastRow, Column destination, int destinationRow)

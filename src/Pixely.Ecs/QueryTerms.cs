@@ -5,20 +5,20 @@ namespace Pixely.Ecs;
 public static class QueryTerms
 {
     public static void RegisterSpan<T>() where T : struct =>
-        QueryTerm<Span<T>>.Instance ??= new QueryTerm<Span<T>>(static description => description.Read<T>(), static chunk => chunk.GetSpan<T>());
+        QueryTerm<Span<T>>.Instance ??= new QueryTerm<Span<T>>(static description => description.Read<T>(), static archetype => archetype.GetSpan<T>());
 
     public static void RegisterReadOnlySpan<T>() where T : struct =>
-        QueryTerm<ReadOnlySpan<T>>.Instance ??= new QueryTerm<ReadOnlySpan<T>>(static description => description.Read<T>(), static chunk => chunk.GetSpan<T>());
+        QueryTerm<ReadOnlySpan<T>>.Instance ??= new QueryTerm<ReadOnlySpan<T>>(static description => description.Read<T>(), static archetype => archetype.GetSpan<T>());
 }
 
 // How a query describes and creates the span of one type argument. ReadOnlySpan<Entity> needs no registration, so it has its term from the start.
 internal sealed class QueryTerm<TSpan> where TSpan : allows ref struct
 {
     public static QueryTerm<TSpan>? Instance = typeof(TSpan) == typeof(ReadOnlySpan<Entity>)
-        ? (QueryTerm<TSpan>)(object)new QueryTerm<ReadOnlySpan<Entity>>(static _ => { }, static chunk => chunk.Entities)
+        ? (QueryTerm<TSpan>)(object)new QueryTerm<ReadOnlySpan<Entity>>(static _ => { }, static archetype => archetype.Entities)
         : null;
 
-    public QueryTerm(Action<QueryDescription> describe, Func<ArchetypeChunk, TSpan> create)
+    public QueryTerm(Action<QueryDescription> describe, Func<Archetype, TSpan> create)
     {
         Describe = describe;
         Create = create;
@@ -26,5 +26,5 @@ internal sealed class QueryTerm<TSpan> where TSpan : allows ref struct
 
     public Action<QueryDescription> Describe { get; }
 
-    public Func<ArchetypeChunk, TSpan> Create { get; }
+    public Func<Archetype, TSpan> Create { get; }
 }

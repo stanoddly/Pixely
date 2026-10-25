@@ -46,10 +46,6 @@ public partial struct MarkerBlueprint
     public Frozen Frozen;
 }
 
-public sealed class FrozenPositions : Query<ReadOnlySpan<Position>>, IWith<Frozen>;
-
-public sealed class PlayerPositions : Query<ReadOnlySpan<Position>>, IWith<Player>;
-
 public sealed class Positions : Query<ReadOnlySpan<Position>>;
 
 // Wrong on purpose: it requires and excludes Position. No system names it, so only the world checks it.

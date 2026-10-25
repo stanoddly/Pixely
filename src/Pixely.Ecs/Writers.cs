@@ -1,3 +1,5 @@
+using Pixely.Collections;
+
 namespace Pixely.Ecs;
 
 // Adds T at the next sync point. The value replaces T when the entity has it by then, and a dead entity is skipped.
@@ -111,11 +113,22 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
     private readonly CommandBuffer _commands;
     private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
     private readonly ChunkedList<TBlueprint> _values = new ChunkedList<TBlueprint>();
+    private readonly CapacityRequests _capacityRequests = new CapacityRequests();
 
     internal Spawner(CommandBuffer commands)
     {
         _commands = commands;
         commands.AddSource(this);
+        commands.AddSource(_capacityRequests);
+    }
+
+    // World.EnsureCapacity at the sync point, in the order of the commands, so it never replaces the arrays under a running query.
+    // A system that throws drops the request with its other commands.
+    public void EnsureCapacity(int capacity)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
+        _commands.ThrowIfNotRecording();
+        _commands.Record(_capacityRequests, _capacityRequests.Add(capacity));
     }
 
     // The entity is reserved now and becomes alive at the sync point, so other commands of the same system can already target it.
@@ -136,5 +149,22 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands where TBlueprint : s
     {
         _entities.Clear();
         _values.Clear();
+    }
+
+    private sealed class CapacityRequests : IRecordedCommands
+    {
+        private readonly FastList<int> _capacities = new FastList<int>(1);
+
+        public int Add(int capacity) => _capacities.Add(capacity);
+
+        public void Apply(World world, int first, int count)
+        {
+            for (int i = first; i < first + count; i++)
+            {
+                world.EnsureCapacity<TBlueprint>(_capacities[i]);
+            }
+        }
+
+        public void Clear() => _capacities.Resize(0);
     }
 }

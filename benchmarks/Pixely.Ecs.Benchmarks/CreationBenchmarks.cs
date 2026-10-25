@@ -52,6 +52,22 @@ public class CreationBenchmarks
     }
 
     [Benchmark]
+    public int Pixely_CreateThenAdd_CapacityHint()
+    {
+        World world = new World();
+        world.EnsureCapacity<MovingBlueprint>(Count);
+        Entity last = default;
+        for (int i = 0; i < Count; i++)
+        {
+            last = world.Create();
+            world.Add(last, new Position(i, i));
+            world.Add(last, new Velocity(1, 1));
+        }
+
+        return world.IsAlive(last) ? Count : 0;
+    }
+
+    [Benchmark]
     public int Pixely_CreateThenAdd()
     {
         World world = new World();

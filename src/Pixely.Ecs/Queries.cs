@@ -146,49 +146,49 @@ public class Query<T1, T2, T3, T4, T5, T6, T7, T8> : Query
     }
 }
 
-// The spans of one chunk, in the order of the query's type arguments. foreach deconstructs them into named variables.
+// The spans of one matching archetype, in the order of the query's type arguments. foreach deconstructs them into named variables.
 // The query checked that each type argument is registered when it was created.
 public readonly ref struct Columns<T1> : IColumns<Columns<T1>>
     where T1 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    static Columns<T1> IColumns<Columns<T1>>.Create(ArchetypeChunk chunk) => new Columns<T1>(chunk);
+    static Columns<T1> IColumns<Columns<T1>>.Create(Archetype archetype) => new Columns<T1>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2> : IColumns<Columns<T1, T2>>
     where T1 : allows ref struct
     where T2 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2> IColumns<Columns<T1, T2>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2>(chunk);
+    static Columns<T1, T2> IColumns<Columns<T1, T2>>.Create(Archetype archetype) => new Columns<T1, T2>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3> : IColumns<Columns<T1, T2, T3>>
@@ -196,29 +196,29 @@ public readonly ref struct Columns<T1, T2, T3> : IColumns<Columns<T1, T2, T3>>
     where T2 : allows ref struct
     where T3 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3> IColumns<Columns<T1, T2, T3>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3>(chunk);
+    static Columns<T1, T2, T3> IColumns<Columns<T1, T2, T3>>.Create(Archetype archetype) => new Columns<T1, T2, T3>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3, T4> : IColumns<Columns<T1, T2, T3, T4>>
@@ -227,32 +227,32 @@ public readonly ref struct Columns<T1, T2, T3, T4> : IColumns<Columns<T1, T2, T3
     where T3 : allows ref struct
     where T4 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
-    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_chunk);
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
-        item4 = QueryTerm<T4>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3, T4> IColumns<Columns<T1, T2, T3, T4>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3, T4>(chunk);
+    static Columns<T1, T2, T3, T4> IColumns<Columns<T1, T2, T3, T4>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3, T4, T5> : IColumns<Columns<T1, T2, T3, T4, T5>>
@@ -262,35 +262,35 @@ public readonly ref struct Columns<T1, T2, T3, T4, T5> : IColumns<Columns<T1, T2
     where T4 : allows ref struct
     where T5 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
-    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_chunk);
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
 
-    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_chunk);
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
-        item4 = QueryTerm<T4>.Instance!.Create(_chunk);
-        item5 = QueryTerm<T5>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3, T4, T5> IColumns<Columns<T1, T2, T3, T4, T5>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3, T4, T5>(chunk);
+    static Columns<T1, T2, T3, T4, T5> IColumns<Columns<T1, T2, T3, T4, T5>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3, T4, T5, T6> : IColumns<Columns<T1, T2, T3, T4, T5, T6>>
@@ -301,38 +301,38 @@ public readonly ref struct Columns<T1, T2, T3, T4, T5, T6> : IColumns<Columns<T1
     where T5 : allows ref struct
     where T6 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
-    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_chunk);
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
 
-    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_chunk);
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
 
-    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_chunk);
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
-        item4 = QueryTerm<T4>.Instance!.Create(_chunk);
-        item5 = QueryTerm<T5>.Instance!.Create(_chunk);
-        item6 = QueryTerm<T6>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3, T4, T5, T6> IColumns<Columns<T1, T2, T3, T4, T5, T6>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3, T4, T5, T6>(chunk);
+    static Columns<T1, T2, T3, T4, T5, T6> IColumns<Columns<T1, T2, T3, T4, T5, T6>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7>>
@@ -344,41 +344,41 @@ public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7> : IColumns<Column
     where T6 : allows ref struct
     where T7 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
-    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_chunk);
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
 
-    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_chunk);
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
 
-    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_chunk);
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
 
-    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_chunk);
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
-        item4 = QueryTerm<T4>.Instance!.Create(_chunk);
-        item5 = QueryTerm<T5>.Instance!.Create(_chunk);
-        item6 = QueryTerm<T6>.Instance!.Create(_chunk);
-        item7 = QueryTerm<T7>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3, T4, T5, T6, T7> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3, T4, T5, T6, T7>(chunk);
+    static Columns<T1, T2, T3, T4, T5, T6, T7> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7>(archetype);
 }
 
 public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8>>
@@ -391,42 +391,42 @@ public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8> : IColumns<Co
     where T7 : allows ref struct
     where T8 : allows ref struct
 {
-    private readonly ArchetypeChunk _chunk;
+    private readonly Archetype _archetype;
 
-    private Columns(ArchetypeChunk chunk)
+    private Columns(Archetype archetype)
     {
-        _chunk = chunk;
+        _archetype = archetype;
     }
 
-    public int Count => _chunk.Count;
+    public int Count => _archetype.Count;
 
-    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_chunk);
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
 
-    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_chunk);
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
 
-    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_chunk);
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
 
-    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_chunk);
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
 
-    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_chunk);
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
 
-    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_chunk);
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
 
-    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_chunk);
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
 
-    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_chunk);
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
 
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8)
     {
-        item1 = QueryTerm<T1>.Instance!.Create(_chunk);
-        item2 = QueryTerm<T2>.Instance!.Create(_chunk);
-        item3 = QueryTerm<T3>.Instance!.Create(_chunk);
-        item4 = QueryTerm<T4>.Instance!.Create(_chunk);
-        item5 = QueryTerm<T5>.Instance!.Create(_chunk);
-        item6 = QueryTerm<T6>.Instance!.Create(_chunk);
-        item7 = QueryTerm<T7>.Instance!.Create(_chunk);
-        item8 = QueryTerm<T8>.Instance!.Create(_chunk);
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
     }
 
-    static Columns<T1, T2, T3, T4, T5, T6, T7, T8> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8>>.Create(ArchetypeChunk chunk) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8>(chunk);
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8>(archetype);
 }

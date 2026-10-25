@@ -48,13 +48,15 @@ Systems do not use these calls. They change the world through writers, described
 
 Entities with exactly the same component types share an archetype. Adding or removing a component moves the entity to another archetype. Archetypes are created on first use and never removed.
 
-An archetype stores its entities in chunks. A chunk holds one array per component type that is not a tag, so a query reads each component of a chunk as one contiguous span.
+An archetype stores each component type that is not a tag in one array, with a row per entity, so a query reads each component of an archetype as one contiguous span.
 
-- A chunk holds a power of two of rows: the most whose entity and components fit 16 KB, and at least 64. A full chunk of any component is then a whole number of SIMD vectors up to 512 bits, so a vectorized loop needs a scalar tail only in an archetype's last chunk, which can hold fewer rows.
-- An archetype grows by adding chunks, so it never copies its rows and its arrays stay off the large object heap.
-- Removing an entity moves the archetype's last entity into its place, possibly from another chunk.
-- Chunks are kept for reuse when entities leave, and an archetype with one entity still has a whole chunk.
+- An archetype starts with room for 8 entities. When it runs out, it doubles the room and copies its rows into the new arrays.
+- Doubling leaves the old arrays as garbage, and an array over 85 KB goes on the large object heap, which only a gen 2 collection frees. Growing to a known size with `EnsureCapacity` allocates once instead.
+- Removing an entity moves the archetype's last entity into its place.
+- The room is kept when entities leave.
 - A tag has no array, so adding or removing one moves the entity's other components and nothing else. An empty struct without `ITag` still takes one byte per row.
+
+`EnsureCapacity<TBlueprint>(capacity)` grows the archetype of a blueprint's components to exactly `capacity` entities, and returns its capacity. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use the `EnsureCapacity` of a `Spawner<TBlueprint>` instead, described under blueprints.
 
 ## Queries
 
@@ -73,7 +75,7 @@ A query is a class that derives from `Query<...>`. Its type arguments are spans,
 internal sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>, IWithout<Frozen>;
 ```
 
-A query yields the spans of each chunk of each matching archetype, and `foreach` deconstructs them into named variables in the order of the type arguments. All spans have the same `Length`, and index `i` is the same entity in each:
+A query yields the spans of each matching archetype that has entities, and `foreach` deconstructs them into named variables in the order of the type arguments. All spans have the same `Length`, and index `i` is the same entity in each:
 
 ```csharp
 foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
@@ -85,7 +87,7 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 }
 ```
 
-- A query of one span has no deconstruction in C#. Enumerate `Columns<T>` and read its `Item1`. `Columns<...>.Count` is the number of entities in the chunk.
+- A query of one span has no deconstruction in C#. Enumerate `Columns<T>` and read its `Item1`. `Columns<...>.Count` is the number of entities in the archetype.
 - A query without filters needs no class of its own: `Query<ReadOnlySpan<Velocity>>` works wherever a query class does.
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
@@ -201,6 +203,8 @@ internal sealed class WeaponSystem : ISystem<Shooters, Spawner<Bullet>>
 A blueprint can hold a tag. The spawned entity gets the tag, and the generated code writes no value for it.
 
 A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
+
+`Spawner<TBlueprint>.EnsureCapacity(capacity)` grows the blueprint's archetype to `capacity` entities at the next sync point, before the spawns recorded after it, so a wave spread over many frames grows the arrays once. A system that throws drops the request with its other changes. The spawns applied at one sync point already grow the arrays at most once.
 
 ## Sync points
 

@@ -297,8 +297,8 @@ public class SystemSchedulerTests
         Assert.That(addedUpdates, Is.EqualTo(1));
     }
 
-    // 1500 rows of Position span two chunks, so the second run fails after the first one was written. 5000 rows need more chunks than a column
-    // starts with room for, so the retry writes into chunks added before the failure.
+    // 1500 blueprints span two runs of the spawner's lists, so the second run fails after the first one was written. The retry writes into the
+    // columns that grew before the failure.
     [TestCase(1)]
     [TestCase(1500)]
     [TestCase(5000)]

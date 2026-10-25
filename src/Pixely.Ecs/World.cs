@@ -94,13 +94,13 @@ public sealed class World
             return ref TagValue<T>.Value;
         }
 
-        T[][]? chunks = archetype.GetChunks<T>(ComponentType<T>.Id);
-        if (chunks is null)
+        T[]? items = archetype.GetItems<T>(ComponentType<T>.Id);
+        if (items is null)
         {
             ThrowMissing<T>(entity);
         }
 
-        return ref archetype.GetRowUnchecked(chunks, record.Row);
+        return ref Archetype.GetRowUnchecked(items, record.Row);
     }
 
     // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert.
@@ -115,7 +115,7 @@ public sealed class World
 
         ref EntityRecord record = ref _records[entity.Index];
         Archetype archetype = record.Archetype!;
-        return ref archetype.GetRowUnchecked(archetype.GetChunksUnchecked<T>(ComponentType<T>.Id), record.Row);
+        return ref Archetype.GetRowUnchecked(archetype.GetItemsUnchecked<T>(ComponentType<T>.Id), record.Row);
     }
 
     public void Add<T>(Entity entity, T component) where T : struct
@@ -182,6 +182,15 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
+    // Grows the archetype of the blueprint's components to hold capacity entities, so a known number of spawns or adds grows its columns once.
+    // Returns the archetype's capacity. Throws while a query runs, because growing replaces the arrays its spans point into.
+    public int EnsureCapacity<TBlueprint>(int capacity) where TBlueprint : struct, IBlueprint<TBlueprint>
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
+        ThrowIfQueryRuns();
+        return GetBlueprintState<TBlueprint>().Archetype.EnsureCapacity(capacity);
+    }
+
     // One instance per world and query type, created on first use. Enumerate it with foreach.
     public TQuery Query<TQuery>() where TQuery : Query, new()
     {
@@ -202,10 +211,10 @@ public sealed class World
         return (TQuery)query;
     }
 
-    internal ChunkEnumerator QueryChunks(QueryState state)
+    internal ArchetypeEnumerator QueryArchetypes(QueryState state)
     {
         state.Update(_archetypes);
-        return new ChunkEnumerator(this, state.Matches);
+        return new ArchetypeEnumerator(this, state.Matches);
     }
 
     // Allowed while a query runs, because the entity gets no archetype until Spawn.
@@ -234,9 +243,10 @@ public sealed class World
             {
                 ReadOnlySpan<Entity> entityRun = entities.GetRun(index, first + count - index);
                 ReadOnlySpan<TBlueprint> blueprintRun = blueprints.GetRun(index, entityRun.Length);
-                int length = Math.Min(blueprintRun.Length, archetype.GetRowsLeftInChunk(row));
+                // The spawner's two lists split into runs at different indices, so the shorter run sets the length.
+                int length = blueprintRun.Length;
                 entityRun[..length].CopyTo(archetype.GetEntities(row, length));
-                TBlueprint.Write(blueprintRun[..length], new BlueprintColumns(archetype, state.Columns, row, length));
+                TBlueprint.Write(blueprintRun, new BlueprintColumns(archetype, state.Columns, row, length));
                 index += length;
                 row += length;
             }

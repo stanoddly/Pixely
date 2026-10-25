@@ -136,9 +136,9 @@ public class WorldTests
         Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(5, 2)));
     }
 
-    // A column starts with room for four chunks and grows that array as the archetype adds chunks, so Get must not keep reading the first one.
+    // A column replaces its array each time the archetype grows, so Get must not keep reading an earlier one.
     [Test]
-    public void GetAndUnsafeGetReadEveryRowAfterTheArchetypeAddsManyChunks()
+    public void GetAndUnsafeGetReadEveryRowAfterTheArchetypeGrowsManyTimes()
     {
         World world = new World();
         Entity[] entities = new Entity[20_000];
@@ -218,8 +218,8 @@ public class WorldTests
 
     private record struct SpacedSecond(int Value);
 
-    // The archetype lacks the id between its two data columns and has a tag, so each column's chunks sit at their own component id, which the
-    // archetype must refresh as it adds chunks.
+    // The archetype lacks the id between its two data columns and has a tag, so each column's array sits at its own component id, which the
+    // archetype must refresh as it grows.
     [Test]
     public void EachColumnReadsItsOwnRowsWhenComponentIdsHaveGapsAndTags()
     {
