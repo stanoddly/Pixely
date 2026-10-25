@@ -56,6 +56,8 @@ internal interface ILookup
 
 internal static class Lookup
 {
+    public static bool Has<T>(Archetype archetype) where T : struct => archetype.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
+
     [DoesNotReturn]
     public static World ThrowOutsideUpdate() => throw new InvalidOperationException("A lookup reads components only during its system's Update.");
 }

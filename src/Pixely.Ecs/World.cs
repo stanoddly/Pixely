@@ -80,14 +80,47 @@ public sealed class World
     public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
     // Has for an entity that may not be alive, which has no components, for lookups that follow an entity another system may have destroyed.
-    internal bool IsAliveWith<T>(Entity entity) where T : struct =>
-        IsAlive(entity) && _records[entity.Index].Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
+    internal bool IsAliveWith<T>(Entity entity) where T : struct => FindArchetype(entity)?.GetColumnIndex(ComponentType<T>.Id) is not (null or Archetype.Absent);
 
     // The reference stays valid until the next structural change: Create, Destroy, Add, Remove, EnsureCapacity or a sync point. For a tag it is one value that all entities share.
     public ref T Get<T>(Entity entity) where T : struct
     {
         ref EntityRecord record = ref GetRecord(entity);
-        Archetype archetype = record.Archetype!;
+        return ref GetComponent<T>(record.Archetype!, record.Row, entity);
+    }
+
+    // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert.
+    // Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
+    public ref T UnsafeGet<T>(Entity entity) where T : struct
+    {
+        Debug.Assert(IsAlive(entity) && Has<T>(entity));
+        ref EntityRecord record = ref _records[entity.Index];
+        return ref UnsafeGetComponent<T>(record.Archetype!, record.Row);
+    }
+
+    // The archetype of an entity that may not be alive, or null, for lookups that check several components of one entity.
+    internal Archetype? FindArchetype(Entity entity) => IsAlive(entity) ? _records[entity.Index].Archetype : null;
+
+    // The row of an entity and its archetype, for lookups that get several components of one entity. Throws for an entity that is not alive.
+    internal int GetRow(Entity entity, out Archetype archetype)
+    {
+        ref EntityRecord record = ref GetRecord(entity);
+        archetype = record.Archetype!;
+        return record.Row;
+    }
+
+    // GetRow without its checks, with the undefined behavior of UnsafeGet.
+    internal int UnsafeGetRow(Entity entity, out Archetype archetype)
+    {
+        Debug.Assert(IsAlive(entity));
+        ref EntityRecord record = ref _records[entity.Index];
+        archetype = record.Archetype!;
+        return record.Row;
+    }
+
+    // T in the row of the archetype, which belongs to entity, the entity named when T is missing.
+    internal static ref T GetComponent<T>(Archetype archetype, int row, Entity entity) where T : struct
+    {
         // The JIT removes the branch that does not apply to T.
         if (default(T) is ITag)
         {
@@ -105,22 +138,18 @@ public sealed class World
             ThrowMissing<T>(entity);
         }
 
-        return ref Archetype.GetRowUnchecked(items, record.Row);
+        return ref Archetype.GetRowUnchecked(items, row);
     }
 
-    // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert.
-    // Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
-    public ref T UnsafeGet<T>(Entity entity) where T : struct
+    // GetComponent for an archetype that has T, with the undefined behavior of UnsafeGet otherwise.
+    internal static ref T UnsafeGetComponent<T>(Archetype archetype, int row) where T : struct
     {
-        Debug.Assert(IsAlive(entity) && Has<T>(entity));
         if (default(T) is ITag)
         {
             return ref TagValue<T>.Value;
         }
 
-        ref EntityRecord record = ref _records[entity.Index];
-        Archetype archetype = record.Archetype!;
-        return ref Archetype.GetRowUnchecked(archetype.GetItemsUnchecked<T>(ComponentType<T>.Id), record.Row);
+        return ref Archetype.GetRowUnchecked(archetype.GetItemsUnchecked<T>(ComponentType<T>.Id), row);
     }
 
     public void Add<T>(Entity entity, T component) where T : struct

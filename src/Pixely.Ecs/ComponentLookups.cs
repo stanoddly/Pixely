@@ -1,0 +1,555 @@
+namespace Pixely.Ecs;
+
+// Reads and writes the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
+// behave as those of ComponentLookup<T> do for each component.
+public sealed class ComponentLookup<T1, T2> : ILookup
+    where T1 : struct
+    where T2 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype);
+
+    public ComponentRefs<T1, T2> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2>(ref World.GetComponent<T1>(archetype, row, entity), ref World.GetComponent<T2>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype);
+
+    public ComponentRefs<T1, T2, T3> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3>(ref World.GetComponent<T1>(archetype, row, entity), ref World.GetComponent<T2>(archetype, row, entity),
+                ref World.GetComponent<T3>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3, T4> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype);
+
+    public ComponentRefs<T1, T2, T3, T4> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3, T4>(ref World.GetComponent<T1>(archetype, row, entity), ref World.GetComponent<T2>(archetype, row, entity),
+                ref World.GetComponent<T3>(archetype, row, entity), ref World.GetComponent<T4>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3, T4> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3, T4>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3, T4, T5> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype);
+
+    public ComponentRefs<T1, T2, T3, T4, T5> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3, T4, T5>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3, T4, T5> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3, T4, T5>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row),
+            ref World.UnsafeGetComponent<T5>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype);
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row),
+            ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype)
+        && Lookup.Has<T7>(archetype);
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6, T7> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity), ref World.GetComponent<T7>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6, T7> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row),
+            ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+{
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype)
+        && Lookup.Has<T7>(archetype) && Lookup.Has<T8>(archetype);
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity), ref World.GetComponent<T7>(archetype, row, entity),
+                ref World.GetComponent<T8>(archetype, row, entity));
+        }
+    }
+
+    public ComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row),
+            ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row),
+            ref World.UnsafeGetComponent<T8>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+// Reads the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
+// behave as those of ReadOnlyComponentLookup<T> do for each component.
+public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
+    where T1 : struct
+    where T2 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2>(ref World.GetComponent<T1>(archetype, row, entity), ref World.GetComponent<T2>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3, T4>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3, T4>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row),
+            ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row),
+            ref World.UnsafeGetComponent<T6>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype)
+        && Lookup.Has<T7>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity), ref World.GetComponent<T7>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row),
+            ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
+
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+{
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddLookup(this);
+    }
+
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype)
+        && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype)
+        && Lookup.Has<T7>(archetype) && Lookup.Has<T8>(archetype);
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8> this[Entity entity]
+    {
+        get
+        {
+            int row = (_world ?? Lookup.ThrowOutsideUpdate()).GetRow(entity, out Archetype archetype);
+            return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.GetComponent<T1>(archetype, row, entity),
+                ref World.GetComponent<T2>(archetype, row, entity), ref World.GetComponent<T3>(archetype, row, entity),
+                ref World.GetComponent<T4>(archetype, row, entity), ref World.GetComponent<T5>(archetype, row, entity),
+                ref World.GetComponent<T6>(archetype, row, entity), ref World.GetComponent<T7>(archetype, row, entity),
+                ref World.GetComponent<T8>(archetype, row, entity));
+        }
+    }
+
+    public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8> UnsafeGet(Entity entity)
+    {
+        int row = _world!.UnsafeGetRow(entity, out Archetype archetype);
+        return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.UnsafeGetComponent<T1>(archetype, row),
+            ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row),
+            ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row),
+            ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row),
+            ref World.UnsafeGetComponent<T8>(archetype, row));
+    }
+
+    void ILookup.SetWorld(World? world) => _world = world;
+}
