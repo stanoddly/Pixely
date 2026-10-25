@@ -78,7 +78,7 @@ public sealed class World
 
     public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
-    // The reference stays valid until the next structural change: Create, Destroy, Add or Remove. For a tag it is one value that all entities share.
+    // The reference stays valid until the next structural change: Create, Destroy, Add, Remove, EnsureCapacity or a sync point. For a tag it is one value that all entities share.
     public ref T Get<T>(Entity entity) where T : struct
     {
         ref EntityRecord record = ref GetRecord(entity);
@@ -182,8 +182,8 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
-    // Grows the archetype of the blueprint's components to hold capacity entities, so a known number of spawns or adds grows its columns once.
-    // Returns the archetype's capacity. Throws while a query runs, because growing replaces the arrays its spans point into.
+    // Grows the archetype of the blueprint's components to hold at least capacity entities, so a known number of spawns or adds grows its
+    // columns once. Returns the archetype's capacity, which can be more than requested. Throws while a query runs, because growing replaces the arrays its spans point into.
     public int EnsureCapacity<TBlueprint>(int capacity) where TBlueprint : struct, IBlueprint<TBlueprint>
     {
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);

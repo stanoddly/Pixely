@@ -2,9 +2,9 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-10-25: Pixely.Ecs archetypes store each component in one array that doubles, with EnsureCapacity for a known size
+## 2026-10-25: Pixely.Ecs archetypes store each component in one array that doubles, with capacity hints for a known size
 
-Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TBlueprint>` and `Spawner<TBlueprint>.EnsureCapacity` grow a blueprint's archetype to an exact size. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
+Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TBlueprint>` grows a blueprint's archetype to a known size, and `Spawner<TBlueprint>.EnsureRoomFor` makes room for a known number of spawns. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
 
 - Chunks only help while a column grows: it never copies its rows, and its arrays stay off the large object heap. Their costs apply to every frame. Against chunks, flat columns made `Get` 26 to 27% faster, `UnsafeGet` 30 to 32%, adding and removing a component 21 to 24%, and iteration 3 to 6%.
 - Unity's chunks live in native memory, so its reasons do not carry over to the .NET garbage collector. Flecs and Bevy store flat columns.

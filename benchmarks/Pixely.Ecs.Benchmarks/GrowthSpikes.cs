@@ -9,8 +9,11 @@ namespace Pixely.Ecs.Benchmarks;
 // Run with: dotnet run -c Release --project benchmarks/Pixely.Ecs.Benchmarks/Pixely.Ecs.Benchmarks.csproj -- growth [entities per frame]
 public static class GrowthSpikes
 {
-    private const int Total = 1_000_000;
+    private const int Target = 1_000_000;
     private static int PerFrame = 2_000;
+    // Every frame spawns PerFrame entities, so the frames round the target up.
+    private static int Frames;
+    private static int Total;
     private const int Runs = 7;
 
     internal sealed class SpawnSystem : ISystem<Spawner<MovingBlueprint>>
@@ -28,7 +31,11 @@ public static class GrowthSpikes
 
     public static void Run(int perFrame)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(perFrame);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(perFrame, Target);
         PerFrame = perFrame;
+        Frames = (Target + perFrame - 1) / perFrame;
+        Total = Frames * perFrame;
         Console.WriteLine($"{Total:N0} entities, {PerFrame:N0} per frame, median of {Runs} interleaved runs after warmup, {(GCSettings.IsServerGC ? "server" : "workstation")} GC, latency mode {GCSettings.LatencyMode}");
         Console.WriteLine($"| Case | Total ms | Max frame ms | P99 frame ms | Gen0 | Gen1 | Gen2 | GC pause ms | Allocated MB |");
         Console.WriteLine($"|---|---|---|---|---|---|---|---|---|");
@@ -144,7 +151,7 @@ public static class GrowthSpikes
         GC.WaitForPendingFinalizers();
         GC.Collect();
         (Action frame, Action? dispose) = createFrame();
-        double[] frames = new double[Total / PerFrame];
+        double[] frames = new double[Frames];
         int gen0 = GC.CollectionCount(0);
         int gen1 = GC.CollectionCount(1);
         int gen2 = GC.CollectionCount(2);

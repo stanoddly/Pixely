@@ -165,9 +165,10 @@ internal sealed class Archetype
     public int AddRows(int count)
     {
         int firstRow = Count;
-        GrowFor(firstRow + count);
+        int rows = checked(firstRow + count);
+        GrowFor(rows);
 
-        Count = firstRow + count;
+        Count = rows;
         return firstRow;
     }
 
@@ -229,7 +230,7 @@ internal sealed class Archetype
         return row;
     }
 
-    // Grows the columns to exactly the capacity, for a known number of rows, so they grow once and leave no smaller arrays behind.
+    // Grows smaller columns to exactly the capacity, for a known number of rows, so they grow once and leave no smaller arrays behind.
     public int EnsureCapacity(int capacity)
     {
         if (capacity > _capacity)
@@ -241,11 +242,12 @@ internal sealed class Archetype
     }
 
     // Doubles the capacity, or grows it to the rows if that is more, so adding rows one by one copies each row a constant number of times.
+    // Doubling stops at the largest array length instead of overflowing.
     private void GrowFor(int rows)
     {
         if (rows > _capacity)
         {
-            Grow(Math.Max(rows, _capacity * 2));
+            Grow(Math.Max(rows, (int)Math.Min(_capacity * 2L, Array.MaxLength)));
         }
     }
 

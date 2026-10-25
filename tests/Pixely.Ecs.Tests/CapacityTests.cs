@@ -5,7 +5,7 @@ namespace Pixely.Ecs.Tests;
 public class CapacityTests
 {
     [Test]
-    public void EnsureCapacityGrowsTheBlueprintsArchetypeToExactlyTheCapacityOnce()
+    public void EnsureCapacityGrowsASmallerArchetypeToExactlyTheCapacityAndNeverShrinksIt()
     {
         World world = new World();
 
@@ -58,14 +58,14 @@ public class CapacityTests
     // The spawner's request waits for the sync point, so it never replaces the arrays under a running query, even in a frame without spawns.
     [TestCase(0)]
     [TestCase(3)]
-    public void SpawnerEnsuresTheCapacityAtTheSyncPoint(int spawns)
+    public void SpawnerMakesRoomAtTheSyncPoint(int spawns)
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         int capacityDuringUpdate = 0;
         scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
         {
-            spawner.EnsureCapacity(500);
+            spawner.EnsureRoomFor(500);
             for (int i = 0; i < spawns; i++)
             {
                 spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0) });
@@ -80,6 +80,31 @@ public class CapacityTests
         Assert.That(world.EnsureCapacity<MovingBlueprint>(0), Is.EqualTo(500));
     }
 
+    // Each system asks for room for its own spawns, so together they grow the archetype to all of them, each before its spawns.
+    [Test]
+    public void SpawnerRoomAddsToTheEntitiesOfEarlierSystems()
+    {
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        Entity existing = CreateMoving(world, 0);
+        for (int system = 0; system < 2; system++)
+        {
+            scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
+            {
+                spawner.EnsureRoomFor(100);
+                for (int i = 0; i < 100; i++)
+                {
+                    spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0) });
+                }
+            }));
+        }
+
+        scheduler.Update();
+
+        Assert.That(world.EnsureCapacity<MovingBlueprint>(0), Is.EqualTo(201));
+        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(0, 0)));
+    }
+
     [Test]
     public void SpawnerRequestOfASystemThatThrowsIsDropped()
     {
@@ -90,7 +115,7 @@ public class CapacityTests
         {
             if (fail)
             {
-                spawner.EnsureCapacity(500);
+                spawner.EnsureRoomFor(500);
                 throw new InvalidOperationException("The system failed.");
             }
         }));
@@ -111,7 +136,7 @@ public class CapacityTests
         scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner => kept = spawner));
         scheduler.Update();
 
-        Assert.Throws<InvalidOperationException>(() => kept.EnsureCapacity(500));
+        Assert.Throws<InvalidOperationException>(() => kept.EnsureRoomFor(500));
     }
 
     private static Entity CreateMoving(World world, int i)
