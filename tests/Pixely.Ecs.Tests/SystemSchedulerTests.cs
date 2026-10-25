@@ -660,6 +660,65 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void LookupOfSeveralComponentsReadsAndWritesEachOfThem()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        world.Get<Velocity>(entity) = new Velocity(1, 2);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        scheduler.Add(new ActionSystem<ComponentLookup<Position, Velocity>>(lookup =>
+        {
+            ComponentRefs<Position, Velocity> components = lookup[entity];
+            components.Item1 = new Position(components.Item1.X + components.Item2.X, components.Item1.Y + components.Item2.Y);
+            components.Item2 = default;
+        }));
+
+        scheduler.Update();
+
+        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Get<Velocity>(entity), Is.EqualTo(default(Velocity)));
+    }
+
+    [Test]
+    public void LookupOfSeveralComponentsHasOnlyAnAliveEntityWithAllOfThem()
+    {
+        World world = new World();
+        Entity frozen = CreateMoving(world);
+        world.Add(frozen, new Frozen());
+        Entity moving = CreateMoving(world);
+        Entity destroyed = CreateMoving(world);
+        world.Add(destroyed, new Frozen());
+        world.Destroy(destroyed);
+        SystemScheduler scheduler = new SystemScheduler(world);
+        bool[] has = [];
+        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Position, Frozen>>(lookup =>
+        {
+            has = [lookup.Has(frozen), lookup.Has(moving), lookup.Has(destroyed)];
+            Assert.Throws<InvalidOperationException>(() => { _ = lookup[moving]; });
+            Assert.Throws<ArgumentException>(() => { _ = lookup[destroyed]; });
+        }));
+
+        scheduler.Update();
+
+        Assert.That(has, Is.EqualTo(new[] { true, false, false }));
+    }
+
+    // The generator reports the lookup of a system, so the builder sees one only from code that calls it directly.
+    [Test]
+    public void LookupNamingAComponentTwiceThrows()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => scheduler.Add(new ActionSystem(() => { }), builder =>
+        {
+            builder.ReadOnlyComponentLookup<Position, Velocity, Position>();
+            return static system => system.Update();
+        }, SystemScheduler.ReserveOrder()));
+
+        Assert.That(exception.Message, Is.EqualTo("The lookup ReadOnlyComponentLookup<Position, Velocity, Position> names Position more than once."));
+    }
+
+    [Test]
     public void LookupKeptPastUpdateThrows()
     {
         World world = new World();
@@ -667,10 +726,12 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         ComponentLookup<Position> keptPositions = null!;
         ReadOnlyComponentLookup<Velocity> keptVelocities = null!;
-        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>((positions, velocities) =>
+        ReadOnlyComponentLookup<Position, Velocity> keptBoth = null!;
+        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>, ReadOnlyComponentLookup<Position, Velocity>>((positions, velocities, both) =>
         {
             keptPositions = positions;
             keptVelocities = velocities;
+            keptBoth = both;
         }));
         scheduler.Update();
 
@@ -678,6 +739,8 @@ public class SystemSchedulerTests
         Assert.Throws<InvalidOperationException>(() => _ = keptPositions[entity]);
         Assert.Throws<InvalidOperationException>(() => keptVelocities.Has(entity));
         Assert.Throws<InvalidOperationException>(() => _ = keptVelocities[entity]);
+        Assert.Throws<InvalidOperationException>(() => keptBoth.Has(entity));
+        Assert.Throws<InvalidOperationException>(() => { _ = keptBoth[entity]; });
     }
 
     // Creates the component's string here, so nothing but the world and the spawner can reference it once this returns.

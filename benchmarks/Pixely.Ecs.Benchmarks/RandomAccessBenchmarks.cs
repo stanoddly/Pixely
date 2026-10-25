@@ -24,10 +24,48 @@ public class RandomAccessBenchmarks
         }
     }
 
+    internal sealed class TwoLookupsSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>
+    {
+        public float Sum { get; private set; }
+
+        public void Update(ReadOnlyComponentLookup<Position> positions, ReadOnlyComponentLookup<Velocity> velocities)
+        {
+            float sum = 0;
+            foreach (Entity entity in entities)
+            {
+                sum += positions[entity].X + velocities[entity].X;
+            }
+
+            Sum = sum;
+        }
+    }
+
+    internal sealed class PairLookupSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position, Velocity>>
+    {
+        public float Sum { get; private set; }
+
+        public void Update(ReadOnlyComponentLookup<Position, Velocity> lookup)
+        {
+            float sum = 0;
+            foreach (Entity entity in entities)
+            {
+                ReadOnlyComponentRefs<Position, Velocity> components = lookup[entity];
+                sum += components.Item1.X + components.Item2.X;
+            }
+
+            Sum = sum;
+        }
+    }
+
     private World _pixely = null!;
     private Entity[] _pixelyEntities = [];
-    private SystemScheduler _scheduler = null!;
+    // One scheduler per system, so each benchmark updates only its own.
+    private SystemScheduler _lookupScheduler = null!;
+    private SystemScheduler _twoLookupsScheduler = null!;
+    private SystemScheduler _pairLookupScheduler = null!;
     private LookupSystem _lookupSystem = null!;
+    private TwoLookupsSystem _twoLookupsSystem = null!;
+    private PairLookupSystem _pairLookupSystem = null!;
     private ArchWorld _arch = null!;
     private ArchEntity[] _archEntities = [];
 
@@ -43,8 +81,12 @@ public class RandomAccessBenchmarks
         new Random(42).Shuffle(order);
         _pixelyEntities = order.Select(i => _pixelyEntities[i]).ToArray();
         _archEntities = order.Select(i => _archEntities[i]).ToArray();
-        _scheduler = new SystemScheduler(_pixely);
-        _lookupSystem = _scheduler.Add(new LookupSystem(_pixelyEntities));
+        _lookupScheduler = new SystemScheduler(_pixely);
+        _lookupSystem = _lookupScheduler.Add(new LookupSystem(_pixelyEntities));
+        _twoLookupsScheduler = new SystemScheduler(_pixely);
+        _twoLookupsSystem = _twoLookupsScheduler.Add(new TwoLookupsSystem(_pixelyEntities));
+        _pairLookupScheduler = new SystemScheduler(_pixely);
+        _pairLookupSystem = _pairLookupScheduler.Add(new PairLookupSystem(_pixelyEntities));
     }
 
     [GlobalCleanup]
@@ -87,11 +129,27 @@ public class RandomAccessBenchmarks
         return sum;
     }
 
-    // A system reads the positions through its ReadOnlyComponentLookup, which checks that its Update runs before each Get.
+    // A system reads the positions through its ReadOnlyComponentLookup, which adds a null test of its world to each Get.
     [Benchmark]
     public float PixelyLookup()
     {
-        _scheduler.Update();
+        _lookupScheduler.Update();
         return _lookupSystem.Sum;
+    }
+
+    // Reads each position and velocity through two lookups, which find the entity twice.
+    [Benchmark]
+    public float PixelyTwoLookups()
+    {
+        _twoLookupsScheduler.Update();
+        return _twoLookupsSystem.Sum;
+    }
+
+    // Reads each position and velocity through one lookup, which finds the entity once.
+    [Benchmark]
+    public float PixelyPairLookup()
+    {
+        _pairLookupScheduler.Update();
+        return _pairLookupSystem.Sum;
     }
 }

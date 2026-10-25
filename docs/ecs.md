@@ -110,8 +110,8 @@ A system implements `ISystem<...>`. Its type arguments are its contract, and the
 | `ComponentAdder<T>` | Adds `T` to entities. |
 | `ComponentRemover<T>` | Removes `T` from entities. |
 | `EntityDestroyer` | Destroys entities. |
-| `ComponentLookup<T>` | Reads and writes `T` of a given entity. |
-| `ReadOnlyComponentLookup<T>` | Reads `T` of a given entity. |
+| `ComponentLookup<T1, ...>` | Reads and writes the components of its 1 to 8 type arguments of a given entity. |
+| `ReadOnlyComponentLookup<T1, ...>` | Reads the components of its 1 to 8 type arguments of a given entity. |
 | A spawner class or `Spawner<...>` | Creates entities with the components of its type arguments and the tags of its `IWith<...>`. |
 
 The constructor takes only services from the service provider. A system without queries, lookups or writers implements `ISystem`, whose `Update` takes nothing.
@@ -178,6 +178,7 @@ internal sealed class ChaseSystem : ISystem<Chasers, ReadOnlyComponentLookup<Pos
 - A writer records changes only during its system's `Update`. A writer kept past it throws `InvalidOperationException`, so a change cannot apply at a sync point nobody expects. A query has no such check, because renderers enumerate the same instance.
 - A lookup reads components only during its system's `Update`, and one kept past it throws `InvalidOperationException`. A lookup counts as naming `T`, so it sees the changes of earlier systems like a query does.
 - A lookup's indexer returns a reference, which stays valid until `Update` returns, because structural changes wait for the sync point. It throws for an entity that is not alive or has no `T`. `Has` returns `false` for an entity that is not alive, unlike `World.Has`, so it guards the indexer for an entity that may have been destroyed. `UnsafeGet` is the indexer without its checks, like `World.UnsafeGet`, and outside `Update` it throws `NullReferenceException`.
+- A lookup of several components finds the entity once for all of them. Its indexer returns `ComponentRefs<T1, ...>`, or `ReadOnlyComponentRefs<T1, ...>`, whose fields `Item1` to `Item8` are references to the components, because C# cannot deconstruct into references. `Has` returns `true` only for an entity that is alive and has all of them.
 
 Register the world and the systems:
 
@@ -278,7 +279,7 @@ The generator fails the build on these:
 | PXECS005 | No component is both required and excluded by a query. |
 | PXECS006 | A spawner that a system names is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
 | PXECS007 | A type argument of a spawner is not `Entity` or a tag. |
-| PXECS008 | A spawner names no component twice in its type arguments and `IWith<...>`. |
+| PXECS008 | A spawner names no component twice in its type arguments and `IWith<...>`, and a lookup none in its type arguments. |
 | PXECS009 | The `IWith<...>` of a spawner names only tags, and a spawner has no `IWithout<...>`. |
 | PXECS010 | `AddSystem<T>` and `SystemScheduler.Add` take a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. `SystemScheduler.Add` also takes a type parameter, unless its constraints make it an `ISystem<...>`, which only an intercepted call can add. |
 | PXECS011 | The system of `AddSystem<T>` has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
@@ -286,11 +287,11 @@ The generator fails the build on these:
 | PXECS013 | The constructor takes no query, writer or lookup. They go in the system's `ISystem<...>`, which passes them to `Update`. |
 | PXECS014 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
 | PXECS015 | A system implements exactly one of `ISystem` and `ISystem<...>`. |
-| PXECS016 | Each type argument of `ISystem<...>` is a query, a spawner, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer`, `ComponentLookup<T>` or `ReadOnlyComponentLookup<T>`. |
+| PXECS016 | Each type argument of `ISystem<...>` is a query, a spawner, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer`, `ComponentLookup<...>` or `ReadOnlyComponentLookup<...>`. |
 | PXECS017 | A system does not implement `IUpdatable`, which would update it a second time. |
 | PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, and not used as method groups, such as `Action add = services.AddSystem<T>;`, or they would throw. A method group of `SystemScheduler.Add` for an `ISystem` is allowed. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners a system names, and the world checks PXECS007 to PXECS009 when it reads a spawner's components.
+PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners a system names, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups a system names too, and `SystemBuilder` checks it again when it creates a lookup.
 
 ## Not supported yet
 

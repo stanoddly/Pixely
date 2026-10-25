@@ -25,13 +25,13 @@ public class SystemGenerator : IIncrementalGenerator
     private const string SchedulerName = "Pixely.Ecs.SystemScheduler";
     private const string SystemName = "Pixely.Ecs.ISystem";
 
-    // The generic writers and lookups, each created by the SystemBuilder method of its name.
-    private static readonly Dictionary<string, string> BuilderMethods = new Dictionary<string, string>
+    // The generic writers and lookups by their arities, each created by the SystemBuilder method of its name with its type arguments.
+    private static readonly Dictionary<string, (int MinArity, int MaxArity)> BuilderMethods = new Dictionary<string, (int, int)>
     {
-        ["Pixely.Ecs.ComponentAdder<T>"] = "ComponentAdder",
-        ["Pixely.Ecs.ComponentRemover<T>"] = "ComponentRemover",
-        ["Pixely.Ecs.ComponentLookup<T>"] = "ComponentLookup",
-        ["Pixely.Ecs.ReadOnlyComponentLookup<T>"] = "ReadOnlyComponentLookup"
+        ["ComponentAdder"] = (1, 1),
+        ["ComponentRemover"] = (1, 1),
+        ["ComponentLookup"] = (1, 8),
+        ["ReadOnlyComponentLookup"] = (1, 8)
     };
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat;
@@ -285,11 +285,17 @@ public class SystemGenerator : IIncrementalGenerator
             }
             else if (GetBuilderCall(typeArgument) is { } builderCall)
             {
+                // Only lookups take more than one type argument.
+                if (GetRepeated(((INamedTypeSymbol)typeArgument).TypeArguments) is { } repeated)
+                {
+                    return Fail("PXECS008", $"The lookup {argumentName} names {repeated.Name} more than once.", invocation);
+                }
+
                 calls.Add(builderCall);
             }
             else
             {
-                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T>, EntityDestroyer, ComponentLookup<T> or ReadOnlyComponentLookup<T>. A service goes in the constructor.",
+                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T>, EntityDestroyer, ComponentLookup<...> or ReadOnlyComponentLookup<...>. A service goes in the constructor.",
                     invocation);
             }
 
@@ -378,14 +384,16 @@ public class SystemGenerator : IIncrementalGenerator
             return Fail("PXECS009", $"The spawner {spawnerName} implements IWithout<...>, which a spawner has no use for.", invocation);
         }
 
-        ITypeSymbol? repeated = components.GroupBy(component => component, SymbolEqualityComparer.Default).FirstOrDefault(group => group.Count() > 1)?.Key as ITypeSymbol;
-        if (repeated is not null)
+        if (GetRepeated(components) is { } repeated)
         {
             return Fail("PXECS008", $"The spawner {spawnerName} names {repeated.Name} more than once.", invocation);
         }
 
         return null;
     }
+
+    private static ITypeSymbol? GetRepeated(IEnumerable<ITypeSymbol> types) =>
+        types.GroupBy(type => type, SymbolEqualityComparer.Default).FirstOrDefault(group => group.Count() > 1)?.Key as ITypeSymbol;
 
     private static bool IsQuery(ITypeSymbol type) => type is INamedTypeSymbol named && GeneratorSupport.GetQueryBase(named) is not null;
 
@@ -398,8 +406,9 @@ public class SystemGenerator : IIncrementalGenerator
             return "builder.EntityDestroyer()";
         }
 
-        return type is INamedTypeSymbol { IsGenericType: true } generic && BuilderMethods.TryGetValue(generic.ConstructedFrom.ToDisplayString(), out string? method)
-            ? $"builder.{method}<{generic.TypeArguments[0].ToDisplayString(TypeFormat)}>()"
+        return type is INamedTypeSymbol { IsGenericType: true } generic && generic.ContainingNamespace.ToDisplayString() == "Pixely.Ecs"
+            && BuilderMethods.TryGetValue(generic.Name, out (int MinArity, int MaxArity) arities) && generic.Arity >= arities.MinArity && generic.Arity <= arities.MaxArity
+            ? $"builder.{generic.Name}<{string.Join(", ", generic.TypeArguments.Select(argument => argument.ToDisplayString(TypeFormat)))}>()"
             : null;
     }
 

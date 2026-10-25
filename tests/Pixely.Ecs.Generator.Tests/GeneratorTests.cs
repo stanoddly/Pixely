@@ -33,10 +33,11 @@ public class GeneratorTests
                     public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
                 }
 
-                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>, ComponentLookup<Position>, ReadOnlyComponentLookup<Dead>>
+                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>, ComponentLookup<Position>, ReadOnlyComponentLookup<Dead>,
+                    ComponentLookup<Position, Velocity, Dead>>
                 {
                     public void Update(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities, ComponentLookup<Position> positionLookup,
-                        ReadOnlyComponentLookup<Dead> deadLookup)
+                        ReadOnlyComponentLookup<Dead> deadLookup, ComponentLookup<Position, Velocity, Dead> lookup)
                     {
                         foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> speeds) in movement)
                         {
@@ -68,6 +69,7 @@ public class GeneratorTests
         Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("Add_1"));
         Assert.That(interceptors, Does.Contain("builder.Query<global::Game.Queries.Corpses>()").And.Contain("builder.Query<global::Pixely.Ecs.Query<global::System.ReadOnlySpan<global::Velocity>>>()"));
         Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position>()").And.Contain("builder.ReadOnlyComponentLookup<global::Game.Dead>()"));
+        Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position, global::Velocity, global::Game.Dead>()"));
     }
 
     [TestCase("abstract class Q : Query<ReadOnlySpan<Position>>;", "PXECS001")]
@@ -279,6 +281,8 @@ public class GeneratorTests
     [TestCase("class S { }", "S", "PXECS015")]
     [TestCase("class S : ISystem, ISystem<EntityDestroyer> { public void Update() { } public void Update(EntityDestroyer d) { } }", "S", "PXECS015")]
     [TestCase("class S : ISystem<EntityDestroyer>, ISystem<ComponentAdder<Position>> { public void Update(EntityDestroyer d) { } public void Update(ComponentAdder<Position> a) { } }", "S", "PXECS015")]
+    [TestCase("class S : ISystem<ComponentLookup<Position, Position>> { public void Update(ComponentLookup<Position, Position> l) { } }", "S", "PXECS008")]
+    [TestCase("class S : ISystem<ReadOnlyComponentLookup<Position, Velocity, Position>> { public void Update(ReadOnlyComponentLookup<Position, Velocity, Position> l) { } }", "S", "PXECS008")]
     [TestCase("class Log; class S : ISystem<Log> { public void Update(Log log) { } }", "S", "PXECS016")]
     [TestCase("class S : ISystem<World> { public void Update(World world) { } }", "S", "PXECS016")]
     public void InvalidSystemRegistrationReportsDiagnostic(string declaration, string system, string expectedId)
