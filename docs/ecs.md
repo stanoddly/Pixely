@@ -204,7 +204,7 @@ A blueprint can hold a tag. The spawned entity gets the tag, and the generated c
 
 A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
 
-`Spawner<TBlueprint>.EnsureRoomFor(count)` grows the blueprint's archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. A system that throws drops the request with its other changes.
+`Spawner<TBlueprint>.EnsureRoomFor(count)` grows the blueprint's archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. Any change of the system can fill the room: a system that also moves entities into the archetype with `ComponentAdder<T>` or `ComponentRemover<T>` asks for room for them too. A system that throws drops the request with its other changes.
 
 ## Sync points
 

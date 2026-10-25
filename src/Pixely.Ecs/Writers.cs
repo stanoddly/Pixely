@@ -122,8 +122,9 @@ public sealed class Spawner<TBlueprint> : IRecordedCommands, IRoomRequest where 
     }
 
     // Grows the archetype at the sync point, before any of the system's commands, so it never replaces the arrays under a running query.
-    // The buffer sums the requests of the system for each archetype, so spawners that share one each get room for their own spawns.
-    // A system that throws drops the request with its other commands.
+    // The buffer sums the requests of the system for each archetype, so spawners that share one each get room for their own spawns. The room
+    // is rows, not spawns: entities the system's other writers move into the archetype fill it too. A system that throws drops the request with
+    // its other commands.
     public void EnsureRoomFor(int count)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
