@@ -4,13 +4,10 @@ namespace Pixely.Ecs.Tests;
 
 public class TagTests
 {
-    // Hand-written, to ask for the column of its tag field.
-    internal struct TagColumnBlueprint : IBlueprint<TagColumnBlueprint>
-    {
-        public static void Describe(BlueprintDescription description) => description.Add<Frozen>();
+    // Wrong on purpose: tags go in IWith<...>, and IWith<...> names only tags. No system names them, so only the world checks them.
+    public sealed class TagArgumentSpawner : Spawner<Position, Frozen>;
 
-        public static void Write(ReadOnlySpan<TagColumnBlueprint> blueprints, BlueprintColumns columns) => columns.Get<Frozen>(0);
-    }
+    public sealed class DataInWithSpawner : Spawner<Position>, IWith<Velocity>;
 
     [Test]
     public void AddingAndRemovingATagKeepsEveryValue()
@@ -108,33 +105,25 @@ public class TagTests
     }
 
     [Test]
-    public void BlueprintsSpawnTheirTags()
+    public void SpawnerGivesItsEntitiesTheTagsOfIWith()
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        Entity withPosition = default;
-        Entity onlyTag = default;
-        scheduler.Add(new ActionSystem<Spawner<FrozenBlueprint>, Spawner<MarkerBlueprint>>((frozen, markers) =>
-        {
-            withPosition = frozen.Spawn(new FrozenBlueprint { Position = new Position(1, 2) });
-            onlyTag = markers.Spawn(new MarkerBlueprint());
-        }));
+        Entity spawned = default;
+        scheduler.Add(new ActionSystem<FrozenSpawner>(frozen => spawned = frozen.Spawn(new Position(1, 2))));
 
         scheduler.Update();
 
-        Assert.That(world.Has<Frozen>(withPosition), Is.True);
-        Assert.That(world.Get<Position>(withPosition), Is.EqualTo(new Position(1, 2)));
-        Assert.That(world.Has<Frozen>(onlyTag), Is.True);
-        Assert.That(world.Has<Position>(onlyTag), Is.False);
+        Assert.That(world.Has<Frozen>(spawned), Is.True);
+        Assert.That(world.Get<Position>(spawned), Is.EqualTo(new Position(1, 2)));
     }
 
     [Test]
-    public void BlueprintColumnOfATagThrows()
+    public void SpawnerTakingATagOrNamingDataInIWithThrows()
     {
         World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<Spawner<TagColumnBlueprint>>(spawner => spawner.Spawn(new TagColumnBlueprint())));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<TagArgumentSpawner>(1));
+        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<DataInWithSpawner>(1));
     }
 }

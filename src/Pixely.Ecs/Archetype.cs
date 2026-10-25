@@ -172,16 +172,6 @@ internal sealed class Archetype
         return firstRow;
     }
 
-    // Drops the last count rows, which AddRows added.
-    public void RemoveLastRows(int count)
-    {
-        Count -= count;
-        foreach (Column column in _columns)
-        {
-            column.ClearRows(Count, count);
-        }
-    }
-
     // Copies the row straight into a new row of the edge's target, with the components both archetypes have, and swap-removes it here.
     // A component only the target has is left for the caller to write.
     public int MoveRow(int row, ArchetypeEdge edge)

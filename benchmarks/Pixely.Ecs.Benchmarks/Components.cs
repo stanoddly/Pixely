@@ -14,9 +14,4 @@ public record struct Health(float Value);
 
 public sealed class Movement : Query<Span<Position>, ReadOnlySpan<Velocity>>;
 
-[Blueprint]
-public partial struct MovingBlueprint
-{
-    public Position Position;
-    public Velocity Velocity;
-}
+public sealed class MovingSpawner : Spawner<Position, Velocity>;

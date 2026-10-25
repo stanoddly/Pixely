@@ -23,36 +23,12 @@ public struct Dead : ITag;
 
 public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
 
-[Blueprint]
-public partial struct MovingBlueprint
-{
-    public Position Position;
-    public Velocity Velocity;
-}
+public sealed class MovingSpawner : Spawner<Position, Velocity>;
 
-// Describes the components of MovingBlueprint, so both spawn into one archetype.
-[Blueprint]
-public partial struct SecondMovingBlueprint
-{
-    public Position Position;
-    public Velocity Velocity;
-}
+// Spawns the components of MovingSpawner, so both spawn into one archetype.
+public sealed class SecondMovingSpawner : Spawner<Position, Velocity>;
 
-[Blueprint]
-public readonly partial record struct NamedBlueprint(Name Name, Position Position);
-
-[Blueprint]
-public partial struct FrozenBlueprint
-{
-    public Position Position;
-    public Frozen Frozen;
-}
-
-[Blueprint]
-public partial struct MarkerBlueprint
-{
-    public Frozen Frozen;
-}
+public sealed class FrozenSpawner : Spawner<Position>, IWith<Frozen>;
 
 public sealed class Positions : Query<ReadOnlySpan<Position>>;
 

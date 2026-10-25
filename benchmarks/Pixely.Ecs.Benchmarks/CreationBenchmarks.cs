@@ -7,13 +7,13 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class CreationBenchmarks
 {
-    internal sealed class SpawnSystem(int count) : ISystem<Spawner<MovingBlueprint>>
+    internal sealed class SpawnSystem(int count) : ISystem<MovingSpawner>
     {
-        public void Update(Spawner<MovingBlueprint> spawner)
+        public void Update(MovingSpawner spawner)
         {
             for (int i = 0; i < count; i++)
             {
-                spawner.Spawn(new MovingBlueprint { Position = new Position(i, i), Velocity = new Velocity(1, 1) });
+                spawner.Spawn(new Position(i, i), new Velocity(1, 1));
             }
         }
     }
@@ -55,7 +55,7 @@ public class CreationBenchmarks
     public int Pixely_CreateThenAdd_CapacityHint()
     {
         World world = new World();
-        world.EnsureCapacity<MovingBlueprint>(Count);
+        world.EnsureCapacity<MovingSpawner>(Count);
         Entity last = default;
         for (int i = 0; i < Count; i++)
         {

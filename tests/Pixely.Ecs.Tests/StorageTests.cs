@@ -93,11 +93,11 @@ public class StorageTests
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
         int count = 3;
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
+        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
         {
             for (int i = 0; i < count; i++)
             {
-                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(spawned.Count, 0), Velocity = new Velocity(1, 0) }));
+                spawned.Add(spawner.Spawn(new Position(spawned.Count, 0), new Velocity(1, 0)));
             }
         }));
 
@@ -116,11 +116,11 @@ public class StorageTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
+        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
         {
             for (int i = 0; i < 10000; i++)
             {
-                spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(i, 0), Velocity = new Velocity(0, i) }));
+                spawned.Add(spawner.Spawn(new Position(i, 0), new Velocity(0, i)));
             }
         }));
 

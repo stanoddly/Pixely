@@ -43,40 +43,8 @@ public class SystemSchedulerTests
         }
     }
 
-    // Hand-written, to throw from Write after writing the blueprints before the one that fails and the one that fails.
-    internal struct FailingBlueprint<T> : IBlueprint<FailingBlueprint<T>> where T : struct
-    {
-        public T Component;
-        public bool Fails;
-
-        public static void Describe(BlueprintDescription description) => description.Add<T>();
-
-        public static void Write(ReadOnlySpan<FailingBlueprint<T>> blueprints, BlueprintColumns columns)
-        {
-            Span<T> components = columns.Get<T>(0);
-            for (int i = 0; i < blueprints.Length; i++)
-            {
-                components[i] = blueprints[i].Component;
-                if (blueprints[i].Fails)
-                {
-                    throw new InvalidOperationException("The blueprint failed.");
-                }
-            }
-        }
-    }
-
-    internal struct DuplicateBlueprint : IBlueprint<DuplicateBlueprint>
-    {
-        public static void Describe(BlueprintDescription description)
-        {
-            description.Add<Position>();
-            description.Add<Position>();
-        }
-
-        public static void Write(ReadOnlySpan<DuplicateBlueprint> blueprints, BlueprintColumns columns)
-        {
-        }
-    }
+    // Wrong on purpose: a spawner has no use for IWithout<...>. No system names it, so only the world checks it.
+    public sealed class ExcludingSpawner : Spawner<Position>, IWithout<Frozen>;
 
     [Test]
     public void ChangesApplyAtTheEndOfTheUpdate()
@@ -144,9 +112,9 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity spawned = default;
         bool aliveDuringUpdate = true;
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>, ComponentAdder<Name>>((spawner, names) =>
+        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
         {
-            spawned = spawner.Spawn(new MovingBlueprint { Position = new Position(1, 2), Velocity = new Velocity(3, 4) });
+            spawned = spawner.Spawn(new Position(1, 2), new Velocity(3, 4));
             names.Add(spawned, new Name("spawned"));
             aliveDuringUpdate = world.IsAlive(spawned);
         }));
@@ -167,13 +135,13 @@ public class SystemSchedulerTests
         world.Add(existing, new Position());
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>, ComponentAdder<Name>>((spawner, names) =>
+        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
         {
-            spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(1, 0) }));
-            spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(2, 0) }));
+            spawned.Add(spawner.Spawn(new Position(1, 0), default));
+            spawned.Add(spawner.Spawn(new Position(2, 0), default));
             names.Add(spawned[1], new Name("second"));
             names.Add(existing, new Name("existing"));
-            spawned.Add(spawner.Spawn(new MovingBlueprint { Position = new Position(3, 0) }));
+            spawned.Add(spawner.Spawn(new Position(3, 0), default));
         }));
 
         scheduler.Update();
@@ -184,18 +152,20 @@ public class SystemSchedulerTests
         Assert.That(world.Get<Name>(existing), Is.EqualTo(new Name("existing")));
     }
 
+    // Each type argument goes into the column of its component, whatever the order of the archetype's columns.
     [Test]
-    public void BlueprintWithPositionalPropertiesSpawnsTheirValues()
+    public void SpawnerWritesEachTypeArgumentIntoItsComponent()
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity spawned = default;
-        scheduler.Add(new ActionSystem<Spawner<NamedBlueprint>>(spawner => spawned = spawner.Spawn(new NamedBlueprint(new Name("a"), new Position(5, 6)))));
+        scheduler.Add(new ActionSystem<Spawner<Name, Position, Velocity>>(spawner => spawned = spawner.Spawn(new Name("a"), new Position(5, 6), new Velocity(7, 8))));
 
         scheduler.Update();
 
         Assert.That(world.Get<Name>(spawned), Is.EqualTo(new Name("a")));
         Assert.That(world.Get<Position>(spawned), Is.EqualTo(new Position(5, 6)));
+        Assert.That(world.Get<Velocity>(spawned), Is.EqualTo(new Velocity(7, 8)));
     }
 
     [Test]
@@ -297,56 +267,53 @@ public class SystemSchedulerTests
         Assert.That(addedUpdates, Is.EqualTo(1));
     }
 
-    // 1500 blueprints span two runs of the spawner's lists, so the second run fails after the first one was written. The retry writes into the
-    // columns that grew before the failure.
+    // 5000 spawns span three runs of the spawner's lists, so the retry copies them run by run.
     [TestCase(1)]
-    [TestCase(1500)]
     [TestCase(5000)]
-    public void FailedBlueprintWriteDropsItsRowsAndReleasesItsEntities(int count)
+    public void FailedSpawnLeavesNoRowsAndReleasesItsEntities(int count)
     {
         World world = new World();
         Entity existing = world.Create();
         world.Add(existing, new Position(7, 7));
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        bool fail = true;
-        scheduler.Add(new ActionSystem<Spawner<FailingBlueprint<Position>>>(spawner =>
+        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
         {
             spawned.Clear();
             for (int i = 0; i < count; i++)
             {
-                spawned.Add(spawner.Spawn(new FailingBlueprint<Position> { Component = new Position(i, 0), Fails = fail && i == count - 1 }));
+                spawned.Add(spawner.Spawn(new Position(i, 0), new Velocity(0, i)));
             }
         }));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        UpdateWhileAQueryRuns(world, scheduler);
 
         Assert.That(spawned.Where(world.IsAlive), Is.Empty);
         Assert.That(CountPositions(world), Is.EqualTo(1));
         Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(7, 7)));
 
-        fail = false;
         scheduler.Update();
 
         Assert.That(spawned.All(world.IsAlive), Is.True);
         Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
-        Assert.That(spawned.Select(entity => world.UnsafeGet<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.UnsafeGet<Velocity>(entity).Y), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
         Assert.That(CountPositions(world), Is.EqualTo(count + 1));
     }
 
     [Test]
-    public void FailedBlueprintWriteKeepsNoReferenceToTheComponentsItWrote()
+    public void FailedSpawnKeepsNoReferenceToItsComponents()
     {
-        SystemScheduler scheduler = new SystemScheduler(new World());
-        WeakReference written = null!;
-        scheduler.Add(new ActionSystem<Spawner<FailingBlueprint<Name>>>(spawner => written = SpawnFailingName(spawner)));
+        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(world);
+        WeakReference spawned = null!;
+        scheduler.Add(new ActionSystem<Spawner<Name>>(spawner => spawned = SpawnName(spawner)));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        UpdateWhileAQueryRuns(world, scheduler);
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        Assert.That(written.IsAlive, Is.False);
+        Assert.That(spawned.IsAlive, Is.False);
     }
 
     [Test]
@@ -355,18 +322,18 @@ public class SystemSchedulerTests
         World world = new World();
         Entity entity = world.Create();
         SystemScheduler scheduler = new SystemScheduler(world);
-        bool fail = true;
-        scheduler.Add(new ActionSystem<Spawner<FailingBlueprint<Position>>, ComponentAdder<Name>>((spawner, names) =>
+        bool record = true;
+        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
         {
-            if (fail)
+            if (record)
             {
-                spawner.Spawn(new FailingBlueprint<Position> { Fails = true });
+                spawner.Spawn(default, default);
                 names.Add(entity, new Name("dropped"));
             }
         }));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
-        fail = false;
+        UpdateWhileAQueryRuns(world, scheduler);
+        record = false;
         scheduler.Update();
 
         Assert.That(world.Has<Name>(entity), Is.False);
@@ -377,19 +344,11 @@ public class SystemSchedulerTests
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        bool fail = true;
-        scheduler.Add(new ActionSystem<Spawner<FailingBlueprint<Position>>>(failing =>
-        {
-            if (fail)
-            {
-                failing.Spawn(new FailingBlueprint<Position> { Fails = true });
-            }
-        }));
+        scheduler.Add(new ActionSystem<FrozenSpawner>(earlier => earlier.Spawn(default)));
         List<Entity> recorded = [];
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(later => recorded.Add(later.Spawn(new MovingBlueprint()))));
+        scheduler.Add(new ActionSystem<MovingSpawner>(later => recorded.Add(later.Spawn(default, default))));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
-        fail = false;
+        UpdateWhileAQueryRuns(world, scheduler);
         scheduler.Update();
 
         Assert.That(world.IsAlive(recorded[0]), Is.False);
@@ -398,11 +357,13 @@ public class SystemSchedulerTests
     }
 
     [Test]
-    public void BlueprintDescribingAComponentTwiceThrows()
+    public void SpawnerNamingAComponentTwiceTakingEntityOrExcludingThrows()
     {
-        SystemScheduler scheduler = new SystemScheduler(new World());
+        World world = new World();
 
-        Assert.Throws<InvalidOperationException>(() => scheduler.Add(new ActionSystem<Spawner<DuplicateBlueprint>>(_ => { })));
+        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<Spawner<Position, Position>>(1));
+        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<Spawner<Entity>>(1));
+        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<ExcludingSpawner>(1));
     }
 
     [Test]
@@ -411,7 +372,7 @@ public class SystemSchedulerTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         int count = -1;
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner => spawner.Spawn(new MovingBlueprint())));
+        scheduler.Add(new ActionSystem<MovingSpawner>(spawner => spawner.Spawn(default, default)));
         scheduler.Add(new ActionSystem<Movement>(movement =>
         {
             count = 0;
@@ -562,11 +523,11 @@ public class SystemSchedulerTests
                 names.Add(entity, new Name("dropped"));
             }
         }));
-        scheduler.Add(new ActionSystem<Spawner<MovingBlueprint>>(spawner =>
+        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
         {
             if (fail)
             {
-                spawned = spawner.Spawn(new MovingBlueprint());
+                spawned = spawner.Spawn(default, default);
                 throw new InvalidOperationException("The system failed.");
             }
         }));
@@ -597,13 +558,13 @@ public class SystemSchedulerTests
         Entity spawned = default;
         ComponentAdder<Name> keptNames = null!;
         scheduler.Add(new Killer());
-        scheduler.Add(new ActionSystem<Corpses, ComponentAdder<Name>, Spawner<MovingBlueprint>>((_, names, spawner) =>
+        scheduler.Add(new ActionSystem<Corpses, ComponentAdder<Name>, MovingSpawner>((_, names, spawner) =>
         {
             keptNames = names;
             if (fail)
             {
                 names.Add(entity, new Name("dropped"));
-                spawned = spawner.Spawn(new MovingBlueprint());
+                spawned = spawner.Spawn(default, default);
                 throw new InvalidOperationException("The system failed.");
             }
         }));
@@ -627,8 +588,8 @@ public class SystemSchedulerTests
         Entity entity = world.Create();
         SystemScheduler scheduler = new SystemScheduler(world);
         ComponentAdder<Dead> keptAdder = null!;
-        Spawner<MovingBlueprint> keptSpawner = null!;
-        scheduler.Add(new ActionSystem<ComponentAdder<Dead>, Spawner<MovingBlueprint>>((dead, spawner) =>
+        MovingSpawner keptSpawner = null!;
+        scheduler.Add(new ActionSystem<ComponentAdder<Dead>, MovingSpawner>((dead, spawner) =>
         {
             keptAdder = dead;
             keptSpawner = spawner;
@@ -636,18 +597,31 @@ public class SystemSchedulerTests
         scheduler.Update();
 
         Assert.Throws<InvalidOperationException>(() => keptAdder.Add(entity, new Dead()));
-        Assert.Throws<InvalidOperationException>(() => keptSpawner.Spawn(new MovingBlueprint()));
+        Assert.Throws<InvalidOperationException>(() => keptSpawner.Spawn(default, default));
         scheduler.Update();
         Assert.That(world.Has<Dead>(entity), Is.False);
     }
 
     // Creates the component's string here, so nothing but the world and the spawner can reference it once this returns.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static WeakReference SpawnFailingName(Spawner<FailingBlueprint<Name>> spawner)
+    private static WeakReference SpawnName(Spawner<Name> spawner)
     {
         string value = new string('x', 8);
-        spawner.Spawn(new FailingBlueprint<Name> { Component = new Name(value), Fails = true });
+        spawner.Spawn(new Name(value));
         return new WeakReference(value);
+    }
+
+    // Copying a spawn's components cannot fail, so the tests fail a sync point by running it inside a query, where its first command throws.
+    private static void UpdateWhileAQueryRuns(World world, SystemScheduler scheduler)
+    {
+        Entity running = world.Create();
+        world.Add(running, new Mass(1));
+        foreach (Columns<ReadOnlySpan<Mass>> _ in world.Query<Masses>())
+        {
+            Assert.Throws<InvalidOperationException>(scheduler.Update);
+        }
+
+        world.Destroy(running);
     }
 
     private static int CountPositions(World world)

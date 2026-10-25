@@ -28,8 +28,7 @@ public class SystemGenerator : IIncrementalGenerator
     private static readonly Dictionary<string, string> Writers = new Dictionary<string, string>
     {
         ["Pixely.Ecs.ComponentAdder<T>"] = "ComponentAdder",
-        ["Pixely.Ecs.ComponentRemover<T>"] = "ComponentRemover",
-        ["Pixely.Ecs.Spawner<TBlueprint>"] = "Spawner"
+        ["Pixely.Ecs.ComponentRemover<T>"] = "ComponentRemover"
     };
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat;
@@ -108,8 +107,7 @@ public class SystemGenerator : IIncrementalGenerator
             return ExtractMethodGroup(context, cancellationToken);
         }
 
-        // Generators do not see each other's output, so a type argument such as Spawner<TBlueprint> of a [Blueprint] struct breaks its constraint here
-        // and the call resolves only to a candidate. The final compilation, with the blueprint's generated part, resolves it to the same method.
+        // A call whose type arguments break a constraint resolves only to a candidate, which is still the method to report on.
         SymbolInfo symbolInfo = context.SemanticModel.GetSymbolInfo(invocation, cancellationToken);
         if ((symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is not IMethodSymbol method)
         {
@@ -191,7 +189,7 @@ public class SystemGenerator : IIncrementalGenerator
                 return Fail("PXECS012", $"The constructor of {systemName} takes {byReference.Name} by reference, but its arguments are created for the call.", invocation);
             }
 
-            if (constructors[0].Parameters.FirstOrDefault(parameter => IsQuery(parameter.Type) || GetWriterCall(parameter.Type) is not null) is { } contract)
+            if (constructors[0].Parameters.FirstOrDefault(parameter => IsQuery(parameter.Type) || IsSpawner(parameter.Type) || GetWriterCall(parameter.Type) is not null) is { } contract)
             {
                 return Fail("PXECS013", $"The constructor of {systemName} takes {contract.Name}, a query or writer. Name its type in the ISystem<...> of {systemName}, which passes it to Update; the constructor takes only services.",
                     invocation);
@@ -272,13 +270,23 @@ public class SystemGenerator : IIncrementalGenerator
 
                 calls.Add($"builder.Query<{type}>()");
             }
+            else if (IsSpawner(typeArgument))
+            {
+                SystemExtraction? failure = ValidateSpawner((INamedTypeSymbol)typeArgument, argumentName, compilation, invocation);
+                if (failure is not null)
+                {
+                    return failure;
+                }
+
+                calls.Add($"builder.Spawner<{type}>()");
+            }
             else if (GetWriterCall(typeArgument) is { } writerCall)
             {
                 calls.Add(writerCall);
             }
             else
             {
-                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, ComponentAdder<T>, ComponentRemover<T>, EntityDestroyer or Spawner<TBlueprint>. A service goes in the constructor.",
+                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T> or EntityDestroyer. A service goes in the constructor.",
                     invocation);
             }
 
@@ -325,7 +333,60 @@ public class SystemGenerator : IIncrementalGenerator
         return null;
     }
 
+    // Repeats the checks the world makes when it creates the spawner's layout, so a spawner a system names fails the build instead.
+    private static SystemExtraction? ValidateSpawner(INamedTypeSymbol spawner, string spawnerName, Compilation compilation, InvocationExpressionSyntax invocation)
+    {
+        bool creatable = spawner.TypeKind == TypeKind.Class && !spawner.IsAbstract && !GeneratorSupport.ContainsTypeParameter(spawner) && !IsInFileLocalType(spawner)
+            && compilation.IsSymbolAccessibleWithin(spawner, compilation.Assembly)
+            && spawner.InstanceConstructors.Any(constructor => constructor.Parameters.IsEmpty && constructor.DeclaredAccessibility == Accessibility.Public);
+        if (!creatable)
+        {
+            return Fail("PXECS006", $"The spawner {spawnerName} must be a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor.", invocation);
+        }
+
+        List<ITypeSymbol> components = [];
+        foreach (ITypeSymbol argument in GeneratorSupport.GetSpawnerBase(spawner)!.TypeArguments)
+        {
+            if (argument.ToDisplayString() == GeneratorSupport.EntityName)
+            {
+                return Fail("PXECS007", $"The spawner {spawnerName} takes Entity, which is not a component. Spawn returns the entity.", invocation);
+            }
+
+            if (GeneratorSupport.IsTag(argument))
+            {
+                return Fail("PXECS007", $"The spawner {spawnerName} takes {argument.Name}, a tag, which has no data. Use IWith<{argument.Name}> instead.", invocation);
+            }
+
+            components.Add(argument);
+        }
+
+        foreach (ITypeSymbol tag in GetFilterTypes(spawner, "Pixely.Ecs.IWith<"))
+        {
+            if (!GeneratorSupport.IsTag(tag))
+            {
+                return Fail("PXECS009", $"The spawner {spawnerName} names {tag.Name} in IWith<...>, but it has data. Name it in Spawner<...>, whose Spawn takes its value.", invocation);
+            }
+
+            components.Add(tag);
+        }
+
+        if (GetFilterTypes(spawner, "Pixely.Ecs.IWithout<").Any())
+        {
+            return Fail("PXECS009", $"The spawner {spawnerName} implements IWithout<...>, which a spawner has no use for.", invocation);
+        }
+
+        ITypeSymbol? repeated = components.GroupBy(component => component, SymbolEqualityComparer.Default).FirstOrDefault(group => group.Count() > 1)?.Key as ITypeSymbol;
+        if (repeated is not null)
+        {
+            return Fail("PXECS008", $"The spawner {spawnerName} names {repeated.Name} more than once.", invocation);
+        }
+
+        return null;
+    }
+
     private static bool IsQuery(ITypeSymbol type) => type is INamedTypeSymbol named && GeneratorSupport.GetQueryBase(named) is not null;
+
+    private static bool IsSpawner(ITypeSymbol type) => type is INamedTypeSymbol named && GeneratorSupport.GetSpawnerBase(named) is not null;
 
     private static string? GetWriterCall(ITypeSymbol type)
     {
@@ -339,11 +400,12 @@ public class SystemGenerator : IIncrementalGenerator
             : null;
     }
 
-    // The type arguments of every IWith<...> or IWithout<...> the query implements. The compiler allows at most one of each, because two would both implement the same member.
-    private static List<string> GetFilters(INamedTypeSymbol type, string prefix) => [.. type.AllInterfaces
+    // The type arguments of every IWith<...> or IWithout<...> the type implements. The compiler allows at most one of each, because two would both implement the same member.
+    private static IEnumerable<ITypeSymbol> GetFilterTypes(INamedTypeSymbol type, string prefix) => type.AllInterfaces
         .Where(implemented => implemented.IsGenericType && implemented.ConstructedFrom.ToDisplayString().StartsWith(prefix))
-        .SelectMany(implemented => implemented.TypeArguments)
-        .Select(argument => argument.ToDisplayString(TypeFormat))];
+        .SelectMany(implemented => implemented.TypeArguments);
+
+    private static List<string> GetFilters(INamedTypeSymbol type, string prefix) => [.. GetFilterTypes(type, prefix).Select(argument => argument.ToDisplayString(TypeFormat))];
 
     private static string CreateArgument(IParameterSymbol parameter)
     {

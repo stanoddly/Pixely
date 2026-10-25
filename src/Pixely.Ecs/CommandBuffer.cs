@@ -22,7 +22,7 @@ internal interface IRoomRequest
 {
     int Room { get; }
 
-    Archetype GetArchetype(World world);
+    Archetype Archetype { get; }
 }
 
 // One system's structural changes, recorded by its writers and applied in recording order at a sync point.
@@ -112,7 +112,7 @@ internal sealed class CommandBuffer
         _roomByArchetype ??= [];
         foreach (IRoomRequest request in _roomRequests)
         {
-            ref int room = ref CollectionsMarshal.GetValueRefOrAddDefault(_roomByArchetype, request.GetArchetype(World), out _);
+            ref int room = ref CollectionsMarshal.GetValueRefOrAddDefault(_roomByArchetype, request.Archetype, out _);
             room = checked(room + request.Room);
         }
 

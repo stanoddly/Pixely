@@ -39,9 +39,6 @@ internal abstract class Column
 
     // Moves the last row into the row and clears the last row, so the column stops referencing what it held.
     public abstract void RemoveRow(int row, int lastRow);
-
-    // Clears the rows when they can hold references, so the column stops referencing what they held.
-    public abstract void ClearRows(int first, int count);
 }
 
 // Stores rows in one array, which Grow replaces with a larger one. The archetype counts the rows and grows the columns together; rows passed to
@@ -87,17 +84,6 @@ internal sealed class Column<T> : Column where T : struct
         if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
             last = default;
-        }
-    }
-
-    public override void ClearRows(int first, int count)
-    {
-        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            for (int row = first; row < first + count; row++)
-            {
-                GetUnchecked(row) = default;
-            }
         }
     }
 }
