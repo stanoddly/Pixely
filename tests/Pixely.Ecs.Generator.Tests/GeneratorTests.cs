@@ -33,9 +33,10 @@ public class GeneratorTests
                     public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
                 }
 
-                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>>
+                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>, ComponentLookup<Position>, ReadOnlyComponentLookup<Dead>>
                 {
-                    public void Update(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities)
+                    public void Update(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities, ComponentLookup<Position> positionLookup,
+                        ReadOnlyComponentLookup<Dead> deadLookup)
                     {
                         foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> speeds) in movement)
                         {
@@ -66,6 +67,7 @@ public class GeneratorTests
         string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
         Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("Add_1"));
         Assert.That(interceptors, Does.Contain("builder.Query<global::Game.Queries.Corpses>()").And.Contain("builder.Query<global::Pixely.Ecs.Query<global::System.ReadOnlySpan<global::Velocity>>>()"));
+        Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position>()").And.Contain("builder.ReadOnlyComponentLookup<global::Game.Dead>()"));
     }
 
     [TestCase("abstract class Q : Query<ReadOnlySpan<Position>>;", "PXECS001")]
@@ -273,6 +275,7 @@ public class GeneratorTests
     [TestCase("class S : ISystem { public S(ComponentAdder<Position> adder) { } public void Update() { } }", "S", "PXECS013")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>; class S : ISystem { public S(Q query) { } public void Update() { } }", "S", "PXECS013")]
     [TestCase("sealed class P : Spawner<Position>; class S : ISystem { public S(P spawner) { } public void Update() { } }", "S", "PXECS013")]
+    [TestCase("class S : ISystem { public S(ReadOnlyComponentLookup<Position> positions) { } public void Update() { } }", "S", "PXECS013")]
     [TestCase("class S { }", "S", "PXECS015")]
     [TestCase("class S : ISystem, ISystem<EntityDestroyer> { public void Update() { } public void Update(EntityDestroyer d) { } }", "S", "PXECS015")]
     [TestCase("class S : ISystem<EntityDestroyer>, ISystem<ComponentAdder<Position>> { public void Update(EntityDestroyer d) { } public void Update(ComponentAdder<Position> a) { } }", "S", "PXECS015")]

@@ -38,9 +38,11 @@ internal sealed class CommandBuffer
 
     private readonly FastList<Command> _commands = new FastList<Command>(4);
     private readonly List<IRecordedCommands> _sources = [];
+    private readonly List<ILookup> _lookups = [];
     // Created on the first request, because most systems never ask for room.
     private List<IRoomRequest>? _roomRequests;
     private Dictionary<Archetype, int>? _roomByArchetype;
+    private bool _isRecording;
 
     public CommandBuffer(World world)
     {
@@ -49,7 +51,19 @@ internal sealed class CommandBuffer
 
     public World World { get; }
 
-    public bool IsRecording { get; set; }
+    // Also gives the system's lookups the world while it records, and takes it back after.
+    public bool IsRecording
+    {
+        get => _isRecording;
+        set
+        {
+            _isRecording = value;
+            foreach (ILookup lookup in _lookups)
+            {
+                lookup.SetWorld(value ? World : null);
+            }
+        }
+    }
 
     public void ThrowIfNotRecording()
     {
@@ -60,6 +74,8 @@ internal sealed class CommandBuffer
     }
 
     public void AddSource(IRecordedCommands source) => _sources.Add(source);
+
+    public void AddLookup(ILookup lookup) => _lookups.Add(lookup);
 
     public void Record(IRecordedCommands source, int index)
     {

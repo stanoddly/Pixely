@@ -6,7 +6,7 @@ public interface ISystem
     void Update();
 }
 
-// Updated by a SystemScheduler once per update, with the queries and writers its type arguments name. They are the system's contract;
+// Updated by a SystemScheduler once per update, with the queries, lookups and writers its type arguments name. They are the system's contract;
 // its constructor takes only services.
 public interface ISystem<T1>
     where T1 : allows ref struct

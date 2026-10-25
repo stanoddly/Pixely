@@ -79,6 +79,10 @@ public sealed class World
 
     public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
+    // Has for an entity that may not be alive, which has no components, for lookups that follow an entity another system may have destroyed.
+    internal bool IsAliveWith<T>(Entity entity) where T : struct =>
+        IsAlive(entity) && _records[entity.Index].Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
+
     // The reference stays valid until the next structural change: Create, Destroy, Add, Remove, EnsureCapacity or a sync point. For a tag it is one value that all entities share.
     public ref T Get<T>(Entity entity) where T : struct
     {
