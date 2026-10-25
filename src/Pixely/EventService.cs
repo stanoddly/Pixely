@@ -11,6 +11,7 @@ public class EventService
     private readonly GamepadService _gamepadService;
     private readonly MouseService _mouseService;
     private readonly TextInputService _textInputService;
+    private readonly PlatformSettings _platformSettings;
     private readonly WindowRegistry _windowRegistry;
     private readonly AppControl _appControl;
 
@@ -19,6 +20,7 @@ public class EventService
         GamepadService gamepadService,
         MouseService mouseService,
         TextInputService textInputService,
+        PlatformSettings platformSettings,
         WindowRegistry windowRegistry,
         AppControl appControl)
     {
@@ -26,6 +28,7 @@ public class EventService
         _gamepadService = gamepadService;
         _mouseService = mouseService;
         _textInputService = textInputService;
+        _platformSettings = platformSettings;
         _windowRegistry = windowRegistry;
         _appControl = appControl;
     }
@@ -149,6 +152,14 @@ public class EventService
                             closedWindow.Hide();
                         }
                     }
+                }
+                else if (evt.Type == SDL_EventType.SDL_EVENT_SYSTEM_THEME_CHANGED)
+                {
+                    _platformSettings.OnSystemThemeChanged(evt.common.timestamp);
+                }
+                else if (evt.Type == SDL_EventType.SDL_EVENT_LOCALE_CHANGED)
+                {
+                    _platformSettings.OnLocaleChanged(evt.common.timestamp);
                 }
                 else if (evt.Type == SDL_EventType.SDL_EVENT_QUIT)
                 {
