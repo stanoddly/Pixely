@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Pixely.Collections;
 
 namespace Pixely.Ecs;
@@ -266,36 +267,45 @@ public sealed class World
     internal SpawnerLayout GetSpawnerLayout<TSpawner>(TSpawner? describer = null) where TSpawner : Spawner, new()
     {
         int id = SpawnerId<TSpawner>.Id;
+        if (id < _spawnerLayouts.Length && _spawnerLayouts[id] is { } layout)
+        {
+            return layout;
+        }
+
+        return CreateSpawnerLayout(id, describer ?? new TSpawner());
+    }
+
+    // Runs once per world and spawner type. Kept out of line, because inlined into a caller that then adds components in a loop, it used up the
+    // caller's inlining budget, so the JIT stopped inlining Add and the loop ran about 20% slower.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private SpawnerLayout CreateSpawnerLayout(int id, Spawner describer)
+    {
         if (id >= _spawnerLayouts.Length)
         {
             _spawnerLayouts.Resize(id + 1);
         }
 
-        ref SpawnerLayout? layout = ref _spawnerLayouts[id];
-        if (layout is null)
+        SpawnerDescription description = describer.Describe();
+        ComponentSet components = ComponentSet.From(description.Ids);
+        if (!_archetypesBySet.TryGetValue(components, out Archetype? archetype))
         {
-            SpawnerDescription description = (describer ?? new TSpawner()).Describe();
-            ComponentSet components = ComponentSet.From(description.Ids);
-            if (!_archetypesBySet.TryGetValue(components, out Archetype? archetype))
+            ColumnType[] types = new ColumnType[description.Ids.Count];
+            for (int i = 0; i < types.Length; i++)
             {
-                ColumnType[] types = new ColumnType[description.Ids.Count];
-                for (int i = 0; i < types.Length; i++)
-                {
-                    types[components.IndexOf(description.Ids[i])] = description.Types[i];
-                }
-
-                archetype = CreateArchetype(components, types);
+                types[components.IndexOf(description.Ids[i])] = description.Types[i];
             }
 
-            int[] columns = new int[description.ArgumentCount];
-            for (int i = 0; i < columns.Length; i++)
-            {
-                columns[i] = archetype.GetColumnIndex(description.Ids[i]);
-            }
-
-            layout = new SpawnerLayout(archetype, columns);
+            archetype = CreateArchetype(components, types);
         }
 
+        int[] columns = new int[description.ArgumentCount];
+        for (int i = 0; i < columns.Length; i++)
+        {
+            columns[i] = archetype.GetColumnIndex(description.Ids[i]);
+        }
+
+        SpawnerLayout layout = new SpawnerLayout(archetype, columns);
+        _spawnerLayouts[id] = layout;
         return layout;
     }
 
