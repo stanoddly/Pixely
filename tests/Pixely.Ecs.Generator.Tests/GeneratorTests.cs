@@ -469,7 +469,7 @@ public class GeneratorTests
     public void KeywordNamesCompile()
     {
         string source = Components + """
-            public static partial class @class
+            public static class @class
             {
                 public sealed class @event : Query<ReadOnlySpan<Entity>, Span<Position>>;
 
