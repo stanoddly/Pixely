@@ -38,8 +38,9 @@ internal sealed class CommandBuffer
 
     private readonly FastList<Command> _commands = new FastList<Command>(4);
     private readonly List<IRecordedCommands> _sources = [];
-    private readonly List<IRoomRequest> _roomRequests = [];
-    private readonly Dictionary<Archetype, int> _roomByArchetype = [];
+    // Created on the first request, because most systems never ask for room.
+    private List<IRoomRequest>? _roomRequests;
+    private Dictionary<Archetype, int>? _roomByArchetype;
 
     public CommandBuffer(World world)
     {
@@ -76,7 +77,7 @@ internal sealed class CommandBuffer
         _commands.Add(new Command { Source = source, First = index, Count = 1 });
     }
 
-    public void RequestRoom(IRoomRequest request) => _roomRequests.Add(request);
+    public void RequestRoom(IRoomRequest request) => (_roomRequests ??= []).Add(request);
 
     // Hands each run of consecutive commands from one writer to it at once, so a run of spawns becomes one batch.
     // Clears the buffer even when a command throws, so a later sync point does not apply the commands before it twice.
@@ -98,15 +99,17 @@ internal sealed class CommandBuffer
         }
     }
 
-    // Sums the requests for each archetype before growing it, so the room covers every spawn of the system, whatever the order of its commands.
-    // Entities the system destroys in the same archetype are not subtracted, so the archetype can grow a little more than needed.
+    // Sums the requests for each archetype before growing it, so spawners that share an archetype get room together, whatever the order of
+    // their commands. Any command of the system can fill the room: entities that other writers move into the archetype take rows the spawns
+    // asked for, and entities they destroy there are not subtracted.
     private void MakeRequestedRoom()
     {
-        if (_roomRequests.Count == 0)
+        if (_roomRequests is null || _roomRequests.Count == 0)
         {
             return;
         }
 
+        _roomByArchetype ??= [];
         foreach (IRoomRequest request in _roomRequests)
         {
             ref int room = ref CollectionsMarshal.GetValueRefOrAddDefault(_roomByArchetype, request.GetArchetype(World), out _);
@@ -134,8 +137,8 @@ internal sealed class CommandBuffer
         }
 
         _commands.Resize(0);
-        _roomRequests.Clear();
-        _roomByArchetype.Clear();
+        _roomRequests?.Clear();
+        _roomByArchetype?.Clear();
         foreach (IRecordedCommands source in _sources)
         {
             source.Clear();
