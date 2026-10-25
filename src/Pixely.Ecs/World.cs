@@ -28,7 +28,7 @@ public sealed class World
     private readonly Dictionary<ComponentSet, Archetype> _archetypesBySet = new Dictionary<ComponentSet, Archetype>();
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
     private readonly FastList<Query?> _queries = new FastList<Query?>(4);
-    private readonly FastList<BlueprintState?> _blueprints = new FastList<BlueprintState?>(4);
+    private readonly FastList<SpawnerLayout?> _spawnerLayouts = new FastList<SpawnerLayout?>(4);
     private readonly Archetype _emptyArchetype;
 
     // Each running query has an id, so ending a query twice, as copies of its enumerator do, ends it once.
@@ -182,13 +182,13 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
-    // Grows the archetype of the blueprint's components to hold at least capacity entities, so a known number of spawns or adds grows its
+    // Grows the archetype of the spawner's components to hold at least capacity entities, so a known number of spawns or adds grows its
     // columns once. Returns the archetype's capacity, which can be more than requested. Throws while a query runs, because growing replaces the arrays its spans point into.
-    public int EnsureCapacity<TBlueprint>(int capacity) where TBlueprint : struct, IBlueprint<TBlueprint>
+    public int EnsureCapacity<TSpawner>(int capacity) where TSpawner : Spawner, new()
     {
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
         ThrowIfQueryRuns();
-        return GetBlueprintState<TBlueprint>().Archetype.EnsureCapacity(capacity);
+        return GetSpawnerLayout<TSpawner>().Archetype.EnsureCapacity(capacity);
     }
 
     // One instance per world and query type, created on first use. Enumerate it with foreach.
@@ -233,37 +233,17 @@ public sealed class World
         return new Entity(index, record.Version);
     }
 
-    // Spawns a run of reserved entities together, so each column grows once and the blueprints are copied into it directly.
-    // Only a Spawner of this world reserves, and only a failed sync point releases, so the entities are reserved without a check.
-    // When a blueprint's Write throws, the rows are dropped and the entities stay reserved, for the failed sync point to release.
-    internal void Spawn<TBlueprint>(ChunkedList<Entity> entities, ChunkedList<TBlueprint> blueprints, int first, int count)
-        where TBlueprint : struct, IBlueprint<TBlueprint>
+    // Adds the rows of a run of spawns together, so each column grows once, for the spawner to copy its entities and components into.
+    // Copying calls no code of the components, so nothing throws between this and SetSpawnedRecords.
+    internal int AddSpawnedRows(Archetype archetype, int count)
     {
         ThrowIfQueryRuns();
-        BlueprintState state = GetBlueprintState<TBlueprint>();
-        Archetype archetype = state.Archetype;
-        int firstRow = archetype.AddRows(count);
-        try
-        {
-            int row = firstRow;
-            for (int index = first; index < first + count;)
-            {
-                ReadOnlySpan<Entity> entityRun = entities.GetRun(index, first + count - index);
-                ReadOnlySpan<TBlueprint> blueprintRun = blueprints.GetRun(index, entityRun.Length);
-                // The spawner's two lists split into runs at different indices, so the shorter run sets the length.
-                int length = blueprintRun.Length;
-                entityRun[..length].CopyTo(archetype.GetEntities(row, length));
-                TBlueprint.Write(blueprintRun, new BlueprintColumns(archetype, state.Columns, row, length));
-                index += length;
-                row += length;
-            }
-        }
-        catch
-        {
-            archetype.RemoveLastRows(count);
-            throw;
-        }
+        return archetype.AddRows(count);
+    }
 
+    // Only a Spawner of this world reserves, and only a failed sync point releases, so the entities are reserved without a check.
+    internal void SetSpawnedRecords(Archetype archetype, int firstRow, int count)
+    {
         for (int row = firstRow; row < firstRow + count; row++)
         {
             Entity entity = archetype.GetEntity(row);
@@ -282,25 +262,20 @@ public sealed class World
         FreeIndex(ref record, entity.Index);
     }
 
-    internal BlueprintState GetBlueprintState<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
+    // One layout per world and spawner type. describer saves creating a spawner only to describe it, when the caller has one.
+    internal SpawnerLayout GetSpawnerLayout<TSpawner>(TSpawner? describer = null) where TSpawner : Spawner, new()
     {
-        int id = BlueprintId<TBlueprint>.Id;
-        if (id >= _blueprints.Length)
+        int id = SpawnerId<TSpawner>.Id;
+        if (id >= _spawnerLayouts.Length)
         {
-            _blueprints.Resize(id + 1);
+            _spawnerLayouts.Resize(id + 1);
         }
 
-        ref BlueprintState? state = ref _blueprints[id];
-        if (state is null)
+        ref SpawnerLayout? layout = ref _spawnerLayouts[id];
+        if (layout is null)
         {
-            BlueprintDescription description = new BlueprintDescription();
-            TBlueprint.Describe(description);
+            SpawnerDescription description = (describer ?? new TSpawner()).Describe();
             ComponentSet components = ComponentSet.From(description.Ids);
-            if (components.Ids.Length != description.Ids.Count)
-            {
-                throw new InvalidOperationException($"The blueprint {typeof(TBlueprint).Name} describes a component more than once.");
-            }
-
             if (!_archetypesBySet.TryGetValue(components, out Archetype? archetype))
             {
                 ColumnType[] types = new ColumnType[description.Ids.Count];
@@ -312,16 +287,16 @@ public sealed class World
                 archetype = CreateArchetype(components, types);
             }
 
-            int[] fieldColumns = new int[description.Ids.Count];
-            for (int i = 0; i < fieldColumns.Length; i++)
+            int[] columns = new int[description.ArgumentCount];
+            for (int i = 0; i < columns.Length; i++)
             {
-                fieldColumns[i] = archetype.GetColumnIndex(description.Ids[i]);
+                columns[i] = archetype.GetColumnIndex(description.Ids[i]);
             }
 
-            state = new BlueprintState(archetype, fieldColumns);
+            layout = new SpawnerLayout(archetype, columns);
         }
 
-        return state;
+        return layout;
     }
 
     internal long BeginQuery()

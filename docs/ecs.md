@@ -56,7 +56,7 @@ An archetype stores each component type that is not a tag in one array, with a r
 - The room is kept when entities leave.
 - A tag has no array, so adding or removing one moves the entity's other components and nothing else. An empty struct without `ITag` still takes one byte per row.
 
-`EnsureCapacity<TBlueprint>(capacity)` grows the archetype of a blueprint's components to hold at least `capacity` entities, and returns its capacity. An archetype that is smaller grows to exactly `capacity`. One that is already larger keeps its size. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use `EnsureRoomFor` of a `Spawner<TBlueprint>` instead, described under blueprints.
+`EnsureCapacity<TSpawner>(capacity)` grows the archetype of a spawner's components to hold at least `capacity` entities, and returns its capacity. An archetype that is smaller grows to exactly `capacity`. One that is already larger keeps its size. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use `EnsureRoomFor` of their spawner instead, described under spawners.
 
 ## Queries
 
@@ -110,7 +110,7 @@ A system implements `ISystem<...>`. Its type arguments are its contract, and the
 | `ComponentAdder<T>` | Adds `T` to entities. |
 | `ComponentRemover<T>` | Removes `T` from entities. |
 | `EntityDestroyer` | Destroys entities. |
-| `Spawner<TBlueprint>` | Creates entities with the components of a blueprint. |
+| A spawner class or `Spawner<...>` | Creates entities with the components of its type arguments and the tags of its `IWith<...>`. |
 
 The constructor takes only services from the service provider. A system without queries or writers implements `ISystem`, whose `Update` takes nothing.
 
@@ -167,51 +167,47 @@ services.AddSystem<MovementSystem>();
 - A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS017 reports one that does.
 - A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
 
-## Blueprints
+## Spawners
 
-A blueprint is a partial struct with `[Blueprint]`. Its fields, or the properties of a positional record struct, are the components of an entity that a `Spawner<TBlueprint>` creates.
+A spawner creates entities with the components of its type arguments. `Spawn` takes one value for each, in their order. Like a query, a spawner can be written inline, as `Spawner<Position, Velocity>`, or as a class that derives from it. A class can add `IWith<...>`, whose tags each spawned entity gets without a value, and factory methods that call `Spawn`.
 
 ```csharp
-[Blueprint]
-internal partial struct Bullet
+internal sealed class Bullets : Spawner<Position, Velocity, Damage>, IWith<Projectile>
 {
-    public Position Position;
-    public Velocity Velocity;
-    public Damage Damage;
+    public Entity Spawn(Position at, Aim aim) => Spawn(at, aim.Velocity, new Damage(10));
 }
-
-[Blueprint]
-internal readonly partial record struct Corpse(Position Position, Dead Dead);
 
 internal sealed class Shooters : Query<ReadOnlySpan<Position>, ReadOnlySpan<Aim>>;
 
-internal sealed class WeaponSystem : ISystem<Shooters, Spawner<Bullet>>
+internal sealed class WeaponSystem : ISystem<Shooters, Bullets>
 {
-    public void Update(Shooters shooters, Spawner<Bullet> bullets)
+    public void Update(Shooters shooters, Bullets bullets)
     {
         foreach ((ReadOnlySpan<Position> positions, ReadOnlySpan<Aim> aims) in shooters)
         {
             for (int i = 0; i < positions.Length; i++)
             {
-                bullets.Spawn(new Bullet { Position = positions[i], Velocity = aims[i].Velocity, Damage = new Damage(10) });
+                bullets.Spawn(positions[i], aims[i]);
             }
         }
     }
 }
 ```
 
-A blueprint can hold a tag. The spawned entity gets the tag, and the generated code writes no value for it.
+- The type arguments are components with data. A tag goes in `IWith<...>`, and `IWith<...>` names only tags. A spawner has no `IWithout<...>`.
+- A spawner spawns at least one component with data. An entity with only tags is created with `Create` and `Add`.
+- The scheduler creates one spawner for each system that names it, so a spawner class needs a public parameterless constructor. Its type arguments and `IWith<...>` are read once, when the first spawner of its type is created in a world.
+- A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
+- `Spawn` keeps each component in its own list, and the sync point copies each list into its array.
 
-A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
-
-`Spawner<TBlueprint>.EnsureRoomFor(count)` grows the blueprint's archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. Any change of the system can fill the room: a system that also moves entities into the archetype with `ComponentAdder<T>` or `ComponentRemover<T>` asks for room for them too. A system that throws drops the request with its other changes.
+`EnsureRoomFor(count)` of a spawner grows its archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. Any change of the system can fill the room: a system that also moves entities into the archetype with `ComponentAdder<T>` or `ComponentRemover<T>` asks for room for them too. A system that throws drops the request with its other changes.
 
 ## Sync points
 
 Writers record their changes, and the scheduler applies them at sync points:
 
 - After the last system of every update.
-- Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, `IWith<...>` and `IWithout<...>`. A `Spawner<TBlueprint>` changes every component of the blueprint.
+- Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, `IWith<...>` and `IWithout<...>`. A spawner changes every component it spawns, tags included.
 - Before any system with a query, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component.
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
@@ -254,21 +250,21 @@ The generator fails the build on these:
 | PXECS003 | No component appears in two type arguments of `Query<...>`. |
 | PXECS004 | A query requires at least one component through `Span<T>`, `ReadOnlySpan<T>` or `IWith<...>`. |
 | PXECS005 | No component is both required and excluded by a query. |
-| PXECS006 | A blueprint is a non-generic partial struct that is not a `ref struct` or `file`-local, and every type that contains it is partial, non-generic and not `file`-local. |
-| PXECS007 | Each member of a blueprint is a struct component, not `Entity`, a `ref struct` or a type parameter, and a blueprint captures no primary constructor parameter. |
-| PXECS008 | No component appears in two members of a blueprint. |
-| PXECS009 | A blueprint holds at least one component. |
+| PXECS006 | A spawner that a system names is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
+| PXECS007 | A type argument of a spawner is not `Entity` or a tag. |
+| PXECS008 | A spawner names no component twice in its type arguments and `IWith<...>`. |
+| PXECS009 | The `IWith<...>` of a spawner names only tags, and a spawner has no `IWithout<...>`. |
 | PXECS010 | `AddSystem<T>` and `SystemScheduler.Add` take a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. `SystemScheduler.Add` also takes a type parameter, unless its constraints make it an `ISystem<...>`, which only an intercepted call can add. |
 | PXECS011 | The system of `AddSystem<T>` has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
 | PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
 | PXECS013 | The constructor takes no query or writer. They go in the system's `ISystem<...>`, which passes them to `Update`. |
 | PXECS014 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
 | PXECS015 | A system implements exactly one of `ISystem` and `ISystem<...>`. |
-| PXECS016 | Each type argument of `ISystem<...>` is a query, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` or `Spawner<TBlueprint>`. |
+| PXECS016 | Each type argument of `ISystem<...>` is a query, a spawner, `ComponentAdder<T>`, `ComponentRemover<T>` or `EntityDestroyer`. |
 | PXECS017 | A system does not implement `IUpdatable`, which would update it a second time. |
 | PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, and not used as method groups, such as `Action add = services.AddSystem<T>;`, or they would throw. A method group of `SystemScheduler.Add` for an `ISystem` is allowed. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime.
+PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners a system names, and the world checks PXECS007 to PXECS009 when it reads a spawner's components.
 
 ## Not supported yet
 

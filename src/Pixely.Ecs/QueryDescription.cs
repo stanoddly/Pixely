@@ -1,7 +1,7 @@
 namespace Pixely.Ecs;
 
 // What a query requires and excludes, as its span type arguments and its IWith<...> and IWithout<...> describe it.
-internal sealed class QueryDescription
+internal sealed class QueryDescription : IFilterDescription
 {
     private readonly string _subject;
     private readonly List<int> _read = [];

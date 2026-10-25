@@ -43,12 +43,12 @@ public class SystemRegistrationTests
         }
     }
 
-    public sealed class Spawning(IEnumerable<UpdateLog> logs, UpdateLog? log) : ISystem<Spawner<MovingBlueprint>>
+    public sealed class Spawning(IEnumerable<UpdateLog> logs, UpdateLog? log) : ISystem<MovingSpawner>
     {
-        public void Update(Spawner<MovingBlueprint> spawner)
+        public void Update(MovingSpawner spawner)
         {
             log!.Entries.Add(nameof(Spawning) + logs.Count());
-            spawner.Spawn(new MovingBlueprint());
+            spawner.Spawn(default, default);
         }
     }
 

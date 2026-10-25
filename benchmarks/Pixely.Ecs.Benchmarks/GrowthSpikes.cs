@@ -16,13 +16,13 @@ public static class GrowthSpikes
     private static int Total;
     private const int Runs = 7;
 
-    internal sealed class SpawnSystem : ISystem<Spawner<MovingBlueprint>>
+    internal sealed class SpawnSystem : ISystem<MovingSpawner>
     {
-        public void Update(Spawner<MovingBlueprint> spawner)
+        public void Update(MovingSpawner spawner)
         {
             for (int i = 0; i < PerFrame; i++)
             {
-                spawner.Spawn(new MovingBlueprint { Position = new Position(i, i), Velocity = new Velocity(1, 1) });
+                spawner.Spawn(new Position(i, i), new Velocity(1, 1));
             }
         }
     }
@@ -69,7 +69,7 @@ public static class GrowthSpikes
             {
                 if (!hinted)
                 {
-                    world.EnsureCapacity<MovingBlueprint>(Total);
+                    world.EnsureCapacity<MovingSpawner>(Total);
                     hinted = true;
                 }
 
@@ -91,7 +91,7 @@ public static class GrowthSpikes
             {
                 if (!hinted)
                 {
-                    world.EnsureCapacity<MovingBlueprint>(Total);
+                    world.EnsureCapacity<MovingSpawner>(Total);
                     hinted = true;
                 }
 

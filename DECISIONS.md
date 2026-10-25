@@ -2,9 +2,19 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-25: Pixely.Ecs spawners are classes on Spawner<...>, like queries, instead of [Blueprint] structs
+
+A spawner derives from `Spawner<T1, ..., T8>`, or is written inline as one, like a query on `Query<...>`. `Spawn` takes one value for each type argument, and the tags of the class's `IWith<...>` come without values. A system names the spawner in its `ISystem<...>`. This supersedes the `[Blueprint]` structs and `Spawner<TBlueprint>` of the 2026-10-23 entry.
+
+- A blueprint needed `partial` and a generator, because C# implements an interface only inside the type. The generic base already knows its component types, so spawners need no generated code, and the blueprint generator and its diagnostics are gone.
+- Games create entities through factory methods, as Bevy does with functions that return a bundle. A spawner class holds its factory methods, which call `Spawn`.
+- Tags go in `IWith<...>`, as in queries, because a generic `Spawn` cannot drop the parameter of a tag.
+
+Cost: `Spawn` takes up to 8 positional arguments, told apart only by their types. A spawner spawns at least one component with data, so an entity with only tags is created with `Create` and `Add`.
+
 ## 2026-10-25: Pixely.Ecs archetypes store each component in one array that doubles, with capacity hints for a known size
 
-Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TBlueprint>` grows a blueprint's archetype to a known size, and `Spawner<TBlueprint>.EnsureRoomFor` makes room for a known number of spawns. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
+Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TSpawner>` grows a spawner's archetype to a known size, and a spawner's `EnsureRoomFor` makes room for a known number of spawns. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
 
 - Chunks only help while a column grows: it never copies its rows, and its arrays stay off the large object heap. Their costs apply to every frame. Against chunks, flat columns made `Get` 26 to 27% faster, `UnsafeGet` 30 to 32%, adding and removing a component 21 to 24%, and iteration 3 to 6%.
 - Unity's chunks live in native memory, so its reasons do not carry over to the .NET garbage collector. Flecs and Bevy store flat columns.

@@ -171,7 +171,7 @@ public class GeneratorTests
     }
 
     [Test]
-    public void ValidBlueprintsAndSystemsCompile()
+    public void ValidSpawnersAndSystemsCompile()
     {
         string source = Components + """
             namespace Game
@@ -179,34 +179,34 @@ public class GeneratorTests
                 using System.Collections.Generic;
                 using Pixely.DependencyInjection;
 
-                public struct Dead;
+                public struct Dead : ITag;
 
-                [Blueprint]
-                public partial struct Bullet
+                public sealed class Bullets : Spawner<Position, Velocity>
                 {
-                    public Position Position;
-                    public Velocity Velocity;
+                    public Entity Spawn(Position at) => Spawn(at, new Velocity { X = 1 });
                 }
 
-                public static partial class Blueprints
+                public static class Spawners
                 {
-                    [Blueprint]
-                    internal readonly partial record struct Corpse(Position Position, Dead Dead);
+                    internal sealed class Corpses : Spawner<Position>, IWith<Dead>;
                 }
 
                 internal sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>>;
 
                 public sealed class Log;
 
-                internal sealed class Shooter : ISystem<Movement, Spawner<Bullet>, ComponentAdder<Dead>, ComponentRemover<Velocity>, EntityDestroyer, Spawner<Blueprints.Corpse>>
+                internal sealed class Shooter : ISystem<Movement, Bullets, ComponentAdder<Dead>, ComponentRemover<Velocity>, EntityDestroyer, Spawners.Corpses, Spawner<Velocity>>
                 {
                     public Shooter(Log log, Log? optional, IEnumerable<Log> logs, in Log byValue, IReadOnlyList<Log> list)
                     {
                     }
 
-                    public void Update(Movement movement, Spawner<Bullet> bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop, EntityDestroyer destroyer,
-                        Spawner<Blueprints.Corpse> corpses)
+                    public void Update(Movement movement, Bullets bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop, EntityDestroyer destroyer,
+                        Spawners.Corpses corpses, Spawner<Velocity> velocities)
                     {
+                        bullets.Spawn(new Position());
+                        corpses.Spawn(new Position());
+                        velocities.Spawn(new Velocity());
                     }
                 }
 
@@ -225,25 +225,39 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::Game.Bullet>()")), Is.True);
-        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::Game.Log>>()")), Is.True);
+        string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
+        Assert.That(interceptors, Does.Contain("builder.Spawner<global::Game.Bullets>()").And.Contain("builder.Spawner<global::Game.Spawners.Corpses>()"));
+        Assert.That(interceptors, Does.Contain("builder.Spawner<global::Pixely.Ecs.Spawner<global::Velocity>>()"));
+        Assert.That(interceptors, Does.Contain("sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::Game.Log>>()"));
     }
 
-    [TestCase("[Blueprint] struct B { public Position P; }", "PXECS006")]
-    [TestCase("[Blueprint] ref partial struct B { public Position P; }", "PXECS006")]
-    [TestCase("[Blueprint] partial struct B<T> { public Position P; }", "PXECS006")]
-    [TestCase("class Outer { [Blueprint] partial struct B { public Position P; } }", "PXECS006")]
-    [TestCase("[Blueprint] file partial struct B { public Position P; }", "PXECS006")]
-    [TestCase("file partial class Outer { [Blueprint] partial struct B { public Position P; } }", "PXECS006")]
-    [TestCase("[Blueprint] partial struct B { public string S; }", "PXECS007")]
-    [TestCase("[Blueprint] partial struct B { public Entity E; }", "PXECS007")]
-    [TestCase("[Blueprint] partial struct B(Position p) { public Position Read => p; }", "PXECS007")]
-    [TestCase("[Blueprint] partial struct B(Position p) { public Velocity V; public Position Read => p; }", "PXECS007")]
-    [TestCase("[Blueprint] partial struct B { public Position A; public Position B2; }", "PXECS008")]
-    [TestCase("[Blueprint] partial struct B { }", "PXECS009")]
-    public void InvalidBlueprintReportsDiagnostic(string declaration, string expectedId)
+    [TestCase("abstract class P : Spawner<Position>;", "PXECS006")]
+    [TestCase("sealed class P : Spawner<Position> { public P(int value) { } }", "PXECS006")]
+    [TestCase("sealed class P : Spawner<Position> { internal P() { } }", "PXECS006")]
+    [TestCase("sealed class P : Spawner<Entity>;", "PXECS007")]
+    [TestCase("public struct Mark : ITag; sealed class P : Spawner<Position, Mark>;", "PXECS007")]
+    [TestCase("sealed class P : Spawner<Position, Position>;", "PXECS008")]
+    [TestCase("public struct Mark : ITag; sealed class P : Spawner<Position>, IWith<Mark, Mark>;", "PXECS008")]
+    [TestCase("sealed class P : Spawner<Position>, IWith<Velocity>;", "PXECS009")]
+    [TestCase("public struct Mark : ITag; sealed class P : Spawner<Position>, IWithout<Mark>;", "PXECS009")]
+    public void InvalidSpawnerOfASystemReportsDiagnostic(string declaration, string expectedId)
     {
-        (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
+        string source = Components + declaration + """
+
+            sealed class S : ISystem<P>
+            {
+                public void Update(P spawner)
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
     }
@@ -258,6 +272,7 @@ public class GeneratorTests
     [TestCase("class Log; class S : ISystem { public S(out Log log) { log = new Log(); } public void Update() { } }", "S", "PXECS012")]
     [TestCase("class S : ISystem { public S(ComponentAdder<Position> adder) { } public void Update() { } }", "S", "PXECS013")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>; class S : ISystem { public S(Q query) { } public void Update() { } }", "S", "PXECS013")]
+    [TestCase("sealed class P : Spawner<Position>; class S : ISystem { public S(P spawner) { } public void Update() { } }", "S", "PXECS013")]
     [TestCase("class S { }", "S", "PXECS015")]
     [TestCase("class S : ISystem, ISystem<EntityDestroyer> { public void Update() { } public void Update(EntityDestroyer d) { } }", "S", "PXECS015")]
     [TestCase("class S : ISystem<EntityDestroyer>, ISystem<ComponentAdder<Position>> { public void Update(EntityDestroyer d) { } public void Update(ComponentAdder<Position> a) { } }", "S", "PXECS015")]
@@ -314,9 +329,9 @@ public class GeneratorTests
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS014" }));
     }
 
-    // A tag has no column, so the generated Write leaves it out and writes only the other members.
+    // A tag has no column, so a spawner takes no value for the tags of its IWith<...>.
     [Test]
-    public void TagsCompileAndBlueprintsDoNotWriteThem()
+    public void TagsOfASpawnerCompile()
     {
         string source = Components + """
             public struct Marked : ITag;
@@ -326,18 +341,13 @@ public class GeneratorTests
                 public static int Count => 0;
             }
 
-            [Blueprint]
-            public partial struct B
-            {
-                public Marked Marked;
-                public Position Position;
-            }
+            public sealed class Flags : Spawner<Position>, IWith<Marked, Flagged>;
 
-            [Blueprint]
-            public partial struct OnlyTags
+            public sealed class S : ISystem<Flags>
             {
-                public Marked Marked;
-                public Flagged Flagged;
+                public void Update(Flags flags) => flags.Spawn(new Position());
+
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
             """;
 
@@ -345,10 +355,6 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-        string blueprint = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("B.Blueprint.g.cs")).ToString();
-        Assert.That(blueprint, Does.Contain("column1[i] = blueprints[i].Position;").And.Not.Contain("column0"));
-        string onlyTags = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("OnlyTags.Blueprint.g.cs")).ToString();
-        Assert.That(onlyTags, Does.Not.Contain("for ("));
     }
 
     [Test]
@@ -436,46 +442,6 @@ public class GeneratorTests
         Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
     }
 
-    // A parameter that only initializes a member is not captured, so the member is the component.
-    [Test]
-    public void BlueprintWithAPrimaryConstructorInitializingItsMembersCompiles()
-    {
-        string source = Components + """
-            [Blueprint]
-            public partial struct B(Position position, float speed)
-            {
-                public Position Position = position;
-                public Velocity Velocity { get; } = new Velocity { X = speed };
-            }
-            """;
-
-        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
-
-        Assert.That(generatorDiagnostics, Is.Empty);
-        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("column1[i] = blueprints[i].Velocity;")), Is.True);
-    }
-
-    [Test]
-    public void TypesInsideRecordsAndInterfacesCompile()
-    {
-        string source = Components + """
-            public partial interface IOuter
-            {
-                [Blueprint]
-                public partial struct B
-                {
-                    public Velocity Velocity;
-                }
-            }
-            """;
-
-        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
-
-        Assert.That(generatorDiagnostics, Is.Empty);
-        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-    }
-
     // The generated code is outside the system, so what the call site can reach inside the system does not count.
     [TestCase("""
         class S : ISystem
@@ -507,25 +473,19 @@ public class GeneratorTests
             {
                 public sealed class @event : Query<ReadOnlySpan<Entity>, Span<Position>>;
 
-                [Blueprint]
-                public partial struct @struct
-                {
-                    public Position @in;
-                    public Velocity record;
-                }
+                public sealed class @struct : Spawner<Position, Velocity>;
 
-                [Blueprint]
-                public partial record struct @record(Position @out);
+                public sealed class @record : Spawner<Position>;
 
-                public sealed class @operator : ISystem<@event, Spawner<@struct>, Spawner<@record>>
+                public sealed class @operator : ISystem<@event, @struct, @record>
                 {
-                    public void Update(@event query, Spawner<@struct> structs, Spawner<@record> records)
+                    public void Update(@event query, @struct structs, @record records)
                     {
                         foreach ((ReadOnlySpan<Entity> @this, Span<Position> @base) in query)
                         {
                             @base[0] = @base[0];
-                            structs.Spawn(new @struct { @in = @base[0], record = default });
-                            records.Spawn(new @record(@base[0]));
+                            structs.Spawn(@base[0], default);
+                            records.Spawn(@base[0]);
                         }
                     }
                 }
@@ -540,17 +500,10 @@ public class GeneratorTests
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
-    // Generators do not see each other's output, so the generator sees Spawner<B> break its constraint until the blueprint's part exists.
     [Test]
-    public void SchedulerAddOfAGenericSystemWithASpawnerOfAGeneratedBlueprintIsIntercepted()
+    public void SchedulerAddOfAGenericSystemWithASpawnerIsIntercepted()
     {
         string source = Components + """
-            [Blueprint]
-            public partial struct B
-            {
-                public Position Position;
-            }
-
             public sealed class Generic<T>(System.Action<T> update) : ISystem<T>
             {
                 public void Update(T item1) => update(item1);
@@ -558,7 +511,7 @@ public class GeneratorTests
 
             static class Registration
             {
-                static void Register(SystemScheduler scheduler) => scheduler.Add(new Generic<Spawner<B>>(spawner => spawner.Spawn(new B())));
+                static void Register(SystemScheduler scheduler) => scheduler.Add(new Generic<Spawner<Position>>(spawner => spawner.Spawn(new Position())));
             }
             """;
 
@@ -566,7 +519,7 @@ public class GeneratorTests
 
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::B>()")), Is.True);
+        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::Pixely.Ecs.Spawner<global::Position>>()")), Is.True);
     }
 
     // SystemScheduler.Add handles an ISystem at runtime, and a type parameter is known only where the generic code is called.
@@ -921,6 +874,6 @@ public class GeneratorTests
     }
 
     private static GeneratorDriver CreateDriver() =>
-        CSharpGeneratorDriver.Create([new QueryTermGenerator().AsSourceGenerator(), new BlueprintGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
+        CSharpGeneratorDriver.Create([new QueryTermGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
             parseOptions: ParseOptions);
 }

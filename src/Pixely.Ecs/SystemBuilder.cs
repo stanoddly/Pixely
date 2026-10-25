@@ -56,11 +56,14 @@ public sealed class SystemBuilder
         return new EntityDestroyer(Commands);
     }
 
-    public Spawner<TBlueprint> Spawner<TBlueprint>() where TBlueprint : struct, IBlueprint<TBlueprint>
+    public TSpawner Spawner<TSpawner>() where TSpawner : Spawner, new()
     {
         ThrowIfClosed();
-        AddAll(Contract.Changed, _world.GetBlueprintState<TBlueprint>().Archetype.Components);
-        return new Spawner<TBlueprint>(Commands);
+        TSpawner spawner = new TSpawner();
+        SpawnerLayout layout = _world.GetSpawnerLayout(spawner);
+        AddAll(Contract.Changed, layout.Archetype.Components);
+        spawner.Initialize(Commands, layout);
+        return spawner;
     }
 
     internal void Close() => _closed = true;
