@@ -91,6 +91,34 @@ public class GpuMemorySystem: ICopyPass
         return GetOrCreateCopyPass().CreateStorageBuffer(data);
     }
 
+    /// <summary>Creates a storage buffer of <paramref name="length"/> elements with undefined contents, without an upload. A compute shader writes it, or <see cref="UpdateStorageBuffer{T}"/> fills it.</summary>
+    public GpuStorageBuffer<T> CreateStorageBuffer<T>(int length, StorageBufferUsage usage) where T : unmanaged
+    {
+        uint sizeBytes = GpuStorageBuffer<T>.ValidateAllocationSize(length, nameof(length));
+
+        const StorageBufferUsage allUsages = StorageBufferUsage.GraphicsStorageRead | StorageBufferUsage.ComputeStorageRead | StorageBufferUsage.ComputeStorageWrite;
+        if (usage == 0 || (usage & ~allUsages) != 0)
+        {
+            throw new ArgumentException($"A storage buffer needs one or more of {allUsages}, but the usage is '{usage}'.", nameof(usage));
+        }
+
+        unsafe
+        {
+            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
+            {
+                usage = (SDL_GPUBufferUsageFlags)usage,
+                size = sizeBytes
+            };
+
+            Pointer<SDL_GPUBuffer> rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
+            SdlError.ThrowOnNull(rawBuffer);
+
+            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, length, usage);
+            _gpuDevice.RegisterStorageBuffer(storageBuffer);
+            return storageBuffer;
+        }
+    }
+
     public void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged
     {
         GetOrCreateCopyPass().UpdateStorageBuffer(storageBuffer, data);

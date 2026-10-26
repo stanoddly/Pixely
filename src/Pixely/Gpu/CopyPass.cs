@@ -276,12 +276,7 @@ internal sealed class CopyPass
 
     public GpuStorageBuffer<T> CreateStorageBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
-        if (data.Length == 0)
-        {
-            throw new ArgumentException("Cannot create an empty storage buffer", nameof(data));
-        }
-
-        uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);
+        uint sizeBytes = GpuStorageBuffer<T>.ValidateAllocationSize(data.Length, nameof(data));
         unsafe
         {
             SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
@@ -293,7 +288,7 @@ internal sealed class CopyPass
             SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
             UploadToNewBuffer(data, rawBuffer);
 
-            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length);
+            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length, StorageBufferUsage.GraphicsStorageRead);
             _gpuDevice.RegisterStorageBuffer(storageBuffer);
             return storageBuffer;
         }

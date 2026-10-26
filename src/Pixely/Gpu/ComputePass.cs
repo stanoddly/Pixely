@@ -75,6 +75,7 @@ public class ComputePass : IDisposable
         ThrowIfDisposed();
         for (int i = 0; i < buffers.Length; i++)
         {
+            buffers[i].ValidateUsage("Compute read-only storage buffer", slot + (uint)i, StorageBufferUsage.ComputeStorageRead);
             _readOnlyStorageBufferElementSizes = SetStorageBufferSlotSize(_readOnlyStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
         unsafe
