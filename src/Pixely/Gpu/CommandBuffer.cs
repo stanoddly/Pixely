@@ -386,6 +386,11 @@ public class CommandBuffer: IDisposable
         ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers)
     {
         ThrowIfDisposed();
+        for (int i = 0; i < readWriteStorageBuffers.Length; i++)
+        {
+            readWriteStorageBuffers[i].Buffer.ValidateUsage("Compute read-write storage buffer", (uint)i, StorageBufferUsage.ComputeStorageWrite);
+        }
+
         unsafe
         {
             SDL_GPUStorageTextureReadWriteBinding* textureBindings = stackalloc SDL_GPUStorageTextureReadWriteBinding[readWriteStorageTextures.Length];

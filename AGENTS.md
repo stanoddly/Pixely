@@ -8,7 +8,7 @@
 - `docs/static-factory-methods.md` - Static Create() method pattern
 - `docs/frame-order.md` - Update and render ordering: UpdateOrders/RenderOrders constants, the registration-order tie-break, input order as a separate axis
 - `docs/pipeline-configuration.md` - GraphicsPipelineBuilder API (vertex types, shaders, depth testing)
-- `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages)
+- `docs/shaders.md` - Writing and using shaders (Slang, constant buffers, vertex/fragment stages, storage buffers and their `StorageBufferUsage`)
 - `docs/content-distribution.md` - Virtual content sources, source precedence, and build/publish distribution policies, `Content.pk3` in the browser's file system with `PixelyBrowserVfsFile`
 - `docs/render-pass-flow.md` - Rendering architecture overview, CommandBuffer vs RenderPass, push constants, binding order
 - `docs/multisampling.md` - Multisample anti-aliasing: sample counts and what each backend supports, multisampled textures and their limits, resolving a color target in a render pass, matching depth buffers and pipelines

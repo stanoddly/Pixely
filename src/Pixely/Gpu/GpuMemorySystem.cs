@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.Utilities;
 using SDL;
@@ -89,6 +90,40 @@ public class GpuMemorySystem: ICopyPass
     public GpuStorageBuffer<T> CreateStorageBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
         return GetOrCreateCopyPass().CreateStorageBuffer(data);
+    }
+
+    /// <summary>Creates a storage buffer of <paramref name="length"/> elements with undefined contents, without an upload. A compute shader writes it, or <see cref="UpdateStorageBuffer{T}"/> fills it.</summary>
+    public GpuStorageBuffer<T> CreateStorageBuffer<T>(int length, StorageBufferUsage usage) where T : unmanaged
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
+
+        long sizeBytes = (long)Unsafe.SizeOf<T>() * length;
+        if (sizeBytes > uint.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length), length, $"A storage buffer of {length} elements of {Unsafe.SizeOf<T>()} bytes exceeds {uint.MaxValue} bytes.");
+        }
+
+        const StorageBufferUsage allUsages = StorageBufferUsage.GraphicsStorageRead | StorageBufferUsage.ComputeStorageRead | StorageBufferUsage.ComputeStorageWrite;
+        if (usage == 0 || (usage & ~allUsages) != 0)
+        {
+            throw new ArgumentException($"A storage buffer needs one or more of {allUsages}, but the usage is '{usage}'.", nameof(usage));
+        }
+
+        unsafe
+        {
+            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
+            {
+                usage = (SDL_GPUBufferUsageFlags)usage,
+                size = (uint)sizeBytes
+            };
+
+            Pointer<SDL_GPUBuffer> rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
+            SdlError.ThrowOnNull(rawBuffer);
+
+            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, length, usage);
+            _gpuDevice.RegisterStorageBuffer(storageBuffer);
+            return storageBuffer;
+        }
     }
 
     public void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged

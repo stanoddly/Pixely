@@ -137,6 +137,7 @@ internal struct RenderPassValidator
     {
         for (int i = 0; i < buffers.Length; i++)
         {
+            buffers[i].ValidateUsage("Vertex storage buffer", slot + (uint)i, StorageBufferUsage.GraphicsStorageRead);
             _vertexStorageBufferElementSizes = SetStorageBufferSlotSize(_vertexStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
     }
@@ -145,6 +146,7 @@ internal struct RenderPassValidator
     {
         for (int i = 0; i < buffers.Length; i++)
         {
+            buffers[i].ValidateUsage("Fragment storage buffer", slot + (uint)i, StorageBufferUsage.GraphicsStorageRead);
             _fragmentStorageBufferElementSizes = SetStorageBufferSlotSize(_fragmentStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
     }

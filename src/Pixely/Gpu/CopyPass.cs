@@ -293,7 +293,7 @@ internal sealed class CopyPass
             SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
             UploadToNewBuffer(data, rawBuffer);
 
-            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length);
+            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length, StorageBufferUsage.GraphicsStorageRead);
             _gpuDevice.RegisterStorageBuffer(storageBuffer);
             return storageBuffer;
         }
