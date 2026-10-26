@@ -281,7 +281,7 @@ internal sealed class CopyPass
             throw new ArgumentException("Cannot create an empty storage buffer", nameof(data));
         }
 
-        uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);
+        uint sizeBytes = GpuStorageBuffer<T>.ValidateSizeInBytes(data.Length, nameof(data));
         unsafe
         {
             SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()

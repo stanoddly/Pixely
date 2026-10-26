@@ -15,11 +15,28 @@ public class StorageBufferUsageTests
     }
 
     [Test]
-    public void CreateStorageBuffer_SizeOverUIntMaxValue_Throws()
+    public void CreateStorageBuffer_SizeUnder4Bytes_Throws()
     {
         GpuMemorySystem gpuMemorySystem = new(null!);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => gpuMemorySystem.CreateStorageBuffer<long>(int.MaxValue, StorageBufferUsage.ComputeStorageWrite));
+        Assert.Throws<ArgumentOutOfRangeException>(() => gpuMemorySystem.CreateStorageBuffer<byte>(3, StorageBufferUsage.ComputeStorageWrite));
+    }
+
+    [Test]
+    public void CreateStorageBuffer_SizeOverIntMaxValue_Throws()
+    {
+        GpuMemorySystem gpuMemorySystem = new(null!);
+
+        // 2^29 elements of 4 bytes are 2^31 bytes, one more than int.MaxValue.
+        Assert.Throws<ArgumentOutOfRangeException>(() => gpuMemorySystem.CreateStorageBuffer<int>(1 << 29, StorageBufferUsage.ComputeStorageWrite));
+    }
+
+    [Test]
+    public void CreateStorageBuffer_DataUnder4Bytes_Throws()
+    {
+        CopyPass copyPass = new(null!, default, null!);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => copyPass.CreateStorageBuffer<byte>(new byte[3]));
     }
 
     [TestCase(0u)]

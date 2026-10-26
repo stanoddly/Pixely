@@ -150,7 +150,7 @@ A storage buffer's `StorageBufferUsage` says which stages may bind it, and bindi
 - `ComputeStorageRead` for `ComputePass.BindReadOnlyStorageBuffers`.
 - `ComputeStorageWrite` for a `StorageBufferReadWriteBinding` passed to `CommandBuffer.CreateComputePass`.
 
-`GpuMemorySystem.CreateStorageBuffer<T>(ReadOnlySpan<T>)` uploads the data and has the usage `GraphicsStorageRead`. `CreateStorageBuffer<T>(int length, StorageBufferUsage usage)` takes any combination of the three and uploads nothing, so its contents are undefined until a compute shader writes it or `UpdateStorageBuffer` fills it. A buffer that a compute pass writes and a fragment shader reads has `ComputeStorageWrite | GraphicsStorageRead`.
+`GpuMemorySystem.CreateStorageBuffer<T>(ReadOnlySpan<T>)` uploads the data and has the usage `GraphicsStorageRead`. `CreateStorageBuffer<T>(int length, StorageBufferUsage usage)` takes any combination of the three and uploads nothing, so its contents are undefined until a compute shader writes it or `UpdateStorageBuffer` fills it. A buffer that a compute pass writes and a fragment shader reads has `ComputeStorageWrite | GraphicsStorageRead`. Both methods throw `ArgumentOutOfRangeException` for a buffer under 4 bytes, which SDL rejects, or over `int.MaxValue` bytes.
 
 The reflection records the element size of a `StructuredBuffer<T>` and the runtime rejects a bound `GpuStorageBuffer<T>` whose element size differs. A `ByteAddressBuffer` has no element type, so its recorded size is 0 and the element-size check is skipped for its slot; any storage buffer may be bound to it.
 
