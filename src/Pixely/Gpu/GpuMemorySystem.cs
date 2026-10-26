@@ -94,7 +94,7 @@ public class GpuMemorySystem: ICopyPass
     /// <summary>Creates a storage buffer of <paramref name="length"/> elements with undefined contents, without an upload. A compute shader writes it, or <see cref="UpdateStorageBuffer{T}"/> fills it.</summary>
     public GpuStorageBuffer<T> CreateStorageBuffer<T>(int length, StorageBufferUsage usage) where T : unmanaged
     {
-        uint sizeBytes = GpuStorageBuffer<T>.ValidateSizeInBytes(length, nameof(length));
+        uint sizeBytes = GpuStorageBuffer<T>.ValidateAllocationSize(length, nameof(length));
 
         const StorageBufferUsage allUsages = StorageBufferUsage.GraphicsStorageRead | StorageBufferUsage.ComputeStorageRead | StorageBufferUsage.ComputeStorageWrite;
         if (usage == 0 || (usage & ~allUsages) != 0)

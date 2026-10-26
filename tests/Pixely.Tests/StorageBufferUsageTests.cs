@@ -31,12 +31,22 @@ public class StorageBufferUsageTests
         Assert.Throws<ArgumentOutOfRangeException>(() => gpuMemorySystem.CreateStorageBuffer<int>(1 << 29, StorageBufferUsage.ComputeStorageWrite));
     }
 
-    [Test]
-    public void CreateStorageBuffer_DataUnder4Bytes_Throws()
+    [TestCase(0)]
+    [TestCase(3)]
+    public void CreateStorageBuffer_DataUnder4Bytes_Throws(int length)
     {
         CopyPass copyPass = new(null!, default, null!);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => copyPass.CreateStorageBuffer<byte>(new byte[3]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => copyPass.CreateStorageBuffer<byte>(new byte[length]));
+    }
+
+    [TestCase(4, 4u)]
+    [TestCase(5, 8u)]
+    [TestCase(6, 8u)]
+    [TestCase(8, 8u)]
+    public void ValidateAllocationSize_RoundsUpToMultipleOf4(int length, uint expected)
+    {
+        Assert.That(GpuStorageBuffer<byte>.ValidateAllocationSize(length, "length"), Is.EqualTo(expected));
     }
 
     [TestCase(0u)]

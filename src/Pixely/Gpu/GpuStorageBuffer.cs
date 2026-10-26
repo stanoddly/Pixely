@@ -46,9 +46,10 @@ public class GpuStorageBuffer<T> : GpuStorageBuffer where T : unmanaged
     {
     }
 
-    // SDL rejects a buffer under 4 bytes in debug mode, and D3D12 views a storage buffer as 4-byte elements, so a smaller one
-    // has none. The upper limit keeps SizeInBytes, which the constructor computes as an int, from overflowing.
-    internal static uint ValidateSizeInBytes(int length, string paramName)
+    // SDL rejects a buffer under 4 bytes in debug mode, and D3D12 views a storage buffer as 4-byte elements, so it would not reach
+    // the last 1 to 3 bytes of another size: the allocation is rounded up to a multiple of 4, while SizeInBytes keeps the size
+    // asked for. The upper limit keeps SizeInBytes, which the constructor computes as an int, from overflowing.
+    internal static uint ValidateAllocationSize(int length, string paramName)
     {
         long sizeInBytes = (long)Unsafe.SizeOf<T>() * length;
         if (sizeInBytes < 4 || sizeInBytes > int.MaxValue)
@@ -57,7 +58,7 @@ public class GpuStorageBuffer<T> : GpuStorageBuffer where T : unmanaged
                 $"A storage buffer needs 4 to {int.MaxValue} bytes, but {length} elements of {Unsafe.SizeOf<T>()} bytes are {sizeInBytes} bytes.");
         }
 
-        return (uint)sizeInBytes;
+        return (uint)((sizeInBytes + 3) & ~3L);
     }
 
     public override void Dispose()
