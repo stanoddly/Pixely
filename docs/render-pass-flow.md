@@ -106,7 +106,7 @@ new RenderPassBuilder(commandBuffer)
 **ColorTargetSettings options:**
 - `Clear` - Clear the target before rendering
 - `Load` - Keep existing contents
-- Others may exist for different load/store operations
+- Other combinations: `new ColorTargetSettings { LoadOperation = ..., StoreOperation = ..., ClearColorValue = ... }`
 
 Add multiple color targets for deferred rendering (G-buffer). A pass takes at most 8 color targets, SDL's limit.
 
