@@ -869,14 +869,16 @@ public class GeneratorTests
         Assert.That(registration, Does.Contain("RegisterSpan<global::Position>();").And.Not.Contain("global::Mark"));
     }
 
-    // The open query already reports its invalid type argument where it is written, so AddSystem does not report it again.
-    [Test]
-    public void InvalidSpanOfAnOpenQueryIsReportedOnce()
+    // The open query already reports its invalid type argument where it is written, so AddSystem and World.Query do not report it again.
+    [TestCase("Query<Span<T>, int>", "")]
+    [TestCase("Of<T>", "sealed class Of<T> : Query<Span<T>, int> where T : struct; static class Reader { static void Read(World world) => world.Query<Of<Velocity>>(); }")]
+    public void InvalidSpanOfAnOpenQueryIsReportedOnce(string queryType, string declarations)
     {
-        string source = Components + """
+        string source = Components + declarations + $$"""
+
             sealed class Generic<T> : ISystem where T : struct
             {
-                public Generic(Query<Span<T>, int> query)
+                public Generic({{queryType}} query)
                 {
                 }
 
