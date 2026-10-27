@@ -43,33 +43,14 @@ internal sealed class InputAutomationCommandInterpreter
             return 0;
         }
 
-        ViewScope? viewScope = null;
         // An optional "@<n>" prefix picks the window by ViewScope value; the default scope needs none.
-        if (command[0] == '@')
+        command = AutomationCommandRegistry.SplitViewScope(command, out ViewScope? viewScope);
+        if (_commands.TryExecute(command, viewScope))
         {
-            int scopeEnd = 1;
-            while (scopeEnd < command.Length && !char.IsWhiteSpace(command[scopeEnd]))
-            {
-                scopeEnd++;
-            }
-
-            string scopeWord = command[1..scopeEnd];
-            if (!int.TryParse(scopeWord, NumberStyles.Integer, CultureInfo.InvariantCulture, out int scopeValue))
-            {
-                throw new FormatException($"invalid view scope '{scopeWord}'");
-            }
-
-            viewScope = new ViewScope(scopeValue);
-            command = command[scopeEnd..].TrimStart();
-        }
-
-        string[] words = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length > 0 && _commands.TryGet(words[0], out AutomationCommand? gameCommand))
-        {
-            gameCommand.Execute(command[words[0].Length..].Trim(), viewScope);
             return 0;
         }
 
+        string[] words = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         switch (words)
         {
             case ["wait", string frames]:
