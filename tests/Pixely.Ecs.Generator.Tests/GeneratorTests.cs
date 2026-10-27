@@ -872,6 +872,7 @@ public class GeneratorTests
     // The open query already reports its invalid type argument where it is written, so AddSystem and World.Query do not report it again.
     [TestCase("Query<Span<T>, int>", "")]
     [TestCase("Of<T>", "sealed class Of<T> : Query<Span<T>, int> where T : struct; static class Reader { static void Read(World world) => world.Query<Of<Velocity>>(); }")]
+    [TestCase("Of<T>", "class Of<T> : Query<Span<T>, int> where T : struct; sealed class Positions : Of<Position>;")]
     public void InvalidSpanOfAnOpenQueryIsReportedOnce(string queryType, string declarations)
     {
         string source = Components + declarations + $$"""
@@ -894,6 +895,23 @@ public class GeneratorTests
             """;
 
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS002" }));
+    }
+
+    // A referenced assembly is not scanned, so its query class reported nothing, and the closed query is reported where it is named.
+    [Test]
+    public void InvalidSpanOfAQueryFromAReferencedAssemblyIsReported()
+    {
+        CSharpCompilation external = CSharpCompilation.Create("External",
+            [CSharpSyntaxTree.ParseText("using System; using Pixely.Ecs; namespace External { public sealed class Of<T> : Query<Span<T>, int> where T : struct; }", ParseOptions)],
+            CreateReferences(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using MemoryStream image = new MemoryStream();
+        Assert.That(external.Emit(image).Success, Is.True);
+        CSharpCompilation compilation = CreateCompilation(Components + "static class Reader { static void Read(World world) => world.Query<External.Of<Position>>(); }")
+            .AddReferences(MetadataReference.CreateFromImage(image.ToArray()));
+
+        CreateDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out ImmutableArray<Diagnostic> diagnostics);
 
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS002" }));
     }
@@ -1019,18 +1037,21 @@ public class GeneratorTests
 
     private static CSharpCompilation CreateCompilation(params string[] sources)
     {
+        return CSharpCompilation.Create(
+            "TestAssembly",
+            sources.Select((source, index) => CSharpSyntaxTree.ParseText(source, ParseOptions, $"Source{index}.cs")),
+            CreateReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithNullableContextOptions(NullableContextOptions.Enable));
+    }
+
+    private static IEnumerable<MetadataReference> CreateReferences()
+    {
         string[] platformAssemblies = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
-        IEnumerable<MetadataReference> references = platformAssemblies
+        return platformAssemblies
             .Append(typeof(World).Assembly.Location)
             .Append(typeof(Pixely.DependencyInjection.ServiceCollection).Assembly.Location)
             .Append(typeof(IUpdatable).Assembly.Location)
             .Select(path => MetadataReference.CreateFromFile(path));
-
-        return CSharpCompilation.Create(
-            "TestAssembly",
-            sources.Select((source, index) => CSharpSyntaxTree.ParseText(source, ParseOptions, $"Source{index}.cs")),
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithNullableContextOptions(NullableContextOptions.Enable));
     }
 
     private static GeneratorDriver CreateDriver() =>

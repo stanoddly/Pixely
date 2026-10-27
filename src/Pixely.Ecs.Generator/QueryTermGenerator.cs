@@ -62,13 +62,14 @@ public class QueryTermGenerator : IIncrementalGenerator
         if (context.Node is ClassDeclarationSyntax declaration)
         {
             // A base that is Query<...> itself is handled where Query<...> is written, even in an alias, and a generic class is closed elsewhere.
-            if (context.SemanticModel.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol { IsGenericType: false, BaseType: { } baseType }
+            if (context.SemanticModel.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol { IsGenericType: false, BaseType: { } baseType } declared
                 || GeneratorSupport.IsQueryType(baseType) || GeneratorSupport.GetQueryBase(baseType) is not { } inherited)
             {
                 return null;
             }
 
-            return ExtractTerms(inherited, declaration.Identifier.GetLocation());
+            TermExtraction? terms = ExtractTerms(inherited, declaration.Identifier.GetLocation());
+            return terms?.Diagnostic is not null && IsReportedWhereWritten(declared, context.SemanticModel.Compilation) ? null : terms;
         }
 
         GenericNameSyntax syntax = (GenericNameSyntax)context.Node;
@@ -76,7 +77,7 @@ public class QueryTermGenerator : IIncrementalGenerator
         {
             INamedTypeSymbol type when GeneratorSupport.IsQueryType(type) => ExtractTerms(type, syntax.GetLocation()),
             IMethodSymbol { Name: "Query", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() is WorldName or BuilderName =>
-                ExtractClosedQueries(method.TypeArguments, syntax.GetLocation()),
+                ExtractClosedQueries(method.TypeArguments, context.SemanticModel.Compilation, syntax.GetLocation()),
             // nameof adds no system.
             IMethodSymbol { Name: "AddSystem", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == ExtensionsName
                 && method.TypeArguments[0] is INamedTypeSymbol system
@@ -87,9 +88,8 @@ public class QueryTermGenerator : IIncrementalGenerator
     }
 
     // The closed generic query classes among the types, such as Of<Position>. Query<...> itself is handled where it is written, and a
-    // non-generic query class through its declaration. A problem the open base already has is reported where the base is written, so only a problem
-    // that closing it adds is reported here.
-    private static TermExtraction? ExtractClosedQueries(IEnumerable<ITypeSymbol> types, Location location)
+    // non-generic query class through its declaration.
+    private static TermExtraction? ExtractClosedQueries(IEnumerable<ITypeSymbol> types, Compilation compilation, Location location)
     {
         List<TermRegistration> registrations = [];
         foreach (ITypeSymbol type in types)
@@ -103,7 +103,7 @@ public class QueryTermGenerator : IIncrementalGenerator
             TermExtraction? terms = ExtractTerms(queryBase, location);
             if (terms?.Diagnostic is not null)
             {
-                if (IsReportedWhereWritten(GeneratorSupport.GetQueryBase(query.OriginalDefinition)!, location))
+                if (IsReportedWhereWritten(query, compilation))
                 {
                     continue;
                 }
@@ -139,11 +139,11 @@ public class QueryTermGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // A problem the open query already has is reported where it is written, so only a problem that closing it adds is reported here.
+            // A problem the open query already has is reported where the system writes it, if the system is in this assembly.
             TermExtraction? terms = ExtractTerms(query, location);
             if (terms?.Diagnostic is not null)
             {
-                if (IsReportedWhereWritten(written, location))
+                if (SymbolEqualityComparer.Default.Equals(system.OriginalDefinition.ContainingAssembly, compilation.Assembly) && ExtractTerms(written, location)?.Diagnostic is not null)
                 {
                     continue;
                 }
@@ -154,7 +154,7 @@ public class QueryTermGenerator : IIncrementalGenerator
             registrations.AddRange(terms!.Value.Registrations);
         }
 
-        TermExtraction? closed = ExtractClosedQueries(others, location);
+        TermExtraction? closed = ExtractClosedQueries(others, compilation, location);
         if (closed?.Diagnostic is not null)
         {
             return closed;
@@ -168,7 +168,21 @@ public class QueryTermGenerator : IIncrementalGenerator
         return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
     }
 
-    private static bool IsReportedWhereWritten(INamedTypeSymbol written, Location location) => ExtractTerms(written, location)?.Diagnostic is not null;
+    // Whether the Query<...> base of a query class, as the class that writes it declares it, has a problem of its own, which is then reported where it
+    // is written. Only this assembly is scanned, so a base written in a referenced assembly reports nothing. A problem that closing the base adds, such
+    // as a span of a tag, is not its own, so it is reported where the base is closed.
+    private static bool IsReportedWhereWritten(INamedTypeSymbol query, Compilation compilation)
+    {
+        for (INamedTypeSymbol? current = query.OriginalDefinition; current is not null; current = current.BaseType?.OriginalDefinition)
+        {
+            if (current.BaseType is { } baseType && GeneratorSupport.IsQueryType(baseType))
+            {
+                return SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, compilation.Assembly) && ExtractTerms(baseType, Location.None)?.Diagnostic is not null;
+            }
+        }
+
+        return false;
+    }
 
     private static TermExtraction? ExtractTerms(INamedTypeSymbol query, Location location)
     {
