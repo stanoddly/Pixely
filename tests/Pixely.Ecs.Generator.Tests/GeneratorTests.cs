@@ -819,6 +819,83 @@ public class GeneratorTests
         Assert.That(diagnostics.Select(d => d.Id), Is.EquivalentTo(new[] { "PXECS002", "PXECS004" }));
     }
 
+    // Only the constructor the generated code calls counts, and nameof adds no system.
+    [Test]
+    public void QueriesOfAnUncalledConstructorOrANameofAreNotChecked()
+    {
+        string source = Components + """
+            public struct Mark : ITag;
+
+            sealed class Of<T> : Query<Span<T>> where T : struct;
+
+            sealed class S : ISystem
+            {
+                public S(Of<Position> positions)
+                {
+                }
+
+                private S(Of<Mark> marks)
+                {
+                }
+
+                public void Update()
+                {
+                }
+            }
+
+            sealed class Generic<T> : ISystem where T : struct
+            {
+                public Generic(Query<ReadOnlySpan<T>> reads)
+                {
+                }
+
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+
+                static string Name() => nameof(EcsServiceCollectionExtensions.AddSystem<Generic<Mark>>);
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, Compilation output) = Run(source);
+
+        Assert.That(diagnostics, Is.Empty);
+        string registration = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("QueryTerms.g.cs")).ToString();
+        Assert.That(registration, Does.Contain("RegisterSpan<global::Position>();").And.Not.Contain("global::Mark"));
+    }
+
+    // The open query already reports its invalid type argument where it is written, so AddSystem does not report it again.
+    [Test]
+    public void InvalidSpanOfAnOpenQueryIsReportedOnce()
+    {
+        string source = Components + """
+            sealed class Generic<T> : ISystem where T : struct
+            {
+                public Generic(Query<Span<T>, int> query)
+                {
+                }
+
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<Generic<Position>>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS002" }));
+    }
+
     [TestCase("public struct T : ITag; abstract class ComponentQuery<C> : Query<ReadOnlySpan<C>> where C : struct; sealed class Q : ComponentQuery<T>;")]
     [TestCase("sealed class Of<C> : Query<Span<C>> where C : struct; static class R { static void Read(World world) => world.Query<Of<Entity>>(); }")]
     public void InvalidSpanBehindAGenericBaseReportsDiagnostic(string declaration)

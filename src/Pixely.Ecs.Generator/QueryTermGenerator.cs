@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
@@ -76,8 +77,11 @@ public class QueryTermGenerator : IIncrementalGenerator
             INamedTypeSymbol type when GeneratorSupport.IsQueryType(type) => ExtractTerms(type, syntax.GetLocation()),
             IMethodSymbol { Name: "Query", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() is WorldName or BuilderName =>
                 ExtractClosedQueries(method.TypeArguments, syntax.GetLocation()),
+            // nameof adds no system.
             IMethodSymbol { Name: "AddSystem", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == ExtensionsName
-                && method.TypeArguments[0] is INamedTypeSymbol system => ExtractConstructorQueries(system, syntax.GetLocation()),
+                && method.TypeArguments[0] is INamedTypeSymbol system
+                && !syntax.Ancestors().OfType<InvocationExpressionSyntax>().Any(ancestor => context.SemanticModel.GetOperation(ancestor, cancellationToken) is INameOfOperation) =>
+                ExtractConstructorQueries(system, context.SemanticModel.Compilation, syntax.GetLocation()),
             _ => null
         };
     }
@@ -107,36 +111,37 @@ public class QueryTermGenerator : IIncrementalGenerator
         return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
     }
 
-    // The queries a system's constructor takes, read from the closed system type. A Query<...> written with a type parameter of the system, such as
-    // Query<Span<T>> in S<T>, is closed only here; one written closed is handled where it is written.
-    private static TermExtraction? ExtractConstructorQueries(INamedTypeSymbol system, Location location)
+    // The queries a system's constructor takes, read from the closed system type. Only the constructor the SystemGenerator calls counts, and without
+    // exactly one the SystemGenerator reports the system. A Query<...> written with a type parameter of the system, such as Query<Span<T>> in S<T>, is
+    // closed only here; one written closed is handled where it is written.
+    private static TermExtraction? ExtractConstructorQueries(INamedTypeSymbol system, Compilation compilation, Location location)
     {
-        if (GeneratorSupport.ContainsTypeParameter(system))
+        IMethodSymbol[] constructors = [.. system.InstanceConstructors.Where(constructor => compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))];
+        if (GeneratorSupport.ContainsTypeParameter(system) || constructors.Length != 1)
         {
             return null;
         }
 
-        List<INamedTypeSymbol> closedHere = [];
+        List<TermRegistration> registrations = [];
         List<ITypeSymbol> others = [];
-        foreach (IParameterSymbol parameter in system.InstanceConstructors.SelectMany(constructor => constructor.Parameters))
+        foreach (IParameterSymbol parameter in constructors[0].Parameters)
         {
-            bool isWrittenOpen = GeneratorSupport.ContainsTypeParameter(parameter.OriginalDefinition.Type);
-            if (isWrittenOpen && parameter.Type is INamedTypeSymbol query && GeneratorSupport.IsQueryType(query))
-            {
-                closedHere.Add(query);
-            }
-            else
+            if (parameter.OriginalDefinition.Type is not INamedTypeSymbol written || !GeneratorSupport.ContainsTypeParameter(written) || parameter.Type is not INamedTypeSymbol query
+                || !GeneratorSupport.IsQueryType(query))
             {
                 others.Add(parameter.Type);
+                continue;
             }
-        }
 
-        List<TermRegistration> registrations = [];
-        foreach (INamedTypeSymbol query in closedHere)
-        {
+            // A problem the open query already has is reported where it is written, so only a problem that closing it adds is reported here.
             TermExtraction? terms = ExtractTerms(query, location);
             if (terms?.Diagnostic is not null)
             {
+                if (ExtractTerms(written, location)?.Diagnostic is not null)
+                {
+                    continue;
+                }
+
                 return terms;
             }
 
@@ -153,6 +158,7 @@ public class QueryTermGenerator : IIncrementalGenerator
         {
             registrations.AddRange(closedTerms.Registrations);
         }
+
         return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
     }
 
