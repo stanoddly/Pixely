@@ -1,6 +1,6 @@
 namespace Pixely;
 
-/// <summary>Overrides <see cref="PixelyConfig"/> from environment variables so automation can switch an app to headless mode, another GPU backend or the low-power GPU, turn on diagnostics, or change the upload wait, without changing its code.</summary>
+/// <summary>Overrides <see cref="PixelyConfig"/> from environment variables so automation can switch an app to headless mode, another GPU backend or the low-power GPU, turn on diagnostics or the command console, or change the upload wait, without changing its code.</summary>
 internal static class PixelyConfigEnvironment
 {
     internal const string GpuBackendVariable = "PIXELY_GRAPHICS";
@@ -10,6 +10,7 @@ internal static class PixelyConfigEnvironment
     internal const string PreferLowPowerGpuVariable = "PIXELY_PREFER_LOW_POWER_GPU";
     internal const string DiagnosticsVariable = "PIXELY_DIAGNOSTICS";
     internal const string UploadWaitVariable = "PIXELY_UPLOAD_WAIT";
+    internal const string CommandConsoleVariable = "PIXELY_COMMAND_CONSOLE";
 
     public static void Apply(PixelyConfig config, Func<string, string?> getVariable)
     {
@@ -20,6 +21,7 @@ internal static class PixelyConfigEnvironment
         config.PreferLowPowerGpu = ResolveBoolean(config.PreferLowPowerGpu, PreferLowPowerGpuVariable, getVariable(PreferLowPowerGpuVariable));
         config.EnableDiagnostics = ResolveBoolean(config.EnableDiagnostics, DiagnosticsVariable, getVariable(DiagnosticsVariable));
         config.UploadWait = ResolveUploadWait(config.UploadWait, getVariable(UploadWaitVariable));
+        config.EnableCommandConsole = ResolveBoolean(config.EnableCommandConsole, CommandConsoleVariable, getVariable(CommandConsoleVariable));
     }
 
     internal static GpuBackend ResolveGpuBackend(GpuBackend configuredBackend, string? environmentBackend)

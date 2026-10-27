@@ -30,7 +30,8 @@ public sealed record PixelyConfig(
     bool Headless = false,
     bool PreferLowPowerGpu = false,
     bool EnableDiagnostics = false,
-    UploadWait UploadWait = UploadWait.Automatic)
+    UploadWait UploadWait = UploadWait.Automatic,
+    bool EnableCommandConsole = false)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
@@ -39,6 +40,7 @@ public sealed record PixelyConfig(
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
+    public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
 }
 #else
 public sealed record PixelyConfig(
@@ -51,7 +53,8 @@ public sealed record PixelyConfig(
     bool Headless = false,
     bool PreferLowPowerGpu = false,
     bool EnableDiagnostics = false,
-    UploadWait UploadWait = UploadWait.Automatic)
+    UploadWait UploadWait = UploadWait.Automatic,
+    bool EnableCommandConsole = false)
 {
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
@@ -60,5 +63,6 @@ public sealed record PixelyConfig(
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
+    public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
 }
 #endif

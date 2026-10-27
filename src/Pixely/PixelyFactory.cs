@@ -352,6 +352,18 @@ public partial class PixelyFactory: IDisposable
         return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl, frameTimingRecorder);
     }
 
+    // Headless mode reads standard input with its own console, so this one exists only outside it; a null result registers nothing.
+    [UnsupportedOSPlatform("browser")]
+    internal AutomationCommandConsole? CreateAutomationCommandConsole(AutomationCommandRegistry commands, AppControl appControl)
+    {
+        if (!_config.EnableCommandConsole || _config.Headless)
+        {
+            return null;
+        }
+
+        return new AutomationCommandConsole(commands, new StreamReader(Console.OpenStandardInput()), Console.Error, appControl);
+    }
+
     internal EventService CreateEventService(
         KeyboardService keyboardService,
         GamepadService gamepadService,

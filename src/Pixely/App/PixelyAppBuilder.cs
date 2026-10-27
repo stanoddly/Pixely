@@ -100,6 +100,8 @@ public class PixelyAppBuilder : ServiceCollection
         }
 #if !BROWSER
         AddSingleton<InputAutomationConsole, PixelyFactory>();
+        // PixelyConfig.EnableCommandConsole outside headless mode only; the factory returns null otherwise.
+        AddSingleton<AutomationCommandConsole, PixelyFactory>();
 #endif
 
         AddSingleton<GraphicsShaderProgramMetadataLoader>();

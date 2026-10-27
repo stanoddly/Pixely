@@ -63,9 +63,36 @@ stage.AddSingleton<AutomationCommand, SpawnCommand>();
 
 A command whose first word is the `Name` runs the game command, matched case-sensitively, in the same frame and order as the built-in commands around it. `Execute` receives the rest of the command after the name, trimmed, and parses it itself. It also receives the scope of an `@<n>` prefix, or null without one; the interpreter does not check that the scope has a window, so the command decides what the scope means and whether it accepts one. A game command cannot hold frames; a scenario uses `wait` for that. A game command reports a malformed command by throwing `FormatException`; any exception from `Execute` ends the app, the same as for a built-in command. A command that produces output writes it wherever it chooses, such as a file named in its arguments.
 
-A command is active from when its provider creates it until that provider disposes it: the app's commands for the whole run, a stage's commands from the stage's load until it is unloaded or reloaded. After that its name is an unknown command again. A failed build of the app or load of a stage disposes the commands it created, so their names are free again. Register commands as singletons: a transient command is created only when something resolves it, so the interpreter does not see it before then, and a second resolution creates a second command with the same name, which fails. The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode runs it.
+A command is active from when its provider creates it until that provider disposes it: the app's commands for the whole run, a stage's commands from the stage's load until it is unloaded or reloaded. After that its name is an unknown command again. A failed build of the app or load of a stage disposes the commands it created, so their names are free again. Register commands as singletons: a transient command is created only when something resolves it, so the interpreter does not see it before then, and a second resolution creates a second command with the same name, which fails. The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode or the command console (see below) runs it.
 
 A name is checked when the command is created, in every run. The `AutomationCommand` constructor throws `ArgumentException` for a name that is null or empty, contains whitespace or `;`, or starts with `@`, because it would never match, and for a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`), because one would hide the other. A command with the name of another active command, of the app or of the current stage, throws `InvalidOperationException` that names both types, so the build of the app or the load of the stage fails.
+
+### Game commands outside headless mode
+
+`PixelyConfig.EnableCommandConsole` runs game commands typed on standard input while the app runs normally, with its windows shown, physical input and the real clock, for example cheats while testing a game. A game usually turns it on and registers its cheats only in its own Debug build. An app that already registers a `PixelyConfig` passes the flag to that constructor instead of registering a second one, which would replace the first:
+
+```csharp
+#if DEBUG
+bool enableCommandConsole = true;
+builder.AddSingleton<AutomationCommand, GodModeCommand>();
+#else
+bool enableCommandConsole = false;
+#endif
+builder.AddSingleton(new PixelyConfig(ApplicationIdentifier: "com.example.game", EnableCommandConsole: enableCommandConsole));
+```
+
+With `GodModeCommand` named `god`, typing `god` and Enter in the terminal of `dotnet run` runs it in the next frame. `PIXELY_COMMAND_CONSOLE=1` turns the console on without a rebuild, also in a Release build, see [Environment variables](#environment-variables); there it runs only `quit` and the commands registered in every build, not the cheats.
+
+The console differs from headless mode:
+
+- A background thread reads the input, so a frame never waits for it. Each frame runs, at `UpdateOrders.Input`, the commands read since the frame before.
+- A newline ends a command as well as `;`, so a command is a line.
+- Only game commands, with an optional `@<n>`, and `quit` run. The built-in input, `screenshot` and `wait` commands are unknown commands here.
+- A malformed command, such as an unknown one, one with an invalid `@<n>` or one whose `Execute` throws `FormatException`, is written to standard error and the app goes on. Any other exception from `Execute` ends the app, the same as in headless mode.
+- The end of the input ends only the console; the app keeps running. A command left without its newline or `;` at the end still runs.
+- The reading thread starts with the first frame. A read it is blocked in cannot be cancelled, so the thread does not keep the process alive after the app ends.
+
+Headless mode reads standard input with its own console, so with `PixelyConfig.Headless` this setting does nothing. Neither console exists in the browser, which has no standard input, so the setting does nothing there either.
 
 ### Scenarios
 
@@ -127,6 +154,7 @@ The frame is also available to code through `OffscreenWindow.CaptureLastFrame()`
 | `PIXELY_GPU_VALIDATION` | `PixelyConfig.EnableGpuValidation` | `1`, `true`, `0`, `false` |
 | `PIXELY_DIAGNOSTICS` | `PixelyConfig.EnableDiagnostics` (see diagnostics.md) | `1`, `true`, `0`, `false` |
 | `PIXELY_UPLOAD_WAIT` | `PixelyConfig.UploadWait` (see window-rendering.md) | `automatic`, `on`, `off` |
+| `PIXELY_COMMAND_CONSOLE` | `PixelyConfig.EnableCommandConsole` | `1`, `true`, `0`, `false` |
 
 Values are trimmed and matched case-insensitively. An unset, empty, or whitespace-only variable leaves the configured value in effect. Any other value stops `Build()` with an `InvalidOperationException` that names the variable and lists the accepted values.
 

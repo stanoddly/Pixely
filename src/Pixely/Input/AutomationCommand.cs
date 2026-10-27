@@ -4,7 +4,8 @@ namespace Pixely.Input;
 
 /// <summary>
 /// A game's own command for the headless command grammar, registered through the service collection of the app or of a
-/// stage. It runs on the frame loop at <see cref="UpdateOrders.Input"/> like the built-in commands, and only in headless mode.
+/// stage. It runs on the frame loop at <see cref="UpdateOrders.Input"/> like the built-in commands, in headless mode or with
+/// <see cref="PixelyConfig.EnableCommandConsole"/>.
 /// </summary>
 public abstract class AutomationCommand
 {
@@ -35,7 +36,8 @@ public abstract class AutomationCommand
     /// <summary>
     /// Runs the command. <paramref name="arguments"/> is the rest of the command after its name, trimmed.
     /// <paramref name="viewScope"/> is the scope of an <c>@&lt;n&gt;</c> prefix, or null without one. Throw
-    /// <see cref="FormatException"/> for a malformed command; any exception ends the app.
+    /// <see cref="FormatException"/> for a malformed command: it ends the app in headless mode, and the command console reports it
+    /// and goes on. Any other exception ends the app.
     /// </summary>
     public abstract void Execute(string arguments, ViewScope? viewScope);
 }
