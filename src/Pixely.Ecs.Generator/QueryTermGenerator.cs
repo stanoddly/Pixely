@@ -87,7 +87,8 @@ public class QueryTermGenerator : IIncrementalGenerator
     }
 
     // The closed generic query classes among the types, such as Of<Position>. Query<...> itself is handled where it is written, and a
-    // non-generic query class through its declaration.
+    // non-generic query class through its declaration. A problem the open base already has is reported where the base is written, so only a problem
+    // that closing it adds is reported here.
     private static TermExtraction? ExtractClosedQueries(IEnumerable<ITypeSymbol> types, Location location)
     {
         List<TermRegistration> registrations = [];
@@ -102,6 +103,11 @@ public class QueryTermGenerator : IIncrementalGenerator
             TermExtraction? terms = ExtractTerms(queryBase, location);
             if (terms?.Diagnostic is not null)
             {
+                if (IsReportedWhereWritten(GeneratorSupport.GetQueryBase(query.OriginalDefinition)!, location))
+                {
+                    continue;
+                }
+
                 return terms;
             }
 
@@ -137,7 +143,7 @@ public class QueryTermGenerator : IIncrementalGenerator
             TermExtraction? terms = ExtractTerms(query, location);
             if (terms?.Diagnostic is not null)
             {
-                if (ExtractTerms(written, location)?.Diagnostic is not null)
+                if (IsReportedWhereWritten(written, location))
                 {
                     continue;
                 }
@@ -161,6 +167,8 @@ public class QueryTermGenerator : IIncrementalGenerator
 
         return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
     }
+
+    private static bool IsReportedWhereWritten(INamedTypeSymbol written, Location location) => ExtractTerms(written, location)?.Diagnostic is not null;
 
     private static TermExtraction? ExtractTerms(INamedTypeSymbol query, Location location)
     {
