@@ -1,6 +1,6 @@
 # ECS
 
-`Pixely.Ecs` is an experimental entity component system (ECS). Entities are ids, components are structs stored by type, and a query reads the components of every entity that matches it. A system names the queries it reads and the structural changes it makes in the type arguments of its `ISystem<...>`, which are its contract.
+`Pixely.Ecs` is an experimental entity component system (ECS). Entities are ids, components are structs stored by type, and a query reads the components of every entity that matches it. A system takes the queries it reads and the writers of the structural changes it makes in its constructor, and they are its contract.
 
 It is not in the Pixely package yet. Reference `src/Pixely.Ecs` and, as an analyzer, `src/Pixely.Ecs.Generator`, and allow the generator's interceptors:
 
@@ -92,19 +92,19 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
 
-The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that an `ISystem<...>` or `world.Query<T>()` names. A type argument that nothing registered throws when its query is created.
+The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that `world.Query<T>()` or `builder.Query<T>()` names, or that the constructor of a system added with `AddSystem<T>` takes. The generator reads that constructor from the type `AddSystem<T>` names, so a generic system's queries are closed with its type arguments. A type argument that nothing registered throws when its query is created.
 
-A system gets its queries through `Update`. Other code, such as a renderer, gets one from `world.Query<Movement>()`. The world creates one instance of each query class, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
+A system gets its queries through its constructor. Other code, such as a renderer, gets one from `world.Query<Movement>()`. The world creates one instance of each query class, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
 
-The generator checks the spans wherever `Query<...>` is written, and the filters of every query a system names. The world checks a query again when it creates it, and throws `InvalidOperationException` when the query requires no component, reads a component in two spans, reads a tag, or requires and excludes the same component.
+The generator checks the spans wherever `Query<...>` is written, and the filters of every query that the constructor of a system added with `AddSystem<T>` takes. The world checks a query again when it creates it, and throws `InvalidOperationException` when the query requires no component, reads a component in two spans, reads a tag, or requires and excludes the same component.
 
 While a query runs, `Destroy`, `Add` and `Remove` on the world throw `InvalidOperationException`, because they would move rows under the spans. `Create` is allowed, because a new entity has no components and every query requires one. The query ends when `foreach` ends, including on `break` or an exception.
 
 ## Systems
 
-A system implements `ISystem<...>`. Its type arguments are its contract, and the scheduler passes them to its `Update` once per update:
+A system implements `ISystem`, whose `Update` the scheduler calls once per update. Its constructor takes its contract, and any services it needs:
 
-| Type argument | What the system does |
+| Constructor parameter | What the system does |
 |----|----|
 | A query class or `Query<...>` | Reads and writes the components of its spans, and filters on its `IWith<...>` and `IWithout<...>`. |
 | `ComponentAdder<T>` | Adds `T` to entities. |
@@ -114,14 +114,14 @@ A system implements `ISystem<...>`. Its type arguments are its contract, and the
 | `ReadOnlyComponentLookup<T1, ...>` | Reads the components of its 1 to 8 type arguments of a given entity. |
 | A spawner class or `Spawner<...>` | Creates entities with the components of its type arguments and the tags of its `IWith<...>`. |
 
-The constructor takes only services from the service provider. A system without queries, lookups or writers implements `ISystem`, whose `Update` takes nothing.
+Any other constructor parameter is a service from the service provider.
 
 ```csharp
 internal sealed class Mortals : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Health>>, IWithout<Dead>;
 
-internal sealed class DeathSystem(ILogger logger) : ISystem<Mortals, ComponentAdder<Dead>>
+internal sealed class DeathSystem(Mortals mortals, ComponentAdder<Dead> dead, ILogger logger) : ISystem
 {
-    public void Update(Mortals mortals, ComponentAdder<Dead> dead)
+    public void Update()
     {
         foreach ((ReadOnlySpan<Entity> entities, ReadOnlySpan<Health> healths) in mortals)
         {
@@ -136,9 +136,9 @@ internal sealed class DeathSystem(ILogger logger) : ISystem<Mortals, ComponentAd
     }
 }
 
-internal sealed class MovementSystem : ISystem<Movement>
+internal sealed class MovementSystem(Movement movement) : ISystem
 {
-    public void Update(Movement movement)
+    public void Update()
     {
         foreach ((_, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
         {
@@ -154,9 +154,9 @@ internal record struct Target(Entity Value);
 
 internal sealed class Chasers : Query<Span<Velocity>, ReadOnlySpan<Position>, ReadOnlySpan<Target>>;
 
-internal sealed class ChaseSystem : ISystem<Chasers, ReadOnlyComponentLookup<Position>>
+internal sealed class ChaseSystem(Chasers chasers, ReadOnlyComponentLookup<Position> positions) : ISystem
 {
-    public void Update(Chasers chasers, ReadOnlyComponentLookup<Position> positions)
+    public void Update()
     {
         foreach ((Span<Velocity> velocities, ReadOnlySpan<Position> own, ReadOnlySpan<Target> targets) in chasers)
         {
@@ -173,10 +173,9 @@ internal sealed class ChaseSystem : ISystem<Chasers, ReadOnlyComponentLookup<Pos
 }
 ```
 
-- `ISystem<...>` takes 1 to 8 type arguments. A system implements exactly one `ISystem<...>` or `ISystem`.
-- The compiler checks `Update` against the type arguments, and the IDE's "Implement interface" writes it.
-- A writer records changes only during its system's `Update`. A writer kept past it throws `InvalidOperationException`, so a change cannot apply at a sync point nobody expects. A query has no such check, because renderers enumerate the same instance.
-- A lookup reads components only during its system's `Update`, and one kept past it throws `InvalidOperationException`. A lookup counts as naming `T`, so it sees the changes of earlier systems like a query does.
+- The contract parameters can come in any order, mixed with services.
+- A writer records changes only during its system's `Update`. Used in the constructor, or kept for a callback that runs later, it throws `InvalidOperationException`, so a change cannot apply at a sync point nobody expects. A query has no such check, because renderers enumerate the same instance.
+- A lookup reads components only during its system's `Update`. Used in the constructor, or kept for a callback that runs later, it throws `InvalidOperationException`. A lookup counts as naming `T`, so it sees the changes of earlier systems like a query does.
 - A lookup's indexer returns a reference, which stays valid until `Update` returns, because structural changes wait for the sync point. It throws for an entity that is not alive or has no `T`. `Has` returns `false` for an entity that is not alive, unlike `World.Has`, so it guards the indexer for an entity that may have been destroyed. `UnsafeGet` is the indexer without its checks, like `World.UnsafeGet`, and outside `Update` it throws `NullReferenceException`.
 - A lookup of several components finds the entity once for all of them. Its indexer returns `ComponentRefs<T1, ...>`, or `ReadOnlyComponentRefs<T1, ...>`, whose fields `Item1` to `Item8` are references to the components, because C# cannot deconstruct into references. `Has` returns `true` only for an entity that is alive and has all of them.
 
@@ -189,9 +188,9 @@ services.AddSystem<MovementSystem>();
 ```
 
 - `AddEcs` registers a `World` and a `SystemScheduler`. The scheduler is an `IUpdatable` at the default `UpdateOrder` and updates every system once per frame. A child collection that calls `AddEcs` keeps its parent's world and scheduler.
-- `AddSystem<T>` is intercepted by the generator, also through `?.`. The generated code registers `T` as a singleton of its own type, created with services for its constructor, and adds it to the scheduler with the queries and writers of its `ISystem<...>` when the provider creates it, before any `OnBuilt` callback runs. The scheduler records them as the contract.
+- `AddSystem<T>` is intercepted by the generator, also through `?.`. The generated code registers `T` as a singleton of its own type. When the provider creates it, before any `OnBuilt` callback runs, the generated code creates its queries, lookups and writers through a `SystemBuilder`, which records them as the contract, resolves its other parameters from the provider, and adds it to the scheduler.
 - Systems run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
-- A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS017 reports one that does.
+- A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS014 reports one that does.
 - A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
 
 ## Spawners
@@ -206,9 +205,9 @@ internal sealed class Bullets : Spawner<Position, Velocity, Damage>, IWith<Proje
 
 internal sealed class Shooters : Query<ReadOnlySpan<Position>, ReadOnlySpan<Aim>>;
 
-internal sealed class WeaponSystem : ISystem<Shooters, Bullets>
+internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 {
-    public void Update(Shooters shooters, Bullets bullets)
+    public void Update()
     {
         foreach ((ReadOnlySpan<Position> positions, ReadOnlySpan<Aim> aims) in shooters)
         {
@@ -223,7 +222,7 @@ internal sealed class WeaponSystem : ISystem<Shooters, Bullets>
 
 - The type arguments are components with data. A tag goes in `IWith<...>`, and `IWith<...>` names only tags. A spawner has no `IWithout<...>`.
 - A spawner spawns at least one component with data. An entity with only tags is created with `Create` and `Add`.
-- The scheduler creates one spawner for each system that names it, so a spawner class needs a public parameterless constructor. Its type arguments and `IWith<...>` are read once, when the first spawner of its type is created in a world.
+- The `SystemBuilder` creates one spawner for each system that takes it, so a spawner class needs a public parameterless constructor. Its type arguments and `IWith<...>` are read once, when the first spawner of its type is created in a world.
 - A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
 - `Spawn` keeps each component in its own list, and the sync point copies each list into its array.
 
@@ -251,20 +250,21 @@ Changes through a `Span<T>` are not structural. Later systems see them at once.
 
 ## Without dependency injection
 
-`SystemScheduler.Add` takes a system that is already created. For an `ISystem<...>`, the generator intercepts the call like `AddSystem`, so tests need nothing else:
+`SystemScheduler.Add` takes a function that creates the system with the queries, lookups and writers of a `SystemBuilder`, which records them as the contract. It needs no generated code, so tests need nothing else:
 
 ```csharp
 World world = new World();
 SystemScheduler scheduler = new SystemScheduler(world);
-scheduler.Add(new DeathSystem(NullLogger.Instance));
-scheduler.Add(new MovementSystem());
+scheduler.Add(builder => new DeathSystem(builder.Query<Mortals>(), builder.ComponentAdder<Dead>(), NullLogger.Instance));
+scheduler.Add(builder => new MovementSystem(builder.Query<Movement>()));
 
 scheduler.Update();
 ```
 
-- An `ISystem` needs no generated code, so `Add` works for it without the generator.
+- The builder works only during the function. A builder kept and used later throws `InvalidOperationException`.
+- A system without queries, lookups or writers can be passed as it is, as in `scheduler.Add(new TimerSystem())`.
 - `Add` returns the system. `Remove` takes a system out; a system added or removed during `Update` takes effect from the next `Update`.
-- The generated code calls an overload of `Add` that also takes a function of a `SystemBuilder` and an order from `SystemScheduler.ReserveOrder()`. The function creates the queries and writers once, which the builder records as the contract, and returns the call of `Update` with them. The builder works only during that call. The scheduler runs its systems sorted by order, and `AddSystem` reserves the order when it is called, because the provider does not create singletons in call order.
+- The generated code of `AddSystem` calls an overload of `Add` that also takes an order from `SystemScheduler.ReserveOrder()`. The scheduler runs its systems sorted by order, and `AddSystem` reserves the order when it is called, because the provider does not create singletons in call order.
 
 ## Diagnostics
 
@@ -272,26 +272,25 @@ The generator fails the build on these:
 
 | Id | Rule |
 |----|------|
-| PXECS001 | A query that a system names is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
+| PXECS001 | A query that the constructor of a system takes is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
 | PXECS002 | Each type argument of `Query<...>` is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct` or a tag, or `ReadOnlySpan<Entity>`. |
 | PXECS003 | No component appears in two type arguments of `Query<...>`. |
 | PXECS004 | A query requires at least one component through `Span<T>`, `ReadOnlySpan<T>` or `IWith<...>`. |
 | PXECS005 | No component is both required and excluded by a query. |
-| PXECS006 | A spawner that a system names is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
+| PXECS006 | A spawner that the constructor of a system takes is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
 | PXECS007 | A type argument of a spawner is not `Entity` or a tag. |
 | PXECS008 | A spawner names no component twice in its type arguments and `IWith<...>`, and a lookup none in its type arguments. |
 | PXECS009 | The `IWith<...>` of a spawner names only tags, and a spawner has no `IWithout<...>`. |
-| PXECS010 | `AddSystem<T>` and `SystemScheduler.Add` take a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. `SystemScheduler.Add` also takes a type parameter, unless its constraints make it an `ISystem<...>`, which only an intercepted call can add. |
+| PXECS010 | `AddSystem<T>` takes a concrete class without type parameters that the whole assembly can access, so not `private`, `protected` or `file`-local. |
 | PXECS011 | The system of `AddSystem<T>` has exactly one `public` or `internal` constructor. The generated code calls it from outside the system. |
 | PXECS012 | The constructor has no `ref` or `out` parameter, because the generated code creates every argument for the call. |
-| PXECS013 | The constructor takes no query, writer or lookup. They go in the system's `ISystem<...>`, which passes them to `Update`. |
-| PXECS014 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
-| PXECS015 | A system implements exactly one of `ISystem` and `ISystem<...>`. |
-| PXECS016 | Each type argument of `ISystem<...>` is a query, a spawner, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer`, `ComponentLookup<...>` or `ReadOnlyComponentLookup<...>`. |
-| PXECS017 | A system does not implement `IUpdatable`, which would update it a second time. |
-| PXECS018 | `AddSystem<T>` and `SystemScheduler.Add` are called where the generator can intercept them, and not used as method groups, such as `Action add = services.AddSystem<T>;`, or they would throw. A method group of `SystemScheduler.Add` for an `ISystem` is allowed. |
+| PXECS013 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
+| PXECS014 | A system does not implement `IUpdatable`, which would update it a second time. |
+| PXECS015 | `AddSystem<T>` is called where the generator can intercept it, and not used as a method group, such as `Action add = services.AddSystem<T>;`, or it would throw. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries a system names. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners a system names, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups a system names too, and `SystemBuilder` checks it again when it creates a lookup.
+PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
+
+`AddSystem<T>` requires `T` to be a class that implements `ISystem`, which the compiler checks.
 
 ## Not supported yet
 

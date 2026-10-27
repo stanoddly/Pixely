@@ -8,20 +8,17 @@ public sealed class SystemScheduler : IUpdatable
 {
     private sealed class SystemEntry
     {
-        public SystemEntry(object system, long order, Action update, SystemContract contract, CommandBuffer commands)
+        public SystemEntry(ISystem system, long order, SystemContract contract, CommandBuffer commands)
         {
             System = system;
             Order = order;
-            Update = update;
             Contract = contract;
             Commands = commands;
         }
 
-        public object System { get; }
+        public ISystem System { get; }
 
         public long Order { get; }
-
-        public Action Update { get; }
 
         public SystemContract Contract { get; }
 
@@ -43,39 +40,32 @@ public sealed class SystemScheduler : IUpdatable
         _world = world;
     }
 
-    // Adds an ISystem. For an ISystem<...>, the Pixely.Ecs generator intercepts this call and passes the queries and writers of its type arguments.
-    // A system added during Update runs from the next Update.
-    public TSystem Add<TSystem>(TSystem system) where TSystem : class
-    {
-        if (system is not ISystem)
-        {
-            throw new InvalidOperationException(
-                $"Add({typeof(TSystem).Name}) was not intercepted by the source generator, which an ISystem<...> needs. Reference Pixely.Ecs.Generator as an analyzer and add Pixely.Ecs.Generated to InterceptorsNamespaces.");
-        }
+    // Adds a system created without queries, lookups or writers, so its contract is empty. A system added during Update runs from the next Update.
+    public TSystem Add<TSystem>(TSystem system) where TSystem : class, ISystem => Add(_ => system, ReserveOrder());
 
-        return Add(system, static _ => static system => ((ISystem)system).Update(), ReserveOrder());
-    }
+    // Adds the system that create returns. create passes the system the queries, lookups and writers it gets from the builder, which records them as
+    // the system's contract. A system added during Update runs from the next Update.
+    public TSystem Add<TSystem>(Func<SystemBuilder, TSystem> create) where TSystem : class, ISystem => Add(create, ReserveOrder());
 
     // An order number for a system, unique in the process and larger than every earlier one. AddSystem's generated code takes it when AddSystem is called,
     // because the provider creates singletons grouped by type, and earlier when another service needs one, so creation order is not call order.
     public static long ReserveOrder() => Interlocked.Increment(ref s_lastOrder);
 
-    // bind creates the system's queries and writers through the builder, which records them as its contract, and returns the call of its Update with them.
-    // The system runs among the others by its order from ReserveOrder. The generated code of Add and AddSystem calls it.
-    public TSystem Add<TSystem>(TSystem system, Func<SystemBuilder, Action<TSystem>> bind, long order) where TSystem : class
+    // As Add(create), but the system runs among the others by its order from ReserveOrder. The generated code of AddSystem calls it.
+    public TSystem Add<TSystem>(Func<SystemBuilder, TSystem> create, long order) where TSystem : class, ISystem
     {
         SystemBuilder builder = new SystemBuilder(_world);
-        Action<TSystem> update;
+        TSystem system;
         try
         {
-            update = bind(builder);
+            system = create(builder);
         }
         finally
         {
             builder.Close();
         }
 
-        _entries.Add(new SystemEntry(system, order, () => update(system), builder.Contract, builder.Commands));
+        _entries.Add(new SystemEntry(system, order, builder.Contract, builder.Commands));
         _planIsStale = true;
         return system;
     }
@@ -112,13 +102,14 @@ public sealed class SystemScheduler : IUpdatable
                 segmentStart = i;
             }
 
-            // A writer records only while its system updates, so one kept past Update throws instead of applying its change at an unexpected sync point.
+            // A writer records only while its system updates, so one used in the constructor or kept for a callback throws instead of applying its change at
+            // an unexpected sync point.
             // When a system throws, the commands recorded since the last sync point are dropped, so no later sync point applies them, and a spawn's
             // reserved entity is released.
             entry.Commands.IsRecording = true;
             try
             {
-                entry.Update();
+                entry.System.Update();
             }
             catch
             {

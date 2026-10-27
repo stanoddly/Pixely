@@ -4,9 +4,9 @@ namespace Pixely.Ecs.Tests;
 
 public class SystemSchedulerTests
 {
-    internal sealed class Killer : ISystem<Movement, ComponentAdder<Dead>>
+    internal sealed class Killer(Movement movement, ComponentAdder<Dead> dead) : ISystem
     {
-        public void Update(Movement movement, ComponentAdder<Dead> dead)
+        public void Update()
         {
             foreach ((ReadOnlySpan<Entity> entities, _, _) in movement)
             {
@@ -18,11 +18,11 @@ public class SystemSchedulerTests
         }
     }
 
-    internal sealed class CorpseCounter : ISystem<Corpses>
+    internal sealed class CorpseCounter(Corpses corpses) : ISystem
     {
         public int Count { get; private set; }
 
-        public void Update(Corpses corpses)
+        public void Update()
         {
             Count = 0;
             foreach (Columns<ReadOnlySpan<Entity>> columns in corpses)
@@ -33,13 +33,22 @@ public class SystemSchedulerTests
     }
 
     // Reads the world directly, which a real system does not, to see whether a change has been applied yet. Its query only adds to its contract.
-    internal sealed class DeadProbe(World world, Entity entity) : ISystem<Movement>
+    internal sealed class DeadProbe : ISystem
     {
+        private readonly World _world;
+        private readonly Entity _entity;
+
+        public DeadProbe(World world, Entity entity, Movement movement)
+        {
+            _world = world;
+            _entity = entity;
+        }
+
         public bool SawDead { get; private set; }
 
-        public void Update(Movement movement)
+        public void Update()
         {
-            SawDead = world.Has<Dead>(entity);
+            SawDead = _world.Has<Dead>(_entity);
         }
     }
 
@@ -52,7 +61,7 @@ public class SystemSchedulerTests
         World world = new World();
         Entity entity = CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new Killer());
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
 
         scheduler.Update();
 
@@ -66,8 +75,8 @@ public class SystemSchedulerTests
         CreateMoving(world);
         CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new Killer());
-        CorpseCounter counter = scheduler.Add(new CorpseCounter());
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
 
         scheduler.Update();
 
@@ -80,8 +89,8 @@ public class SystemSchedulerTests
         World world = new World();
         Entity entity = CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new Killer());
-        DeadProbe probe = scheduler.Add(new DeadProbe(world, entity));
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        DeadProbe probe = scheduler.Add(builder => new DeadProbe(world, entity, builder.Query<Movement>()));
 
         scheduler.Update();
 
@@ -95,8 +104,8 @@ public class SystemSchedulerTests
         World world = new World();
         CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
-        CorpseCounter counter = scheduler.Add(new CorpseCounter());
-        scheduler.Add(new Killer());
+        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
 
         scheduler.Update();
         Assert.That(counter.Count, Is.Zero);
@@ -112,7 +121,7 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity spawned = default;
         bool aliveDuringUpdate = true;
-        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
         {
             spawned = spawner.Spawn(new Position(1, 2), new Velocity(3, 4));
             names.Add(spawned, new Name("spawned"));
@@ -135,7 +144,7 @@ public class SystemSchedulerTests
         world.Add(existing, new Position());
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
         {
             spawned.Add(spawner.Spawn(new Position(1, 0), default));
             spawned.Add(spawner.Spawn(new Position(2, 0), default));
@@ -159,7 +168,7 @@ public class SystemSchedulerTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity spawned = default;
-        scheduler.Add(new ActionSystem<Spawner<Name, Position, Velocity>>(spawner => spawned = spawner.Spawn(new Name("a"), new Position(5, 6), new Velocity(7, 8))));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Name, Position, Velocity>>(), spawner => spawned = spawner.Spawn(new Name("a"), new Position(5, 6), new Velocity(7, 8))));
 
         scheduler.Update();
 
@@ -174,8 +183,8 @@ public class SystemSchedulerTests
         World world = new World();
         Entity entity = CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<EntityDestroyer>(destroyer => destroyer.Destroy(entity)));
-        scheduler.Add(new ActionSystem<ComponentAdder<Dead>, ComponentRemover<Position>, EntityDestroyer>((dead, positions, destroyer) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Position>(), builder.EntityDestroyer(), (dead, positions, destroyer) =>
         {
             dead.Add(entity, new Dead());
             positions.Remove(entity);
@@ -193,7 +202,7 @@ public class SystemSchedulerTests
         Entity entity = world.Create();
         world.Add(entity, new Name("old"));
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<ComponentAdder<Name>>(names => names.Add(entity, new Name("new"))));
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names => names.Add(entity, new Name("new"))));
 
         scheduler.Update();
 
@@ -207,8 +216,8 @@ public class SystemSchedulerTests
         Entity entity = world.Create();
         world.Add(entity, new Dead());
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<EntityDestroyer>(destroyer => destroyer.Destroy(entity)));
-        CorpseCounter counter = scheduler.Add(new CorpseCounter());
+        scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
+        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
 
         scheduler.Update();
 
@@ -277,7 +286,7 @@ public class SystemSchedulerTests
         world.Add(existing, new Position(7, 7));
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             spawned.Clear();
             for (int i = 0; i < count; i++)
@@ -306,7 +315,7 @@ public class SystemSchedulerTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         WeakReference spawned = null!;
-        scheduler.Add(new ActionSystem<Spawner<Name>>(spawner => spawned = SpawnName(spawner)));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Name>>(), spawner => spawned = SpawnName(spawner)));
 
         UpdateWhileAQueryRuns(world, scheduler);
         GC.Collect();
@@ -323,7 +332,7 @@ public class SystemSchedulerTests
         Entity entity = world.Create();
         SystemScheduler scheduler = new SystemScheduler(world);
         bool record = true;
-        scheduler.Add(new ActionSystem<MovingSpawner, ComponentAdder<Name>>((spawner, names) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
         {
             if (record)
             {
@@ -344,9 +353,9 @@ public class SystemSchedulerTests
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<FrozenSpawner>(earlier => earlier.Spawn(default)));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<FrozenSpawner>(), earlier => earlier.Spawn(default)));
         List<Entity> recorded = [];
-        scheduler.Add(new ActionSystem<MovingSpawner>(later => recorded.Add(later.Spawn(default, default))));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), later => recorded.Add(later.Spawn(default, default))));
 
         UpdateWhileAQueryRuns(world, scheduler);
         scheduler.Update();
@@ -372,8 +381,8 @@ public class SystemSchedulerTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         int count = -1;
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner => spawner.Spawn(default, default)));
-        scheduler.Add(new ActionSystem<Movement>(movement =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(default, default)));
+        scheduler.Add(builder => ActionSystem.Of(builder.Query<Movement>(), movement =>
         {
             count = 0;
             foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> columns in movement)
@@ -395,8 +404,8 @@ public class SystemSchedulerTests
         world.Add(entity, new Position());
         SystemScheduler scheduler = new SystemScheduler(world);
         int visible = -1;
-        scheduler.Add(new ActionSystem<ComponentAdder<Frozen>>(frozen => frozen.Add(entity, new Frozen())));
-        scheduler.Add(new ActionSystem<UnfrozenPositions>(positions =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Frozen>(), frozen => frozen.Add(entity, new Frozen())));
+        scheduler.Add(builder => ActionSystem.Of(builder.Query<UnfrozenPositions>(), positions =>
         {
             visible = 0;
             foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> columns in positions)
@@ -417,14 +426,14 @@ public class SystemSchedulerTests
         CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
         Position seen = default;
-        scheduler.Add(new ActionSystem<Movement>(movement =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Query<Movement>(), movement =>
         {
             foreach ((_, Span<Position> positions, _) in movement)
             {
                 positions[0] = new Position(7, 8);
             }
         }));
-        scheduler.Add(new ActionSystem<Positions>(positions =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Query<Positions>(), positions =>
         {
             foreach (Columns<ReadOnlySpan<Position>> columns in positions)
             {
@@ -445,7 +454,7 @@ public class SystemSchedulerTests
         world.Add(present, new Position());
         Entity absent = world.Create();
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<ComponentRemover<Position>>(remover =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentRemover<Position>(), remover =>
         {
             remover.Remove(present);
             remover.Remove(absent);
@@ -464,7 +473,7 @@ public class SystemSchedulerTests
         Entity addedLast = world.Create();
         world.Add(addedLast, new Dead());
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<ComponentAdder<Dead>, ComponentRemover<Dead>>((adder, remover) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Dead>(), (adder, remover) =>
         {
             adder.Add(removedLast, new Dead());
             remover.Remove(removedLast);
@@ -498,11 +507,11 @@ public class SystemSchedulerTests
     {
         SystemScheduler scheduler = new SystemScheduler(new World());
         SystemBuilder builder = null!;
-        scheduler.Add(new ActionSystem(() => { }), created =>
+        scheduler.Add(created =>
         {
             builder = created;
-            return static system => system.Update();
-        }, SystemScheduler.ReserveOrder());
+            return new ActionSystem(() => { });
+        });
 
         Assert.Throws<InvalidOperationException>(() => builder.ComponentAdder<Dead>());
     }
@@ -516,14 +525,14 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         bool fail = true;
         Entity spawned = default;
-        scheduler.Add(new ActionSystem<ComponentAdder<Name>>(names =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names =>
         {
             if (fail)
             {
                 names.Add(entity, new Name("dropped"));
             }
         }));
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             if (fail)
             {
@@ -557,8 +566,8 @@ public class SystemSchedulerTests
         bool fail = true;
         Entity spawned = default;
         ComponentAdder<Name> keptNames = null!;
-        scheduler.Add(new Killer());
-        scheduler.Add(new ActionSystem<Corpses, ComponentAdder<Name>, MovingSpawner>((_, names, spawner) =>
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        scheduler.Add(builder => ActionSystem.Of(builder.Query<Corpses>(), builder.ComponentAdder<Name>(), builder.Spawner<MovingSpawner>(), (_, names, spawner) =>
         {
             keptNames = names;
             if (fail)
@@ -589,7 +598,7 @@ public class SystemSchedulerTests
         SystemScheduler scheduler = new SystemScheduler(world);
         ComponentAdder<Dead> keptAdder = null!;
         MovingSpawner keptSpawner = null!;
-        scheduler.Add(new ActionSystem<ComponentAdder<Dead>, MovingSpawner>((dead, spawner) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.Spawner<MovingSpawner>(), (dead, spawner) =>
         {
             keptAdder = dead;
             keptSpawner = spawner;
@@ -602,6 +611,35 @@ public class SystemSchedulerTests
         Assert.That(world.Has<Dead>(entity), Is.False);
     }
 
+    // A system gets its writers and lookups in its constructor, but they work only during its Update.
+    [Test]
+    public void WriterOrLookupUsedWhileItsSystemIsCreatedThrows()
+    {
+        World world = new World();
+        Entity entity = CreateMoving(world);
+        SystemScheduler scheduler = new SystemScheduler(world);
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        {
+            builder.ComponentAdder<Dead>().Add(entity, new Dead());
+            return new ActionSystem(() => { });
+        }));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        {
+            builder.Spawner<MovingSpawner>().Spawn(default, default);
+            return new ActionSystem(() => { });
+        }));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        {
+            _ = builder.ReadOnlyComponentLookup<Position>().Has(entity);
+            return new ActionSystem(() => { });
+        }));
+        scheduler.Update();
+
+        Assert.That(world.Has<Dead>(entity), Is.False);
+        Assert.That(CountPositions(world), Is.EqualTo(1));
+    }
+
     [Test]
     public void LookupReadsAndWritesTheComponentsOfAGivenEntity()
     {
@@ -611,7 +649,7 @@ public class SystemSchedulerTests
         Entity still = world.Create();
         world.Add(still, new Position(5, 5));
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>((positions, velocities) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), (positions, velocities) =>
         {
             foreach (Entity entity in (Entity[])[moving, still])
             {
@@ -636,8 +674,8 @@ public class SystemSchedulerTests
         Entity entity = CreateMoving(world);
         SystemScheduler scheduler = new SystemScheduler(world);
         bool sawDead = false;
-        scheduler.Add(new Killer());
-        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Dead>>(dead => sawDead = dead.Has(entity)));
+        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Dead>(), dead => sawDead = dead.Has(entity)));
 
         scheduler.Update();
 
@@ -652,7 +690,7 @@ public class SystemSchedulerTests
         world.Destroy(entity);
         SystemScheduler scheduler = new SystemScheduler(world);
         bool has = true;
-        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Position>>(positions => has = positions.Has(entity)));
+        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position>(), positions => has = positions.Has(entity)));
 
         scheduler.Update();
 
@@ -666,7 +704,7 @@ public class SystemSchedulerTests
         Entity entity = CreateMoving(world);
         world.Get<Velocity>(entity) = new Velocity(1, 2);
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new ActionSystem<ComponentLookup<Position, Velocity>>(lookup =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position, Velocity>(), lookup =>
         {
             ComponentRefs<Position, Velocity> components = lookup[entity];
             components.Item1 = new Position(components.Item1.X + components.Item2.X, components.Item1.Y + components.Item2.Y);
@@ -691,7 +729,7 @@ public class SystemSchedulerTests
         world.Destroy(destroyed);
         SystemScheduler scheduler = new SystemScheduler(world);
         bool[] has = [];
-        scheduler.Add(new ActionSystem<ReadOnlyComponentLookup<Position, Frozen>>(lookup =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position, Frozen>(), lookup =>
         {
             has = [lookup.Has(frozen), lookup.Has(moving), lookup.Has(destroyed)];
             Assert.Throws<InvalidOperationException>(() => { _ = lookup[moving]; });
@@ -703,17 +741,17 @@ public class SystemSchedulerTests
         Assert.That(has, Is.EqualTo(new[] { true, false, false }));
     }
 
-    // The generator reports the lookup of a system, so the builder sees one only from code that calls it directly.
+    // The generator reports the lookup of a system added with AddSystem, so the builder sees one only from code that calls it directly.
     [Test]
     public void LookupNamingAComponentTwiceThrows()
     {
         SystemScheduler scheduler = new SystemScheduler(new World());
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => scheduler.Add(new ActionSystem(() => { }), builder =>
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
         {
             builder.ReadOnlyComponentLookup<Position, Velocity, Position>();
-            return static system => system.Update();
-        }, SystemScheduler.ReserveOrder()));
+            return new ActionSystem(() => { });
+        }));
 
         Assert.That(exception.Message, Is.EqualTo("The lookup ReadOnlyComponentLookup<Position, Velocity, Position> names Position more than once."));
     }
@@ -727,7 +765,7 @@ public class SystemSchedulerTests
         ComponentLookup<Position> keptPositions = null!;
         ReadOnlyComponentLookup<Velocity> keptVelocities = null!;
         ReadOnlyComponentLookup<Position, Velocity> keptBoth = null!;
-        scheduler.Add(new ActionSystem<ComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>, ReadOnlyComponentLookup<Position, Velocity>>((positions, velocities, both) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), builder.ReadOnlyComponentLookup<Position, Velocity>(), (positions, velocities, both) =>
         {
             keptPositions = positions;
             keptVelocities = velocities;

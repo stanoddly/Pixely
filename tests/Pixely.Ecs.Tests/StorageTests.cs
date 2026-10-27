@@ -93,7 +93,7 @@ public class StorageTests
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
         int count = 3;
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             for (int i = 0; i < count; i++)
             {
@@ -116,7 +116,7 @@ public class StorageTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         List<Entity> spawned = [];
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             for (int i = 0; i < 10000; i++)
             {

@@ -15,8 +15,10 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
         commands.AddSource(this);
     }
 
+    // Checks before storing anything, so a call outside Update that the caller catches leaves nothing behind.
     public void Add(Entity entity, T component)
     {
+        _commands.ThrowIfNotRecording();
         _values.Add(component);
         _commands.Record(this, _entities.Add(entity));
     }
@@ -61,7 +63,11 @@ public sealed class ComponentRemover<T> : IRecordedCommands where T : struct
         commands.AddSource(this);
     }
 
-    public void Remove(Entity entity) => _commands.Record(this, _entities.Add(entity));
+    public void Remove(Entity entity)
+    {
+        _commands.ThrowIfNotRecording();
+        _commands.Record(this, _entities.Add(entity));
+    }
 
     void IRecordedCommands.Apply(World world, int first, int count)
     {
@@ -90,7 +96,11 @@ public sealed class EntityDestroyer : IRecordedCommands
         commands.AddSource(this);
     }
 
-    public void Destroy(Entity entity) => _commands.Record(this, _entities.Add(entity));
+    public void Destroy(Entity entity)
+    {
+        _commands.ThrowIfNotRecording();
+        _commands.Record(this, _entities.Add(entity));
+    }
 
     void IRecordedCommands.Apply(World world, int first, int count)
     {

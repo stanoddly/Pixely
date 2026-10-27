@@ -1,6 +1,6 @@
 namespace Pixely.Ecs;
 
-// What a system's ISystem<...> declares: the components its queries and lookups name and the structural changes its writers make.
+// What a system's constructor declares: the components its queries and lookups name and the structural changes its writers make.
 internal sealed class SystemContract
 {
     public HashSet<int> Touched { get; } = [];

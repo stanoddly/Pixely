@@ -33,7 +33,7 @@ public class TagGenerator : IIncrementalGenerator
         // Fields include auto-property backing fields and captured primary constructor parameters.
         bool holdsData = type.GetMembers().Any(member => member is IFieldSymbol { IsStatic: false, IsConst: false });
         return holdsData
-            ? GeneratorSupport.CreateDiagnostic("PXECS014", $"The tag {type.Name} must have no instance fields, because a tag has no column and its data would be dropped.", syntax.Identifier.GetLocation())
+            ? GeneratorSupport.CreateDiagnostic("PXECS013", $"The tag {type.Name} must have no instance fields, because a tag has no column and its data would be dropped.", syntax.Identifier.GetLocation())
             : null;
     }
 }

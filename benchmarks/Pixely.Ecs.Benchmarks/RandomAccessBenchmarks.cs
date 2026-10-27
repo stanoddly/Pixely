@@ -8,11 +8,11 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class RandomAccessBenchmarks
 {
-    internal sealed class LookupSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position>>
+    internal sealed class LookupSystem(Entity[] entities, ReadOnlyComponentLookup<Position> positions) : ISystem
     {
         public float Sum { get; private set; }
 
-        public void Update(ReadOnlyComponentLookup<Position> positions)
+        public void Update()
         {
             float sum = 0;
             foreach (Entity entity in entities)
@@ -24,11 +24,11 @@ public class RandomAccessBenchmarks
         }
     }
 
-    internal sealed class TwoLookupsSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position>, ReadOnlyComponentLookup<Velocity>>
+    internal sealed class TwoLookupsSystem(Entity[] entities, ReadOnlyComponentLookup<Position> positions, ReadOnlyComponentLookup<Velocity> velocities) : ISystem
     {
         public float Sum { get; private set; }
 
-        public void Update(ReadOnlyComponentLookup<Position> positions, ReadOnlyComponentLookup<Velocity> velocities)
+        public void Update()
         {
             float sum = 0;
             foreach (Entity entity in entities)
@@ -40,11 +40,11 @@ public class RandomAccessBenchmarks
         }
     }
 
-    internal sealed class PairLookupSystem(Entity[] entities) : ISystem<ReadOnlyComponentLookup<Position, Velocity>>
+    internal sealed class PairLookupSystem(Entity[] entities, ReadOnlyComponentLookup<Position, Velocity> lookup) : ISystem
     {
         public float Sum { get; private set; }
 
-        public void Update(ReadOnlyComponentLookup<Position, Velocity> lookup)
+        public void Update()
         {
             float sum = 0;
             foreach (Entity entity in entities)
@@ -82,11 +82,11 @@ public class RandomAccessBenchmarks
         _pixelyEntities = order.Select(i => _pixelyEntities[i]).ToArray();
         _archEntities = order.Select(i => _archEntities[i]).ToArray();
         _lookupScheduler = new SystemScheduler(_pixely);
-        _lookupSystem = _lookupScheduler.Add(new LookupSystem(_pixelyEntities));
+        _lookupSystem = _lookupScheduler.Add(builder => new LookupSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position>()));
         _twoLookupsScheduler = new SystemScheduler(_pixely);
-        _twoLookupsSystem = _twoLookupsScheduler.Add(new TwoLookupsSystem(_pixelyEntities));
+        _twoLookupsSystem = _twoLookupsScheduler.Add(builder => new TwoLookupsSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>()));
         _pairLookupScheduler = new SystemScheduler(_pixely);
-        _pairLookupSystem = _pairLookupScheduler.Add(new PairLookupSystem(_pixelyEntities));
+        _pairLookupSystem = _pairLookupScheduler.Add(builder => new PairLookupSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position, Velocity>()));
     }
 
     [GlobalCleanup]

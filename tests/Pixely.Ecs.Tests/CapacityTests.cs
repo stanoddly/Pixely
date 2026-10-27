@@ -63,7 +63,7 @@ public class CapacityTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         int capacityDuringUpdate = 0;
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             spawner.EnsureRoomFor(500);
             for (int i = 0; i < spawns; i++)
@@ -89,7 +89,7 @@ public class CapacityTests
         Entity existing = CreateMoving(world, 0);
         for (int system = 0; system < 2; system++)
         {
-            scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+            scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
             {
                 spawner.EnsureRoomFor(100);
                 for (int i = 0; i < 100; i++)
@@ -112,7 +112,7 @@ public class CapacityTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity existing = CreateMoving(world, 0);
-        scheduler.Add(new ActionSystem<MovingSpawner, SecondMovingSpawner>((first, second) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.Spawner<SecondMovingSpawner>(), (first, second) =>
         {
             first.EnsureRoomFor(100);
             second.EnsureRoomFor(60);
@@ -136,7 +136,7 @@ public class CapacityTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         bool fail = true;
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner =>
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             if (fail)
             {
@@ -158,7 +158,7 @@ public class CapacityTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         MovingSpawner kept = null!;
-        scheduler.Add(new ActionSystem<MovingSpawner>(spawner => kept = spawner));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner => kept = spawner));
         scheduler.Update();
 
         Assert.Throws<InvalidOperationException>(() => kept.EnsureRoomFor(500));

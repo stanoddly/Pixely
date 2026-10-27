@@ -7,22 +7,17 @@ using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
 
-// The ISystem<...> a system implements, and for each of its type arguments the type and the SystemBuilder call that creates it.
-readonly record struct SystemBinding(string Interface, EquatableArray<string> ArgumentTypes, EquatableArray<string> BuilderCalls);
-
-// ConstructorArguments is null for SystemScheduler.Add, which gets the system already created.
-readonly record struct SystemRegistration(string InterceptsLocationAttribute, string SystemType, EquatableArray<string>? ConstructorArguments, SystemBinding? Binding);
+// Each constructor argument is the SystemBuilder call that creates a query, lookup or writer, or the provider call that resolves a service.
+readonly record struct SystemRegistration(string InterceptsLocationAttribute, string SystemType, EquatableArray<string> ConstructorArguments);
 
 readonly record struct SystemExtraction(SystemRegistration? Registration, DiagnosticInfo? Diagnostic);
 
-// Intercepts AddSystem<TSystem>() and SystemScheduler.Add(system). For an ISystem<...>, the generated code creates the queries and writers of its type arguments
-// through the SystemBuilder, which records them as the system's contract, and calls Update with them, so the system itself needs no generated code.
-// AddSystem also creates the system with services from the provider. An ISystem added with SystemScheduler.Add needs no generated code.
+// Intercepts AddSystem<TSystem>(). The generated code creates the system with the queries, lookups and writers its constructor takes from the SystemBuilder,
+// which records them as the system's contract, and the rest from the provider, so the system itself needs no generated code.
 [Generator]
 public class SystemGenerator : IIncrementalGenerator
 {
     private const string ExtensionsName = "Pixely.Ecs.EcsServiceCollectionExtensions";
-    private const string SchedulerName = "Pixely.Ecs.SystemScheduler";
     private const string SystemName = "Pixely.Ecs.ISystem";
 
     // The generic writers and lookups by their arities, each created by the SystemBuilder method of its name with its type arguments.
@@ -64,7 +59,7 @@ public class SystemGenerator : IIncrementalGenerator
         });
     }
 
-    // AddSystem<T>() or Add(system), called directly, on a receiver or through ?., or either named without a call, as a method group.
+    // AddSystem<T>(), called directly, on a receiver or through ?., or named without a call, as a method group.
     private static bool IsCandidate(SyntaxNode node)
     {
         if (node is not InvocationExpressionSyntax invocation)
@@ -80,10 +75,10 @@ public class SystemGenerator : IIncrementalGenerator
             _ => null
         };
 
-        return name is GenericNameSyntax { Identifier.Text: "AddSystem" } || (name?.Identifier.Text == "Add" && invocation.ArgumentList.Arguments.Count == 1);
+        return name is GenericNameSyntax { Identifier.Text: "AddSystem" };
     }
 
-    // A name of AddSystem or Add that no invocation calls. The name part of a member access is covered by the member access, and the name after ?.
+    // A name of AddSystem that no invocation calls. The name part of a member access is covered by the member access, and the name after ?.
     // is always called.
     private static bool IsMethodGroupCandidate(SyntaxNode node)
     {
@@ -100,7 +95,7 @@ public class SystemGenerator : IIncrementalGenerator
         };
 
         bool isCalled = node.Parent is InvocationExpressionSyntax parentInvocation && parentInvocation.Expression == node;
-        return name?.Identifier.Text is "AddSystem" or "Add" && !isCalled;
+        return name?.Identifier.Text == "AddSystem" && !isCalled;
     }
 
     private static SystemExtraction? Extract(GeneratorSyntaxContext context, CancellationToken cancellationToken)
@@ -117,31 +112,21 @@ public class SystemGenerator : IIncrementalGenerator
             return null;
         }
 
-        string? containingType = method.ContainingType?.ToDisplayString();
-        bool isAddSystem = method.Name == "AddSystem" && containingType == ExtensionsName;
-        bool isSchedulerAdd = method.Name == "Add" && containingType == SchedulerName && method.Parameters.Length == 1;
-        if (!isAddSystem && !isSchedulerAdd)
+        if (method.Name != "AddSystem" || method.ContainingType?.ToDisplayString() != ExtensionsName)
         {
             return null;
         }
 
-        // A candidate of Add has no inferred type argument, so the system type comes from the argument.
-        ITypeSymbol? systemType = isAddSystem ? method.TypeArguments[0] : context.SemanticModel.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression, cancellationToken).Type;
-        if (systemType is null)
-        {
-            return null;
-        }
-
-        // A type parameter is known only where the generic code is called, so Add throws for it at runtime unless it is an ISystem. A constraint to an
-        // ISystem<...> means it always throws.
-        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        string call = isAddSystem ? $"AddSystem<{systemName}>()" : $"Add({systemName})";
-        if (isSchedulerAdd && systemType is ITypeParameterSymbol parameter && !GetConstraintInterfaces(parameter).Any(IsBindingInterface))
+        // A type argument that is not an ISystem breaks the constraint, which the compiler reports. A type parameter is reported below.
+        ITypeSymbol systemType = method.TypeArguments[0];
+        if (systemType is not ITypeParameterSymbol && !systemType.AllInterfaces.Any(implemented => implemented.ToDisplayString() == SystemName))
         {
             return null;
         }
 
         // The generated code is outside the system, so the system must be accessible anywhere in the assembly.
+        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        string call = $"AddSystem<{systemName}>()";
         Compilation compilation = context.SemanticModel.Compilation;
         if (systemType is not INamedTypeSymbol { IsAbstract: false } namedType || GeneratorSupport.ContainsTypeParameter(systemType)
             || !compilation.IsSymbolAccessibleWithin(namedType, compilation.Assembly) || IsInFileLocalType(namedType))
@@ -149,69 +134,45 @@ public class SystemGenerator : IIncrementalGenerator
             return Fail("PXECS010", $"{call} requires a concrete class without type parameters, accessible anywhere in its assembly.", invocation);
         }
 
-        INamedTypeSymbol[] bindingInterfaces = [.. namedType.AllInterfaces.Where(IsBindingInterface)];
-        bool isSystem = namedType.AllInterfaces.Any(implemented => implemented.ToDisplayString() == SystemName);
-        if (bindingInterfaces.Length + (isSystem ? 1 : 0) != 1)
-        {
-            return Fail("PXECS015", $"{call} requires {systemName} to implement exactly one of ISystem and ISystem<...>.", invocation);
-        }
-
         // The registry of IUpdatable would update it too, so it would update twice per frame.
         if (namedType.AllInterfaces.Any(implemented => implemented.ToDisplayString() == "Pixely.IUpdatable"))
         {
-            return Fail("PXECS017", $"{systemName} implements IUpdatable, so it would update twice per frame: once as an IUpdatable and once through the SystemScheduler. Remove IUpdatable.", invocation);
+            return Fail("PXECS014", $"{systemName} implements IUpdatable, so it would update twice per frame: once as an IUpdatable and once through the SystemScheduler. Remove IUpdatable.", invocation);
         }
 
-        // SystemScheduler.Add handles an ISystem at runtime.
-        if (isSchedulerAdd && isSystem)
+        IMethodSymbol[] constructors = [.. namedType.InstanceConstructors.Where(constructor => compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))];
+        if (constructors.Length != 1)
         {
-            return null;
+            return Fail("PXECS011", $"{call} requires {systemName} to have exactly one public or internal constructor.", invocation);
         }
 
-        SystemBinding? binding = null;
-        if (bindingInterfaces.Length == 1)
+        if (constructors[0].Parameters.FirstOrDefault(parameter => parameter.RefKind is not (RefKind.None or RefKind.In)) is { } byReference)
         {
-            SystemExtraction? failure = ExtractBinding(bindingInterfaces[0], systemName, compilation, invocation, out binding);
+            return Fail("PXECS012", $"The constructor of {systemName} takes {byReference.Name} by reference, but its arguments are created for the call.", invocation);
+        }
+
+        List<string> arguments = [];
+        foreach (IParameterSymbol parameter in constructors[0].Parameters)
+        {
+            SystemExtraction? failure = CreateArgument(parameter, compilation, invocation, out string argument);
             if (failure is not null)
             {
                 return failure;
             }
-        }
 
-        EquatableArray<string>? constructorArguments = null;
-        if (isAddSystem)
-        {
-            IMethodSymbol[] constructors = [.. namedType.InstanceConstructors.Where(constructor => compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))];
-            if (constructors.Length != 1)
-            {
-                return Fail("PXECS011", $"{call} requires {systemName} to have exactly one public or internal constructor.", invocation);
-            }
-
-            if (constructors[0].Parameters.FirstOrDefault(parameter => parameter.RefKind is not (RefKind.None or RefKind.In)) is { } byReference)
-            {
-                return Fail("PXECS012", $"The constructor of {systemName} takes {byReference.Name} by reference, but its arguments are created for the call.", invocation);
-            }
-
-            if (constructors[0].Parameters.FirstOrDefault(parameter => IsQuery(parameter.Type) || IsSpawner(parameter.Type) || GetBuilderCall(parameter.Type) is not null) is { } contract)
-            {
-                return Fail("PXECS013", $"The constructor of {systemName} takes {contract.Name}, a query, writer or lookup. Name its type in the ISystem<...> of {systemName}, which passes it to Update; the constructor takes only services.",
-                    invocation);
-            }
-
-            constructorArguments = new EquatableArray<string>([.. constructors[0].Parameters.Select(CreateArgument)]);
+            arguments.Add(argument);
         }
 
         InterceptableLocation? location = context.SemanticModel.GetInterceptableLocation(invocation, cancellationToken);
         if (location is null)
         {
-            return Fail("PXECS018", $"{call} cannot be intercepted where it is called, so it would throw. Call it as a method of its receiver.", invocation);
+            return Fail("PXECS015", $"{call} cannot be intercepted where it is called, so it would throw. Call it as a method of its receiver.", invocation);
         }
 
-        return new SystemExtraction(new SystemRegistration(location.GetInterceptsLocationAttributeSyntax(), systemType.ToDisplayString(TypeFormat), constructorArguments, binding), null);
+        return new SystemExtraction(new SystemRegistration(location.GetInterceptsLocationAttributeSyntax(), systemType.ToDisplayString(TypeFormat), new EquatableArray<string>([.. arguments])), null);
     }
 
-    // A method group of AddSystem, or of Add for a system that needs its queries and writers, would throw when called, because no call can be
-    // intercepted. nameof calls nothing.
+    // A method group of AddSystem would throw when called, because no call can be intercepted. nameof calls nothing.
     private static SystemExtraction? ExtractMethodGroup(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         SyntaxNode group = context.Node;
@@ -221,88 +182,48 @@ public class SystemGenerator : IIncrementalGenerator
             return null;
         }
 
-        string? containingType = method.ContainingType?.ToDisplayString();
-        ITypeSymbol systemType = method.TypeArguments[0];
-        string systemName = systemType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        if (method.Name == "AddSystem" && containingType == ExtensionsName)
+        if (method.Name == "AddSystem" && method.ContainingType?.ToDisplayString() == ExtensionsName)
         {
-            return Fail("PXECS018", $"AddSystem<{systemName}>() is used as a method group, which cannot be intercepted, so it would throw. Call it directly.", group);
-        }
-
-        IEnumerable<INamedTypeSymbol> interfaces = systemType switch
-        {
-            ITypeParameterSymbol parameter => GetConstraintInterfaces(parameter),
-            _ => systemType.AllInterfaces
-        };
-
-        if (method.Name == "Add" && containingType == SchedulerName && method.Parameters.Length == 1 && interfaces.Any(IsBindingInterface))
-        {
-            return Fail("PXECS018", $"Add({systemName}) is used as a method group, which cannot be intercepted, so it would throw. Call it directly.", group);
+            string systemName = method.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+            return Fail("PXECS015", $"AddSystem<{systemName}>() is used as a method group, which cannot be intercepted, so it would throw. Call it directly.", group);
         }
 
         return null;
     }
 
-    private static bool IsBindingInterface(INamedTypeSymbol type) => type.IsGenericType && type.ConstructedFrom.ToDisplayString().StartsWith(SystemName + "<");
-
-    // The interfaces and base types a type parameter's constraints guarantee, also through other type parameters.
-    private static IEnumerable<INamedTypeSymbol> GetConstraintInterfaces(ITypeParameterSymbol parameter) =>
-        parameter.ConstraintTypes.SelectMany(constraint => constraint switch
-        {
-            ITypeParameterSymbol other => GetConstraintInterfaces(other),
-            INamedTypeSymbol named => named.AllInterfaces.Prepend(named),
-            _ => []
-        });
-
-    private static SystemExtraction? ExtractBinding(INamedTypeSymbol bindingInterface, string systemName, Compilation compilation, InvocationExpressionSyntax invocation, out SystemBinding? binding)
+    // A query, spawner, lookup or writer comes from the SystemBuilder, which records it as the system's contract, and anything else from the provider.
+    private static SystemExtraction? CreateArgument(IParameterSymbol parameter, Compilation compilation, InvocationExpressionSyntax invocation, out string argument)
     {
-        binding = null;
-        List<string> types = [];
-        List<string> calls = [];
-        foreach (ITypeSymbol typeArgument in bindingInterface.TypeArguments)
+        ITypeSymbol type = parameter.Type;
+        string typeName = type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        argument = "";
+        if (IsQuery(type))
         {
-            string argumentName = typeArgument.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-            string type = typeArgument.ToDisplayString(TypeFormat);
-            if (IsQuery(typeArgument))
-            {
-                SystemExtraction? failure = ValidateQuery((INamedTypeSymbol)typeArgument, argumentName, compilation, invocation);
-                if (failure is not null)
-                {
-                    return failure;
-                }
-
-                calls.Add($"builder.Query<{type}>()");
-            }
-            else if (IsSpawner(typeArgument))
-            {
-                SystemExtraction? failure = ValidateSpawner((INamedTypeSymbol)typeArgument, argumentName, compilation, invocation);
-                if (failure is not null)
-                {
-                    return failure;
-                }
-
-                calls.Add($"builder.Spawner<{type}>()");
-            }
-            else if (GetBuilderCall(typeArgument) is { } builderCall)
-            {
-                // Only lookups take more than one type argument.
-                if (GetRepeated(((INamedTypeSymbol)typeArgument).TypeArguments) is { } repeated)
-                {
-                    return Fail("PXECS008", $"The lookup {argumentName} names {repeated.Name} more than once.", invocation);
-                }
-
-                calls.Add(builderCall);
-            }
-            else
-            {
-                return Fail("PXECS016", $"The type argument {argumentName} of the ISystem<...> of {systemName} must be a query, a spawner, ComponentAdder<T>, ComponentRemover<T>, EntityDestroyer, ComponentLookup<...> or ReadOnlyComponentLookup<...>. A service goes in the constructor.",
-                    invocation);
-            }
-
-            types.Add(type);
+            SystemExtraction? failure = ValidateQuery((INamedTypeSymbol)type, typeName, compilation, invocation);
+            argument = $"builder.Query<{type.ToDisplayString(TypeFormat)}>()";
+            return failure;
         }
 
-        binding = new SystemBinding(bindingInterface.ToDisplayString(TypeFormat), new EquatableArray<string>([.. types]), new EquatableArray<string>([.. calls]));
+        if (IsSpawner(type))
+        {
+            SystemExtraction? failure = ValidateSpawner((INamedTypeSymbol)type, typeName, compilation, invocation);
+            argument = $"builder.Spawner<{type.ToDisplayString(TypeFormat)}>()";
+            return failure;
+        }
+
+        if (GetBuilderCall(type) is { } builderCall)
+        {
+            // Only lookups take more than one type argument.
+            if (GetRepeated(((INamedTypeSymbol)type).TypeArguments) is { } repeated)
+            {
+                return Fail("PXECS008", $"The lookup {typeName} names {repeated.Name} more than once.", invocation);
+            }
+
+            argument = builderCall;
+            return null;
+        }
+
+        argument = CreateServiceArgument(parameter);
         return null;
     }
 
@@ -419,7 +340,7 @@ public class SystemGenerator : IIncrementalGenerator
 
     private static List<string> GetFilters(INamedTypeSymbol type, string prefix) => [.. GetFilterTypes(type, prefix).Select(argument => argument.ToDisplayString(TypeFormat))];
 
-    private static string CreateArgument(IParameterSymbol parameter)
+    private static string CreateServiceArgument(IParameterSymbol parameter)
     {
         ITypeSymbol type = parameter.Type;
         if (type is INamedTypeSymbol { IsGenericType: true } generic && generic.ConstructedFrom.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
@@ -465,46 +386,18 @@ public class SystemGenerator : IIncrementalGenerator
 
             string system = registration.SystemType;
             sb.AppendLine($"        {registration.InterceptsLocationAttribute}");
-            if (registration.ConstructorArguments is { } arguments)
-            {
-                // The provider creates singletons grouped by service type, and earlier when another service needs one, so the order is reserved when
-                // AddSystem runs and the scheduler sorts by it. The system joins the scheduler when it is created, before any OnBuilt callback.
-                string bind = registration.Binding is { } binding ? GenerateBind(binding, "target", "            ") : "static _ => static target => ((global::Pixely.Ecs.ISystem)target).Update()";
-                sb.AppendLine($"        public static void AddSystem_{i}<TSystem>(this global::Pixely.DependencyInjection.ServiceCollection services) where TSystem : class");
-                sb.AppendLine("        {");
-                sb.AppendLine("            long order = global::Pixely.Ecs.SystemScheduler.ReserveOrder();");
-                sb.AppendLine($"            services.AddSingleton<{system}>(sp => sp.GetRequiredService<global::Pixely.Ecs.SystemScheduler>().Add(new {system}({string.Join(", ", arguments)}), {bind}, order));");
-                sb.AppendLine("        }");
-            }
-            else
-            {
-                // The interceptor is generic like Add, so the system reaches Update through object.
-                sb.AppendLine($"        public static TSystem Add_{i}<TSystem>(this global::Pixely.Ecs.SystemScheduler scheduler, TSystem system) where TSystem : class");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            return scheduler.Add(system, {GenerateBind(registration.Binding!.Value, "(object)target", "            ")}, global::Pixely.Ecs.SystemScheduler.ReserveOrder());");
-                sb.AppendLine("        }");
-            }
+
+            // The provider creates singletons grouped by service type, and earlier when another service needs one, so the order is reserved when
+            // AddSystem runs and the scheduler sorts by it. The system joins the scheduler when it is created, before any OnBuilt callback.
+            sb.AppendLine($"        public static void AddSystem_{i}<TSystem>(this global::Pixely.DependencyInjection.ServiceCollection services) where TSystem : class, global::Pixely.Ecs.ISystem");
+            sb.AppendLine("        {");
+            sb.AppendLine("            long order = global::Pixely.Ecs.SystemScheduler.ReserveOrder();");
+            sb.AppendLine($"            services.AddSingleton<{system}>(sp => sp.GetRequiredService<global::Pixely.Ecs.SystemScheduler>().Add(builder => new {system}({string.Join(", ", registration.ConstructorArguments)}), order));");
+            sb.AppendLine("        }");
         }
 
         sb.AppendLine("    }");
         sb.AppendLine("}");
-        return sb.ToString();
-    }
-
-    // The function SystemScheduler.Add calls with the SystemBuilder: it creates each query and writer once and returns the call of Update with them.
-    private static string GenerateBind(SystemBinding binding, string target, string indent)
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("static builder =>");
-        sb.AppendLine($"{indent}{{");
-        for (int i = 0; i < binding.ArgumentTypes.Length; i++)
-        {
-            sb.AppendLine($"{indent}    {binding.ArgumentTypes[i]} item{i + 1} = {binding.BuilderCalls[i]};");
-        }
-
-        string items = string.Join(", ", Enumerable.Range(1, binding.ArgumentTypes.Length).Select(index => $"item{index}"));
-        sb.AppendLine($"{indent}    return target => (({binding.Interface}){target}).Update({items});");
-        sb.Append($"{indent}}}");
         return sb.ToString();
     }
 }

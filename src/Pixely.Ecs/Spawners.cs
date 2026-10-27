@@ -1,6 +1,6 @@
 namespace Pixely.Ecs;
 
-// Spawns entities with the components of its type arguments, whose values Spawn takes. Name it in ISystem<...> as it is, or derive a class
+// Spawns entities with the components of its type arguments, whose values Spawn takes. A system takes it in its constructor as it is, or derive a class
 // from it to give the entities the tags of IWith<...> or to add factory methods that call Spawn.
 public class Spawner<T1> : Spawner
     where T1 : struct

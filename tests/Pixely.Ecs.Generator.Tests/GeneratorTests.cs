@@ -33,13 +33,19 @@ public class GeneratorTests
                     public sealed class Corpses : Query<ReadOnlySpan<Entity>>, IWith<Dead>;
                 }
 
-                internal sealed class Mover : ISystem<Movement, Queries.Corpses, Query<ReadOnlySpan<Velocity>>, ComponentLookup<Position>, ReadOnlyComponentLookup<Dead>,
-                    ComponentLookup<Position, Velocity, Dead>>
+                internal sealed class Mover : ISystem
                 {
-                    public void Update(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities, ComponentLookup<Position> positionLookup,
+                    private readonly Movement _movement;
+
+                    public Mover(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities, ComponentLookup<Position> positionLookup,
                         ReadOnlyComponentLookup<Dead> deadLookup, ComponentLookup<Position, Velocity, Dead> lookup)
                     {
-                        foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> speeds) in movement)
+                        _movement = movement;
+                    }
+
+                    public void Update()
+                    {
+                        foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> speeds) in _movement)
                         {
                             for (int i = 0; i < positions.Length; i++)
                             {
@@ -51,11 +57,10 @@ public class GeneratorTests
 
                 internal static class Registration
                 {
-                    public static void Register(ServiceCollection services, SystemScheduler scheduler)
+                    public static void Register(ServiceCollection services)
                     {
                         services.AddEcs();
                         services.AddSystem<Mover>();
-                        scheduler.Add(new Mover());
                     }
                 }
             }
@@ -66,7 +71,7 @@ public class GeneratorTests
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
-        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("Add_1"));
+        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("builder.Query<global::Game.Movement>()"));
         Assert.That(interceptors, Does.Contain("builder.Query<global::Game.Queries.Corpses>()").And.Contain("builder.Query<global::Pixely.Ecs.Query<global::System.ReadOnlySpan<global::Velocity>>>()"));
         Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position>()").And.Contain("builder.ReadOnlyComponentLookup<global::Game.Dead>()"));
         Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position, global::Velocity, global::Game.Dead>()"));
@@ -83,9 +88,9 @@ public class GeneratorTests
     {
         string source = Components + declaration + """
 
-            sealed class S : ISystem<Q>
+            sealed class S(Q query) : ISystem
             {
-                public void Update(Q query)
+                public void Update()
                 {
                 }
             }
@@ -146,9 +151,13 @@ public class GeneratorTests
 
             sealed class Positions : Query<ReadOnlySpan<Position>>;
 
-            sealed class S : ISystem<Query<Span<Velocity>>>
+            sealed class S : ISystem
             {
-                public void Update(Query<Span<Velocity>> velocities)
+                public S(Query<Span<Velocity>> velocities)
+                {
+                }
+
+                public void Update()
                 {
                 }
             }
@@ -199,18 +208,25 @@ public class GeneratorTests
 
                 public sealed class Log;
 
-                internal sealed class Shooter : ISystem<Movement, Bullets, ComponentAdder<Dead>, ComponentRemover<Velocity>, EntityDestroyer, Spawners.Corpses, Spawner<Velocity>>
+                internal sealed class Shooter : ISystem
                 {
-                    public Shooter(Log log, Log? optional, IEnumerable<Log> logs, in Log byValue, IReadOnlyList<Log> list)
+                    private readonly Bullets _bullets;
+                    private readonly Spawners.Corpses _corpses;
+                    private readonly Spawner<Velocity> _velocities;
+
+                    public Shooter(Movement movement, Log log, Bullets bullets, Log? optional, ComponentAdder<Dead> dead, IEnumerable<Log> logs, ComponentRemover<Velocity> stop,
+                        in Log byValue, EntityDestroyer destroyer, Spawners.Corpses corpses, IReadOnlyList<Log> list, Spawner<Velocity> velocities, World world)
                     {
+                        _bullets = bullets;
+                        _corpses = corpses;
+                        _velocities = velocities;
                     }
 
-                    public void Update(Movement movement, Bullets bullets, ComponentAdder<Dead> dead, ComponentRemover<Velocity> stop, EntityDestroyer destroyer,
-                        Spawners.Corpses corpses, Spawner<Velocity> velocities)
+                    public void Update()
                     {
-                        bullets.Spawn(new Position());
-                        corpses.Spawn(new Position());
-                        velocities.Spawn(new Velocity());
+                        _bullets.Spawn(new Position());
+                        _corpses.Spawn(new Position());
+                        _velocities.Spawn(new Velocity());
                     }
                 }
 
@@ -233,6 +249,8 @@ public class GeneratorTests
         Assert.That(interceptors, Does.Contain("builder.Spawner<global::Game.Bullets>()").And.Contain("builder.Spawner<global::Game.Spawners.Corpses>()"));
         Assert.That(interceptors, Does.Contain("builder.Spawner<global::Pixely.Ecs.Spawner<global::Velocity>>()"));
         Assert.That(interceptors, Does.Contain("sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::Game.Log>>()"));
+        Assert.That(interceptors, Does.Contain("new global::Game.Shooter(builder.Query<global::Game.Movement>(), sp.GetRequiredService<global::Game.Log>(), builder.Spawner<global::Game.Bullets>(), "));
+        Assert.That(interceptors, Does.Contain("builder.Spawner<global::Pixely.Ecs.Spawner<global::Velocity>>(), sp.GetRequiredService<global::Pixely.Ecs.World>()), order));"));
     }
 
     [TestCase("abstract class P : Spawner<Position>;", "PXECS006")]
@@ -248,9 +266,9 @@ public class GeneratorTests
     {
         string source = Components + declaration + """
 
-            sealed class S : ISystem<P>
+            sealed class S(P spawner) : ISystem
             {
-                public void Update(P spawner)
+                public void Update()
                 {
                 }
             }
@@ -274,17 +292,8 @@ public class GeneratorTests
     [TestCase("class S : ISystem { protected S() { } public void Update() { } }", "S", "PXECS011")]
     [TestCase("class Log; class S : ISystem { public S(ref Log log) { } public void Update() { } }", "S", "PXECS012")]
     [TestCase("class Log; class S : ISystem { public S(out Log log) { log = new Log(); } public void Update() { } }", "S", "PXECS012")]
-    [TestCase("class S : ISystem { public S(ComponentAdder<Position> adder) { } public void Update() { } }", "S", "PXECS013")]
-    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>; class S : ISystem { public S(Q query) { } public void Update() { } }", "S", "PXECS013")]
-    [TestCase("sealed class P : Spawner<Position>; class S : ISystem { public S(P spawner) { } public void Update() { } }", "S", "PXECS013")]
-    [TestCase("class S : ISystem { public S(ReadOnlyComponentLookup<Position> positions) { } public void Update() { } }", "S", "PXECS013")]
-    [TestCase("class S { }", "S", "PXECS015")]
-    [TestCase("class S : ISystem, ISystem<EntityDestroyer> { public void Update() { } public void Update(EntityDestroyer d) { } }", "S", "PXECS015")]
-    [TestCase("class S : ISystem<EntityDestroyer>, ISystem<ComponentAdder<Position>> { public void Update(EntityDestroyer d) { } public void Update(ComponentAdder<Position> a) { } }", "S", "PXECS015")]
-    [TestCase("class S : ISystem<ComponentLookup<Position, Position>> { public void Update(ComponentLookup<Position, Position> l) { } }", "S", "PXECS008")]
-    [TestCase("class S : ISystem<ReadOnlyComponentLookup<Position, Velocity, Position>> { public void Update(ReadOnlyComponentLookup<Position, Velocity, Position> l) { } }", "S", "PXECS008")]
-    [TestCase("class Log; class S : ISystem<Log> { public void Update(Log log) { } }", "S", "PXECS016")]
-    [TestCase("class S : ISystem<World> { public void Update(World world) { } }", "S", "PXECS016")]
+    [TestCase("class S : ISystem { public S(ComponentLookup<Position, Position> l) { } public void Update() { } }", "S", "PXECS008")]
+    [TestCase("class S : ISystem { public S(ReadOnlyComponentLookup<Position, Velocity, Position> l) { } public void Update() { } }", "S", "PXECS008")]
     public void InvalidSystemRegistrationReportsDiagnostic(string declaration, string system, string expectedId)
     {
         string source = Components + declaration + $$"""
@@ -300,17 +309,12 @@ public class GeneratorTests
         Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { expectedId }));
     }
 
-    // AddSystem's class constraint rejects a struct before the generator sees the call.
-    [Test]
-    public void StructSystemIsRejectedByTheCompiler()
+    // AddSystem's constraints reject a struct, or a class that is not an ISystem, before the generator sees the call.
+    [TestCase("struct S : ISystem { public void Update() { } }", "CS0452")]
+    [TestCase("class S { }", "CS0311")]
+    public void SystemBreakingTheConstraintsIsRejectedByTheCompiler(string declaration, string expectedId)
     {
-        string source = Components + """
-            struct S : ISystem
-            {
-                public void Update()
-                {
-                }
-            }
+        string source = Components + declaration + """
 
             static class Registration
             {
@@ -321,7 +325,7 @@ public class GeneratorTests
         (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
 
         Assert.That(generatorDiagnostics, Is.Empty);
-        Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain("CS0452"));
+        Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain(expectedId));
     }
 
     [TestCase("public struct T : ITag { public int X; }")]
@@ -333,7 +337,7 @@ public class GeneratorTests
     {
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
 
-        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS014" }));
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS013" }));
     }
 
     // A tag has no column, so a spawner takes no value for the tags of its IWith<...>.
@@ -350,9 +354,9 @@ public class GeneratorTests
 
             public sealed class Flags : Spawner<Position>, IWith<Marked, Flagged>;
 
-            public sealed class S : ISystem<Flags>
+            public sealed class S(Flags flags) : ISystem
             {
-                public void Update(Flags flags) => flags.Spawn(new Position());
+                public void Update() => flags.Spawn(new Position());
 
                 static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
@@ -484,9 +488,9 @@ public class GeneratorTests
 
                 public sealed class @record : Spawner<Position>;
 
-                public sealed class @operator : ISystem<@event, @struct, @record>
+                public sealed class @operator(@event query, @struct structs, @record records) : ISystem
                 {
-                    public void Update(@event query, @struct structs, @record records)
+                    public void Update()
                     {
                         foreach ((ReadOnlySpan<Entity> @this, Span<Position> @base) in query)
                         {
@@ -507,33 +511,13 @@ public class GeneratorTests
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
     }
 
+    // SystemScheduler.Add takes a system, or a function that creates one through the builder, so it needs no generated code.
     [Test]
-    public void SchedulerAddOfAGenericSystemWithASpawnerIsIntercepted()
+    public void SchedulerAddIsNotIntercepted()
     {
         string source = Components + """
-            public sealed class Generic<T>(System.Action<T> update) : ISystem<T>
-            {
-                public void Update(T item1) => update(item1);
-            }
+            public sealed class Q : Query<ReadOnlySpan<Position>>;
 
-            static class Registration
-            {
-                static void Register(SystemScheduler scheduler) => scheduler.Add(new Generic<Spawner<Position>>(spawner => spawner.Spawn(new Position())));
-            }
-            """;
-
-        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
-
-        Assert.That(generatorDiagnostics, Is.Empty);
-        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
-        Assert.That(output.SyntaxTrees.Any(tree => tree.ToString().Contains("builder.Spawner<global::Pixely.Ecs.Spawner<global::Position>>()")), Is.True);
-    }
-
-    // SystemScheduler.Add handles an ISystem at runtime, and a type parameter is known only where the generic code is called.
-    [Test]
-    public void SchedulerAddOfAnISystemOrATypeParameterIsNotIntercepted()
-    {
-        string source = Components + """
             public sealed class S : ISystem
             {
                 public void Update()
@@ -541,13 +525,26 @@ public class GeneratorTests
                 }
             }
 
+            public sealed class Spawning(Spawner<Position> spawner, Q query) : ISystem
+            {
+                public void Update()
+                {
+                    spawner.Spawn(new Position());
+                    foreach (Columns<ReadOnlySpan<Position>> columns in query)
+                    {
+                    }
+                }
+            }
+
             static class Registration
             {
-                static void Register(SystemScheduler scheduler) => scheduler.Add(new S());
+                static void Register(SystemScheduler scheduler)
+                {
+                    scheduler.Add(new S());
+                    scheduler.Add(builder => new Spawning(builder.Spawner<Spawner<Position>>(), builder.Query<Q>()));
+                }
 
-                static void Register<T>(SystemScheduler scheduler, T system) where T : class => scheduler.Add(system);
-
-                static void RegisterSystem<T>(SystemScheduler scheduler, T system) where T : class, ISystem => scheduler.Add(system);
+                static void Register<T>(SystemScheduler scheduler, T system) where T : class, ISystem => scheduler.Add(system);
             }
             """;
 
@@ -558,64 +555,36 @@ public class GeneratorTests
         Assert.That(output.SyntaxTrees.Any(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")), Is.False);
     }
 
-    // Add of a type parameter is intercepted only where the generic code is called, so a constraint to an ISystem<...> means it always throws.
-    [Test]
-    public void SchedulerAddOfATypeParameterConstrainedToAnISystemWithTypeArgumentsReportsDiagnostic()
-    {
-        string source = Components + """
-            public sealed class Q : Query<ReadOnlySpan<Position>>;
-
-            public abstract class Base : ISystem<Q>
-            {
-                public abstract void Update(Q query);
-            }
-
-            static class Registration
-            {
-                static void Register<T>(SystemScheduler scheduler, T system) where T : class, ISystem<Q> => scheduler.Add(system);
-
-                static void RegisterBase<T>(SystemScheduler scheduler, T system) where T : Base => scheduler.Add(system);
-
-                static void RegisterNested<T, U>(SystemScheduler scheduler, T system) where T : class, U where U : ISystem<Q> => scheduler.Add(system);
-            }
-            """;
-
-        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
-
-        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS010", "PXECS010", "PXECS010" }));
-    }
-
     // A method group is not a call, so there is nothing to intercept.
     [Test]
-    public void MethodGroupsOfAddSystemAndAddReportDiagnostic()
+    public void MethodGroupsOfAddSystemReportDiagnostic()
     {
         string source = Components + """
-            public sealed class S : ISystem<EntityDestroyer>
+            public sealed class S(EntityDestroyer destroyer) : ISystem
             {
-                public void Update(EntityDestroyer destroyer)
+                public void Update()
                 {
                 }
             }
 
             static class Registration
             {
-                static void Register(Pixely.DependencyInjection.ServiceCollection services, SystemScheduler scheduler)
+                static void Register(Pixely.DependencyInjection.ServiceCollection services)
                 {
                     System.Action add = services.AddSystem<S>;
                     System.Action<Pixely.DependencyInjection.ServiceCollection> addStatic = EcsServiceCollectionExtensions.AddSystem<S>;
-                    System.Func<S, S> schedule = scheduler.Add;
                 }
             }
             """;
 
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
-        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS018", "PXECS018", "PXECS018" }));
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS015", "PXECS015" }));
     }
 
-    // SystemScheduler.Add handles an ISystem at runtime, and nameof calls nothing.
+    // SystemScheduler.Add needs no generated code, and nameof calls nothing.
     [Test]
-    public void MethodGroupOfAddForAnISystemAndNameofReportNothing()
+    public void MethodGroupOfAddAndNameofReportNothing()
     {
         string source = Components + """
             public sealed class P : ISystem
@@ -642,23 +611,23 @@ public class GeneratorTests
     }
 
     [Test]
-    public void CallsThroughConditionalAccessAreIntercepted()
+    public void CallThroughConditionalAccessIsIntercepted()
     {
         string source = Components + """
-            public sealed class S : ISystem<EntityDestroyer>
+            public sealed class S : ISystem
             {
-                public void Update(EntityDestroyer destroyer)
+                public S(EntityDestroyer destroyer)
+                {
+                }
+
+                public void Update()
                 {
                 }
             }
 
             static class Registration
             {
-                static void Register(Pixely.DependencyInjection.ServiceCollection? services, SystemScheduler? scheduler)
-                {
-                    services?.AddSystem<S>();
-                    scheduler?.Add(new S());
-                }
+                static void Register(Pixely.DependencyInjection.ServiceCollection? services) => services?.AddSystem<S>();
             }
             """;
 
@@ -667,28 +636,24 @@ public class GeneratorTests
         Assert.That(generatorDiagnostics, Is.Empty);
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
-        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("Add_1"));
+        Assert.That(interceptors, Does.Contain("AddSystem_0").And.Contain("builder.EntityDestroyer()"));
     }
 
     [TestCase("class S : ISystem, Pixely.IUpdatable { public void Update() { } public int UpdateOrder => 0; void Pixely.IUpdatable.Update() { } }")]
-    [TestCase("class S : ISystem<EntityDestroyer>, Pixely.IUpdatable { public void Update(EntityDestroyer d) { } public void Update() { } }")]
+    [TestCase("class S(EntityDestroyer d) : ISystem, Pixely.IUpdatable { public void Update() { } }")]
     public void SystemThatIsAlsoAnIUpdatableReportsDiagnostic(string declaration)
     {
         string source = Components + declaration + """
 
             static class Registration
             {
-                static void Register(Pixely.DependencyInjection.ServiceCollection services, SystemScheduler scheduler)
-                {
-                    services.AddSystem<S>();
-                    scheduler.Add(new S());
-                }
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
             """;
 
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
 
-        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS017", "PXECS017" }));
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS014" }));
     }
 
     // AddSystem reserves the system's order when it is called, because the provider does not create singletons in call order.
@@ -715,7 +680,8 @@ public class GeneratorTests
         Assert.That(interceptors, Does.Contain("long order = global::Pixely.Ecs.SystemScheduler.ReserveOrder();").And.Contain(", order));"));
     }
 
-    // A query whose Query<...> comes through a generic base is registered through its declaration, or through the closed type a system or World.Query names.
+    // A query whose Query<...> comes through a generic base is registered through its declaration, or through the closed type that World.Query names
+    // or that the constructor of a system added with AddSystem takes.
     [Test]
     public void SpansBehindAGenericBaseAreRegistered()
     {
@@ -730,9 +696,13 @@ public class GeneratorTests
 
             sealed class Of<T> : Query<Span<T>> where T : struct;
 
-            sealed class S : ISystem<Of<Speed>>
+            sealed class S : ISystem
             {
-                public void Update(Of<Speed> speeds)
+                public S(Of<Speed> speeds)
+                {
+                }
+
+                public void Update()
                 {
                 }
             }
@@ -740,6 +710,8 @@ public class GeneratorTests
             static class Reader
             {
                 static void Read(World world) => world.Query<Of<Heat>>();
+
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
             """;
 
@@ -749,6 +721,102 @@ public class GeneratorTests
         Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
         string registration = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("QueryTerms.g.cs")).ToString();
         Assert.That(registration, Does.Contain("RegisterReadOnlySpan<global::Mass>();").And.Contain("RegisterSpan<global::Speed>();").And.Contain("RegisterSpan<global::Heat>();"));
+    }
+
+    // The constructor is read from the type AddSystem names, so a record system and the type parameters of a generic system count too.
+    [Test]
+    public void QueriesOfRecordAndGenericSystemsAreRegistered()
+    {
+        string source = Components + """
+            public record struct Charge(float Value);
+            public record struct Light(float Value);
+            public record struct Spin(float Value);
+
+            sealed class Of<T> : Query<Span<T>> where T : struct;
+
+            sealed record Recorded(Of<Charge> Charges) : ISystem
+            {
+                public void Update()
+                {
+                }
+            }
+
+            sealed class Generic<T>(Of<T> items, Query<ReadOnlySpan<T>> reads) : ISystem where T : struct
+            {
+                public void Update()
+                {
+                    foreach (Columns<Span<T>> columns in items)
+                    {
+                    }
+
+                    foreach (Columns<ReadOnlySpan<T>> columns in reads)
+                    {
+                    }
+                }
+            }
+
+            class Outer<T> where T : struct
+            {
+                public sealed class Inner : ISystem
+                {
+                    public Inner(Of<T> items)
+                    {
+                    }
+
+                    public void Update()
+                    {
+                    }
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services)
+                {
+                    services.AddSystem<Recorded>();
+                    services.AddSystem<Generic<Light>>();
+                    services.AddSystem<Outer<Spin>.Inner>();
+                }
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string registration = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("QueryTerms.g.cs")).ToString();
+        Assert.That(registration, Does.Contain("RegisterSpan<global::Charge>();").And.Contain("RegisterSpan<global::Light>();")
+            .And.Contain("RegisterReadOnlySpan<global::Light>();").And.Contain("RegisterSpan<global::Spin>();"));
+    }
+
+    // A span closed with a system's type argument is checked where AddSystem names it. The query then reads only a tag, which also leaves it without
+    // a required component.
+    [Test]
+    public void InvalidSpanClosedByAGenericSystemReportsDiagnostic()
+    {
+        string source = Components + """
+            public struct Mark : ITag;
+
+            sealed class Generic<T> : ISystem where T : struct
+            {
+                public Generic(Query<ReadOnlySpan<T>> reads)
+                {
+                }
+
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<Generic<Mark>>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(source);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EquivalentTo(new[] { "PXECS002", "PXECS004" }));
     }
 
     [TestCase("public struct T : ITag; abstract class ComponentQuery<C> : Query<ReadOnlySpan<C>> where C : struct; sealed class Q : ComponentQuery<T>;")]
@@ -782,9 +850,13 @@ public class GeneratorTests
 
             sealed class Masses : MassBase;
 
-            sealed class S : ISystem<Game.Of<Speed>, HeatQuery>
+            sealed class S : ISystem
             {
-                public void Update(Game.Of<Speed> speeds, HeatQuery heats)
+                public S(Game.Of<Speed> speeds, HeatQuery heats)
+                {
+                }
+
+                public void Update()
                 {
                 }
             }
@@ -792,6 +864,8 @@ public class GeneratorTests
             static class Reader
             {
                 static void Read(World world) => world.Query<Game.Of<Light>>();
+
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
             """;
 
@@ -837,7 +911,7 @@ public class GeneratorTests
 
         RunEdit(registration, plain, updatable, out ImmutableArray<Diagnostic> diagnostics, out _);
 
-        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS017" }));
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS014" }));
     }
 
     private static (ImmutableArray<Diagnostic> GeneratorDiagnostics, Compilation Output) Run(string source)
