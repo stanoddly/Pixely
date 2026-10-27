@@ -12,9 +12,9 @@ public class SystemRegistrationTests
         public List<object> Systems { get; } = [];
     }
 
-    public sealed class Killer(UpdateLog log) : ISystem<Movement, ComponentAdder<Dead>>
+    public sealed class Killer(UpdateLog log, Movement movement, ComponentAdder<Dead> dead) : ISystem
     {
-        public void Update(Movement movement, ComponentAdder<Dead> dead)
+        public void Update()
         {
             log.Entries.Add(nameof(Killer));
             foreach ((ReadOnlySpan<Entity> entities, _, _) in movement)
@@ -27,9 +27,10 @@ public class SystemRegistrationTests
         }
     }
 
-    public sealed class Cleaner(UpdateLog log) : ISystem<Corpses, EntityDestroyer>
+    // Takes its contract before and after a service, which the generated code resolves from the provider.
+    public sealed class Cleaner(Corpses corpses, UpdateLog log, EntityDestroyer destroyer) : ISystem
     {
-        public void Update(Corpses corpses, EntityDestroyer destroyer)
+        public void Update()
         {
             log.Entries.Add(nameof(Cleaner));
             foreach (Columns<ReadOnlySpan<Entity>> columns in corpses)
@@ -43,19 +44,19 @@ public class SystemRegistrationTests
         }
     }
 
-    public sealed class Spawning(IEnumerable<UpdateLog> logs, UpdateLog? log) : ISystem<MovingSpawner>
+    public sealed class Spawning(IEnumerable<UpdateLog> logs, UpdateLog? log, MovingSpawner spawner) : ISystem
     {
-        public void Update(MovingSpawner spawner)
+        public void Update()
         {
             log!.Entries.Add(nameof(Spawning) + logs.Count());
             spawner.Spawn(default, default);
         }
     }
 
-    // Explicit, so the generated code calls Update through the interface.
-    public sealed class ExplicitMover : ISystem<Movement>
+    // Explicit, so the scheduler calls Update through the interface.
+    public sealed class ExplicitMover(Movement movement) : ISystem
     {
-        void ISystem<Movement>.Update(Movement movement)
+        void ISystem.Update()
         {
             foreach ((_, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
             {
@@ -212,16 +213,6 @@ public class SystemRegistrationTests
         Assert.That(provider.GetRequiredService<Killer>(), Is.Not.Null);
     }
 
-    [Test]
-    public void SchedulerAddOfAnISystemWithTypeArgumentsThatWasNotInterceptedThrows()
-    {
-        MethodInfo add = typeof(SystemScheduler).GetMethods().Single(method => method.Name == nameof(SystemScheduler.Add) && method.GetParameters().Length == 1).MakeGenericMethod(typeof(Killer));
-
-        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => add.Invoke(new SystemScheduler(new World()), [new Killer(new UpdateLog())]))!;
-
-        Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
-    }
-
     // The provider creates singletons grouped by type, and earlier when another service needs one; the scheduler still follows the AddSystem calls.
     [Test]
     public void SystemsRunInTheOrderOfTheirAddSystemCalls()
@@ -299,10 +290,8 @@ public class SystemRegistrationTests
     public void ConditionalAccessOnANullReceiverDoesNothing()
     {
         ServiceCollection? services = null;
-        SystemScheduler? scheduler = null;
 
         Assert.DoesNotThrow(() => services?.AddSystem<Cleaner>());
-        Assert.DoesNotThrow(() => scheduler?.Add(new Cleaner(new UpdateLog())));
     }
 
     // The systems a failed child build added leave the parent's scheduler when the build disposes what it created.

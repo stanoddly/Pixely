@@ -7,9 +7,9 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class CreationBenchmarks
 {
-    internal sealed class SpawnSystem(int count) : ISystem<MovingSpawner>
+    internal sealed class SpawnSystem(MovingSpawner spawner, int count) : ISystem
     {
-        public void Update(MovingSpawner spawner)
+        public void Update()
         {
             for (int i = 0; i < count; i++)
             {
@@ -88,7 +88,7 @@ public class CreationBenchmarks
     {
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(new SpawnSystem(Count));
+        scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>(), Count));
         scheduler.Update();
 
         int count = 0;

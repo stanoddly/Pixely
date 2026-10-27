@@ -84,7 +84,7 @@ public class TagTests
         world.Add(entity, new Frozen());
         SystemScheduler scheduler = new SystemScheduler(world);
         bool remove = false;
-        scheduler.Add(new ActionSystem<ComponentAdder<Frozen>, ComponentRemover<Frozen>>((adder, remover) =>
+        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Frozen>(), builder.ComponentRemover<Frozen>(), (adder, remover) =>
         {
             if (remove)
             {
@@ -110,7 +110,7 @@ public class TagTests
         World world = new World();
         SystemScheduler scheduler = new SystemScheduler(world);
         Entity spawned = default;
-        scheduler.Add(new ActionSystem<FrozenSpawner>(frozen => spawned = frozen.Spawn(new Position(1, 2))));
+        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<FrozenSpawner>(), frozen => spawned = frozen.Spawn(new Position(1, 2))));
 
         scheduler.Update();
 

@@ -84,7 +84,7 @@ public abstract class Query
     {
         if (_world is null)
         {
-            throw new InvalidOperationException($"The query {GetType().Name} was created with new. Get it from World.Query or through a system's Update.");
+            throw new InvalidOperationException($"The query {GetType().Name} was created with new. Get it from World.Query or through a system's constructor.");
         }
 
         return new ColumnsEnumerator<TColumns>(_world.QueryArchetypes(_state!));

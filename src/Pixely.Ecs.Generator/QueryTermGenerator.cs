@@ -11,13 +11,14 @@ readonly record struct TermRegistration(string Method, string Component);
 readonly record struct TermExtraction(EquatableArray<TermRegistration> Registrations, DiagnosticInfo? Diagnostic);
 
 // Registers every Span<T> and ReadOnlySpan<T> that a Query<...> in the assembly names, through a module initializer, because the library cannot get T
-// from a span type argument without reflection. It finds them wherever Query<...> is written: in the base list of a query class, in the type arguments
-// of an ISystem<...> and in a call of World.Query. A query whose Query<...> comes through a generic base, such as Positions : ComponentQuery<Position>,
-// is found through its declaration, or through the closed type named in ISystem<...> or World.Query.
+// from a span type argument without reflection. It finds them wherever Query<...> is written: in the base list of a query class, and in a call of
+// World.Query or SystemBuilder.Query. A query whose Query<...> comes through a generic base, such as Positions : ComponentQuery<Position>, is found
+// through its declaration, or through the closed type named in World.Query or SystemBuilder.Query, or by the constructor of a system that AddSystem
+// names. The constructor is read from the closed system type, so a generic system's queries are closed with its type arguments.
 [Generator]
 public class QueryTermGenerator : IIncrementalGenerator
 {
-    private const string SystemName = "Pixely.Ecs.ISystem";
+    private const string ExtensionsName = "Pixely.Ecs.EcsServiceCollectionExtensions";
     private const string WorldName = "Pixely.Ecs.World";
     private const string BuilderName = "Pixely.Ecs.SystemBuilder";
 
@@ -51,9 +52,9 @@ public class QueryTermGenerator : IIncrementalGenerator
         });
     }
 
-    // Query<...> or a Query call, ISystem<...>, or a class with a base list. The type arguments are read from the symbols, so qualified and aliased
-    // names count too.
-    private static bool IsCandidate(SyntaxNode node) => node is GenericNameSyntax { Identifier.Text: "Query" or "ISystem" } or ClassDeclarationSyntax { BaseList: not null };
+    // Query<...>, a Query or AddSystem call, or a class with a base list. The type arguments are read from the symbols, so qualified and aliased names
+    // count too.
+    private static bool IsCandidate(SyntaxNode node) => node is GenericNameSyntax { Identifier.Text: "Query" or "AddSystem" } or ClassDeclarationSyntax { BaseList: not null };
 
     private static TermExtraction? Extract(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
@@ -73,21 +74,22 @@ public class QueryTermGenerator : IIncrementalGenerator
         return context.SemanticModel.GetSymbolInfo(syntax, cancellationToken).Symbol switch
         {
             INamedTypeSymbol type when GeneratorSupport.IsQueryType(type) => ExtractTerms(type, syntax.GetLocation()),
-            INamedTypeSymbol { IsGenericType: true } type when type.ConstructedFrom.ToDisplayString().StartsWith(SystemName + "<") => ExtractClosedQueries(type.TypeArguments, syntax.GetLocation()),
             IMethodSymbol { Name: "Query", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() is WorldName or BuilderName =>
                 ExtractClosedQueries(method.TypeArguments, syntax.GetLocation()),
+            IMethodSymbol { Name: "AddSystem", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == ExtensionsName
+                && method.TypeArguments[0] is INamedTypeSymbol system => ExtractConstructorQueries(system, syntax.GetLocation()),
             _ => null
         };
     }
 
-    // The closed generic query classes among the type arguments, such as Of<Position>. Query<...> itself is handled where it is written, and a
+    // The closed generic query classes among the types, such as Of<Position>. Query<...> itself is handled where it is written, and a
     // non-generic query class through its declaration.
-    private static TermExtraction? ExtractClosedQueries(IEnumerable<ITypeSymbol> typeArguments, Location location)
+    private static TermExtraction? ExtractClosedQueries(IEnumerable<ITypeSymbol> types, Location location)
     {
         List<TermRegistration> registrations = [];
-        foreach (ITypeSymbol typeArgument in typeArguments)
+        foreach (ITypeSymbol type in types)
         {
-            if (typeArgument is not INamedTypeSymbol { IsGenericType: true } query || GeneratorSupport.ContainsTypeParameter(query) || GeneratorSupport.IsQueryType(query)
+            if (type is not INamedTypeSymbol { IsGenericType: true } query || GeneratorSupport.ContainsTypeParameter(query) || GeneratorSupport.IsQueryType(query)
                 || GeneratorSupport.GetQueryBase(query) is not { } queryBase)
             {
                 continue;
@@ -102,6 +104,55 @@ public class QueryTermGenerator : IIncrementalGenerator
             registrations.AddRange(terms!.Value.Registrations);
         }
 
+        return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
+    }
+
+    // The queries a system's constructor takes, read from the closed system type. A Query<...> written with a type parameter of the system, such as
+    // Query<Span<T>> in S<T>, is closed only here; one written closed is handled where it is written.
+    private static TermExtraction? ExtractConstructorQueries(INamedTypeSymbol system, Location location)
+    {
+        if (GeneratorSupport.ContainsTypeParameter(system))
+        {
+            return null;
+        }
+
+        List<INamedTypeSymbol> closedHere = [];
+        List<ITypeSymbol> others = [];
+        foreach (IParameterSymbol parameter in system.InstanceConstructors.SelectMany(constructor => constructor.Parameters))
+        {
+            bool isWrittenOpen = GeneratorSupport.ContainsTypeParameter(parameter.OriginalDefinition.Type);
+            if (isWrittenOpen && parameter.Type is INamedTypeSymbol query && GeneratorSupport.IsQueryType(query))
+            {
+                closedHere.Add(query);
+            }
+            else
+            {
+                others.Add(parameter.Type);
+            }
+        }
+
+        List<TermRegistration> registrations = [];
+        foreach (INamedTypeSymbol query in closedHere)
+        {
+            TermExtraction? terms = ExtractTerms(query, location);
+            if (terms?.Diagnostic is not null)
+            {
+                return terms;
+            }
+
+            registrations.AddRange(terms!.Value.Registrations);
+        }
+
+        TermExtraction? closed = ExtractClosedQueries(others, location);
+        if (closed?.Diagnostic is not null)
+        {
+            return closed;
+        }
+
+        if (closed is { } closedTerms)
+        {
+            registrations.AddRange(closedTerms.Registrations);
+        }
         return registrations.Count == 0 ? null : new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
     }
 

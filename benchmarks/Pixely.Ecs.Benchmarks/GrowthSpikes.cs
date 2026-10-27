@@ -16,9 +16,9 @@ public static class GrowthSpikes
     private static int Total;
     private const int Runs = 7;
 
-    internal sealed class SpawnSystem : ISystem<MovingSpawner>
+    internal sealed class SpawnSystem(MovingSpawner spawner) : ISystem
     {
-        public void Update(MovingSpawner spawner)
+        public void Update()
         {
             for (int i = 0; i < PerFrame; i++)
             {
@@ -44,7 +44,7 @@ public static class GrowthSpikes
         {
             World world = new World();
             SystemScheduler scheduler = new SystemScheduler(world);
-            scheduler.Add(new SpawnSystem());
+            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>()));
             return (scheduler.Update, null);
         });
         Add("Pixely Create then Add", () =>
@@ -85,7 +85,7 @@ public static class GrowthSpikes
         {
             World world = new World();
             SystemScheduler scheduler = new SystemScheduler(world);
-            scheduler.Add(new SpawnSystem());
+            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>()));
             bool hinted = false;
             return (() =>
             {

@@ -79,7 +79,7 @@ internal sealed class SpawnerDescription : IFilterDescription
 }
 
 // Creates entities with the components of its type arguments and the tags of its IWith<...> at the next sync point, directly in their archetype.
-// A system names a spawner in its ISystem<...>, which creates one for the system, so a spawner class needs a public parameterless constructor.
+// A system takes a spawner in its constructor, and the SystemBuilder creates one for the system, so a spawner class needs a public parameterless constructor.
 public abstract class Spawner : IRecordedCommands, IRoomRequest
 {
     private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();
@@ -93,7 +93,7 @@ public abstract class Spawner : IRecordedCommands, IRoomRequest
 
     internal SpawnerLayout Layout => _layout!;
 
-    private CommandBuffer Commands => _commands ?? throw new InvalidOperationException($"The spawner {GetType().Name} was created with new. Get it through a system's Update.");
+    private CommandBuffer Commands => _commands ?? throw new InvalidOperationException($"The spawner {GetType().Name} was created with new. Get it through a system's constructor.");
 
     internal SpawnerDescription Describe()
     {
