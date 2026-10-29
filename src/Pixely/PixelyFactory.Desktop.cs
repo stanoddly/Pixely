@@ -54,7 +54,7 @@ public partial class PixelyFactory
         }
     }
 
-    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    private Window CreateWindow(ViewScope viewScope, SdlGpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -90,7 +90,7 @@ public partial class PixelyFactory
 
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
 
-        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 
     private OffscreenWindow CreateOffscreenWindow(

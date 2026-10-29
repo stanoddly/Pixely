@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Pixely.Gpu;
-using SDL;
 
 namespace Pixely.App;
 
@@ -119,19 +118,12 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
 
     private static string DescribeDevice(GpuDevice gpuDevice, bool? waitsForUploads)
     {
-        SDL_PropertiesID properties;
-        unsafe
-        {
-            properties = SDL3.SDL_GetGPUDeviceProperties(gpuDevice.SdlGpuDevice);
-        }
-
-        string? name = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_NAME_STRING, null);
+        string? name = gpuDevice.DeviceName;
 #if BROWSER
         // SDL's WebGPU backend names no device, so the page's description of the adapter stands in.
         name ??= BrowserHost.AdapterName;
 #endif
-        string driverVersion = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING, "unknown") ?? "unknown";
-        return FormatDevice(name ?? "unknown", gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", driverVersion, waitsForUploads);
+        return FormatDevice(name ?? "unknown", gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", gpuDevice.DriverVersion ?? "unknown", waitsForUploads);
     }
 
     internal static string FormatDevice(string name, string backend, string driverName, string driverVersion, bool? waitsForUploads)

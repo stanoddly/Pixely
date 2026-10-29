@@ -127,18 +127,7 @@ public class ShaderLoader : IShaderLoader
                     num_storage_textures = (uint)bindingLayout.NumStorageTextures()
                 };
 
-                SDL_GPUShader* pointer = SDL3.SDL_CreateGPUShader(_gpuDevice.SdlGpuDevice, &createInfo);
-                if (pointer == null)
-                {
-                    string stageName = stage == SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX
-                        ? "vertex"
-                        : "fragment";
-                    throw new PixelyInitializationException(
-                        $"SDL_CreateGPUShader failed for {stageName} stage: " +
-                        SDL3.SDL_GetError());
-                }
-
-                return new GraphicsShader(pointer, bindingLayout);
+                return new GraphicsShader(_gpuDevice.CreateShaderCore(createInfo), bindingLayout);
             }
         }
     }

@@ -47,7 +47,8 @@ public sealed partial class SwapchainWindow : Window
         unsafe
         {
             SDL_GPUTexture* swapchainTexturePointer;
-            if (!AcquireSwapchainTexture(commandBuffer.SdlGpuCommandBuffer, &swapchainTexturePointer, &width, &height))
+            // A swapchain window is claimed only for the SDL device, so its command buffers are SDL ones.
+            if (!AcquireSwapchainTexture(((SdlCommandBuffer)commandBuffer).Pointer, &swapchainTexturePointer, &width, &height))
             {
                 throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SDL3.SDL_GetError()}");
             }

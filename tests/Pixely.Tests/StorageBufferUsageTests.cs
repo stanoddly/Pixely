@@ -1,4 +1,5 @@
 using Pixely.Gpu;
+using Pixely.Testing;
 
 namespace Pixely.Tests;
 
@@ -35,9 +36,9 @@ public class StorageBufferUsageTests
     [TestCase(3)]
     public void CreateStorageBuffer_DataUnder4Bytes_Throws(int length)
     {
-        CopyPass copyPass = new(null!, default, null!);
+        using GpuMemorySystem gpuMemorySystem = new(StubGpuDevice.Create());
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => copyPass.CreateStorageBuffer<byte>(new byte[length]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => gpuMemorySystem.CreateStorageBuffer<byte>(new byte[length]));
     }
 
     [TestCase(4, 4u)]

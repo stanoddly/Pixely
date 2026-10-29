@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pixely.Shaders;
+using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.Gpu;
@@ -465,14 +466,7 @@ public class GraphicsPipelineBuilder
                     }
                 };
 
-                SDL_GPUGraphicsPipeline* pipeline = SDL3.SDL_CreateGPUGraphicsPipeline(
-                    _gpuDevice.SdlGpuDevice,
-                    &sdlGpuGraphicsPipelineCreateInfo);
-                if (pipeline == null)
-                {
-                    throw new PixelyInitializationException(
-                        $"SDL_CreateGPUGraphicsPipeline failed: {SDL3.SDL_GetError()}");
-                }
+                Pointer<SDL_GPUGraphicsPipeline> pipeline = _gpuDevice.CreateGraphicsPipelineCore(sdlGpuGraphicsPipelineCreateInfo);
 
                 GraphicsPipeline graphicsPipeline = new GraphicsPipeline(
                     _gpuDevice,

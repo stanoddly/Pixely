@@ -1,8 +1,8 @@
-using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Testing;
 using Pixely.Shaders;
 using Pixely.Text;
 
@@ -53,8 +53,7 @@ public class GpuExtensionsTests
         services.UseGpu();
         services.UseGpu();
 
-        // Not disposed: the uninitialized stub cannot survive GpuDevice.Dispose.
-        ServiceProvider provider = services.BuildServiceProvider();
+        using ServiceProvider provider = services.BuildServiceProvider();
 
         Assert.That(provider.GetServices<GpuDevice>(), Is.EqualTo(new[] { gpuDevice }));
     }
@@ -100,6 +99,6 @@ public class GpuExtensionsTests
 
     private static GpuDevice CreateGpuDeviceStub()
     {
-        return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
+        return StubGpuDevice.Create();
     }
 }

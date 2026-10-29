@@ -16,6 +16,8 @@
         <InternalsVisibleTo Include="Pixely.Ui.Tests" />
         <!-- The model tests decode a texture embedded in a model with SdlImageDecoder. -->
         <InternalsVisibleTo Include="Pixely.Models.Tests" />
+        <!-- The stub GPU device derives from GpuDevice and the other backend types, whose backend members are internal. -->
+        <InternalsVisibleTo Include="Pixely.Testing" />
     </ItemGroup>
 
     <ItemGroup>

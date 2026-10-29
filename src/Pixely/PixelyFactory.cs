@@ -105,7 +105,16 @@ public partial class PixelyFactory: IDisposable
 #endif
         }
 
-        Window window = CreateWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
+#if !BROWSER
+        // Only the SDL device has swapchains. Another device, such as the stub of a game's tests, renders into a texture the
+        // way a headless run does.
+        if (gpuDevice is { } and not SdlGpuDevice)
+        {
+            return CreateOffscreenWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
+        }
+#endif
+
+        Window window = CreateWindow(viewScope, (SdlGpuDevice?)gpuDevice, frameClock, platformInfo, config);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -116,7 +125,7 @@ public partial class PixelyFactory: IDisposable
         return window;
     }
 
-    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(GpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
+    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(SdlGpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
     {
         EnsureSdlInitialized();
 
@@ -145,7 +154,7 @@ public partial class PixelyFactory: IDisposable
             {
                 unsafe
                 {
-                    if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.SdlGpuDevice, sdlWindow) == false)
+                    if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.Pointer, sdlWindow) == false)
                     {
                         throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
                     }
@@ -174,7 +183,7 @@ public partial class PixelyFactory: IDisposable
             {
                 if (claimed)
                 {
-                    SDL3.SDL_ReleaseWindowFromGPUDevice(gpuDevice!.SdlGpuDevice, sdlWindow);
+                    SDL3.SDL_ReleaseWindowFromGPUDevice(gpuDevice!.Pointer, sdlWindow);
                 }
 
                 SDL3.SDL_DestroyWindow(sdlWindow);
@@ -187,17 +196,17 @@ public partial class PixelyFactory: IDisposable
     // Shaders work in linear light and an SDR_LINEAR swapchain encodes to sRGB on write. There is no fallback to the SDR swapchain,
     // because it would need every shader to encode as well. SDL does not always set an error for an unsupported composition, so
     // that case has its own message.
-    private static void UseSrgbSwapchain(GpuDevice gpuDevice, Pointer<SDL_Window> sdlWindow)
+    private static void UseSrgbSwapchain(SdlGpuDevice gpuDevice, Pointer<SDL_Window> sdlWindow)
     {
         unsafe
         {
-            if (SDL3.SDL_WindowSupportsGPUSwapchainComposition(gpuDevice.SdlGpuDevice, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) == false)
+            if (SDL3.SDL_WindowSupportsGPUSwapchainComposition(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) == false)
             {
                 throw new PixelyInitializationException(
                     $"The GPU driver ({gpuDevice.Driver}, {gpuDevice.NativeDriverName ?? "native driver unknown"}) has no sRGB swapchain (SDR_LINEAR) for the window, which Pixely needs.");
             }
 
-            if (SDL3.SDL_SetGPUSwapchainParameters(gpuDevice.SdlGpuDevice, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR, SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC) == false)
+            if (SDL3.SDL_SetGPUSwapchainParameters(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR, SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC) == false)
             {
                 throw new PixelyInitializationException($"SDL_SetGPUSwapchainParameters failed: {SDL3.SDL_GetError()}");
             }
@@ -262,7 +271,7 @@ public partial class PixelyFactory: IDisposable
             throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}");
         }
 
-        return new GpuDevice(device);
+        return SdlGpuDevice.Create(device);
     }
 
     internal KeyboardService CreateKeyboardService(AppControl appControl)

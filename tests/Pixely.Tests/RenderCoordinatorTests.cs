@@ -4,6 +4,7 @@ using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
+using Pixely.Testing;
 using Pixely.Utilities;
 using SDL;
 
@@ -396,6 +397,7 @@ public class RenderCoordinatorTests
     // Records the coordinator's GPU calls in order. The command buffer is a token the test contexts never use.
     private sealed class RecordingGpu : IRenderCoordinatorGpu
     {
+        private readonly StubGpuDevice _gpuDevice = StubGpuDevice.Create();
         private readonly List<string> _calls;
 
         public RecordingGpu(List<string> calls)
@@ -406,7 +408,7 @@ public class RenderCoordinatorTests
         public CommandBuffer AcquireCommandBuffer()
         {
             _calls.Add("acquire");
-            return (CommandBuffer)RuntimeHelpers.GetUninitializedObject(typeof(CommandBuffer));
+            return _gpuDevice.AcquireCommandBuffer();
         }
 
         public void SubmitUploads()
@@ -461,10 +463,10 @@ public class RenderCoordinatorTests
         return builder;
     }
 
-    // A registered device keeps UseGpu from registering the real one, which would need SDL. Providers holding the stub are never disposed: it cannot survive GpuDevice.Dispose.
+    // A registered device keeps UseGpu from registering the real one, which would need SDL.
     private static GpuDevice CreateGpuDeviceStub()
     {
-        return (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
+        return StubGpuDevice.Create();
     }
 
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)

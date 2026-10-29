@@ -17,20 +17,14 @@ public class GpuFence : IDisposable
     public bool IsSignaled()
     {
         ThrowIfDisposed();
-        unsafe
-        {
-            return SDL3.SDL_QueryGPUFence(_gpuDevice.SdlGpuDevice, Pointer);
-        }
+        return _gpuDevice.QueryFenceCore(Pointer);
     }
 
     public void Dispose()
     {
         if (!Pointer.IsNull)
         {
-            unsafe
-            {
-                SDL3.SDL_ReleaseGPUFence(_gpuDevice.SdlGpuDevice, Pointer);
-            }
+            _gpuDevice.ReleaseFenceCore(Pointer);
             Pointer = Pointer<SDL_GPUFence>.Null;
         }
     }

@@ -2,6 +2,21 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-29: The GPU types are abstract, and a stub device backs a game's renderer tests
+
+`GpuDevice`, `CommandBuffer`, `RenderPass`, `ComputePass` and the internal `CopyPass` are abstract. Their public methods stay non-virtual and keep the validation; each calls an internal abstract core. `SdlGpuDevice`, `SdlCommandBuffer`, `SdlRenderPass`, `SdlComputePass` and `SdlCopyPass` hold the SDL GPU calls. `StubGpuDevice` and its command buffer and passes in the new `Pixely.Testing` record what reaches them instead, for a game's tests (`docs/testing.md`).
+
+- The use is a game's own unit tests, so the stub is at the level of the types a renderer touches, not behind them, and a test asserts against the game's own pipelines, buffers and textures.
+- Resources stay one type for every backend. A texture, buffer, sampler, pipeline, shader or fence holds a handle that only the device that created it reads, typed as the SDL object it is on the SDL device and an identifier on the stub. A backend therefore never downcasts what is bound to it, and `UserTexture`, `BorrowedTexture` and `SwapchainTexture` do not multiply by backend.
+- Abstract classes rather than interfaces keep the public names and signatures. The generic methods (`PushVertexUniformData<T>`, `BindVertexBuffer<T>`, `CreateVertexBuffer<T>` and the others) stay non-virtual and pass bytes or the non-generic buffer to the core, so no generic virtual method is dispatched per call, which Mono AOT in the browser handles poorly.
+- The constructors and cores are internal, so only Pixely and `Pixely.Testing`, through `InternalsVisibleTo`, derive from the types.
+- The stub ships as its own assembly in the Pixely package, like `Pixely.Fitness`. A game that never references it neither ships it nor gives NativeAOT a second subclass to dispatch between.
+- `GpuMemorySystem` records into a `CommandBuffer` instead of holding SDL's command buffer, so its uploads go through whichever device it was given. The stub applies an upload when its command buffer is submitted and drops it when it is cancelled.
+- A window over a device other than the SDL one is an `OffscreenWindow`, because only SDL has swapchains.
+- `UseGpu` keeps its rule that a registered device means the block is present; `UseStubGpu` registers the stub and the same services through the internal `GpuExtensions.AddGpuServices`.
+
+Cost: each GPU call goes through one virtual call, which the JIT's dynamic PGO turns into a guarded direct call where only the SDL subclass is seen; Mono AOT keeps the virtual call. Code outside the SDL subclasses that needs an SDL object, the swapchain window and window creation, casts to the SDL type. `SDL_BeginGPURenderPass` returning no pass now throws instead of handing out a pass that throws `ObjectDisposedException` on first use, and `RenderPass.IsDefault()` means the pass has ended. The stub runs no shader and has no SDL validation, so GPU behavior still has no automated tests. `Pixely.Testing` is built for the desktop and copied into the browser folder of the package, where it cannot load.
+
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 
 Textures created from images default to `R8G8B8A8UnormSrgb`, every window claimed for the GPU device has an `SDR_LINEAR` swapchain, and shaders work in linear light. `Color` and `FColor` became `SrgbColor` (bytes, as authored) and `LinearColor` (floats, what the GPU works with); `SrgbColor` converts to `LinearColor` implicitly. The palette `Colors` became `SrgbColors`, and `LinearColors` replaces `FColors` with the same palette converted to linear light. This reverses the closing of #647 and supersedes #648.

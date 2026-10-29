@@ -1,46 +1,39 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.ShaderCommon;
-using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Gpu;
 
-public class CommandBuffer: IDisposable
+/// <summary>
+/// Records GPU work until it is submitted or cancelled. The device that acquired it backs it, so its validation runs the same
+/// whether SDL GPU or a test's stub device records the work.
+/// </summary>
+public abstract class CommandBuffer: IDisposable
 {
-    private readonly GpuDevice _gpuDevice;
-    private Pointer<SDL_GPUCommandBuffer> _sdlGpuCommandBuffer;
     private ShaderUniformSlotSizes _fragmentShaderUniformSlotSizes;
     private ShaderUniformSlotSizes _vertexShaderUniformSlotSizes;
-
-    internal Pointer<SDL_GPUCommandBuffer> SdlGpuCommandBuffer
-    {
-        get => _sdlGpuCommandBuffer;
-        private set => _sdlGpuCommandBuffer = value;
-    }
+    private bool _isFinished;
 
     public ShaderUniformSlotSizes FragmentShaderUniformSlotSizes => _fragmentShaderUniformSlotSizes;
     public ShaderUniformSlotSizes VertexShaderUniformSlotSizes => _vertexShaderUniformSlotSizes;
 
-    internal CommandBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer)
+    internal GpuDevice GpuDevice { get; }
+
+    // True once the command buffer is submitted or cancelled, after which it records nothing.
+    internal bool IsFinished => _isFinished;
+
+    internal CommandBuffer(GpuDevice gpuDevice)
     {
-        _gpuDevice = gpuDevice;
-        SdlGpuCommandBuffer = sdlCommandBuffer;
+        GpuDevice = gpuDevice;
     }
 
     public void Submit()
     {
         ThrowIfDisposed();
-        // Once the submit reaches SDL's backend, SDL invalidates the command buffer even when it fails, so it cannot be retried
-        // or cancelled. Only SDL's debug check for a pass still in progress fails earlier and leaves it valid, which SDL also
-        // asserts on as a programming error.
-        Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = SdlGpuCommandBuffer;
-        SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
-        unsafe
-        {
-            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
-        }
+        _isFinished = true;
+        SubmitCore();
     }
 
     /// <summary>
@@ -68,44 +61,8 @@ public class CommandBuffer: IDisposable
             throw new NotSupportedException($"A {texture.Size.Width}x{texture.Size.Height} {texture.Format} layer is too large to download into one array.");
         }
 
-        uint sizeInBytes = (uint)layerSizeInBytes;
-        byte[] pixels = new byte[sizeInBytes];
-
-        unsafe
-        {
-            SDL_GPUTransferBufferCreateInfo transferBufferCreateInfo = new SDL_GPUTransferBufferCreateInfo
-            {
-                usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
-                size = sizeInBytes
-            };
-            SDL_GPUTransferBuffer* transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(_gpuDevice.SdlGpuDevice, &transferBufferCreateInfo);
-            SdlError.ThrowOnNull(transferBuffer);
-
-            try
-            {
-                SDL_GPUTextureRegion source = new SDL_GPUTextureRegion { texture = texture.SdlGpuTexture, w = texture.Size.Width, h = texture.Size.Height, d = 1 };
-                SDL_GPUTextureTransferInfo destination = new SDL_GPUTextureTransferInfo { transfer_buffer = transferBuffer };
-
-                SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(SdlGpuCommandBuffer);
-                SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
-                SDL3.SDL_EndGPUCopyPass(copyPass);
-
-                using (GpuFence fence = SubmitAndAcquireFence())
-                {
-                    _gpuDevice.WaitForFences([fence]);
-                }
-
-                byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer, false);
-                SdlError.ThrowOnNull(mapped);
-                new ReadOnlySpan<byte>(mapped, pixels.Length).CopyTo(pixels);
-                SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
-            }
-            finally
-            {
-                SDL3.SDL_ReleaseGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
-            }
-        }
-
+        byte[] pixels = new byte[layerSizeInBytes];
+        SubmitAndDownloadTextureCore(texture, pixels);
         return new RawImage(pixels, texture.Size, pixelFormat);
 #endif
     }
@@ -113,46 +70,24 @@ public class CommandBuffer: IDisposable
     public GpuFence SubmitAndAcquireFence()
     {
         ThrowIfDisposed();
-        unsafe
-        {
-            SDL_GPUFence* fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(SdlGpuCommandBuffer);
-            SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
-
-            if (fence == null)
-            {
-                throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SDL3.SDL_GetError()}");
-            }
-
-            return new GpuFence(_gpuDevice, fence);
-        }
+        _isFinished = true;
+        return SubmitAndAcquireFenceCore();
     }
-    
+
     public void PushFragmentUniformData<TType>(uint slot, TType variable) where TType : unmanaged
     {
         ThrowIfDisposed();
-        
+
         AssignSlot(ref _fragmentShaderUniformSlotSizes, slot, Unsafe.SizeOf<TType>());
-        
-        unsafe
-        {
-            IntPtr data = new IntPtr(Unsafe.AsPointer(ref variable));
-            uint size = (uint)Unsafe.SizeOf<TType>();
-            SDL3.SDL_PushGPUFragmentUniformData(SdlGpuCommandBuffer, slot, data, size);
-        }
+        PushFragmentUniformDataCore(slot, MemoryMarshal.AsBytes(new ReadOnlySpan<TType>(in variable)));
     }
-    
+
     public void PushVertexUniformData<TType>(uint slot, TType variable) where TType : unmanaged
     {
         ThrowIfDisposed();
 
         AssignSlot(ref _vertexShaderUniformSlotSizes, slot, Unsafe.SizeOf<TType>());
-        
-        unsafe
-        {
-            IntPtr data = new IntPtr(Unsafe.AsPointer(ref variable));
-            uint size = (uint)Unsafe.SizeOf<TType>();
-            SDL3.SDL_PushGPUVertexUniformData(SdlGpuCommandBuffer, slot, data, size);
-        }
+        PushVertexUniformDataCore(slot, MemoryMarshal.AsBytes(new ReadOnlySpan<TType>(in variable)));
     }
 
     /// <summary>
@@ -179,43 +114,24 @@ public class CommandBuffer: IDisposable
             ValidateDepthBufferStoreOperations(depthBufferSettings);
         }
 
-        Span<SDL_GPUColorTargetInfo> colorTargetInfos = stackalloc SDL_GPUColorTargetInfo[colorTargets.Length];
-            
         for (int i = 0; i < colorTargets.Length; i++)
         {
-            Texture colorTarget = colorTargets[i];
-            ColorTargetSettings colorTargetSetting = colorTargetSettings[i];
             Texture? resolveTexture = resolveTextures.IsEmpty ? null : resolveTextures[i];
-            ValidateResolve(i, colorTarget, colorTargetSetting.StoreOperation, resolveTexture);
-
-            colorTargetInfos[i] = new SDL_GPUColorTargetInfo
-            {
-                texture = colorTarget.SdlGpuTexture,
-                clear_color = colorTargetSetting.ClearColorValue,
-                load_op = (SDL_GPULoadOp)colorTargetSetting.LoadOperation,
-                store_op = (SDL_GPUStoreOp)colorTargetSetting.StoreOperation,
-                resolve_texture = resolveTexture != null ? resolveTexture.SdlGpuTexture : Pointer<SDL_GPUTexture>.Null
-            };
+            ValidateResolve(i, colorTargets[i], colorTargetSettings[i].StoreOperation, resolveTexture);
         }
-        
-        Pointer<SDL_GPUTexture> depthBufferPointer = Pointer<SDL_GPUTexture>.Null;
 
-        if (depthBuffer != null)
-        {
-            depthBufferPointer = depthBuffer.SdlGpuTexture;
-        }
-        
         DepthBufferFormat depthBufferFormat = depthBuffer != null
             ? (DepthBufferFormat)depthBuffer.Format
             : DepthBufferFormat.None;
 
-        return CreateMultipleRenderTargetsPassInternal(
-            colorTargetInfos,
-            depthBufferPointer,
+        RenderPassTargets targets = new(
+            colorTargets,
+            colorTargetSettings[..colorTargets.Length],
+            depthBuffer,
             depthBufferSettings,
-            depthBufferFormat,
-            sampleCount,
-            CalculateTargetSize(colorTargets, depthBuffer));
+            resolveTextures);
+
+        return CreateRenderPassCore(targets, depthBufferFormat, sampleCount, CalculateTargetSize(colorTargets, depthBuffer));
     }
 
     // Every backend needs the attachments of a pass to share one sample count, which the pass's pipelines must also have.
@@ -320,65 +236,10 @@ public class CommandBuffer: IDisposable
         return new ShortSize(width, height);
     }
 
-    private RenderPass CreateMultipleRenderTargetsPassInternal(
-        ReadOnlySpan<SDL_GPUColorTargetInfo> colorTargetInfos,
-        Pointer<SDL_GPUTexture> depthBufferPointer,
-        DepthBufferSettings depthBufferSettings,
-        DepthBufferFormat depthBufferFormat,
-        SampleCount sampleCount,
-        ShortSize targetSize)
-    {
-        ThrowIfDisposed();
-        
-        unsafe
-        {
-            SDL_GPURenderPass* gpuRenderPass;
-            fixed (SDL_GPUColorTargetInfo* colorTargetInfosPtr = colorTargetInfos)
-            {
-                if (depthBufferPointer.IsNull)
-                {
-                    gpuRenderPass = SDL3.SDL_BeginGPURenderPass(
-                        SdlGpuCommandBuffer,
-                        colorTargetInfosPtr,
-                        (uint)colorTargetInfos.Length,
-                        null);
-                }
-                else
-                {
-                    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo = new SDL_GPUDepthStencilTargetInfo
-                    {
-                        texture = depthBufferPointer,
-                        clear_depth = depthBufferSettings.ClearDepthValue,
-                        load_op = (SDL_GPULoadOp)depthBufferSettings.DepthBufferLoadOperation,
-                        store_op = (SDL_GPUStoreOp)depthBufferSettings.DepthBufferStoreOperation,
-                        stencil_load_op = (SDL_GPULoadOp)depthBufferSettings.StencilLoadOperation,
-                        stencil_store_op = (SDL_GPUStoreOp)depthBufferSettings.StencilStoreOperation,
-                        clear_stencil = depthBufferSettings.ClearStencilValue
-                    };
-                    
-                    gpuRenderPass = SDL3.SDL_BeginGPURenderPass(
-                        SdlGpuCommandBuffer,
-                        colorTargetInfosPtr,
-                        (uint)colorTargetInfos.Length,
-                        &depthStencilTargetInfo);
-                }
-            }
-            
-            RenderPass renderPass = new RenderPass(this, gpuRenderPass, depthBufferFormat, sampleCount, targetSize);
-
-            return renderPass;
-        }
-    }
-
     public void PushComputeUniformData<TType>(uint slot, TType variable) where TType : unmanaged
     {
         ThrowIfDisposed();
-        unsafe
-        {
-            IntPtr data = new IntPtr(Unsafe.AsPointer(ref variable));
-            uint size = (uint)Unsafe.SizeOf<TType>();
-            SDL3.SDL_PushGPUComputeUniformData(SdlGpuCommandBuffer, slot, data, size);
-        }
+        PushComputeUniformDataCore(slot, MemoryMarshal.AsBytes(new ReadOnlySpan<TType>(in variable)));
     }
 
     public ComputePass CreateComputePass(
@@ -391,40 +252,7 @@ public class CommandBuffer: IDisposable
             readWriteStorageBuffers[i].Buffer.ValidateUsage("Compute read-write storage buffer", (uint)i, StorageBufferUsage.ComputeStorageWrite);
         }
 
-        unsafe
-        {
-            SDL_GPUStorageTextureReadWriteBinding* textureBindings = stackalloc SDL_GPUStorageTextureReadWriteBinding[readWriteStorageTextures.Length];
-            for (int i = 0; i < readWriteStorageTextures.Length; i++)
-            {
-                textureBindings[i] = new SDL_GPUStorageTextureReadWriteBinding
-                {
-                    texture = readWriteStorageTextures[i].Texture.SdlGpuTexture,
-                    mip_level = readWriteStorageTextures[i].MipLevel,
-                    layer = readWriteStorageTextures[i].Layer,
-                    cycle = readWriteStorageTextures[i].Cycle
-                };
-            }
-
-            SDL_GPUStorageBufferReadWriteBinding* bufferBindings = stackalloc SDL_GPUStorageBufferReadWriteBinding[readWriteStorageBuffers.Length];
-            for (int i = 0; i < readWriteStorageBuffers.Length; i++)
-            {
-                bufferBindings[i] = new SDL_GPUStorageBufferReadWriteBinding
-                {
-                    buffer = readWriteStorageBuffers[i].Buffer.SdlBuffer,
-                    cycle = readWriteStorageBuffers[i].Cycle
-                };
-            }
-
-            SDL_GPUComputePass* computePass = SDL3.SDL_BeginGPUComputePass(
-                SdlGpuCommandBuffer,
-                textureBindings,
-                (uint)readWriteStorageTextures.Length,
-                bufferBindings,
-                (uint)readWriteStorageBuffers.Length);
-
-            StorageBufferElementSizes rwElementSizes = BuildStorageBufferElementSizes(readWriteStorageBuffers);
-            return new ComputePass(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, rwElementSizes);
-        }
+        return CreateComputePassCore(readWriteStorageTextures, readWriteStorageBuffers, BuildStorageBufferElementSizes(readWriteStorageBuffers));
     }
 
     public ComputePass CreateComputePass()
@@ -465,17 +293,17 @@ public class CommandBuffer: IDisposable
         {
             slotSizes.Slot0 = byteSize;
         }
-        
+
         if (slot == 1)
         {
             slotSizes.Slot1 = byteSize;
         }
-        
+
         if (slot == 2)
         {
             slotSizes.Slot2 = byteSize;
         }
-        
+
         if (slot == 3)
         {
             slotSizes.Slot3 = byteSize;
@@ -485,49 +313,15 @@ public class CommandBuffer: IDisposable
     public void BlitTextures(Texture source, Texture destination)
     {
         ThrowIfDisposed();
-        
-        unsafe
-        {
-            SDL_GPUBlitRegion sourceRegion = new SDL_GPUBlitRegion
-            {
-                texture = source.SdlGpuTexture,
-                x = 0,
-                y = 0,
-                w = source.Size.Width,
-                h = source.Size.Height
-            };
-
-            SDL_GPUBlitRegion destinationRegion = new SDL_GPUBlitRegion
-            {
-                texture = destination.SdlGpuTexture,
-                x = 0,
-                y = 0,
-                w = destination.Size.Width,
-                h = destination.Size.Height
-            };
-
-            SDL_GPUBlitInfo blitInfo = new SDL_GPUBlitInfo
-            {
-                source = sourceRegion,
-                destination = destinationRegion,
-                load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
-                flip_mode = SDL_FlipMode.SDL_FLIP_NONE,
-                filter = SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
-            };
-
-            SDL3.SDL_BlitGPUTexture(SdlGpuCommandBuffer, &blitInfo);
-        }
+        BlitTexturesCore(source, destination);
     }
 
     public void Cancel()
     {
-        if (!SdlGpuCommandBuffer.IsNull)
+        if (!_isFinished)
         {
-            unsafe
-            {
-                SDL3.SDL_CancelGPUCommandBuffer(SdlGpuCommandBuffer);
-            }
-            SdlGpuCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _isFinished = true;
+            CancelCore();
         }
     }
 
@@ -538,9 +332,55 @@ public class CommandBuffer: IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (SdlGpuCommandBuffer.IsNull)
+        if (_isFinished)
         {
             throw new ObjectDisposedException(nameof(CommandBuffer));
         }
+    }
+
+    // The backend. The command buffer is open whenever one of these runs, except that the submits and the cancel run once it
+    // has been marked finished.
+    internal abstract void SubmitCore();
+    internal abstract GpuFence SubmitAndAcquireFenceCore();
+#if !BROWSER
+    // Records the download, submits, waits and fills pixels with the texture's first layer.
+    internal abstract void SubmitAndDownloadTextureCore(Texture texture, byte[] pixels);
+#endif
+    internal abstract void PushVertexUniformDataCore(uint slot, ReadOnlySpan<byte> data);
+    internal abstract void PushFragmentUniformDataCore(uint slot, ReadOnlySpan<byte> data);
+    internal abstract void PushComputeUniformDataCore(uint slot, ReadOnlySpan<byte> data);
+    internal abstract RenderPass CreateRenderPassCore(in RenderPassTargets targets, DepthBufferFormat depthBufferFormat, SampleCount sampleCount, ShortSize targetSize);
+    internal abstract ComputePass CreateComputePassCore(
+        ReadOnlySpan<StorageTextureReadWriteBinding> readWriteStorageTextures,
+        ReadOnlySpan<StorageBufferReadWriteBinding> readWriteStorageBuffers,
+        StorageBufferElementSizes readWriteStorageBufferElementSizes);
+    // The copy pass GpuMemorySystem records its uploads into. The transfer buffer outlives the pass, see UploadTransferBuffer.
+    internal abstract CopyPass BeginCopyPassCore(UploadTransferBuffer transferBuffer);
+    internal abstract void BlitTexturesCore(Texture source, Texture destination);
+    internal abstract void CancelCore();
+}
+
+// The validated attachments of a render pass, one color target setting per color target and resolve textures either empty
+// or one per color target.
+internal readonly ref struct RenderPassTargets
+{
+    public ReadOnlySpan<Texture> ColorTargets { get; }
+    public ReadOnlySpan<ColorTargetSettings> ColorTargetSettings { get; }
+    public Texture? DepthBuffer { get; }
+    public DepthBufferSettings DepthBufferSettings { get; }
+    public ReadOnlySpan<Texture?> ResolveTextures { get; }
+
+    public RenderPassTargets(
+        ReadOnlySpan<Texture> colorTargets,
+        ReadOnlySpan<ColorTargetSettings> colorTargetSettings,
+        Texture? depthBuffer,
+        DepthBufferSettings depthBufferSettings,
+        ReadOnlySpan<Texture?> resolveTextures)
+    {
+        ColorTargets = colorTargets;
+        ColorTargetSettings = colorTargetSettings;
+        DepthBuffer = depthBuffer;
+        DepthBufferSettings = depthBufferSettings;
+        ResolveTextures = resolveTextures;
     }
 }

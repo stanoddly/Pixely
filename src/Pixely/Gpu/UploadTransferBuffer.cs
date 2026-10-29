@@ -32,15 +32,15 @@ internal sealed class UploadTransferBuffer : IDisposable
 
         // Uploads already recorded from the old buffer still read it, which SDL allows: a released buffer is freed only once
         // the GPU is done with it. The new buffer is created first, so a failed create leaves the old one in place.
-        Pointer<SDL_GPUTransferBuffer> transferBuffer = _gpuDevice.CreateUploadTransferBuffer(capacity);
-        _gpuDevice.ReleaseTransferBuffer(SdlTransferBuffer);
+        Pointer<SDL_GPUTransferBuffer> transferBuffer = _gpuDevice.CreateUploadTransferBufferCore(capacity);
+        _gpuDevice.ReleaseTransferBufferCore(SdlTransferBuffer);
         SdlTransferBuffer = transferBuffer;
         Capacity = capacity;
     }
 
     public void Dispose()
     {
-        _gpuDevice.ReleaseTransferBuffer(SdlTransferBuffer);
+        _gpuDevice.ReleaseTransferBufferCore(SdlTransferBuffer);
         SdlTransferBuffer = Pointer<SDL_GPUTransferBuffer>.Null;
         Capacity = 0;
     }
