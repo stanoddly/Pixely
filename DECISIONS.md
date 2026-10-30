@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-30: Pixely.Messages keeps two frames of messages, as Bevy does, instead of a log trimmed behind its slowest reader
+
+`Pixely.Observations` becomes `Pixely.Messages`. `Messages<T>` holds the messages of the current and the previous frame and drops the older ones on each update. A `MessageReader<T>` is a transient service whose position is a count of messages, so each consumer that takes one reads on its own. This replaces `ObservationLog<T>` with its named readers, maximum capacity, stall detection and `ObservationSnapshot<T>`.
+
+- Pixely runs every updatable once per frame, and in the Orange architecture systems and updatables read at the same point in every frame, so none falls behind. The log's support for readers several frames behind had no user.
+- The names follow Bevy 0.17, which split its events into messages that systems read later and events that observers receive at once. "Observation" would suggest Bevy's observers.
+- A save captures the world at `UpdateOrders.Maintenance`, and state that must outlive a frame is a component, so messages need no snapshot.
+- A reader no longer registers with the storage, so it needs no name and no `Dispose`.
+
+Cost: a reader that misses messages loses them. That happens when it skips a frame, when it moves its read across Maintenance, or when it reads in a renderer, which Pixely skips while a window is minimized. Its next read throws instead of the writer, and the exception names the message type but not the reader. Messages written in the frame of a save, after one of their readers ran, are not saved. Nothing clears `Messages<T>` on a load.
+
 ## 2026-10-25: Pixely.Ecs spawners are classes on Spawner<...>, like queries, instead of [Blueprint] structs
 
 A spawner derives from `Spawner<T1, ..., T8>`, or is written inline as one, like a query on `Query<...>`. `Spawn` takes one value for each type argument, and the tags of the class's `IWith<...>` come without values. A system takes the spawner in its constructor. This supersedes the `[Blueprint]` structs and `Spawner<TBlueprint>` of the 2026-10-23 entry.

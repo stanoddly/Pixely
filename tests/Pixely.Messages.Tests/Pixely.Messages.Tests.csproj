@@ -20,7 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Pixely.Observations\Pixely.Observations.csproj" />
+      <ProjectReference Include="..\..\src\Pixely.Messages\Pixely.Messages.csproj" />
     </ItemGroup>
 
 </Project>
