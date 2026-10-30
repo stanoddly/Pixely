@@ -1,6 +1,6 @@
-# Testing renderers and input without devices
+# Testing renderers, input and text without devices
 
-`Pixely.Testing` gives a game's tests a GPU device without a GPU, and a keyboard and gamepads that a test presses ([Input](#input)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+`Pixely.Testing` gives a game's tests a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ## The app
 
@@ -85,3 +85,24 @@ gamepads.Disconnect(pad);
 - Every event's `Timestamp` is 0.
 
 Neither stub needs an app, a window or SDL started, so a test creates it with `new` and passes it to the code under test.
+
+## Fonts
+
+`StubFontSystem` is an `IFontSystem` that reads no font file. Every character measures the same, so a test knows the size of any text:
+
+```csharp
+using StubFontSystem fontSystem = new(glyphWidth: 6, lineHeight: 11);
+Font font = fontSystem.Load("fonts/Montserrat-Medium.ttf", 20);
+UiRoot root = new() { Style = new UiStyle(font) };
+```
+
+- `Load` returns a real `Font`, the same one for the same path, size, rasterization, hinting and style, as Pixely's font system does. The path is never read, and the size does not change the metrics.
+- Text is as wide as its longest line's characters times `glyphWidth`, and as high as its lines times `lineHeight`. Only `\n` starts a line; `\r`, spaces and tabs are characters like any other. A character is a Unicode scalar value, so an emoji is one. Empty text measures 0 × 0. The defaults are 8 and 16. "Score" measures 30 × 11 with the metrics above. A size over 65535 pixels throws `OverflowException`, where Pixely's font system would truncate it.
+- `CreateTextSprite` returns a sprite of the measured size on a blank `R8G8B8A8UnormSrgb` texture, the same sprite for the same text and font, so a `Label` lays out and paints as in the game. As in Pixely's font system, the texture is borrowed, so disposing it does nothing, and empty text throws `PixelyException`.
+- The textures are on the `StubGpuDevice` passed as `gpuDevice`, so a test reads a bound text texture back with `ReadTexture` on its own device. Without one, the stub creates a device of its own and disposes it with itself.
+- `ReleaseFont`, which `Font.Dispose()` calls, records the font in `ReleasedFonts`. A later `Load` with its path, size and settings returns a new font. `ReleasedFonts` is a copy taken when it is read.
+- Releasing a font again, including a second `Font.Dispose()` or one after the stub is disposed, does nothing. Releasing a font another font system loaded throws `InvalidOperationException`. Measuring or rasterizing with a released font throws `ObjectDisposedException`, because in the game its SDL font is closed.
+- Disposing the stub disposes its textures, and its device if it created one. After that, `Load`, `CreateTextSprite` and measuring throw `ObjectDisposedException`; `ReleasedFonts` and releasing still work.
+
+Its sizes are not a real font's. Real glyphs differ in width. SDL_ttf measures a trailing `\n` differently, and in text of several lines it leaves out a `\r` before `\n` and the spaces and tabs at the end of each line.
+
