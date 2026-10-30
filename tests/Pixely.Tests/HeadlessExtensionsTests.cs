@@ -19,11 +19,15 @@ public class HeadlessExtensionsTests
         SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
     }
 
-    [Test]
-    public void Build_WithoutTheVariable_RunsAsUsual()
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("0")]
+    [TestCase("false")]
+    [TestCase(" FALSE ")]
+    public void Build_WithTheVariableOff_RunsAsUsual(string? value)
     {
         PixelyAppBuilder builder = new();
-        builder.AddHeadlessSupport(static _ => null);
+        builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? value : null);
 
         using IPixelyApp app = builder.Build();
 
@@ -36,12 +40,14 @@ public class HeadlessExtensionsTests
         });
     }
 
-    [Test]
-    public void Build_WithTheVariable_RunsHeadless()
+    [TestCase("1")]
+    [TestCase("true")]
+    [TestCase(" TRUE ")]
+    public void Build_WithTheVariableOn_RunsHeadless(string value)
     {
         PixelyAppBuilder builder = new();
         builder.AddSingleton(new PixelyConfig(EnableCommandConsole: true));
-        builder.AddHeadlessSupport(HeadlessOn);
+        builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? value : null);
 
         using IPixelyApp app = builder.Build();
 

@@ -102,7 +102,7 @@ public partial class PixelyFactory: IDisposable
         // AddWindow uses instead of this method.
         if (gpuDevice is { } and not SdlGpuDevice)
         {
-            throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains, and no {nameof(IWindowFactory)} is registered to create its windows.");
+            throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains to create windows with. Register the stub GPU device of Pixely.Testing with UseStubGpu(), which also creates its windows.");
         }
 
         Window window = CreateWindow(viewScope, (SdlGpuDevice?)gpuDevice, frameClock, platformInfo, config);

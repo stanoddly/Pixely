@@ -52,8 +52,8 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.IPixelyApp%3F app = null%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
-            <!-- Before Configure, so an image writer the project registers replaces headless mode's. Headless mode is desktop-only. -->
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::Pixely.Headless.HeadlessExtensions.AddHeadlessSupport(builder)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
+            <!-- Before Configure, so an image writer the project registers replaces headless mode's. Headless mode is desktop-only, so a net11.0-browser build without browser-wasm skips it too. -->
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::Pixely.Headless.HeadlessExtensions.AddHeadlessSupport(builder)%3B" Condition="'$(_PixelyBrowser)' != 'true' and '$(TargetPlatformIdentifier)' != 'browser'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20await global::Pixely.App.BrowserHost.PrepareAsync(builder)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />
