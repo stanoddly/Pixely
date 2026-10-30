@@ -26,7 +26,8 @@ public class SystemGenerator : IIncrementalGenerator
         ["ComponentAdder"] = (1, 1),
         ["ComponentRemover"] = (1, 1),
         ["ComponentLookup"] = (1, 8),
-        ["ReadOnlyComponentLookup"] = (1, 8)
+        ["ReadOnlyComponentLookup"] = (1, 8),
+        ["RelationshipSources"] = (1, 1)
     };
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat;
@@ -217,6 +218,11 @@ public class SystemGenerator : IIncrementalGenerator
             if (GetRepeated(((INamedTypeSymbol)type).TypeArguments) is { } repeated)
             {
                 return Fail("PXECS008", $"The lookup {typeName} names {repeated.Name} more than once.", invocation);
+            }
+
+            if (((INamedTypeSymbol)type).Name == "ComponentLookup" && ((INamedTypeSymbol)type).TypeArguments.FirstOrDefault(GeneratorSupport.IsRelationship) is { } relationship)
+            {
+                return Fail("PXECS018", GeneratorSupport.FormatRelationshipWrite($"The lookup {typeName}", relationship.Name, "Use ReadOnlyComponentLookup<...>."), invocation);
             }
 
             argument = builderCall;

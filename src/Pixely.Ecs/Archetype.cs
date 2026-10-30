@@ -46,10 +46,16 @@ internal sealed class Archetype
         _columnIndices = new int[components.Ids.IsEmpty ? 0 : components.Ids[^1] + 1];
         Array.Fill(_columnIndices, Absent);
         _itemsById = new object?[_columnIndices.Length];
+        List<RelationshipColumn>? relationships = null;
         int column = 0;
         for (int i = 0; i < types.Length; i++)
         {
             int id = components.Ids[i];
+            if (types[i].Relationship is { } relationship)
+            {
+                (relationships ??= []).Add(new RelationshipColumn(column, relationship));
+            }
+
             if (types[i].IsTag)
             {
                 _columnIndices[id] = Tag;
@@ -62,9 +68,14 @@ internal sealed class Archetype
                 _columnIndices[id] = column++;
             }
         }
+
+        Relationships = relationships?.ToArray() ?? [];
     }
 
     public ComponentSet Components { get; }
+
+    // The columns that hold relationships, which the world indexes.
+    public RelationshipColumn[] Relationships { get; }
 
     public int Count { get; private set; }
 

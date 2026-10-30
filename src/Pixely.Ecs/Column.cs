@@ -12,6 +12,9 @@ internal abstract class ColumnType
     // A tag has no data, so an archetype keeps no column for it.
     public abstract bool IsTag { get; }
 
+    // How the world indexes the component, or null when it is no relationship.
+    public abstract RelationshipType? Relationship { get; }
+
     public abstract Column Create(int capacity);
 }
 
@@ -22,6 +25,14 @@ internal sealed class ColumnType<T> : ColumnType where T : struct
     public override int Size => Unsafe.SizeOf<T>();
 
     public override bool IsTag => default(T) is ITag;
+
+    // Throws for a relationship the world could not index: one the generator did not register, or a tag, which has no column to read its target from.
+    public override RelationshipType? Relationship => default(T) is IRelationship
+        ? default(T) is ITag
+            ? throw new InvalidOperationException($"The relationship {ComponentType<T>.Name} is a tag, which has no data to hold its target.")
+            : RelationshipType<T>.Instance ?? throw new InvalidOperationException(
+                $"The relationship {ComponentType<T>.Name} is not registered. The Pixely.Ecs generator registers every struct that implements IRelationship; reference it as an analyzer.")
+        : null;
 
     public override Column Create(int capacity) => new Column<T>(capacity);
 }

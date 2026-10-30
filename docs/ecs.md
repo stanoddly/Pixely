@@ -124,6 +124,7 @@ A system implements `ISystem`, whose `Update` the scheduler calls once per updat
 | `EntityDestroyer` | Destroys entities. |
 | `ComponentLookup<T1, ...>` | Reads and writes the components of its 1 to 8 type arguments of a given entity. |
 | `ReadOnlyComponentLookup<T1, ...>` | Reads the components of its 1 to 8 type arguments of a given entity. |
+| `RelationshipSources<T>` | Reads the entities whose relationship `T` points at a given entity, see [Relationships](#relationships). |
 | A spawner class or `Spawner<...>` | Creates entities with the components of its type arguments and the tags of its `IWith<...>`. |
 
 Any other constructor parameter is a service from the service provider.
@@ -215,6 +216,7 @@ internal sealed class Bodies : Query<ReadOnlySpan<Position>, ReadOnlySpan<Veloci
 
 services.AddQuery<Bodies>();
 services.AddReadOnlyComponentLookup<Position>();
+services.AddRelationshipSources<InsideOf>();
 
 internal sealed class BodyRenderer(Bodies bodies, ReadOnlyComponentLookup<Position> positions)
 {
@@ -224,7 +226,8 @@ internal sealed class BodyRenderer(Bodies bodies, ReadOnlyComponentLookup<Positi
 
 - `AddQuery<TQuery>()` registers the world's instance of the query class, the one its systems enumerate. A query with a `Span<T>` throws `InvalidOperationException` when the provider creates it, which is when the provider is built, because only systems write the world.
 - `AddReadOnlyComponentLookup<T1, ...>()` registers a read-only lookup of 1 to 8 components. Unlike a system's lookup, it reads at any time. A reference it returns stays valid until the systems next update, so code outside systems copies what it keeps.
-- Both resolve the `World` that `AddEcs` registered, so a stage's collection can register them too.
+- `AddRelationshipSources<T>()` registers the sources of a relationship, which read at any time too.
+- They resolve the `World` that `AddEcs` registered, so a stage's collection can register them too.
 - They need the service collection. Without dependency injection, only systems reach the world.
 
 ### Order
@@ -282,13 +285,53 @@ internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 
 `EnsureRoomFor(count)` of a spawner grows its archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. Any change of the system can fill the room: a system that also moves entities into the archetype with `ComponentAdder<T>` or `ComponentRemover<T>` asks for room for them too. A system that throws drops the request with its other changes.
 
+## Relationships
+
+A relationship is a component that implements `IRelationship`. It points its entity, the source, at another entity, the target. The world keeps the sources of each target, so `RelationshipSources<T>` reads them without scanning:
+
+```csharp
+// An item inside a container.
+public readonly record struct InsideOf(Entity Target) : IRelationship;
+
+// A part attached to a body, which is destroyed with the body.
+public readonly record struct AttachedTo(Entity Target) : IDestroyedWithTarget;
+
+internal sealed class PickUpSystem(Pickups pickups, ComponentAdder<InsideOf> inside) : ISystem
+{
+    public void Update()
+    {
+        ...
+        inside.Add(item, new InsideOf(player));
+    }
+}
+
+internal sealed class InventorySystem(RelationshipSources<InsideOf> contents, ReadOnlyComponentLookup<Name> names) : ISystem
+{
+    public void Update()
+    {
+        foreach (Entity item in contents[player])
+        {
+            ...
+        }
+    }
+}
+```
+
+- A relationship is an ordinary component otherwise. A query reads it through `ReadOnlySpan<T>`, and a `ReadOnlyComponentLookup<...>` reads it for a given entity.
+- It changes only through `ComponentAdder<T>`, `ComponentRemover<T>` and spawners, because the world updates its index at sync points. A query with `Span<T>` or `Optional<Span<T>>` of it, or a system that takes a `ComponentLookup<...>` of it, is an error. Adding it again moves the source to the new target.
+- Destroying a target removes the relationship from its sources, which stay alive. A relationship that implements `IDestroyedWithTarget` destroys its sources instead, and their sources in turn, so a hierarchy goes with its root. A cycle ends, because each entity is destroyed once.
+- A relationship whose target is not alive when it applies counts as if the target were destroyed: it is removed, or its source is destroyed. A target spawned earlier in the same system is alive by then, because a system's changes apply in the order it recorded them. A relationship that points at its own source is removed.
+- `RelationshipSources<T>` returns a span in no particular order, empty for a target without sources or one that is not alive. The span stays valid until the next structural change, like a reference from a lookup. It counts as naming `T` for [sync points](#sync-points).
+- An entity has one relationship of each type, so it has one target per relationship type. A game declares a type for each kind of relationship.
+- The world cannot read the target of a component it knows only as `T` without boxing it, so the generator registers every struct that implements `IRelationship` through a module initializer of its assembly. A relationship the world meets unregistered throws when the world creates an archetype with it.
+
 ## Sync points
 
 Writers record their changes, and the scheduler applies them at sync points:
 
 - After the last system of every update.
 - Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, optional ones included, `IWith<...>` and `IWithout<...>`. A spawner changes every component it spawns, tags included.
-- Before any system with a query, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component.
+- Before any system with a query, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component. A `ComponentAdder<T>` or spawner of a relationship destroyed with its target counts as an `EntityDestroyer`, because it destroys its source when the target is not alive.
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
 
@@ -342,14 +385,17 @@ The generator fails the build on these:
 | PXECS014 | A system does not implement `IUpdatable`, which would update it a second time. |
 | PXECS015 | `AddSystem<T>` is called where the generator can intercept it, and not used as a method group, such as `Action add = services.AddSystem<T>;`, or it would throw. |
 | PXECS016 | No component of an `Optional<...>` type argument is in the `IWith<...>` or `IWithout<...>` of its query. |
+| PXECS017 | A relationship is a struct that is not a tag or a `ref struct`, without type parameters, accessible anywhere in its assembly, so the generated code can register it. |
+| PXECS018 | No query writes a relationship through `Span<T>` or `Optional<Span<T>>`, and no system takes a `ComponentLookup<...>` of one. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004, PXECS005 and PXECS016 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. The world makes the same checks at runtime when it creates a query. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
+PXECS002, PXECS003 and the spans of PXECS018 are checked wherever `Query<...>` is written, with closed type arguments. PXECS017 is checked for every struct that implements `IRelationship`. PXECS001, PXECS004, PXECS005 and PXECS016 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. The world makes the same checks at runtime when it creates a query. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 and the lookups of PXECS018 are checked for the lookups of such a constructor too, and `SystemBuilder` checks them again when it creates a lookup.
 
 `AddSystem<T>` requires `T` to be a class that implements `ISystem`, which the compiler checks.
 
 ## Not supported yet
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
-- Change detection, events on add or remove, relations between entities.
+- Change detection, events on add or remove.
+- Querying by relationship, such as the entities whose target has a component, as Flecs does. A system reads a relationship's target through a lookup.
 - Pixely.Fitness has no rules for the [Orange architecture](orange-architecture.md) yet.
 - The browser is untested. Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and no browser test runs it under Mono, the browser's runtime, with or without AOT.

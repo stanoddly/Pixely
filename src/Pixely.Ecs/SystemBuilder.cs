@@ -36,10 +36,12 @@ public sealed partial class SystemBuilder
         return query;
     }
 
+    // A relationship destroyed with its target destroys its source when the target is not alive, so adding one counts as destroying.
     public ComponentAdder<T> ComponentAdder<T>() where T : struct
     {
         ThrowIfClosed();
         Contract.Changed.Add(ComponentType<T>.Id);
+        Contract.Destroys |= default(T) is IDestroyedWithTarget;
         return new ComponentAdder<T>(Commands);
     }
 
@@ -51,10 +53,13 @@ public sealed partial class SystemBuilder
     }
 
     public ComponentLookup<T> ComponentLookup<T>() where T : struct =>
-        new ComponentLookup<T>(AddLookup(typeof(ComponentLookup<T>), ComponentType<T>.Id));
+        new ComponentLookup<T>(AddWritableLookup(typeof(ComponentLookup<T>), ComponentType<T>.Id));
 
     public ReadOnlyComponentLookup<T> ReadOnlyComponentLookup<T>() where T : struct =>
         new ReadOnlyComponentLookup<T>(AddLookup(typeof(ReadOnlyComponentLookup<T>), ComponentType<T>.Id));
+
+    public RelationshipSources<T> RelationshipSources<T>() where T : struct, IRelationship =>
+        new RelationshipSources<T>(AddLookup(typeof(RelationshipSources<T>), ComponentType<T>.Id));
 
     public EntityDestroyer EntityDestroyer()
     {
@@ -69,6 +74,7 @@ public sealed partial class SystemBuilder
         TSpawner spawner = new TSpawner();
         SpawnerLayout layout = _world.GetSpawnerLayout(spawner);
         AddAll(Contract.Changed, layout.Archetype.Components);
+        Contract.Destroys |= layout.Archetype.Relationships.Any(relationship => relationship.Type.DestroyedWithTarget);
         spawner.Initialize(Commands, layout);
         return spawner;
     }
@@ -84,9 +90,7 @@ public sealed partial class SystemBuilder
         {
             if (componentIds[..i].Contains(componentIds[i]))
             {
-                Type[] arguments = lookup.GetGenericArguments();
-                string name = $"{lookup.Name[..lookup.Name.IndexOf('`')]}<{string.Join(", ", arguments.Select(argument => argument.Name))}>";
-                throw new InvalidOperationException($"The lookup {name} names {arguments[i].Name} more than once.");
+                throw new InvalidOperationException($"The lookup {FormatLookup(lookup)} names {lookup.GetGenericArguments()[i].Name} more than once.");
             }
         }
 
@@ -97,6 +101,24 @@ public sealed partial class SystemBuilder
 
         return Commands;
     }
+
+    // A relationship changes only at sync points, where the world updates its index, so no lookup writes one. The generator registers relationships when
+    // their assembly loads, which is before any of their ids exists.
+    private CommandBuffer AddWritableLookup(Type lookup, params ReadOnlySpan<int> componentIds)
+    {
+        foreach (int id in componentIds)
+        {
+            if (RelationshipType.Find(id) is { } relationship)
+            {
+                throw new InvalidOperationException(
+                    $"The lookup {FormatLookup(lookup)} writes {relationship.Name}, a relationship, which changes only through ComponentAdder<{relationship.Name}>, ComponentRemover<{relationship.Name}> and spawners. Use ReadOnlyComponentLookup<...>.");
+            }
+        }
+
+        return AddLookup(lookup, componentIds);
+    }
+
+    private static string FormatLookup(Type lookup) => $"{lookup.Name[..lookup.Name.IndexOf('`')]}<{string.Join(", ", lookup.GetGenericArguments().Select(argument => argument.Name))}>";
 
     private void ThrowIfClosed()
     {

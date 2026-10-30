@@ -26,7 +26,7 @@ internal sealed class QueryDescription : IFilterDescription
     public void Write<T>() where T : struct
     {
         Read<T>();
-        _writes = true;
+        SetWrites<T>();
     }
 
     // An Optional<ReadOnlySpan<T>>, so the entity may lack T.
@@ -40,7 +40,7 @@ internal sealed class QueryDescription : IFilterDescription
     public void WriteOptional<T>() where T : struct
     {
         ReadOptional<T>();
-        _writes = true;
+        SetWrites<T>();
     }
 
     public void With<T>() where T : struct => _required.Add(ComponentType<T>.Id);
@@ -68,6 +68,18 @@ internal sealed class QueryDescription : IFilterDescription
         }
 
         return new QueryState(required, optional, excluded, _writes);
+    }
+
+    // A relationship changes only at sync points, where the world updates its index, so no span writes one.
+    private void SetWrites<T>() where T : struct
+    {
+        if (default(T) is IRelationship)
+        {
+            string name = ComponentType<T>.Name;
+            throw new InvalidOperationException($"{_subject} writes {name}, a relationship, which changes only through ComponentAdder<{name}>, ComponentRemover<{name}> and spawners. Read it through ReadOnlySpan<{name}>.");
+        }
+
+        _writes = true;
     }
 
     private void AddRead<T>() where T : struct

@@ -24,6 +24,9 @@ public sealed class World
         public int Row;
     }
 
+    // A relationship of a spawned entity that the world could not index, because its target was not alive or was the entity itself.
+    private readonly record struct PendingLink(Entity Source, RelationshipType Type, Entity Target);
+
     private const int ReservedRow = -1;
 
     private readonly ChunkedList<EntityRecord> _records = new ChunkedList<EntityRecord>();
@@ -32,23 +35,74 @@ public sealed class World
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
     private readonly FastList<Query?> _queries = new FastList<Query?>(4);
     private readonly FastList<SpawnerLayout?> _spawnerLayouts = new FastList<SpawnerLayout?>(4);
+    private readonly Dictionary<int, RelationshipIndex> _relationshipsById = [];
+    private readonly FastList<RelationshipIndex> _relationships = new FastList<RelationshipIndex>();
+    private readonly FastList<Entity> _destroying = new FastList<Entity>();
+    private readonly FastList<PendingLink> _pendingLinks = new FastList<PendingLink>();
 
     // Each running query has an id, so ending a query twice, as copies of its enumerator do, ends it once.
     private readonly HashSet<long> _activeQueries = [];
     private long _lastQuery;
 
+    // Also destroys the sources of the entity's relationships that are destroyed with their target, and their sources in turn, and removes the other
+    // relationships that point at it. A stack instead of recursion keeps a deep hierarchy off the call stack, and the alive check ends a cycle.
     internal void Destroy(Entity entity)
     {
         ThrowIfQueryRuns();
-        ref EntityRecord record = ref GetRecord(entity);
+        GetRecord(entity);
+        _destroying.Add(entity);
+        while (_destroying.Length > 0)
+        {
+            Entity next = _destroying[_destroying.LastIndex];
+            _destroying.RemoveLast();
+            if (IsAlive(next))
+            {
+                DestroyOne(next);
+            }
+        }
+    }
+
+    private void DestroyOne(Entity entity)
+    {
+        ref EntityRecord record = ref _records[entity.Index];
         Archetype archetype = record.Archetype!;
         int row = record.Row;
+        foreach (RelationshipColumn relationship in archetype.Relationships)
+        {
+            GetRelationshipIndex(relationship.Type).Remove(entity, relationship.Type.GetTarget(archetype, relationship.Column, row));
+        }
 
         archetype.RemoveRow(row);
         FixMovedRow(archetype, row);
 
         record.Archetype = null;
         FreeIndex(ref record, entity.Index);
+        ReleaseSources(entity);
+    }
+
+    // The sources of a destroyed target: those destroyed with it wait on the stack of Destroy, and the others lose the relationship.
+    private void ReleaseSources(Entity target)
+    {
+        for (int i = 0; i < _relationships.Length; i++)
+        {
+            RelationshipIndex index = _relationships[i];
+            if (index.TakeSources(target) is not { } sources)
+            {
+                continue;
+            }
+
+            foreach (Entity source in sources.AsReadOnlySpan())
+            {
+                if (index.Type.DestroyedWithTarget)
+                {
+                    _destroying.Add(source);
+                }
+                else
+                {
+                    index.Type.Remove(this, source);
+                }
+            }
+        }
     }
 
     internal bool IsAlive(Entity entity)
@@ -169,6 +223,31 @@ public sealed class World
             edge.Target.GetColumnUnchecked<T>(edge.AddedColumn).GetUnchecked(record.Row) = component;
         }
         FixMovedRow(source, row);
+
+        // The target archetype checked that T is registered when the world created it.
+        if (default(T) is IRelationship)
+        {
+            RelationshipType<T> relationship = RelationshipType<T>.Instance!;
+            Link(entity, relationship, relationship.GetTarget(in component));
+        }
+    }
+
+    // Replaces T of an entity that has it. A relationship moves to its new target, which changes the index, so it waits for queries like a
+    // structural change.
+    internal void Replace<T>(Entity entity, T component) where T : struct
+    {
+        ref T current = ref Get<T>(entity);
+        if (default(T) is IRelationship)
+        {
+            ThrowIfQueryRuns();
+            RelationshipType<T> relationship = RelationshipType<T>.Instance!;
+            GetRelationshipIndex(relationship).Remove(entity, relationship.GetTarget(in current));
+            current = component;
+            Link(entity, relationship, relationship.GetTarget(in component));
+            return;
+        }
+
+        current = component;
     }
 
     internal void Remove<T>(Entity entity) where T : struct
@@ -180,6 +259,12 @@ public sealed class World
         if (source.GetColumnIndex(id) == Archetype.Absent)
         {
             ThrowMissing<T>(entity);
+        }
+
+        if (default(T) is IRelationship)
+        {
+            RelationshipType<T> relationship = RelationshipType<T>.Instance!;
+            GetRelationshipIndex(relationship).Remove(entity, relationship.GetTarget(in GetComponent<T>(source, record.Row, entity)));
         }
 
         ArchetypeEdge? edge = source.GetRemoveEdge(id);
@@ -262,7 +347,79 @@ public sealed class World
             record.Archetype = archetype;
             record.Row = row;
         }
+
+        if (archetype.Relationships.Length > 0)
+        {
+            LinkSpawned(archetype, firstRow, count);
+        }
     }
+
+    // Indexes every spawned row before handling the relationships it could not index, because removing or destroying moves rows of the archetype.
+    // A target spawned later in the same run is alive by then, because the records of the whole run are set.
+    private void LinkSpawned(Archetype archetype, int firstRow, int count)
+    {
+        for (int row = firstRow; row < firstRow + count; row++)
+        {
+            Entity source = archetype.GetEntity(row);
+            foreach (RelationshipColumn relationship in archetype.Relationships)
+            {
+                Entity target = relationship.Type.GetTarget(archetype, relationship.Column, row);
+                if (target != source && IsAlive(target))
+                {
+                    GetRelationshipIndex(relationship.Type).Add(source, target);
+                }
+                else
+                {
+                    _pendingLinks.Add(new PendingLink(source, relationship.Type, target));
+                }
+            }
+        }
+
+        for (int i = 0; i < _pendingLinks.Length; i++)
+        {
+            PendingLink link = _pendingLinks[i];
+            if (IsAlive(link.Source))
+            {
+                Link(link.Source, link.Type, link.Target);
+            }
+        }
+
+        _pendingLinks.Resize(0);
+    }
+
+    // Indexes a relationship the source just got. One that points at the source itself is removed. A target that is not alive counts as destroyed,
+    // so the source loses the relationship or is destroyed.
+    private void Link(Entity source, RelationshipType relationship, Entity target)
+    {
+        if (target != source && IsAlive(target))
+        {
+            GetRelationshipIndex(relationship).Add(source, target);
+        }
+        else if (target != source && relationship.DestroyedWithTarget)
+        {
+            Destroy(source);
+        }
+        else
+        {
+            relationship.Remove(this, source);
+        }
+    }
+
+    // Created on first use, also by a removal: a relationship whose first target was not alive is removed before anything was indexed.
+    private RelationshipIndex GetRelationshipIndex(RelationshipType relationship)
+    {
+        if (!_relationshipsById.TryGetValue(relationship.ComponentId, out RelationshipIndex? index))
+        {
+            index = new RelationshipIndex(relationship);
+            _relationshipsById.Add(relationship.ComponentId, index);
+            _relationships.Add(index);
+        }
+
+        return index;
+    }
+
+    internal ReadOnlySpan<Entity> GetSources(int componentId, Entity target) =>
+        _relationshipsById.TryGetValue(componentId, out RelationshipIndex? index) ? index.GetSources(target) : default;
 
     // Only a failed sync point releases, and only entities its spawner reserved, so the entity is reserved without a check.
     internal void ReleaseReservation(Entity entity)

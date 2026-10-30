@@ -39,6 +39,10 @@ public static partial class EcsServiceCollectionExtensions
     public static void AddReadOnlyComponentLookup<T>(this ServiceCollection services) where T : struct =>
         services.AddSingleton(static provider => new ReadOnlyComponentLookup<T>(provider.GetRequiredService<World>()));
 
+    // Registers the sources of the relationship T for code outside systems, which takes them in its constructor.
+    public static void AddRelationshipSources<T>(this ServiceCollection services) where T : struct, IRelationship =>
+        services.AddSingleton(static provider => new RelationshipSources<T>(provider.GetRequiredService<World>()));
+
     // The Pixely.Ecs generator intercepts this call. It creates TSystem with the queries, lookups and writers its constructor takes from the SystemBuilder
     // and the rest from the provider, and adds it to the SystemScheduler. Systems that declare no order between them with IAfter<...> and IBefore<...> run in
     // the order of these calls.

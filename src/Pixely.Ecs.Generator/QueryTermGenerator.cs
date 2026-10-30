@@ -210,6 +210,11 @@ public class QueryTermGenerator : IIncrementalGenerator
                     return Fail("PXECS002", $"The type argument {argumentName} of {queryName} must be Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct, such a span in Optional<...>, or ReadOnlySpan<Entity>.", location);
             }
 
+            if (kind is SpanKind.Span or SpanKind.OptionalSpan && GeneratorSupport.IsRelationship(element!))
+            {
+                return Fail("PXECS018", GeneratorSupport.FormatRelationshipWrite(queryName, element!.Name, $"Read it through ReadOnlySpan<{element.Name}>."), location);
+            }
+
             string component = element!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (read.Contains(component))
             {

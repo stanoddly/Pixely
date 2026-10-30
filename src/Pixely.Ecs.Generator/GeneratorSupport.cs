@@ -20,6 +20,7 @@ static class GeneratorSupport
 {
     public const string EntityName = "Pixely.Ecs.Entity";
     public const string TagName = "Pixely.Ecs.ITag";
+    public const string RelationshipName = "Pixely.Ecs.IRelationship";
     public const string QueryName = "Pixely.Ecs.Query";
     public const string SpawnerName = "Pixely.Ecs.Spawner";
     private const string SpanName = "System.Span<T>";
@@ -27,6 +28,12 @@ static class GeneratorSupport
     private const string OptionalName = "Pixely.Ecs.Optional<TSpan>";
 
     public static bool IsTag(ITypeSymbol type) => type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == TagName);
+
+    public static bool IsRelationship(ITypeSymbol type) => type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == RelationshipName);
+
+    // A relationship changes only at sync points, where the world updates its index, so no span or lookup writes one.
+    public static string FormatRelationshipWrite(string subject, string relationship, string instead) =>
+        $"{subject} writes {relationship}, a relationship, which changes only through ComponentAdder<{relationship}>, ComponentRemover<{relationship}> and spawners. {instead}";
 
     // What a type argument of Query<...> reads: ReadOnlySpan<Entity>, or Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct,
     // a type parameter or a tag, or such a span in Optional<...>. element is the T of a span.
