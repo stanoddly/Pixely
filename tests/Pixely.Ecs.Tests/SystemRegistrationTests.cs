@@ -91,6 +91,11 @@ public class SystemRegistrationTests
         }
     }
 
+    public sealed class StageOpener(UpdateLog log) : ISystem, IBefore<First>
+    {
+        public void Update() => log.Entries.Add(nameof(StageOpener));
+    }
+
     // A service that needs a system, so the provider creates that system early.
     public sealed class SecondUser(Second second)
     {
@@ -268,6 +273,26 @@ public class SystemRegistrationTests
 
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(First), nameof(Second), nameof(First) }));
         Assert.That(log.Systems[2], Is.Not.SameAs(log.Systems[0]));
+    }
+
+    // A stage shares its parent's scheduler, so its systems are ordered among the parent's.
+    [Test]
+    public void SystemOfAStageCanRunBeforeOneOfItsParent()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<First>();
+        using ServiceProvider root = services.BuildServiceProvider();
+        ServiceCollection stage = root.CreateServiceCollection();
+        stage.AddEcs();
+        stage.AddSystem<StageOpener>();
+        using ServiceProvider child = stage.BuildServiceProvider();
+
+        root.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(StageOpener), nameof(First) }));
     }
 
     [Test]

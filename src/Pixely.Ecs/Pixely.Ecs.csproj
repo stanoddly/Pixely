@@ -20,6 +20,7 @@
         <Fluidify Include="QueryFilters.cs.fluid" />
         <Fluidify Include="Spawners.cs.fluid" />
         <Fluidify Include="SystemBuilder.Lookups.cs.fluid" />
+        <Fluidify Include="SystemOrder.cs.fluid" />
     </ItemGroup>
 
     <ItemGroup>

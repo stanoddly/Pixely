@@ -50,7 +50,8 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - A system implements `ISystem`. Its constructor takes its contract: queries, lookups, writers,
   spawners, and message readers and writers
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
-- Systems run in the order of their `AddSystem` calls
+- A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
+  only breaks ties
 - A system that consumes an intent MUST validate it. A rejected intent becomes an observation
   message
 

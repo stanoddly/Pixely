@@ -189,9 +189,29 @@ services.AddSystem<MovementSystem>();
 
 - `AddEcs` registers a `World` and a `SystemScheduler`. The scheduler is an `IUpdatable` at the default `UpdateOrder` and updates every system once per frame. A child collection that calls `AddEcs` keeps its parent's world and scheduler.
 - `AddSystem<T>` is intercepted by the generator, also through `?.`. The generated code registers `T` as a singleton of its own type. When the provider creates it, before any `OnBuilt` callback runs, the generated code creates its queries, lookups and writers through a `SystemBuilder`, which records them as the contract, resolves its other parameters from the provider, and adds it to the scheduler.
-- Systems run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
+- Systems run in the order their `IAfter<...>` and `IBefore<...>` declare, described below. Otherwise they run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
 - A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS014 reports one that does.
 - A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
+
+### Order
+
+A system declares which systems it runs after with `IAfter<...>`, and which it runs before with `IBefore<...>`:
+
+```csharp
+internal sealed class AimSystem(Aimers aimers) : ISystem, IAfter<CameraSystem>, IBefore<WeaponSystem>
+{
+    public void Update() { ... }
+}
+```
+
+- `AimSystem` runs after every `CameraSystem` and before every `WeaponSystem`, whatever order they were added in.
+- Each type argument is a class that implements `ISystem`, which the compiler checks.
+- `IAfter<...>` and `IBefore<...>` take 1 to 8 systems. A system implements at most one `IAfter<...>` and one `IBefore<...>`; two of a kind give the compiler error CS8705. So two targets are `IAfter<CameraSystem, InputSystem>`.
+- A type argument that no added system has is ignored, so a system of the root may name one that only some stages add.
+- Systems that declare no order between them keep the order of their `AddSystem` or `Add` calls. Each step runs the earliest added system whose systems to run after have run.
+- A stage shares its parent's scheduler, so a system of a stage may run before one of its parent through `IBefore<...>`.
+- The scheduler reads the declarations when it adds a system and sorts at the start of the next `Update`. Sync points follow the sorted order.
+- A cycle, such as two systems that each run after the other, throws `InvalidOperationException` from `Update`, naming the systems of the cycle. Every `Update` throws until a system of the cycle is removed.
 
 ## Spawners
 
@@ -264,7 +284,7 @@ scheduler.Update();
 - The builder works only during the function. A builder kept and used later throws `InvalidOperationException`.
 - A system without queries, lookups or writers can be passed as it is, as in `scheduler.Add(new TimerSystem())`.
 - `Add` returns the system. `Remove` takes a system out; a system added or removed during `Update` takes effect from the next `Update`.
-- The generated code of `AddSystem` calls an overload of `Add` that also takes an order from `SystemScheduler.ReserveOrder()`. The scheduler runs its systems sorted by order, and `AddSystem` reserves the order when it is called, because the provider does not create singletons in call order.
+- The generated code of `AddSystem` calls an overload of `Add` that also takes an order from `SystemScheduler.ReserveOrder()`. The scheduler runs the systems that declare no order between them sorted by this number, and `AddSystem` reserves it when it is called, because the provider does not create singletons in call order.
 
 ## Diagnostics
 
