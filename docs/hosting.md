@@ -44,6 +44,9 @@ static partial class Program
   that needs built services runs in `OnBuilt` (`docs/class-registration.md`), a stage is loaded
   through `IStageManager.Load`, and a registered `UiView` is added to its root by `Pixely.Ui`
   (`docs/ui.md`).
+- On the desktop the generated `Main` calls `AddHeadlessSupport()` (`Pixely.Headless`) before
+  `Configure`, so `PIXELY_HEADLESS` runs any hosted app headless (`docs/headless.md`). An image writer
+  that `Configure` registers replaces headless mode's.
 - Command-line arguments come from `Environment.GetCommandLineArgs()`; its first element is the
   executable.
 - `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
@@ -57,8 +60,7 @@ writes the exception to standard error, shows its message in an error `MessageBo
 "Fatal error" and exits with 1. A system that cannot show the box gets a second entry on standard
 error instead. A Debug build and a headless run (`PIXELY_HEADLESS` set to `1` or `true`, see
 headless.md) rethrow the exception instead, so a debugger stops on it and nobody has to dismiss a box.
-The default reads only the environment variable, so `PixelyConfig.Headless` set in code does not
-count. In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
+In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
 
 A project that wants other behavior declares the optional `OnException`, whose return value is the
 exit code:
@@ -94,7 +96,7 @@ passing it as a method group, and an invocation binds to the declared method wha
 
 `obj/<Configuration>/<TargetFramework>/PixelyProgram.g.cs`, with a `<RuntimeIdentifier>` segment
 after the framework when the build has one, shown in the IDE under `Properties/PixelyProgram.g.cs`.
-It adds `Main` to `Program`, which builds the app from `Configure`, runs it, hands a failure to
+It adds `Main` to `Program`, which adds headless support on the desktop, builds the app from `Configure`, runs it, hands a failure to
 `OnException` and disposes the app last, and `PixelyProgramDefaults` to the namespace, which holds the
 default `OnException`. Nothing else is added. On the desktop `Main` is `static int Main()` and calls
 `app.Run()`; for `browser-wasm` it is `static async Task<int> Main()`, marked
@@ -343,11 +345,12 @@ supported.
 
 Not supported in the browser, each throwing `PlatformNotSupportedException`: `GpuDevice.WaitForFences`
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
-stack under a managed frame). Headless mode (`PixelyConfig.Headless`, `PIXELY_HEADLESS`) reads
-commands from standard input and frames back through that download, so a headless app fails at
-`Build()` with `PixelyInitializationException` in the browser. So does an app with the GPU device
+stack under a managed frame). Headless mode reads commands from standard input and frames back
+through that download, so it is desktop-only: the generated `Main` of a browser build does not call
+`AddHeadlessSupport()`, and a call is a CA1416 warning. An app with the GPU device
 (`UseGpu()`, which rendering registers) and `UploadWait.On` (`PIXELY_UPLOAD_WAIT=on`), which waits on a
-fence after each upload submit; `UploadWait.Automatic` never waits there. The swapchain is acquired
+fence after each upload submit, fails at `Build()` with `PixelyInitializationException`;
+`UploadWait.Automatic` never waits there. The swapchain is acquired
 with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no texture ready is skipped;
 `requestAnimationFrame` paces the frames anyway.
 

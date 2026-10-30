@@ -19,7 +19,6 @@ public class PixelyAppLoggingTests
             // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
             SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
             PixelyAppBuilder builder = new();
-            builder.AddSingleton(new PixelyConfig(Headless: true));
             builder.AddZLogger(logging =>
             {
                 logging.AddZLoggerFileWithRetention(

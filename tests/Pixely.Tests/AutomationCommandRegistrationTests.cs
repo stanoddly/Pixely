@@ -18,7 +18,6 @@ public class AutomationCommandRegistrationTests
     public void Build_TwoCommandsWithSameName_Throws()
     {
         PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: true));
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
 
@@ -31,7 +30,6 @@ public class AutomationCommandRegistrationTests
     public void StageCommand_JoinsOnLoadAndLeavesOnUnload()
     {
         PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: true));
         using IPixelyApp app = builder.Build();
         AutomationCommandRegistry registry = app.GetRequiredService<AutomationCommandRegistry>();
         StageManager stageManager = app.GetRequiredService<StageManager>();
@@ -55,7 +53,6 @@ public class AutomationCommandRegistrationTests
     public void StageCommand_WithNameOfAppCommand_FailsStageLoad()
     {
         PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: true));
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
         using IPixelyApp app = builder.Build();
         StageManager stageManager = app.GetRequiredService<StageManager>();
@@ -69,7 +66,6 @@ public class AutomationCommandRegistrationTests
     public void FailedStageLoad_RemovesItsCommandsAndKeepsAppCommand()
     {
         PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: true));
         SpawnCommand appSpawn = new();
         builder.AddSingleton<AutomationCommand>(appSpawn);
         using IPixelyApp app = builder.Build();

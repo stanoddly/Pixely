@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-30: Headless mode is its own assembly that an app adds
+
+Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its standard-input console and command interpreter, the offscreen window, the fixed-step clock and the image writer. An app adds it with `AddHeadlessSupport()`, and `PIXELY_HEADLESS` then turns it on. The generated `Main` of a hosted app calls it on the desktop. `PixelyConfig.Headless` is removed (`docs/headless.md`).
+
+- An agent turns headless mode on with the variable, never through the config, so the variable is the one switch. An explicit call keeps that working for every hosted app without a module initializer or reflection, which a trimmed publish would break.
+- A game decides whether its builds carry headless mode: a hand-written `Main` can call `AddHeadlessSupport()` under `#if DEBUG` only.
+- Core keeps three internal seams that `Pixely.Headless` uses through `InternalsVisibleTo`: a frame clock registered before `Build()` replaces the real one, an `IWindowFactory` creates the windows instead of the SDL device's swapchain windows, and `PixelyConfig.IsIsolated` leaves out real gamepads and the OS theme. The stub GPU device of `Pixely.Testing` creates its windows through `IWindowFactory` as well, and an app with two window factories fails when it creates a window.
+- `IImageWriter` and `OffscreenWindow` moved with it into the `Pixely.Headless` namespace.
+
+Cost: an app with its own `Main` that does not call `AddHeadlessSupport()` ignores `PIXELY_HEADLESS`. `Pixely.Headless` is built for the desktop and copied into the browser folder of the package, where it cannot load; the browser's generated `Main` does not call it, and `AddHeadlessSupport()` is marked unsupported in the browser.
+
 ## 2026-10-29: The GPU types are abstract, and a stub device backs a game's renderer tests
 
 `GpuDevice`, `CommandBuffer`, `RenderPass`, `ComputePass` and the internal `CopyPass` are abstract. Their public methods stay non-virtual and keep the validation; each calls an internal abstract core. `SdlGpuDevice`, `SdlCommandBuffer`, `SdlRenderPass`, `SdlComputePass` and `SdlCopyPass` hold the SDL GPU calls. `StubGpuDevice` and its command buffer and passes in the new `Pixely.Testing` record what reaches them instead, for a game's tests (`docs/testing.md`).

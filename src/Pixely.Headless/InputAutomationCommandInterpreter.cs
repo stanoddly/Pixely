@@ -2,10 +2,12 @@ using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.Versioning;
+using Pixely.App;
 using Pixely.Content;
+using Pixely.Input;
 using SDL;
 
-namespace Pixely.Input;
+namespace Pixely.Headless;
 
 /// <summary>
 /// Runs one command of the text command grammar, without its terminating <c>;</c>, against <see cref="InputAutomation"/> and

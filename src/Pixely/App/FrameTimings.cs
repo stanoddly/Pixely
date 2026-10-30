@@ -124,7 +124,7 @@ internal sealed class FrameTimings : IFrameTimingRecorder
 
     public void OnSwapchainAcquired(Window window, SwapchainTexture swapchainTexture)
     {
-        SwapchainState swapchain = new(window.ViewScope, swapchainTexture.Size, swapchainTexture.Format, window is OffscreenWindow);
+        SwapchainState swapchain = new(window.ViewScope, swapchainTexture.Size, swapchainTexture.Format, window.IsOffscreen);
         if (_swapchains.TryGetValue(window.ViewScope, out SwapchainState recorded) && recorded == swapchain)
         {
             return;

@@ -1,4 +1,6 @@
-namespace Pixely.Content;
+using Pixely.Content;
+
+namespace Pixely.Headless;
 
 public interface IImageWriter
 {

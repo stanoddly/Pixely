@@ -27,6 +27,7 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" />
+      <ProjectReference Include="..\..\src\Pixely.Headless\Pixely.Headless.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Testing\Pixely.Testing.csproj" />
       <ProjectReference Include="..\..\src\Pixely.Ui\Pixely.Ui.csproj" />
     </ItemGroup>

@@ -4,10 +4,10 @@ using Pixely.Gpu;
 using Pixely.Utilities;
 using SDL;
 
-namespace Pixely;
+namespace Pixely.Headless;
 
 /// <summary>
-/// The window of a headless app (<see cref="PixelyConfig.Headless"/>): a hidden SDL window whose frames go to a texture
+/// The window of a headless app: a hidden SDL window whose frames go to a texture
 /// instead of the swapchain, so nothing is presented and frames can be read back. Events, size and text input still come from
 /// the SDL window. Without a swapchain there is no vsync, so acquiring waits for the GPU to finish all earlier work instead, which
 /// keeps at most about one frame in flight.
@@ -53,6 +53,8 @@ public sealed class OffscreenWindow : Window
 
         throw new PixelyInitializationException("The GPU device supports neither B8G8R8A8UnormSrgb nor R8G8B8A8UnormSrgb as a sampled color target, which an offscreen window needs.");
     }
+
+    internal override bool IsOffscreen => true;
 
     // There is always a frame to draw, whether or not the SDL window is shown.
     public override bool IsRenderable => true;

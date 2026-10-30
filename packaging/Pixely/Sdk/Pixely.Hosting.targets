@@ -2,7 +2,8 @@
 
     <!--
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
-      project's RootNamespace whose Main builds the app from the project's Configure, runs it and
+      project's RootNamespace whose Main adds headless support on the desktop (Pixely.Headless, which PIXELY_HEADLESS turns on),
+      builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
       of Program, which on the desktop reports the failure in a message box in Release builds outside
       headless mode and otherwise rethrows it. On browser-wasm the browser owns the frame loop and the WebGPU device is requested
@@ -51,6 +52,8 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.IPixelyApp%3F app = null%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
+            <!-- Before Configure, so an image writer the project registers replaces headless mode's. Headless mode is desktop-only. -->
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::Pixely.Headless.HeadlessExtensions.AddHeadlessSupport(builder)%3B" Condition="'$(_PixelyBrowser)' != 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20await global::Pixely.App.BrowserHost.PrepareAsync(builder)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />

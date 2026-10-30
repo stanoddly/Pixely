@@ -1,13 +1,14 @@
 using System.Runtime.Versioning;
 using System.Text;
 using Pixely.App;
+using Pixely.Input;
 
-namespace Pixely.Input;
+namespace Pixely.Headless;
 
 /// <summary>
 /// Runs <c>;</c>-terminated commands from a text stream on the frame loop, in lockstep: game time advances only through
 /// <c>wait</c>, and while no command is left to run the frame blocks until the next one arrives. The end of the input quits
-/// the app. The browser has no standard input, so the factory registers no console there.
+/// the app.
 /// </summary>
 [UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable

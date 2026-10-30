@@ -1,7 +1,8 @@
 using System.Numerics;
+using Pixely.Input;
 using SDL;
 
-namespace Pixely.Input;
+namespace Pixely.Headless;
 
 internal sealed class InputAutomation
 {

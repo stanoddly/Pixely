@@ -42,6 +42,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\Pixely.PathFinding\Pixely.PathFinding.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Fitness\Pixely.Fitness.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <ProjectReference Include="..\..\src\Pixely.Headless\Pixely.Headless.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Audio\Pixely.Audio.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Collections\Pixely.Collections.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Core\Pixely.Core.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />

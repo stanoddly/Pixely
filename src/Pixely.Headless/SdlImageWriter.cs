@@ -1,7 +1,8 @@
+using Pixely.Content;
 using Pixely.Utilities;
 using SDL;
 
-namespace Pixely.Content;
+namespace Pixely.Headless;
 
 internal class SdlImageWriter : IImageWriter
 {

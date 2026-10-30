@@ -1,5 +1,6 @@
 using Pixely.App;
 using static Pixely.Tests.FrameTimingsTests;
+using Pixely.Headless;
 
 namespace Pixely.Tests;
 

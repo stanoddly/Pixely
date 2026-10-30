@@ -10,7 +10,7 @@ public static class UpdateOrders
     /// <summary>Frame instrumentation, before anything the frame does. Used by <c>PerformanceReport</c> (with <c>PixelyConfig.EnableDiagnostics</c>).</summary>
     public const int Diagnostics = -20_000;
 
-    /// <summary>Commands from outside the process, after the frame's real events and before the game reads input. Used by <c>InputAutomationConsole</c> and <c>AutomationCommandConsole</c>.</summary>
+    /// <summary>Commands from outside the process, after the frame's real events and before the game reads input. Used by headless mode's console (Pixely.Headless) and <c>AutomationCommandConsole</c>.</summary>
     public const int Input = -10_000;
 
     /// <summary>What an updatable runs at when it does not choose. Used by <c>TimerSystem</c> and <c>UpdateSystem</c>.</summary>

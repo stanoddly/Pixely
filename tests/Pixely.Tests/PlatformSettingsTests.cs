@@ -49,9 +49,10 @@ public class PlatformSettingsTests
     }
 
     [Test]
-    public void Headless_ReportsUnknownThemeAndIgnoresThemeEvent()
+    public void Isolated_ReportsUnknownThemeAndIgnoresThemeEvent()
     {
-        ServiceProvider provider = Build(new PixelyConfig(Headless: true));
+        PixelyConfig config = new() { IsIsolated = true };
+        ServiceProvider provider = Build(config);
         IPlatformSettings settings = provider.GetRequiredService<IPlatformSettings>();
         int raised = 0;
         settings.ThemeChanged += _ => raised++;

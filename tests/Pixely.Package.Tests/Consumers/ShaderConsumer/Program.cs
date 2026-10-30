@@ -7,6 +7,7 @@ string[] runtimeAssemblies =
     "Pixely",
     "Pixely.PathFinding",
     "Pixely.Fitness",
+    "Pixely.Headless",
     "Pixely.Audio",
     "Pixely.Collections",
     "Pixely.Core",

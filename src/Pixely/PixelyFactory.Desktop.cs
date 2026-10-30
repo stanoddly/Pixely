@@ -62,15 +62,15 @@ public partial class PixelyFactory
         return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 
-    // Created as configured, like any other window, but not claimed: there is no swapchain to claim it for.
-    private Window CreateWindowWithoutSwapchain(ViewScope viewScope, GpuDevice gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    // For an IWindowFactory: an SDL window that is not claimed for the GPU device, wrapped in a window of the factory's own type.
+    // Nothing owns the SDL window until the wrapper exists, so a failure to create the wrapper destroys it.
+    internal Window CreateUnclaimedWindow(string? title, uint width, uint height, SDL_WindowFlags windowFlags, Func<Pointer<SDL_Window>, uint, Window> createWindow)
     {
-        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowShape(config);
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, windowFlags);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, title, width, height, windowFlags);
 
         try
         {
-            return gpuDevice.CreateWindowCore(viewScope, sdlWindow, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+            return createWindow(sdlWindow, sdlWindowId);
         }
         catch
         {
@@ -83,7 +83,8 @@ public partial class PixelyFactory
         }
     }
 
-    private static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowShape(WindowConfig config)
+    // The size and flags of a window created as its config says.
+    internal static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowShape(WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -118,24 +119,6 @@ public partial class PixelyFactory
         }
 
         return (width, height, windowFlags);
-    }
-
-    private OffscreenWindow CreateOffscreenWindow(
-        ViewScope viewScope,
-        GpuDevice gpuDevice,
-        PixelyFrameClock frameClock,
-        PlatformInfo platformInfo,
-        WindowConfig config)
-    {
-        // Only size and title matter: the SDL window is never shown, it just backs events and text input.
-        // It is not claimed for the GPU device: with a claimed window, SDL's Vulkan backend frees finished work only on a
-        // submit that requested a swapchain texture, which an offscreen window never does.
-        // Selected before the SDL window exists, so a device without either format leaves no window to clean up.
-        TextureFormat colorTargetFormat = OffscreenWindow.SelectColorTargetFormat(
-            format => gpuDevice.IsTextureFormatSupported(format, TextureType.TwoD, TextureUsage.ColorTarget | TextureUsage.Sampler));
-        (uint width, uint height) = config.Size ?? DefaultSize;
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN);
-        return new OffscreenWindow(viewScope, sdlWindow, gpuDevice, colorTargetFormat, sdlWindowId, frameClock, platformInfo, WindowCloseBehavior.QuitApplication);
     }
 }
 #endif

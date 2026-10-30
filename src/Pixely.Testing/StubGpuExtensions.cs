@@ -31,6 +31,7 @@ public static class StubGpuExtensions
 
         services.AddSingleton<StubGpuDevice>(_ => StubGpuDevice.Create(options));
         services.AddAlias<GpuDevice, StubGpuDevice>();
+        services.AddSingleton<IWindowFactory>(provider => new StubWindowFactory(provider.GetRequiredService<PixelyFactory>(), provider.GetRequiredService<StubGpuDevice>()));
         GpuExtensions.AddGpuServices(services);
         return services;
     }

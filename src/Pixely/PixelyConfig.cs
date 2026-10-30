@@ -27,7 +27,6 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false,
     bool PreferLowPowerGpu = false,
     bool EnableDiagnostics = false,
     UploadWait UploadWait = UploadWait.Automatic,
@@ -36,13 +35,15 @@ public sealed record PixelyConfig(
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
     public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
-    public bool Headless { get; internal set; } = Headless;
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
     // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
     internal string? SdlVideoDriver { get; set; }
+    // The app ignores the machine's gamepads and the OS's theme, so it behaves the same on any machine; set by headless mode
+    // (Pixely.Headless).
+    internal bool IsIsolated { get; set; }
 }
 #else
 public sealed record PixelyConfig(
@@ -52,7 +53,6 @@ public sealed record PixelyConfig(
     string? ApplicationIdentifier = null,
     string? TaskbarIconPath = null,
     bool DeliverActivatingMouseClicks = true,
-    bool Headless = false,
     bool PreferLowPowerGpu = false,
     bool EnableDiagnostics = false,
     UploadWait UploadWait = UploadWait.Automatic,
@@ -61,12 +61,14 @@ public sealed record PixelyConfig(
     public bool EnableSdlLogging { get; internal set; } = EnableSdlLogging;
     public bool EnableGpuValidation { get; internal set; } = EnableGpuValidation;
     public GpuBackend GpuBackend { get; internal set; } = GpuBackend;
-    public bool Headless { get; internal set; } = Headless;
     public bool PreferLowPowerGpu { get; internal set; } = PreferLowPowerGpu;
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
     // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
     internal string? SdlVideoDriver { get; set; }
+    // The app ignores the machine's gamepads and the OS's theme, so it behaves the same on any machine; set by headless mode
+    // (Pixely.Headless).
+    internal bool IsIsolated { get; set; }
 }
 #endif

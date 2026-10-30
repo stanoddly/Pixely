@@ -323,10 +323,6 @@ public abstract class GpuDevice : IDisposable
     // Called with a sample count above Count1 only.
     internal abstract bool IsSampleCountSupportedCore(TextureFormat format, SampleCount sampleCount);
     internal abstract CommandBuffer AcquireCommandBufferCore();
-    // The window of a device without swapchains, which is every device but the SDL one, around an SDL window the factory
-    // created for it and left unclaimed. The SDL device's windows have swapchains and are created by the factory itself.
-    internal virtual Window CreateWindowCore(ViewScope viewScope, Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowCloseBehavior closeBehavior) =>
-        throw new NotSupportedException($"{GetType().Name} has no windows.");
     internal abstract Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config);
     internal abstract Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount);
     internal abstract Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes);
