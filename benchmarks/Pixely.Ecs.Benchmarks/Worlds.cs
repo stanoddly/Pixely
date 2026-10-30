@@ -6,29 +6,32 @@ namespace Pixely.Ecs.Benchmarks;
 // Both worlds hold the same entities: a third each in {Position, Velocity}, {Position, Velocity, Player} and {Position, Velocity, Enemy}.
 public static class Worlds
 {
-    public static (World World, Entity[] Entities) CreatePixely(int count)
+    internal sealed class PopulatingSystem(MovingSpawner moving, PlayerSpawner players, EnemySpawner enemies, Entity[] entities) : ISystem
     {
-        World world = new World();
-        Entity[] entities = new Entity[count];
-        for (int i = 0; i < count; i++)
+        public void Update()
         {
-            Entity entity = world.Create();
-            world.Add(entity, new Position(i, i));
-            world.Add(entity, new Velocity(1, 1));
-            switch (i % 3)
+            for (int i = 0; i < entities.Length; i++)
             {
-                case 1:
-                    world.Add(entity, new Player());
-                    break;
-                case 2:
-                    world.Add(entity, new Enemy());
-                    break;
+                Position position = new Position(i, i);
+                Velocity velocity = new Velocity(1, 1);
+                entities[i] = (i % 3) switch
+                {
+                    1 => players.Spawn(position, velocity),
+                    2 => enemies.Spawn(position, velocity),
+                    _ => moving.Spawn(position, velocity)
+                };
             }
-
-            entities[i] = entity;
         }
+    }
 
-        return (world, entities);
+    // Spawns the entities through a system, as a game does, with a scheduler of its own.
+    public static Entity[] PopulatePixely(World world, int count)
+    {
+        Entity[] entities = new Entity[count];
+        SystemScheduler scheduler = new SystemScheduler(world);
+        scheduler.Add(builder => new PopulatingSystem(builder.Spawner<MovingSpawner>(), builder.Spawner<PlayerSpawner>(), builder.Spawner<EnemySpawner>(), entities));
+        scheduler.Update();
+        return entities;
     }
 
     public static (ArchWorld World, ArchEntity[] Entities) CreateArch(int count)

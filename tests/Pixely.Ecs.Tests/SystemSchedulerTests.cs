@@ -32,15 +32,16 @@ public class SystemSchedulerTests
         }
     }
 
-    // Reads the world directly, which a real system does not, to see whether a change has been applied yet. Its query only adds to its contract.
+    // Reads through the lookup of code outside systems, which a real system does not, so its contract does not name Dead and it can see whether a
+    // change has been applied yet. Its query only adds to its contract.
     internal sealed class DeadProbe : ISystem
     {
-        private readonly World _world;
+        private readonly ReadOnlyComponentLookup<Dead> _dead;
         private readonly Entity _entity;
 
-        public DeadProbe(World world, Entity entity, Movement movement)
+        public DeadProbe(ReadOnlyComponentLookup<Dead> dead, Entity entity, Movement movement)
         {
-            _world = world;
+            _dead = dead;
             _entity = entity;
         }
 
@@ -48,7 +49,7 @@ public class SystemSchedulerTests
 
         public void Update()
         {
-            SawDead = _world.Has<Dead>(_entity);
+            SawDead = _dead.Has(_entity);
         }
     }
 
@@ -58,27 +59,25 @@ public class SystemSchedulerTests
     [Test]
     public void ChangesApplyAtTheEndOfTheUpdate()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Dead>(entity), Is.True);
+        Assert.That(world.Lookup<Dead>().Has(entity), Is.True);
     }
 
     [Test]
     public void LaterSystemThatNamesTheChangedComponentSeesItInTheSameUpdate()
     {
-        World world = new World();
-        CreateMoving(world);
-        CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
-        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
+        world.Spawn(new Position(), new Velocity());
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        CorpseCounter counter = world.Scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(counter.Count, Is.EqualTo(2));
     }
@@ -86,65 +85,60 @@ public class SystemSchedulerTests
     [Test]
     public void LaterSystemThatDoesNotNameTheChangedComponentRunsBeforeTheSyncPoint()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
-        DeadProbe probe = scheduler.Add(builder => new DeadProbe(world, entity, builder.Query<Movement>()));
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        DeadProbe probe = world.Scheduler.Add(builder => new DeadProbe(world.Lookup<Dead>(), entity, builder.Query<Movement>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(probe.SawDead, Is.False);
-        Assert.That(world.Has<Dead>(entity), Is.True);
+        Assert.That(world.Lookup<Dead>().Has(entity), Is.True);
     }
 
     [Test]
     public void EarlierSystemDoesNotSeeChangesOfALaterOneUntilTheNextUpdate()
     {
-        World world = new World();
-        CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
+        CorpseCounter counter = world.Scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
         Assert.That(counter.Count, Is.Zero);
 
-        scheduler.Update();
+        world.Scheduler.Update();
         Assert.That(counter.Count, Is.EqualTo(1));
     }
 
     [Test]
     public void SpawnedEntityIsReservedUntilTheSyncPointAndOtherCommandsCanTargetIt()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
         Entity spawned = default;
         bool aliveDuringUpdate = true;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), builder.ReadOnlyComponentLookup<Position>(), (spawner, names, positions) =>
         {
             spawned = spawner.Spawn(new Position(1, 2), new Velocity(3, 4));
             names.Add(spawned, new Name("spawned"));
-            aliveDuringUpdate = world.IsAlive(spawned);
+            aliveDuringUpdate = positions.Has(spawned);
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(aliveDuringUpdate, Is.False);
-        Assert.That(world.Get<Position>(spawned), Is.EqualTo(new Position(1, 2)));
-        Assert.That(world.Get<Velocity>(spawned), Is.EqualTo(new Velocity(3, 4)));
-        Assert.That(world.Get<Name>(spawned), Is.EqualTo(new Name("spawned")));
+        Assert.That(world.Lookup<Position>()[spawned], Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Lookup<Velocity>()[spawned], Is.EqualTo(new Velocity(3, 4)));
+        Assert.That(world.Lookup<Name>()[spawned], Is.EqualTo(new Name("spawned")));
     }
 
     [Test]
     public void RunsOfSpawnsBetweenOtherCommandsApplyInRecordingOrder()
     {
-        World world = new World();
-        Entity existing = world.Create();
-        world.Add(existing, new Position());
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity existing = world.Spawn(new Position());
         List<Entity> spawned = [];
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
         {
             spawned.Add(spawner.Spawn(new Position(1, 0), default));
             spawned.Add(spawner.Spawn(new Position(2, 0), default));
@@ -153,73 +147,67 @@ public class SystemSchedulerTests
             spawned.Add(spawner.Spawn(new Position(3, 0), default));
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(new[] { 1f, 2f, 3f }));
-        Assert.That(world.Get<Name>(spawned[1]), Is.EqualTo(new Name("second")));
-        Assert.That(world.Has<Name>(spawned[0]), Is.False);
-        Assert.That(world.Get<Name>(existing), Is.EqualTo(new Name("existing")));
+        ReadOnlyComponentLookup<Name> names = world.Lookup<Name>();
+        Assert.That(spawned.Select(entity => world.Lookup<Position>()[entity].X), Is.EqualTo(new[] { 1f, 2f, 3f }));
+        Assert.That(names[spawned[1]], Is.EqualTo(new Name("second")));
+        Assert.That(names.Has(spawned[0]), Is.False);
+        Assert.That(names[existing], Is.EqualTo(new Name("existing")));
     }
 
     // Each type argument goes into the column of its component, whatever the order of the archetype's columns.
     [Test]
     public void SpawnerWritesEachTypeArgumentIntoItsComponent()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        Entity spawned = default;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Name, Position, Velocity>>(), spawner => spawned = spawner.Spawn(new Name("a"), new Position(5, 6), new Velocity(7, 8))));
+        using TestWorld world = new TestWorld();
 
-        scheduler.Update();
+        Entity spawned = world.Scheduler.RunOnce(builder => builder.Spawner<Spawner<Name, Position, Velocity>>(), spawner => spawner.Spawn(new Name("a"), new Position(5, 6), new Velocity(7, 8)));
 
-        Assert.That(world.Get<Name>(spawned), Is.EqualTo(new Name("a")));
-        Assert.That(world.Get<Position>(spawned), Is.EqualTo(new Position(5, 6)));
-        Assert.That(world.Get<Velocity>(spawned), Is.EqualTo(new Velocity(7, 8)));
+        Assert.That(world.Lookup<Name>()[spawned], Is.EqualTo(new Name("a")));
+        Assert.That(world.Lookup<Position>()[spawned], Is.EqualTo(new Position(5, 6)));
+        Assert.That(world.Lookup<Velocity>()[spawned], Is.EqualTo(new Velocity(7, 8)));
     }
 
     [Test]
     public void CommandsOnAnEntityDestroyedEarlierAreSkipped()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Position>(), builder.EntityDestroyer(), (dead, positions, destroyer) =>
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Position>(), builder.EntityDestroyer(), (dead, positions, destroyer) =>
         {
             dead.Add(entity, new Dead());
             positions.Remove(entity);
             destroyer.Destroy(entity);
         }));
 
-        Assert.DoesNotThrow(scheduler.Update);
-        Assert.That(world.IsAlive(entity), Is.False);
+        Assert.DoesNotThrow(world.Scheduler.Update);
+        Assert.That(world.Lookup<Velocity>().Has(entity), Is.False);
     }
 
     [Test]
     public void AddingAPresentComponentReplacesItsValue()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Name("old"));
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names => names.Add(entity, new Name("new"))));
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Name("old"));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names => names.Add(entity, new Name("new"))));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Get<Name>(entity), Is.EqualTo(new Name("new")));
+        Assert.That(world.Lookup<Name>()[entity], Is.EqualTo(new Name("new")));
     }
 
     [Test]
     public void DestroyerForcesASyncPointBeforeALaterQuery()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Dead());
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
-        CorpseCounter counter = scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position());
+        world.AddComponent(entity, new Dead());
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.EntityDestroyer(), destroyer => destroyer.Destroy(entity)));
+        CorpseCounter counter = world.Scheduler.Add(builder => new CorpseCounter(builder.Query<Corpses>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(counter.Count, Is.Zero);
     }
@@ -227,8 +215,7 @@ public class SystemSchedulerTests
     [Test]
     public void RemovedSystemNoLongerRuns()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        SystemScheduler scheduler = new SystemScheduler(new World());
         int updates = 0;
         ActionSystem system = scheduler.Add(new ActionSystem(() => updates++));
 
@@ -281,12 +268,11 @@ public class SystemSchedulerTests
     [TestCase(5000)]
     public void FailedSpawnLeavesNoRowsAndReleasesItsEntities(int count)
     {
-        World world = new World();
-        Entity existing = world.Create();
-        world.Add(existing, new Position(7, 7));
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Mass(1));
+        Entity existing = world.Spawn(new Position(7, 7));
         List<Entity> spawned = [];
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             spawned.Clear();
             for (int i = 0; i < count; i++)
@@ -294,30 +280,31 @@ public class SystemSchedulerTests
                 spawned.Add(spawner.Spawn(new Position(i, 0), new Velocity(0, i)));
             }
         }));
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
 
-        UpdateWhileAQueryRuns(world, scheduler);
+        UpdateWhileAQueryRuns(world);
 
-        Assert.That(spawned.Where(world.IsAlive), Is.Empty);
+        Assert.That(spawned.Where(positions.Has), Is.Empty);
         Assert.That(CountPositions(world), Is.EqualTo(1));
-        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(7, 7)));
+        Assert.That(positions[existing], Is.EqualTo(new Position(7, 7)));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(spawned.All(world.IsAlive), Is.True);
-        Assert.That(spawned.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
-        Assert.That(spawned.Select(entity => world.UnsafeGet<Velocity>(entity).Y), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
+        Assert.That(spawned.All(positions.Has), Is.True);
+        Assert.That(spawned.Select(entity => positions[entity].X), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
+        Assert.That(spawned.Select(entity => world.Lookup<Velocity>().UnsafeGet(entity).Y), Is.EqualTo(Enumerable.Range(0, count).Select(i => (float)i)));
         Assert.That(CountPositions(world), Is.EqualTo(count + 1));
     }
 
     [Test]
     public void FailedSpawnKeepsNoReferenceToItsComponents()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Mass(1));
         WeakReference spawned = null!;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Name>>(), spawner => spawned = SpawnName(spawner)));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Name>>(), spawner => spawned = SpawnName(spawner)));
 
-        UpdateWhileAQueryRuns(world, scheduler);
+        UpdateWhileAQueryRuns(world);
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
@@ -328,11 +315,11 @@ public class SystemSchedulerTests
     [Test]
     public void CommandsRecordedAfterAFailedOneAreDropped()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Mass(1));
+        Entity entity = world.Spawn(new Position());
         bool record = true;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ComponentAdder<Name>(), (spawner, names) =>
         {
             if (record)
             {
@@ -341,45 +328,45 @@ public class SystemSchedulerTests
             }
         }));
 
-        UpdateWhileAQueryRuns(world, scheduler);
+        UpdateWhileAQueryRuns(world);
         record = false;
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Name>(entity), Is.False);
+        Assert.That(world.Lookup<Name>().Has(entity), Is.False);
     }
 
     [Test]
     public void CommandsOfLaterSystemsAreDroppedWhenAnEarlierOneFails()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<FrozenSpawner>(), earlier => earlier.Spawn(default)));
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Mass(1));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<FrozenSpawner>(), earlier => earlier.Spawn(default)));
         List<Entity> recorded = [];
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), later => recorded.Add(later.Spawn(default, default))));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), later => recorded.Add(later.Spawn(default, default))));
 
-        UpdateWhileAQueryRuns(world, scheduler);
-        scheduler.Update();
+        UpdateWhileAQueryRuns(world);
+        world.Scheduler.Update();
 
-        Assert.That(world.IsAlive(recorded[0]), Is.False);
-        Assert.That(world.IsAlive(recorded[1]), Is.True);
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
+        Assert.That(positions.Has(recorded[0]), Is.False);
+        Assert.That(positions.Has(recorded[1]), Is.True);
         Assert.That(CountPositions(world), Is.EqualTo(1));
     }
 
     [Test]
     public void SpawnerNamingAComponentTwiceTakingEntityOrExcludingThrows()
     {
-        World world = new World();
+        SystemScheduler scheduler = new SystemScheduler(new World());
 
-        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<Spawner<Position, Position>>(1));
-        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<Spawner<Entity>>(1));
-        Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<ExcludingSpawner>(1));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Position, Position>>(), _ => { })));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Spawner<Spawner<Entity>>(), _ => { })));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Spawner<ExcludingSpawner>(), _ => { })));
     }
 
     [Test]
     public void SpawnerForcesASyncPointBeforeALaterQueryOfItsComponents()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        SystemScheduler scheduler = new SystemScheduler(new World());
         int count = -1;
         scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(default, default)));
         scheduler.Add(builder => ActionSystem.Of(builder.Query<Movement>(), movement =>
@@ -399,13 +386,11 @@ public class SystemSchedulerTests
     [Test]
     public void AddingAComponentALaterQueryExcludesForcesASyncPointBeforeIt()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Position());
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position());
         int visible = -1;
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Frozen>(), frozen => frozen.Add(entity, new Frozen())));
-        scheduler.Add(builder => ActionSystem.Of(builder.Query<UnfrozenPositions>(), positions =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Frozen>(), frozen => frozen.Add(entity, new Frozen())));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Query<UnfrozenPositions>(), positions =>
         {
             visible = 0;
             foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> columns in positions)
@@ -414,7 +399,7 @@ public class SystemSchedulerTests
             }
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(visible, Is.Zero);
     }
@@ -422,18 +407,17 @@ public class SystemSchedulerTests
     [Test]
     public void SpanWritesAreVisibleToLaterSystemsWithoutASyncPoint()
     {
-        World world = new World();
-        CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
         Position seen = default;
-        scheduler.Add(builder => ActionSystem.Of(builder.Query<Movement>(), movement =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Query<Movement>(), movement =>
         {
             foreach ((_, Span<Position> positions, _) in movement)
             {
                 positions[0] = new Position(7, 8);
             }
         }));
-        scheduler.Add(builder => ActionSystem.Of(builder.Query<Positions>(), positions =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Query<Positions>(), positions =>
         {
             foreach (Columns<ReadOnlySpan<Position>> columns in positions)
             {
@@ -441,7 +425,7 @@ public class SystemSchedulerTests
             }
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(seen, Is.EqualTo(new Position(7, 8)));
     }
@@ -449,31 +433,28 @@ public class SystemSchedulerTests
     [Test]
     public void RemoverRemovesAPresentComponentAndSkipsAnAbsentOne()
     {
-        World world = new World();
-        Entity present = world.Create();
-        world.Add(present, new Position());
-        Entity absent = world.Create();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentRemover<Position>(), remover =>
+        using TestWorld world = new TestWorld();
+        Entity present = world.Spawn(new Position());
+        Entity absent = world.Spawn(new Velocity());
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentRemover<Position>(), remover =>
         {
             remover.Remove(present);
             remover.Remove(absent);
         }));
 
-        Assert.DoesNotThrow(scheduler.Update);
-        Assert.That(world.Has<Position>(present), Is.False);
-        Assert.That(world.Has<Position>(absent), Is.False);
+        Assert.DoesNotThrow(world.Scheduler.Update);
+        Assert.That(world.Lookup<Position>().Has(present), Is.False);
+        Assert.That(world.Lookup<Position>().Has(absent), Is.False);
     }
 
     [Test]
     public void AddsAndRemovesOfOneComponentApplyInRecordingOrder()
     {
-        World world = new World();
-        Entity removedLast = world.Create();
-        Entity addedLast = world.Create();
-        world.Add(addedLast, new Dead());
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Dead>(), (adder, remover) =>
+        using TestWorld world = new TestWorld();
+        Entity removedLast = world.Spawn(new Position());
+        Entity addedLast = world.Spawn(new Position());
+        world.AddComponent(addedLast, new Dead());
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.ComponentRemover<Dead>(), (adder, remover) =>
         {
             adder.Add(removedLast, new Dead());
             remover.Remove(removedLast);
@@ -481,17 +462,16 @@ public class SystemSchedulerTests
             adder.Add(addedLast, new Dead());
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Dead>(removedLast), Is.False);
-        Assert.That(world.Has<Dead>(addedLast), Is.True);
+        Assert.That(world.Lookup<Dead>().Has(removedLast), Is.False);
+        Assert.That(world.Lookup<Dead>().Has(addedLast), Is.True);
     }
 
     [Test]
     public void SystemsRunInTheOrderTheyWereAdded()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        SystemScheduler scheduler = new SystemScheduler(new World());
         List<int> order = [];
         scheduler.Add(new ActionSystem(() => order.Add(1)));
         scheduler.Add(new ActionSystem(() => order.Add(2)));
@@ -520,19 +500,18 @@ public class SystemSchedulerTests
     [Test]
     public void SystemThatThrowsDropsTheCommandsSinceTheLastSyncPoint()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Velocity());
         bool fail = true;
         Entity spawned = default;
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Name>(), names =>
         {
             if (fail)
             {
                 names.Add(entity, new Name("dropped"));
             }
         }));
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             if (fail)
             {
@@ -541,16 +520,16 @@ public class SystemSchedulerTests
             }
         }));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        Assert.Throws<InvalidOperationException>(world.Scheduler.Update);
         fail = false;
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Name>(entity), Is.False);
-        Assert.That(world.IsAlive(spawned), Is.False);
+        Assert.That(world.Lookup<Name>().Has(entity), Is.False);
+        Assert.That(world.Lookup<Position>().Has(spawned), Is.False);
         Assert.That(CountPositions(world), Is.Zero);
 
         // A released reservation frees its index, so the next entity reuses it with a newer version. ToString shows the index, which is internal.
-        Entity next = world.Create();
+        Entity next = world.Spawn(new Position());
         string spawnedIndex = spawned.ToString()[..spawned.ToString().IndexOf(',')];
         Assert.That(next.ToString(), Does.StartWith(spawnedIndex));
         Assert.That(next, Is.Not.EqualTo(spawned));
@@ -560,14 +539,13 @@ public class SystemSchedulerTests
     [Test]
     public void SystemThatThrowsKeepsTheChangesOfEarlierSyncPoints()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
         bool fail = true;
         Entity spawned = default;
         ComponentAdder<Name> keptNames = null!;
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
-        scheduler.Add(builder => ActionSystem.Of(builder.Query<Corpses>(), builder.ComponentAdder<Name>(), builder.Spawner<MovingSpawner>(), (_, names, spawner) =>
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Query<Corpses>(), builder.ComponentAdder<Name>(), builder.Spawner<MovingSpawner>(), (_, names, spawner) =>
         {
             keptNames = names;
             if (fail)
@@ -578,78 +556,73 @@ public class SystemSchedulerTests
             }
         }));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        Assert.Throws<InvalidOperationException>(world.Scheduler.Update);
 
-        Assert.That(world.Has<Dead>(entity), Is.True);
+        Assert.That(world.Lookup<Dead>().Has(entity), Is.True);
         Assert.Throws<InvalidOperationException>(() => keptNames.Add(entity, new Name("kept")));
 
         fail = false;
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Name>(entity), Is.False);
-        Assert.That(world.IsAlive(spawned), Is.False);
+        Assert.That(world.Lookup<Name>().Has(entity), Is.False);
+        Assert.That(world.Lookup<Position>().Has(spawned), Is.False);
     }
 
     [Test]
     public void WriterKeptPastUpdateThrows()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position());
         ComponentAdder<Dead> keptAdder = null!;
         MovingSpawner keptSpawner = null!;
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.Spawner<MovingSpawner>(), (dead, spawner) =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Dead>(), builder.Spawner<MovingSpawner>(), (dead, spawner) =>
         {
             keptAdder = dead;
             keptSpawner = spawner;
         }));
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.Throws<InvalidOperationException>(() => keptAdder.Add(entity, new Dead()));
         Assert.Throws<InvalidOperationException>(() => keptSpawner.Spawn(default, default));
-        scheduler.Update();
-        Assert.That(world.Has<Dead>(entity), Is.False);
+        world.Scheduler.Update();
+        Assert.That(world.Lookup<Dead>().Has(entity), Is.False);
     }
 
     // A system gets its writers and lookups in its constructor, but they work only during its Update.
     [Test]
     public void WriterOrLookupUsedWhileItsSystemIsCreatedThrows()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
 
-        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        Assert.Throws<InvalidOperationException>(() => world.Scheduler.Add(builder =>
         {
             builder.ComponentAdder<Dead>().Add(entity, new Dead());
             return new ActionSystem(() => { });
         }));
-        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        Assert.Throws<InvalidOperationException>(() => world.Scheduler.Add(builder =>
         {
             builder.Spawner<MovingSpawner>().Spawn(default, default);
             return new ActionSystem(() => { });
         }));
-        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder =>
+        Assert.Throws<InvalidOperationException>(() => world.Scheduler.Add(builder =>
         {
             _ = builder.ReadOnlyComponentLookup<Position>().Has(entity);
             return new ActionSystem(() => { });
         }));
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Has<Dead>(entity), Is.False);
+        Assert.That(world.Lookup<Dead>().Has(entity), Is.False);
         Assert.That(CountPositions(world), Is.EqualTo(1));
     }
 
     [Test]
     public void LookupReadsAndWritesTheComponentsOfAGivenEntity()
     {
-        World world = new World();
-        Entity moving = CreateMoving(world);
-        world.Get<Velocity>(moving) = new Velocity(1, 2);
-        Entity still = world.Create();
-        world.Add(still, new Position(5, 5));
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), (positions, velocities) =>
+        using TestWorld world = new TestWorld();
+        Entity moving = world.Spawn(new Position(), new Velocity(1, 2));
+        Entity still = world.Spawn(new Position(5, 5));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), (positions, velocities) =>
         {
             foreach (Entity entity in (Entity[])[moving, still])
             {
@@ -661,23 +634,22 @@ public class SystemSchedulerTests
             }
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Get<Position>(moving), Is.EqualTo(new Position(1, 2)));
-        Assert.That(world.Get<Position>(still), Is.EqualTo(new Position(5, 5)));
+        Assert.That(world.Lookup<Position>()[moving], Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Lookup<Position>()[still], Is.EqualTo(new Position(5, 5)));
     }
 
     [Test]
     public void LookupSeesTheChangesOfAnEarlierSystemInTheSameUpdate()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
         bool sawDead = false;
-        scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
-        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Dead>(), dead => sawDead = dead.Has(entity)));
+        world.Scheduler.Add(builder => new Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Dead>(), dead => sawDead = dead.Has(entity)));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(sawDead, Is.True);
     }
@@ -685,14 +657,13 @@ public class SystemSchedulerTests
     [Test]
     public void LookupHasIsFalseForADestroyedEntity()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
         world.Destroy(entity);
-        SystemScheduler scheduler = new SystemScheduler(world);
         bool has = true;
-        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position>(), positions => has = positions.Has(entity)));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position>(), positions => has = positions.Has(entity)));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(has, Is.False);
     }
@@ -700,43 +671,40 @@ public class SystemSchedulerTests
     [Test]
     public void LookupOfSeveralComponentsReadsAndWritesEachOfThem()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        world.Get<Velocity>(entity) = new Velocity(1, 2);
-        SystemScheduler scheduler = new SystemScheduler(world);
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position, Velocity>(), lookup =>
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity(1, 2));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position, Velocity>(), lookup =>
         {
             ComponentRefs<Position, Velocity> components = lookup[entity];
             components.Item1 = new Position(components.Item1.X + components.Item2.X, components.Item1.Y + components.Item2.Y);
             components.Item2 = default;
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
-        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(1, 2)));
-        Assert.That(world.Get<Velocity>(entity), Is.EqualTo(default(Velocity)));
+        Assert.That(world.Lookup<Position>()[entity], Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Lookup<Velocity>()[entity], Is.EqualTo(default(Velocity)));
     }
 
     [Test]
     public void LookupOfSeveralComponentsHasOnlyAnAliveEntityWithAllOfThem()
     {
-        World world = new World();
-        Entity frozen = CreateMoving(world);
-        world.Add(frozen, new Frozen());
-        Entity moving = CreateMoving(world);
-        Entity destroyed = CreateMoving(world);
-        world.Add(destroyed, new Frozen());
+        using TestWorld world = new TestWorld();
+        Entity frozen = world.Spawn(new Position(), new Velocity());
+        world.AddComponent(frozen, new Frozen());
+        Entity moving = world.Spawn(new Position(), new Velocity());
+        Entity destroyed = world.Spawn(new Position(), new Velocity());
+        world.AddComponent(destroyed, new Frozen());
         world.Destroy(destroyed);
-        SystemScheduler scheduler = new SystemScheduler(world);
         bool[] has = [];
-        scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position, Frozen>(), lookup =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyComponentLookup<Position, Frozen>(), lookup =>
         {
             has = [lookup.Has(frozen), lookup.Has(moving), lookup.Has(destroyed)];
             Assert.Throws<InvalidOperationException>(() => { _ = lookup[moving]; });
             Assert.Throws<ArgumentException>(() => { _ = lookup[destroyed]; });
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(has, Is.EqualTo(new[] { true, false, false }));
     }
@@ -759,19 +727,18 @@ public class SystemSchedulerTests
     [Test]
     public void LookupKeptPastUpdateThrows()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world);
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
         ComponentLookup<Position> keptPositions = null!;
         ReadOnlyComponentLookup<Velocity> keptVelocities = null!;
         ReadOnlyComponentLookup<Position, Velocity> keptBoth = null!;
-        scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), builder.ReadOnlyComponentLookup<Position, Velocity>(), (positions, velocities, both) =>
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>(), builder.ReadOnlyComponentLookup<Position, Velocity>(), (positions, velocities, both) =>
         {
             keptPositions = positions;
             keptVelocities = velocities;
             keptBoth = both;
         }));
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.Throws<InvalidOperationException>(() => keptPositions.Has(entity));
         Assert.Throws<InvalidOperationException>(() => _ = keptPositions[entity]);
@@ -790,35 +757,28 @@ public class SystemSchedulerTests
         return new WeakReference(value);
     }
 
-    // Copying a spawn's components cannot fail, so the tests fail a sync point by running it inside a query, where its first command throws.
-    private static void UpdateWhileAQueryRuns(World world, SystemScheduler scheduler)
+    // Copying a spawn's components cannot fail, so the tests fail a sync point by running it while code outside systems runs a query, where its first
+    // command throws. A query runs only over an archetype with entities, so the test spawns an entity with Mass before it adds its systems.
+    private static void UpdateWhileAQueryRuns(TestWorld world)
     {
-        Entity running = world.Create();
-        world.Add(running, new Mass(1));
-        foreach (Columns<ReadOnlySpan<Mass>> _ in world.Query<Masses>())
+        int runs = 0;
+        foreach (Columns<ReadOnlySpan<Mass>> _ in world.Get<Masses>())
         {
-            Assert.Throws<InvalidOperationException>(scheduler.Update);
+            runs++;
+            Assert.Throws<InvalidOperationException>(world.Scheduler.Update);
         }
 
-        world.Destroy(running);
+        Assert.That(runs, Is.EqualTo(1));
     }
 
-    private static int CountPositions(World world)
+    private static int CountPositions(TestWorld world)
     {
         int count = 0;
-        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> columns in world.Query<UnfrozenPositions>())
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> columns in world.Get<UnfrozenPositions>())
         {
             count += columns.Count;
         }
 
         return count;
-    }
-
-    private static Entity CreateMoving(World world)
-    {
-        Entity entity = world.Create();
-        world.Add(entity, new Position());
-        world.Add(entity, new Velocity());
-        return entity;
     }
 }

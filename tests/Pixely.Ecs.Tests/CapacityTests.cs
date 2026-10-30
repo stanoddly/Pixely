@@ -5,54 +5,70 @@ namespace Pixely.Ecs.Tests;
 public class CapacityTests
 {
     [Test]
-    public void EnsureCapacityGrowsASmallerArchetypeToExactlyTheCapacityAndNeverShrinksIt()
+    public void EnsureRoomForGrowsAnEmptyArchetypeToExactlyTheRoomAndNeverShrinksIt()
     {
-        World world = new World();
+        using TestWorld world = new TestWorld();
+        Entity first = world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner =>
+        {
+            spawner.EnsureRoomFor(1000);
+            return spawner.Spawn(default, default);
+        });
 
-        Assert.That(world.EnsureCapacity<MovingSpawner>(1000), Is.EqualTo(1000));
-        Assert.That(world.EnsureCapacity<MovingSpawner>(10), Is.EqualTo(1000));
+        world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.EnsureRoomFor(10));
+
+        Assert.That(MeasureCapacity(world, first), Is.EqualTo(1000));
     }
 
-    // A reference stays where it is only while the columns are not replaced, so it shows that adding entities within the capacity grows nothing.
+    // A reference stays where it is only while the columns are not replaced, so it shows that spawning within the room grows nothing.
     [Test]
-    public void EntitiesAddedWithinTheCapacityDoNotGrowTheColumns()
+    public void EntitiesSpawnedWithinTheRoomDoNotGrowTheColumns()
     {
-        World world = new World();
-        world.EnsureCapacity<MovingSpawner>(100);
-        Entity first = CreateMoving(world, 0);
-        ref Position position = ref world.Get<Position>(first);
+        using TestWorld world = new TestWorld();
+        Entity first = world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner =>
+        {
+            spawner.EnsureRoomFor(100);
+            return spawner.Spawn(new Position(0, 0), new Velocity(1, 0));
+        });
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
+        ref readonly Position position = ref positions[first];
 
         for (int i = 1; i < 100; i++)
         {
-            CreateMoving(world, i);
+            world.Spawn(new Position(i, 0), new Velocity(1, 0));
         }
 
-        Assert.That(Unsafe.AreSame(ref position, ref world.Get<Position>(first)), Is.True);
-        Assert.That(world.EnsureCapacity<MovingSpawner>(0), Is.EqualTo(100));
+        Assert.That(Unsafe.AreSame(ref Unsafe.AsRef(in position), ref Unsafe.AsRef(in positions[first])), Is.True);
+        Assert.That(MeasureCapacity(world, first), Is.EqualTo(100));
     }
 
     [Test]
-    public void EnsureCapacityKeepsTheEntitiesAndTheirComponents()
+    public void EnsureRoomForKeepsTheEntitiesAndTheirComponents()
     {
-        World world = new World();
-        Entity[] entities = [.. Enumerable.Range(0, 20).Select(i => CreateMoving(world, i))];
+        using TestWorld world = new TestWorld();
+        Entity[] entities = [.. Enumerable.Range(0, 20).Select(i => world.Spawn(new Position(i, 0), new Velocity(1, 0)))];
 
-        world.EnsureCapacity<MovingSpawner>(5000);
+        world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.EnsureRoomFor(5000));
 
-        Assert.That(entities.Select(entity => world.Get<Position>(entity).X), Is.EqualTo(Enumerable.Range(0, 20).Select(i => (float)i)));
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
+        Assert.That(entities.Select(entity => positions[entity].X), Is.EqualTo(Enumerable.Range(0, 20).Select(i => (float)i)));
     }
 
+    // The room is made at the sync point, which throws while code outside systems runs a query.
     [Test]
-    public void EnsureCapacityThrowsWhileAQueryRunsAndForANegativeCapacity()
+    public void EnsureRoomForThrowsForANegativeCountAndItsSyncPointThrowsWhileAQueryRuns()
     {
-        World world = new World();
-        CreateMoving(world, 0);
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => world.EnsureCapacity<MovingSpawner>(-1));
-        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
+        Assert.Throws<ArgumentOutOfRangeException>(() => world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.EnsureRoomFor(-1)));
+        int runs = 0;
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> _ in world.Get<MovingEntities>())
         {
-            Assert.Throws<InvalidOperationException>(() => world.EnsureCapacity<MovingSpawner>(100));
+            runs++;
+            Assert.Throws<InvalidOperationException>(() => world.Scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.EnsureRoomFor(100)));
         }
+
+        Assert.That(runs, Is.EqualTo(1));
     }
 
     // The spawner's request waits for the sync point, so it never replaces the arrays under a running query, even in a frame without spawns.
@@ -60,60 +76,63 @@ public class CapacityTests
     [TestCase(3)]
     public void SpawnerMakesRoomAtTheSyncPoint(int spawns)
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        int capacityDuringUpdate = 0;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
+        using TestWorld world = new TestWorld();
+        Entity existing = world.Spawn(new Position(), new Velocity());
+        bool grewDuringUpdate = true;
+        ActionSystem system = world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.ReadOnlyComponentLookup<Position>(), (spawner, positions) =>
         {
+            ref readonly Position before = ref positions[existing];
             spawner.EnsureRoomFor(500);
             for (int i = 0; i < spawns; i++)
             {
                 spawner.Spawn(new Position(i, 0), default);
             }
 
-            capacityDuringUpdate = world.EnsureCapacity<MovingSpawner>(0);
+            grewDuringUpdate = !Unsafe.AreSame(ref Unsafe.AsRef(in before), ref Unsafe.AsRef(in positions[existing]));
         }));
 
-        scheduler.Update();
+        world.Scheduler.Update();
+        world.Scheduler.Remove(system);
 
-        Assert.That(capacityDuringUpdate, Is.LessThan(500));
-        Assert.That(world.EnsureCapacity<MovingSpawner>(0), Is.EqualTo(500));
+        Assert.That(grewDuringUpdate, Is.False);
+        Assert.That(MeasureCapacity(world, existing), Is.EqualTo(501));
     }
 
     // Each system asks for room for its own spawns, so together they grow the archetype to all of them, each before its spawns.
     [Test]
     public void SpawnerRoomAddsToTheEntitiesOfEarlierSystems()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        Entity existing = CreateMoving(world, 0);
+        using TestWorld world = new TestWorld();
+        Entity existing = world.Spawn(new Position(0, 0), new Velocity(1, 0));
+        List<ActionSystem> systems = [];
         for (int system = 0; system < 2; system++)
         {
-            scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
+            systems.Add(world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
             {
                 spawner.EnsureRoomFor(100);
                 for (int i = 0; i < 100; i++)
                 {
                     spawner.Spawn(new Position(i, 0), default);
                 }
-            }));
+            })));
         }
 
-        scheduler.Update();
+        world.Scheduler.Update();
+        systems.ForEach(world.Scheduler.Remove);
 
-        Assert.That(world.EnsureCapacity<MovingSpawner>(0), Is.EqualTo(201));
-        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(0, 0)));
+        Assert.That(MeasureCapacity(world, existing), Is.EqualTo(201));
+        Assert.That(world.Lookup<Position>()[existing], Is.EqualTo(new Position(0, 0)));
     }
 
     // Both requests come before the spawns, so each must add to the other rather than to the entities the archetype holds when it applies.
     [Test]
     public void RoomOfSpawnersSharingAnArchetypeAddsUpWhateverTheOrder()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
-        Entity existing = CreateMoving(world, 0);
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), builder.Spawner<SecondMovingSpawner>(), (first, second) =>
+        using TestWorld world = new TestWorld();
+        Entity existing = world.Spawn(new Position(0, 0), new Velocity(1, 0));
+        world.Scheduler.RunOnce(builder => (builder.Spawner<MovingSpawner>(), builder.Spawner<SecondMovingSpawner>()), spawners =>
         {
+            (MovingSpawner first, SecondMovingSpawner second) = spawners;
             first.EnsureRoomFor(100);
             second.EnsureRoomFor(60);
             second.EnsureRoomFor(40);
@@ -122,21 +141,19 @@ public class CapacityTests
                 first.Spawn(new Position(i, 0), default);
                 second.Spawn(new Position(-i, 0), default);
             }
-        }));
+        });
 
-        scheduler.Update();
-
-        Assert.That(world.EnsureCapacity<SecondMovingSpawner>(0), Is.EqualTo(201));
-        Assert.That(world.Get<Position>(existing), Is.EqualTo(new Position(0, 0)));
+        Assert.That(MeasureCapacity(world, existing), Is.EqualTo(201));
+        Assert.That(world.Lookup<Position>()[existing], Is.EqualTo(new Position(0, 0)));
     }
 
     [Test]
     public void SpawnerRequestOfASystemThatThrowsIsDropped()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        using TestWorld world = new TestWorld();
+        Entity existing = world.Spawn(new Position(), new Velocity());
         bool fail = true;
-        scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
+        ActionSystem system = world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner =>
         {
             if (fail)
             {
@@ -145,18 +162,18 @@ public class CapacityTests
             }
         }));
 
-        Assert.Throws<InvalidOperationException>(scheduler.Update);
+        Assert.Throws<InvalidOperationException>(world.Scheduler.Update);
         fail = false;
-        scheduler.Update();
+        world.Scheduler.Update();
+        world.Scheduler.Remove(system);
 
-        Assert.That(world.EnsureCapacity<MovingSpawner>(0), Is.LessThan(500));
+        Assert.That(MeasureCapacity(world, existing), Is.LessThan(500));
     }
 
     [Test]
     public void SpawnerRequestOutsideUpdateThrows()
     {
-        World world = new World();
-        SystemScheduler scheduler = new SystemScheduler(world);
+        SystemScheduler scheduler = new SystemScheduler(new World());
         MovingSpawner kept = null!;
         scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner => kept = spawner));
         scheduler.Update();
@@ -164,11 +181,35 @@ public class CapacityTests
         Assert.Throws<InvalidOperationException>(() => kept.EnsureRoomFor(500));
     }
 
-    private static Entity CreateMoving(World world, int i)
+    // The rows the archetype of MovingSpawner holds before it grows. Code outside systems cannot read the capacity, but a growth replaces the columns,
+    // which moves the Position of the entity in that archetype, so this spawns one entity per update until it moves. No other system may spawn there.
+    private static int MeasureCapacity(TestWorld world, Entity entity)
     {
-        Entity entity = world.Create();
-        world.Add(entity, new Position(i, 0));
-        world.Add(entity, new Velocity(1, 0));
-        return entity;
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
+        int count = 0;
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> columns in world.Get<MovingEntities>())
+        {
+            count += columns.Count;
+        }
+
+        ActionSystem spawning = world.Scheduler.Add(builder => ActionSystem.Of(builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(default, default)));
+        try
+        {
+            while (true)
+            {
+                ref readonly Position before = ref positions[entity];
+                world.Scheduler.Update();
+                if (!Unsafe.AreSame(ref Unsafe.AsRef(in before), ref Unsafe.AsRef(in positions[entity])))
+                {
+                    return count;
+                }
+
+                count++;
+            }
+        }
+        finally
+        {
+            world.Scheduler.Remove(spawning);
+        }
     }
 }

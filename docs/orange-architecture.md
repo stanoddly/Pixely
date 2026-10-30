@@ -23,8 +23,6 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - `Pixely.Ecs` is experimental and not in the Pixely package yet
 - `Pixely.Messages` is `Pixely.Observations` today, see `docs/observations.md`.
   `MessageWriter<T>` and `MessageReader<T>` are `ObservationWriter<T>` and `ObservationReader<T>`
-- Code outside systems gets a query from `world.Query<T>()` today, so it holds the whole `World`.
-  Injected queries and read-only lookups for it are planned
 - `Pixely.Ui` still has `IUiViewModel` and `UiView<TViewModel>`. Views without view models are
   planned
 - `Pixely.Fitness` has no Orange rules yet
@@ -41,7 +39,8 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - A component is a struct. A tag is a struct that implements `ITag` and holds no data
 - Components hold no rules. A system reads them through read-only spans or writes them through
   spans, so a setter or a read-only collection guards nothing
-- Code outside systems MUST NOT write the world
+- Code outside systems MUST NOT write the world. `World` has no public members, so only a system's
+  writers, spawners and lookups can
 - The camera is components. Aiming is a system that runs after the camera system
 
 ## Systems
@@ -88,8 +87,9 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 ## Rendering and audio
 
-- Rendering and audio get read-only queries and lookups injected
-- They MUST NOT take `World` and MUST NOT write
+- Rendering and audio take read-only queries and lookups in their constructors, registered with
+  `AddQuery` and `AddReadOnlyComponentLookup`, see `docs/ecs.md`
+- They MUST NOT write
 
 ## Not settled yet
 

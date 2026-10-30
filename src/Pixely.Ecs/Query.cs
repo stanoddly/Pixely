@@ -10,15 +10,19 @@ internal sealed class QueryState
 {
     private int _checkedArchetypes;
 
-    public QueryState(ComponentSet required, ComponentSet excluded)
+    public QueryState(ComponentSet required, ComponentSet excluded, bool writes)
     {
         Required = required;
         Excluded = excluded;
+        Writes = writes;
     }
 
     public ComponentSet Required { get; }
 
     public ComponentSet Excluded { get; }
+
+    // Whether a type argument is a Span<T>, so the query can write the world.
+    public bool Writes { get; }
 
     public FastList<Archetype> Matches { get; } = new FastList<Archetype>(4);
 

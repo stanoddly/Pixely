@@ -7,6 +7,7 @@ internal sealed class QueryDescription : IFilterDescription
     private readonly List<int> _read = [];
     private readonly List<int> _required = [];
     private readonly List<int> _excluded = [];
+    private bool _writes;
 
     public QueryDescription(string subject)
     {
@@ -31,6 +32,13 @@ internal sealed class QueryDescription : IFilterDescription
         _required.Add(id);
     }
 
+    // A Span<T>, which the query may write.
+    public void Write<T>() where T : struct
+    {
+        Read<T>();
+        _writes = true;
+    }
+
     public void With<T>() where T : struct => _required.Add(ComponentType<T>.Id);
 
     public void Without<T>() where T : struct => _excluded.Add(ComponentType<T>.Id);
@@ -49,6 +57,6 @@ internal sealed class QueryDescription : IFilterDescription
             throw new InvalidOperationException($"{_subject} both requires and excludes a component, so it matches no entity.");
         }
 
-        return new QueryState(required, excluded);
+        return new QueryState(required, excluded, _writes);
     }
 }

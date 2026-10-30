@@ -111,16 +111,17 @@ public class SystemRegistrationTests
         services.AddEcs();
         services.AddSystem<Killer>();
         services.AddSystem<Cleaner>();
+        services.AddReadOnlyComponentLookup<Position>();
         using ServiceProvider provider = services.BuildServiceProvider();
-        World world = provider.GetRequiredService<World>();
-        Entity entity = world.Create();
-        world.Add(entity, new Position());
-        world.Add(entity, new Velocity());
+        SystemScheduler scheduler = provider.GetRequiredService<SystemScheduler>();
+        // The registered systems run in the update that spawns the entity too, before it exists, so the log starts after it.
+        Entity entity = scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(default, default));
+        log.Entries.Clear();
 
-        provider.GetRequiredService<SystemScheduler>().Update();
+        scheduler.Update();
 
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Killer), nameof(Cleaner) }));
-        Assert.That(world.IsAlive(entity), Is.False);
+        Assert.That(provider.GetRequiredService<ReadOnlyComponentLookup<Position>>().Has(entity), Is.False);
     }
 
     [Test]
@@ -131,12 +132,13 @@ public class SystemRegistrationTests
         services.AddSingleton(log);
         services.AddEcs();
         services.AddSystem<Spawning>();
+        services.AddQuery<MovingEntities>();
         using ServiceProvider provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<SystemScheduler>().Update();
 
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Spawning) + 1 }));
-        Assert.That(CountMoving(provider.GetRequiredService<World>()), Is.EqualTo(1));
+        Assert.That(CountMoving(provider.GetRequiredService<MovingEntities>()), Is.EqualTo(1));
     }
 
     [Test]
@@ -179,15 +181,14 @@ public class SystemRegistrationTests
         ServiceCollection services = new ServiceCollection();
         services.AddEcs();
         services.AddSystem<ExplicitMover>();
+        services.AddReadOnlyComponentLookup<Position>();
         using ServiceProvider provider = services.BuildServiceProvider();
-        World world = provider.GetRequiredService<World>();
-        Entity entity = world.Create();
-        world.Add(entity, new Position(1, 0));
-        world.Add(entity, new Velocity(2, 0));
+        SystemScheduler scheduler = provider.GetRequiredService<SystemScheduler>();
+        Entity entity = scheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(new Position(1, 0), new Velocity(2, 0)));
 
-        provider.GetRequiredService<SystemScheduler>().Update();
+        scheduler.Update();
 
-        Assert.That(world.Get<Position>(entity), Is.EqualTo(new Position(3, 0)));
+        Assert.That(provider.GetRequiredService<ReadOnlyComponentLookup<Position>>()[entity], Is.EqualTo(new Position(3, 0)));
     }
 
     [Test]
@@ -350,10 +351,10 @@ public class SystemRegistrationTests
         Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
     }
 
-    private static int CountMoving(World world)
+    private static int CountMoving(MovingEntities moving)
     {
         int count = 0;
-        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> columns in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> columns in moving)
         {
             count += columns.Count;
         }

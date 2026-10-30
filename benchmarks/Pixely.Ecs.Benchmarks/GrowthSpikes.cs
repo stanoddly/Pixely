@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Runtime;
+using Arch.Buffer;
+using Arch.Core;
+using ArchEntity = Arch.Core.Entity;
 using ArchWorld = Arch.Core.World;
 
 namespace Pixely.Ecs.Benchmarks;
@@ -16,16 +19,27 @@ public static class GrowthSpikes
     private static int Total;
     private const int Runs = 7;
 
-    internal sealed class SpawnSystem(MovingSpawner spawner) : ISystem
+    // Asks for room in its first update when room is more than zero.
+    internal sealed class SpawnSystem(MovingSpawner spawner, int room) : ISystem
     {
+        private int _room = room;
+
         public void Update()
         {
+            if (_room > 0)
+            {
+                spawner.EnsureRoomFor(_room);
+                _room = 0;
+            }
+
             for (int i = 0; i < PerFrame; i++)
             {
                 spawner.Spawn(new Position(i, i), new Velocity(1, 1));
             }
         }
     }
+
+    private static readonly ComponentType[] s_movingTypes = [Component<Position>.ComponentType, Component<Velocity>.ComponentType];
 
     private readonly record struct RunResult(double TotalMs, double MaxFrameMs, double P99FrameMs, int Gen0, int Gen1, int Gen2, double PauseMs, long AllocatedMb);
 
@@ -42,72 +56,37 @@ public static class GrowthSpikes
         List<(string Name, Func<(Action Frame, Action? Dispose)> CreateFrame)> cases = [];
         Add("Pixely Spawn", () =>
         {
-            World world = new World();
-            SystemScheduler scheduler = new SystemScheduler(world);
-            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>()));
+            SystemScheduler scheduler = new SystemScheduler(new World());
+            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>(), 0));
             return (scheduler.Update, null);
         });
-        Add("Pixely Create then Add", () =>
+        // The request is part of the first frame, so its allocation counts.
+        Add("Pixely Spawn, EnsureRoomFor", () =>
         {
-            World world = new World();
-            return (() =>
-            {
-                for (int i = 0; i < PerFrame; i++)
-                {
-                    Entity entity = world.Create();
-                    world.Add(entity, new Position(i, i));
-                    world.Add(entity, new Velocity(1, 1));
-                }
-            }, null);
+            SystemScheduler scheduler = new SystemScheduler(new World());
+            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>(), Total));
+            return (scheduler.Update, null);
         });
-        // The hint is part of the first frame, so its allocation counts.
-        Add("Pixely Create then Add, capacity hint", () =>
-        {
-            World world = new World();
-            bool hinted = false;
-            return (() =>
-            {
-                if (!hinted)
-                {
-                    world.EnsureCapacity<MovingSpawner>(Total);
-                    hinted = true;
-                }
-
-                for (int i = 0; i < PerFrame; i++)
-                {
-                    Entity entity = world.Create();
-                    world.Add(entity, new Position(i, i));
-                    world.Add(entity, new Velocity(1, 1));
-                }
-            }, null);
-        });
-        Add("Pixely Spawn, capacity hint", () =>
-        {
-            World world = new World();
-            SystemScheduler scheduler = new SystemScheduler(world);
-            scheduler.Add(builder => new SpawnSystem(builder.Spawner<MovingSpawner>()));
-            bool hinted = false;
-            return (() =>
-            {
-                if (!hinted)
-                {
-                    world.EnsureCapacity<MovingSpawner>(Total);
-                    hinted = true;
-                }
-
-                scheduler.Update();
-            }, null);
-        });
-        Add("Arch Create with components", () =>
+        // Pixely's spawns wait for the scheduler's sync point, so Arch records its creations in a CommandBuffer and plays them back each frame.
+        Add("Arch CommandBuffer", () =>
         {
             ArchWorld world = ArchWorld.Create();
+            CommandBuffer buffer = new CommandBuffer();
             return (() =>
             {
                 for (int i = 0; i < PerFrame; i++)
                 {
-                    world.Create(new Position(i, i), new Velocity(1, 1));
+                    ArchEntity entity = buffer.Create(s_movingTypes);
+                    buffer.Set(in entity, new Position(i, i));
+                    buffer.Set(in entity, new Velocity(1, 1));
                 }
-            }, () => ArchWorld.Destroy(world));
+
+                buffer.Playback(world);
+            }, () =>
+            {
+                buffer.Dispose();
+                ArchWorld.Destroy(world);
+            });
         });
 
         // The first measurements of a process run slower, whatever the case, so every case is warmed up before any is measured. Tiered compilation

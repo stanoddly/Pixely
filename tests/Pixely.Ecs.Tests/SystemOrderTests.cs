@@ -171,15 +171,12 @@ public class SystemOrderTests
     [Test]
     public void SystemDeclaredAfterAChangeSeesItInTheSameUpdate()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Position());
-        world.Add(entity, new Velocity());
-        SystemScheduler scheduler = new SystemScheduler(world);
-        LateCorpseCounter counter = scheduler.Add(builder => new LateCorpseCounter(builder.Query<Corpses>()));
-        scheduler.Add(builder => new SystemSchedulerTests.Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
+        LateCorpseCounter counter = world.Scheduler.Add(builder => new LateCorpseCounter(builder.Query<Corpses>()));
+        world.Scheduler.Add(builder => new SystemSchedulerTests.Killer(builder.Query<Movement>(), builder.ComponentAdder<Dead>()));
 
-        scheduler.Update();
+        world.Scheduler.Update();
 
         Assert.That(counter.Count, Is.EqualTo(1));
     }

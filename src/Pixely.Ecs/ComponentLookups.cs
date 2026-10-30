@@ -245,7 +245,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
 }
 
 // Reads the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
-// behave as those of ReadOnlyComponentLookup<T> do for each component.
+// behave as those of ReadOnlyComponentLookup<T> do for each component, inside a system or outside.
 public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
     where T1 : struct
     where T2 : struct
@@ -255,6 +255,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
         commands.AddLookup(this);
+    }
+
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype);
@@ -289,6 +294,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3> : ILookup
         commands.AddLookup(this);
     }
 
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
+    }
+
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype);
 
     public ReadOnlyComponentRefs<T1, T2, T3> this[Entity entity]
@@ -320,6 +330,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : ILookup
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
         commands.AddLookup(this);
+    }
+
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype);
@@ -356,6 +371,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : ILookup
         commands.AddLookup(this);
     }
 
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
+    }
+
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype);
 
     public ReadOnlyComponentRefs<T1, T2, T3, T4, T5> this[Entity entity]
@@ -389,6 +409,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
         commands.AddLookup(this);
+    }
+
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype);
@@ -427,6 +452,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILooku
         commands.AddLookup(this);
     }
 
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
+    }
+
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype) && Lookup.Has<T7>(archetype);
 
     public ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7> this[Entity entity]
@@ -462,6 +492,11 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : IL
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
         commands.AddLookup(this);
+    }
+
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype) && Lookup.Has<T7>(archetype) && Lookup.Has<T8>(archetype);
