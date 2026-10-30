@@ -25,6 +25,17 @@ Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its
 
 Cost: a hosted app's Release build and an app with its own `Main` that does not call `AddHeadlessSupport()` ignore `PIXELY_HEADLESS`. `Pixely.Headless` is built for the desktop and copied into the browser folder of the package, where it cannot load; the browser's generated `Main` does not call it, and the assembly is marked unsupported in the browser.
 
+## 2026-10-30: Pixely.Messages keeps two frames of messages, as Bevy does, instead of a log trimmed behind its slowest reader
+
+`Pixely.Observations` becomes `Pixely.Messages`. `Messages<T>` holds the messages of the current and the previous frame and drops the older ones on each update. A `MessageReader<T>` is a transient service whose position is a count of messages, so each consumer that takes one reads on its own. This replaces `ObservationLog<T>` with its named readers, maximum capacity, stall detection and `ObservationSnapshot<T>`.
+
+- Pixely runs every updatable once per frame, and in the Orange architecture systems and updatables read at the same point in every frame, so none falls behind. The log's support for readers several frames behind had no user.
+- The names follow Bevy 0.17, which split its events into messages that systems read later and events that observers receive at once. "Observation" would suggest Bevy's observers.
+- A save captures the world at `UpdateOrders.Maintenance`, and state that must outlive a frame is a component, so messages need no snapshot.
+- A reader no longer registers with the storage, so it needs no name and no `Dispose`.
+
+Cost: a reader that misses messages loses them. That happens when it skips a frame, when it moves its read across Maintenance, or when it reads in a renderer, which Pixely skips while a window is minimized. Its next read throws instead of the writer, and the exception names the message type but not the reader. Messages written in the frame of a save, after one of their readers ran, are not saved. Nothing clears `Messages<T>` on a load.
+
 ## 2026-10-29: The GPU types are abstract, and a stub device backs a game's renderer tests
 
 `GpuDevice`, `CommandBuffer`, `RenderPass`, `ComputePass` and the internal `CopyPass` are abstract. Their public methods stay non-virtual and keep the validation; each calls an internal abstract core. `SdlGpuDevice`, `SdlCommandBuffer`, `SdlRenderPass`, `SdlComputePass` and `SdlCopyPass` hold the SDL GPU calls. `StubGpuDevice` and its command buffer and passes in the new `Pixely.Testing` record what reaches them instead, for a game's tests (`docs/testing.md`).

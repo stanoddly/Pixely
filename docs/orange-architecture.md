@@ -21,8 +21,6 @@
 Parts of this document describe Pixely APIs that do not exist yet:
 
 - `Pixely.Ecs` is experimental and not in the Pixely package yet
-- `Pixely.Messages` is `Pixely.Observations` today, see `docs/observations.md`.
-  `MessageWriter<T>` and `MessageReader<T>` are `ObservationWriter<T>` and `ObservationReader<T>`
 - `Pixely.Ui` still has `IUiViewModel` and `UiView<TViewModel>`. Views without view models are
   planned
 - `Pixely.Fitness` has no Orange rules yet
@@ -58,12 +56,18 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 - A message is an intent or an observation
   - An intent is what code outside systems asks the systems to do, e.g. switch the flashlight
-  - An observation is a transition that two reads of the world one frame apart cannot derive, see
-    `docs/observations.md`
+  - An observation is a transition that two reads of the world one frame apart cannot derive
+- Messages are `Pixely.Messages`, see `docs/messages.md`. Each message type is registered with
+  `AddMessages<T>`
 - A system takes `MessageWriter<T>` in its constructor like any service
-- A system that consumes a message creates its own `MessageReader<T>` from the log in its
-  constructor and drains it in `Update`
+- A system that consumes a message takes its own `MessageReader<T>` in its constructor and reads it
+  in `Update`. A reader MUST read at the same point in every frame, because a message lasts only
+  until `UpdateOrders.Maintenance` of the next frame
 - Any code on the main thread MAY write a message, so a UI handler needs no spawner
+- Messages are not saved. A save captures the world at `UpdateOrders.Maintenance`, so state that
+  must outlive a frame MUST be a component, e.g. a queued order
+- Code MUST NOT save directly. It writes an intent, and the saver reads it at
+  `UpdateOrders.Maintenance`
 
 ## Input
 
@@ -90,6 +94,8 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - Rendering and audio take read-only queries and lookups in their constructors, registered with
   `AddQuery` and `AddReadOnlyComponentLookup`, see `docs/ecs.md`
 - They MUST NOT write
+- A renderer MUST NOT read messages, because Pixely skips rendering while a window is minimized. An
+  updatable reads them and keeps what the renderer draws
 
 ## Not settled yet
 
@@ -101,3 +107,5 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - References between entities, and finding the children of an entity without scanning every entity
 - Optional components in queries
 - Iteration order, and the tie-breaks a rule needs where order matters
+- Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
+  cleared

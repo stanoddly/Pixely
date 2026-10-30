@@ -12,7 +12,7 @@
     <Project Path="src/Pixely.Audio/Pixely.Audio.csproj" />
     <Project Path="src/Pixely.Collections/Pixely.Collections.csproj" />
     <Project Path="src/Pixely.Core/Pixely.Core.csproj" />
-    <Project Path="src/Pixely.Observations/Pixely.Observations.csproj" />
+    <Project Path="src/Pixely.Messages/Pixely.Messages.csproj" />
     <Project Path="src/Pixely.SdlangCompiler/Pixely.SdlangCompiler.csproj" />
     <Project Path="src/Pixely.ShaderCommon/Pixely.ShaderCommon.csproj" />
     <Project Path="src/Pixely.DependencyInjection/Pixely.DependencyInjection.csproj" />
@@ -31,7 +31,7 @@
     <Project Path="tests/Pixely.Fitness.Tests/Pixely.Fitness.Tests.csproj" />
     <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
-    <Project Path="tests/Pixely.Observations.Tests/Pixely.Observations.Tests.csproj" />
+    <Project Path="tests/Pixely.Messages.Tests/Pixely.Messages.Tests.csproj" />
     <Project Path="tests/Pixely.Content.Tests/Pixely.Content.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangCompiler.Tests/Pixely.SdlangCompiler.Tests.csproj" />
