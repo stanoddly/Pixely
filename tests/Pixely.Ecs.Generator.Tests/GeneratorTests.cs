@@ -340,6 +340,75 @@ public class GeneratorTests
         Assert.That(output.GetDiagnostics().Select(d => d.Id), Does.Contain(expectedId));
     }
 
+    [Test]
+    public void RelationshipsAreRegisteredAndSystemsTakeTheirSources()
+    {
+        string source = Components + """
+            public readonly record struct InsideOf(Entity Target) : IRelationship;
+
+            public partial struct AttachedTo : IDestroyedWithTarget
+            {
+                public Entity Target => default;
+            }
+
+            public partial struct AttachedTo : IDestroyedWithTarget;
+
+            sealed class Contents : Query<ReadOnlySpan<Entity>, ReadOnlySpan<InsideOf>>;
+
+            sealed class S : ISystem
+            {
+                public S(Contents contents, RelationshipSources<InsideOf> inside, ReadOnlyComponentLookup<AttachedTo> attached, ComponentAdder<InsideOf> adder)
+                {
+                }
+
+                public void Update()
+                {
+                }
+            }
+
+            static class Registration
+            {
+                static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
+            }
+            """;
+
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(source);
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        Assert.That(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning), Is.Empty);
+        string registration = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("Relationships.g.cs")).ToString();
+        string[] calls = registration.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith("global::Pixely.Ecs.Relationships.")).ToArray();
+        Assert.That(calls, Is.EqualTo(new[]
+        {
+            "global::Pixely.Ecs.Relationships.Register<global::AttachedTo>();",
+            "global::Pixely.Ecs.Relationships.Register<global::InsideOf>();"
+        }));
+        string interceptors = output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("SystemInterceptors.g.cs")).ToString();
+        Assert.That(interceptors, Does.Contain("builder.RelationshipSources<global::InsideOf>()"));
+    }
+
+    [TestCase("public struct R<T> : IRelationship { public Entity Target => default; }")]
+    [TestCase("class Outer { private struct R : IRelationship { public Entity Target => default; } }")]
+    [TestCase("file struct R : IRelationship { public Entity Target => default; }")]
+    [TestCase("public struct R : IRelationship, ITag { public Entity Target => default; }")]
+    [TestCase("public ref struct R : IRelationship { public Entity Target => default; }")]
+    public void InvalidRelationshipReportsDiagnostic(string declaration)
+    {
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS017" }));
+    }
+
+    [TestCase("sealed class Q : Query<Span<R>>;")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Optional<Span<R>>>;")]
+    [TestCase("sealed class S(ComponentLookup<Position, R> lookup) : ISystem { public void Update() { } } static class G { static void Add(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>(); }")]
+    public void WritingARelationshipReportsDiagnostic(string declaration)
+    {
+        (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + "public readonly record struct R(Entity Target) : IRelationship;\n" + declaration);
+
+        Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "PXECS018" }));
+    }
+
     [TestCase("public struct T : ITag { public int X; }")]
     [TestCase("public struct T : ITag { public int X { get; set; } }")]
     [TestCase("public record struct T(int X) : ITag;")]
@@ -1067,6 +1136,7 @@ public class GeneratorTests
     }
 
     private static GeneratorDriver CreateDriver() =>
-        CSharpGeneratorDriver.Create([new QueryTermGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator()],
+        CSharpGeneratorDriver.Create([new QueryTermGenerator().AsSourceGenerator(), new SystemGenerator().AsSourceGenerator(), new TagGenerator().AsSourceGenerator(),
+            new RelationshipGenerator().AsSourceGenerator()],
             parseOptions: ParseOptions);
 }

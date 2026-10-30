@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-30: Pixely.Ecs relationships are components the world indexes by target, as in Bevy, registered by the generator
+
+A relationship is a component that implements `IRelationship`, whose `Target` points at another entity. The world keeps the sources of each target, which `RelationshipSources<T>` reads. Destroying a target removes the relationship from its sources, or destroys them when the relationship implements `IDestroyedWithTarget`.
+
+- What destroying a target does depends on the relationship: a part attached to a body goes with it, an item in a container stays in the world. So each relationship type chooses, as Bevy's `linked_spawn` does, and a game declares a type for each kind of relationship instead of using one built-in `ChildOf`.
+- The world knows a component only as an unconstrained `T`, and reading `Target` through the interface would box it. The generator registers each relationship with its constraint through a module initializer, as it registers query spans.
+- A relationship changes only through `ComponentAdder<T>`, `ComponentRemover<T>` and spawners, which apply at sync points where the world updates its index. Writing it through a span or a lookup would leave the index stale, so the generator and the world refuse both.
+- A relationship is an ordinary component otherwise, so queries and lookups read it as they read any other. Matching entities by their target's components, as Flecs's pairs do, is left out.
+
+Cost: an entity has one relationship of each type, so many-to-many needs a type per kind or an entity per link. Sources come in no particular order. Every add, remove and destroy of a relationship updates two dictionaries, and destroying any entity checks each relationship type's index for its sources.
+
 ## 2026-10-30: Pixely.Messages keeps two frames of messages, as Bevy does, instead of a log trimmed behind its slowest reader
 
 `Pixely.Observations` becomes `Pixely.Messages`. `Messages<T>` holds the messages of the current and the previous frame and drops the older ones on each update. A `MessageReader<T>` is a transient service whose position is a count of messages, so each consumer that takes one reads on its own. This replaces `ObservationLog<T>` with its named readers, maximum capacity, stall detection and `ObservationSnapshot<T>`.

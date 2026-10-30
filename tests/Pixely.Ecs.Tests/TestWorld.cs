@@ -19,6 +19,10 @@ internal sealed class TestWorld : IDisposable
         services.AddReadOnlyComponentLookup<Player>();
         services.AddReadOnlyComponentLookup<Frozen>();
         services.AddReadOnlyComponentLookup<Dead>();
+        services.AddReadOnlyComponentLookup<InsideOf>();
+        services.AddReadOnlyComponentLookup<AttachedTo>();
+        services.AddRelationshipSources<InsideOf>();
+        services.AddRelationshipSources<AttachedTo>();
         services.AddQuery<MovingEntities>();
         services.AddQuery<UnfrozenPositions>();
         services.AddQuery<PlayerEntities>();
@@ -35,6 +39,8 @@ internal sealed class TestWorld : IDisposable
     public T Get<T>() where T : class => _provider.GetRequiredService<T>();
 
     public ReadOnlyComponentLookup<T> Lookup<T>() where T : struct => Get<ReadOnlyComponentLookup<T>>();
+
+    public Entity[] Sources<T>(Entity target) where T : struct, IRelationship => Get<RelationshipSources<T>>()[target].ToArray();
 
     // Each of the methods below updates the scheduler once with a system that makes the change, so the scheduler's other systems run too.
     public Entity Spawn<T1>(T1 component1) where T1 : struct => Scheduler.RunOnce(builder => builder.Spawner<Spawner<T1>>(), spawner => spawner.Spawn(component1));

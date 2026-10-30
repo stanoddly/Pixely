@@ -35,7 +35,7 @@ public sealed class ComponentAdder<T> : IRecordedCommands where T : struct
 
             if (world.Has<T>(entity))
             {
-                world.Get<T>(entity) = _values[i];
+                world.Replace(entity, _values[i]);
             }
             else
             {

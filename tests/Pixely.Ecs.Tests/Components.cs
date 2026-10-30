@@ -54,3 +54,9 @@ public abstract class ComponentQuery<T> : Query<ReadOnlySpan<T>> where T : struc
 public sealed class Masses : ComponentQuery<Mass>;
 
 public sealed class Writable<T> : Query<Span<T>> where T : struct;
+
+// An item inside a container, which stays in the world when the container is destroyed.
+public readonly record struct InsideOf(Entity Target) : IRelationship;
+
+// A part attached to a body, which is destroyed with the body.
+public readonly record struct AttachedTo(Entity Target) : IDestroyedWithTarget;

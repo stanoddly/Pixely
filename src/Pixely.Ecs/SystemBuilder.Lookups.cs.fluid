@@ -12,7 +12,7 @@ public sealed partial class SystemBuilder
 {%- unless forloop.first and kind == 0 %}
 {% endunless %}
     public {{ name }}<{{ args }}> {{ name }}<{{ args }}>(){% for i in (1..n) %} where T{{ i }} : struct{% endfor %} =>
-        new {{ name }}<{{ args }}>(AddLookup(typeof({{ name }}<{{ args }}>){% for i in (1..n) %}, ComponentType<T{{ i }}>.Id{% endfor %}));
+        new {{ name }}<{{ args }}>({% if kind == 0 %}AddWritableLookup{% else %}AddLookup{% endif %}(typeof({{ name }}<{{ args }}>){% for i in (1..n) %}, ComponentType<T{{ i }}>.Id{% endfor %}));
 {%- endfor -%}
 {%- endfor %}
 }
