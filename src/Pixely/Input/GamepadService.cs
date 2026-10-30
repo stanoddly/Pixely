@@ -56,6 +56,12 @@ public class GamepadService : IGamepadService
     private const float JoystickMaxDivisor = SDL3.SDL_JOYSTICK_AXIS_MAX;
     private const float StickDeadZone = 0.2f;
 
+    private static readonly SDL_GamepadAxis[] Axes =
+    [
+        SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTY, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX,
+        SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER
+    ];
+
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly GamepadButtonEventArgs _buttonEventArgs = new();
     private readonly GamepadStickEventArgs _stickEventArgs = new();
@@ -204,6 +210,27 @@ public class GamepadService : IGamepadService
         GamepadDisconnected?.Invoke(pad);
     }
 
+    // The unplug of a synthetic gamepad, as SDL reports a real one: every held button is released and every axis returns to 0, in that
+    // order, before the gamepad goes.
+    internal void RemoveGamepad(SDL_JoystickID joystickId, ulong timestamp)
+    {
+        Gamepad gamepad = _gamepads[joystickId];
+        foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
+        {
+            if (gamepad.IsPressed(button))
+            {
+                OnGamepadButtonEvent(joystickId, button, false, timestamp);
+            }
+        }
+
+        foreach (SDL_GamepadAxis axis in Axes)
+        {
+            OnGamepadAxisMotion(joystickId, axis, 0, timestamp);
+        }
+
+        OnGamepadRemoved(joystickId);
+    }
+
     internal void OnGamepadButtonPressed(SDL_GamepadButtonEvent gamepadButtonEvent)
     {
         OnGamepadButtonEvent(gamepadButtonEvent.which, (GamepadButton)gamepadButtonEvent.Button, true, gamepadButtonEvent.timestamp);
@@ -259,28 +286,12 @@ public class GamepadService : IGamepadService
         {
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX or SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTY:
             {
-                gamepad.RawLeftStick = WithAxis(gamepad.RawLeftStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, value);
-                Vector2 leftStick = ApplyDeadZone(gamepad.RawLeftStick);
-                if (leftStick == gamepad.LeftStick)
-                {
-                    return;
-                }
-
-                gamepad.LeftStick = leftStick;
-                InvokeStickMotion(_leftStickMotionHandlers, gamepad, leftStick, timestamp);
+                MoveStick(gamepad, true, WithAxis(gamepad.RawLeftStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, value), timestamp);
                 break;
             }
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX or SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY:
             {
-                gamepad.RawRightStick = WithAxis(gamepad.RawRightStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX, value);
-                Vector2 rightStick = ApplyDeadZone(gamepad.RawRightStick);
-                if (rightStick == gamepad.RightStick)
-                {
-                    return;
-                }
-
-                gamepad.RightStick = rightStick;
-                InvokeStickMotion(_rightStickMotionHandlers, gamepad, rightStick, timestamp);
+                MoveStick(gamepad, false, WithAxis(gamepad.RawRightStick, axis == SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX, value), timestamp);
                 break;
             }
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
@@ -307,6 +318,39 @@ public class GamepadService : IGamepadService
                 InvokeTriggerMotion(_rightTriggerMotionHandlers, gamepad, value, timestamp);
                 break;
             }
+        }
+    }
+
+    // Both axes of a synthetic stick at once, so a move is one event; SDL reports each axis of a real stick as its own event.
+    internal void OnGamepadStickMotion(SDL_JoystickID joystickId, bool isLeft, Vector2 value, ulong timestamp)
+    {
+        MoveStick(_gamepads[joystickId], isLeft, value, timestamp);
+    }
+
+    private void MoveStick(Gamepad gamepad, bool isLeft, Vector2 rawValue, ulong timestamp)
+    {
+        Vector2 value = ApplyDeadZone(rawValue);
+        if (isLeft)
+        {
+            gamepad.RawLeftStick = rawValue;
+            if (value == gamepad.LeftStick)
+            {
+                return;
+            }
+
+            gamepad.LeftStick = value;
+            InvokeStickMotion(_leftStickMotionHandlers, gamepad, value, timestamp);
+        }
+        else
+        {
+            gamepad.RawRightStick = rawValue;
+            if (value == gamepad.RightStick)
+            {
+                return;
+            }
+
+            gamepad.RightStick = value;
+            InvokeStickMotion(_rightStickMotionHandlers, gamepad, value, timestamp);
         }
     }
 
