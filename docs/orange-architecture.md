@@ -19,9 +19,9 @@
 
 ## Status
 
-Parts of this document describe Pixely APIs that do not exist yet:
+Parts of what this document builds on are not final:
 
-- `Pixely.Ecs` is experimental and not in the Pixely package yet
+- `Pixely.Ecs` is experimental
 - `Pixely.Fitness` has no Orange rules yet
 
 ## Foo.Vocabulary namespace

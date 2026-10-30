@@ -5,7 +5,7 @@
         <_PixelySdkImported>true</_PixelySdkImported>
         <!-- Microsoft.NET.Sdk must come first: its props import the restored packages' props and Directory.Packages.props, which this file reads. -->
         <_PixelyBaseSdkFirst>$(UsingMicrosoftNETSdk)</_PixelyBaseSdkFirst>
-        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated;Pixely.Ecs.Generated</InterceptorsNamespaces>
         <PixelyDocsDirectory>$(MSBuildThisFileDirectory)..\docs\</PixelyDocsDirectory>
     </PropertyGroup>
 

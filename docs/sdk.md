@@ -33,12 +33,12 @@ MSBuild resolves a named SDK once per build and keeps the first version it resol
 
 ## What the SDK adds
 
-- A `PackageReference` to `Pixely` pinned to the SDK's own version, so the library, the source generator and the SDK never drift apart.
+- A `PackageReference` to `Pixely` pinned to the SDK's own version, so the library, the source generators and the SDK never drift apart.
 - The `SlangDxcBundle.Toolchain` project SDK, pinned to the version the shader targets were built against. It is imported with `Version`, so the project does not name it. It references the toolchain package of the build host, such as `SlangDxcBundle.Toolchain.linux-x64`, with `PrivateAssets="all"`, so restore downloads one platform. The toolchain is a build-host tool of the project being built; a library built on Pixely does not carry it in its nuspec. A consumer of such a library adds the `<Sdk>` line, as every project reaching Pixely must, and gets the toolchain from it. The toolchain SDK's own one-version-per-build rule applies too: the first version resolved in a build wins.
 - The shader compilation targets (`SdlangShader`, see [Shaders](shaders.md)).
 - The generated entry point for projects that set `PixelyHosting` (see [Hosting](hosting.md)).
 - The browser build: with `RuntimeIdentifier` `browser-wasm` the SDK imports `Microsoft.NET.Sdk.WebAssembly` on top of `Microsoft.NET.Sdk`, switches a single `net11.0` to `net11.0-browser` after the project body so the app takes the browser build of the library from `lib/net11.0-browser1.0/`, forces `PublishAot=false`, `SelfContained=true`, `PublishTrimmed=true`, defaults `RunAOTCompilation` to `true` (Mono AOT, which needs the `wasm-tools` workload), keeps the RID in the output paths, adds the default page, bootstrap and frame loop as static web assets, and puts each `PixelyBrowserVfsFile` into the browser's file system (see [Content distribution](content-distribution.md#browser)). The RID must be a global property (`-r browser-wasm` on the executable project), because the SDK props run before the project body; in the body it fails with PIXELY0004. The framework switch is later than the project body, so a body condition on `TargetFramework` sees `net11.0` on a browser publish; condition on `RuntimeIdentifier` instead. A project with `TargetFrameworks` lists `net11.0-browser` itself and publishes with `dotnet publish -f net11.0-browser -r browser-wasm`; an inner build under the RID whose framework is not a browser one fails with PIXELY0007. A project whose `OutputType` is not `Exe` or `WinExe` gets neither the WebAssembly pack nor its `SelfContained` and `PublishTrimmed` defaults, so a library on the SDK stays a library when the app that references it is restored for the browser or when it is published with the RID itself.
-- `InterceptorsNamespaces` for the dependency-injection generator and `PixelyDocsDirectory`, the packaged copy of `docs/`.
+- `InterceptorsNamespaces` for the dependency-injection and ECS generators, and `PixelyDocsDirectory`, the packaged copy of `docs/`.
 
 A library packed on Pixely X depends on exactly `[X]`. A consumer pinned lower fails restore with NU1605; a consumer pinned higher gets its own version with warning NU1608, which `TreatWarningsAsErrors` promotes.
 
@@ -50,14 +50,14 @@ The SDK also removes a `PackageReference` to either package that the project dec
 
 ## Every project needs the line
 
-The `<Sdk>` line belongs in every project that references Pixely, directly or through a project or package reference. A project without it would get the library through the reference graph but not the source generator, and dependency-injection registrations would fail at run time instead of at build time. The package therefore fails the build of such a project with error PIXELY0002, which names the `<Sdk>` line and the `global.json` alternative. The check runs at build, not at restore, because a package's `buildTransitive/` folder is not evaluated while the restore graph is built.
+The `<Sdk>` line belongs in every project that references Pixely, directly or through a project or package reference. A project without it would get the library through the reference graph but not the source generators, so dependency-injection registrations, `AddSystem<T>` and ECS queries would fail at run time instead of at build time. The package therefore fails the build of such a project with error PIXELY0002, which names the `<Sdk>` line and the `global.json` alternative. The check runs at build, not at restore, because a package's `buildTransitive/` folder is not evaluated while the restore graph is built.
 
 ## Package layout
 
 ```
 lib/net11.0/                                   the library, the desktop build
 lib/net11.0-browser1.0/                        the library, the browser build of Pixely and copies of the other assemblies (NuGet takes one folder per consumer)
-analyzers/dotnet/cs/                           the dependency-injection generator
+analyzers/dotnet/cs/                           the dependency-injection and ECS generators
 Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator

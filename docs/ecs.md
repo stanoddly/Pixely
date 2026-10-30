@@ -2,7 +2,7 @@
 
 `Pixely.Ecs` is an experimental entity component system (ECS). Entities are ids, components are structs stored by type, and a query reads the components of every entity that matches it. A system takes the queries it reads and the writers of the structural changes it makes in its constructor, and they are its contract.
 
-It is not in the Pixely package yet. Reference `src/Pixely.Ecs` and, as an analyzer, `src/Pixely.Ecs.Generator`, and allow the generator's interceptors:
+It ships in the Pixely package, and the `<Sdk Name="Pixely" />` line adds its generator and allows the generator's interceptors, see [sdk.md](sdk.md). A project that references Pixely as source references `src/Pixely.Ecs` and, as an analyzer, `src/Pixely.Ecs.Generator`, and allows the interceptors itself:
 
 ```xml
 <PropertyGroup>
@@ -275,7 +275,7 @@ Changes through a `Span<T>` are not structural. Later systems see them at once.
 
 ## Without dependency injection
 
-`SystemScheduler.Add` takes a function that creates the system with the queries, lookups and writers of a `SystemBuilder`, which records them as the contract. It needs no generated code, so tests need nothing else:
+`SystemScheduler.Add` takes a function that creates the system with the queries, lookups and writers of a `SystemBuilder`, which records them as the contract. It needs no interceptor, but a query still needs the generator, which registers its spans. A project on the Pixely SDK gets the generator automatically:
 
 ```csharp
 World world = new World();
@@ -322,3 +322,4 @@ PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
 - Optional components, change detection, events on add or remove, relations between entities.
 - Pixely.Fitness has no rules for the [Orange architecture](orange-architecture.md) yet.
+- The browser is untested. Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and no browser test runs it under Mono, the browser's runtime, with or without AOT.
