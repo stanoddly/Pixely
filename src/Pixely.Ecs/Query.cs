@@ -10,14 +10,18 @@ internal sealed class QueryState
 {
     private int _checkedArchetypes;
 
-    public QueryState(ComponentSet required, ComponentSet excluded, bool writes)
+    public QueryState(ComponentSet required, ComponentSet optional, ComponentSet excluded, bool writes)
     {
         Required = required;
+        Optional = optional;
         Excluded = excluded;
         Writes = writes;
     }
 
     public ComponentSet Required { get; }
+
+    // The components of Optional<...> type arguments, which a matching archetype may lack.
+    public ComponentSet Optional { get; }
 
     public ComponentSet Excluded { get; }
 
@@ -40,7 +44,7 @@ internal sealed class QueryState
     }
 }
 
-// A query of the components its Span<T> and ReadOnlySpan<T> type arguments name, filtered by IWith<...> and IWithout<...>. A query derives from Query<...>;
+// A query of the components its Span<T>, ReadOnlySpan<T> and Optional<...> type arguments name, filtered by IWith<...> and IWithout<...>. A query derives from Query<...>;
 // World.Query creates one instance per world and type, so a query class needs a public parameterless constructor.
 public abstract class Query
 {
@@ -78,7 +82,7 @@ public abstract class Query
         if (QueryTerm<TSpan>.Instance is not { } term)
         {
             throw new InvalidOperationException(
-                $"The type argument {FormatType(typeof(TSpan))} of the query {GetType().Name} is not registered. The Pixely.Ecs generator registers every Span<T> and ReadOnlySpan<T> of a component it sees in a Query<...>; reference it as an analyzer.");
+                $"The type argument {FormatType(typeof(TSpan))} of the query {GetType().Name} is not registered. The Pixely.Ecs generator registers every Span<T>, ReadOnlySpan<T> and Optional<...> of a component it sees in a Query<...>; reference it as an analyzer.");
         }
 
         term.Describe(description);

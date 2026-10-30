@@ -31,6 +31,7 @@ public sealed partial class SystemBuilder
         ThrowIfClosed();
         TQuery query = _world.Query<TQuery>();
         AddAll(Contract.Touched, query.State.Required);
+        AddAll(Contract.Touched, query.State.Optional);
         AddAll(Contract.Touched, query.State.Excluded);
         return query;
     }

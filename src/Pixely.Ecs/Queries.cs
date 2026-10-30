@@ -2,7 +2,8 @@
 // Generated from Queries.cs.fluid — do not edit manually.
 namespace Pixely.Ecs;
 
-// A query whose type arguments are Span<T>, which it may write, ReadOnlySpan<T>, which it only reads, or ReadOnlySpan<Entity>.
+// A query whose type arguments are Span<T>, which it may write, ReadOnlySpan<T>, which it only reads, ReadOnlySpan<Entity>, or Optional<Span<T>> and
+// Optional<ReadOnlySpan<T>>, whose entities may lack T.
 // Derive a class from it to name the query and filter it with IWith<...> and IWithout<...>.
 public class Query<T1> : Query
     where T1 : allows ref struct

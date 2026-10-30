@@ -240,11 +240,17 @@ public class SystemGenerator : IIncrementalGenerator
         }
 
         List<string> required = [];
+        List<string> optional = [];
         foreach (ITypeSymbol typeArgument in GeneratorSupport.GetQueryBase(query)!.TypeArguments)
         {
-            if (GeneratorSupport.ClassifySpan(typeArgument, out ITypeSymbol? element) is SpanKind.Span or SpanKind.ReadOnlySpan)
+            switch (GeneratorSupport.ClassifySpan(typeArgument, out ITypeSymbol? element))
             {
-                required.Add(element!.ToDisplayString(TypeFormat));
+                case SpanKind.Span or SpanKind.ReadOnlySpan:
+                    required.Add(element!.ToDisplayString(TypeFormat));
+                    break;
+                case SpanKind.OptionalSpan or SpanKind.OptionalReadOnlySpan:
+                    optional.Add(element!.ToDisplayString(TypeFormat));
+                    break;
             }
         }
 
@@ -258,6 +264,12 @@ public class SystemGenerator : IIncrementalGenerator
         if (contradiction is not null)
         {
             return Fail("PXECS005", $"The query {queryName} both requires and excludes {contradiction}, so it matches no entity.", invocation);
+        }
+
+        string? filtered = GetFilters(query, "Pixely.Ecs.IWith<").Concat(GetFilters(query, "Pixely.Ecs.IWithout<")).FirstOrDefault(optional.Contains);
+        if (filtered is not null)
+        {
+            return Fail("PXECS016", $"The query {queryName} reads {filtered} as optional, which its IWith<...> or IWithout<...> also names, so it is always present or always absent.", invocation);
         }
 
         return null;
