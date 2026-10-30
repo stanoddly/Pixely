@@ -14,12 +14,6 @@ public sealed record PixelyConventionsOptions(IReadOnlyList<Assembly> Assemblies
     {
     }
 
-    /// <summary>The production assemblies of a Peach game, none until GameResolvesFromPrefix resolved them.</summary>
-    public static PixelyConventionsOptions ForPeach(PeachArchitectureOptions options)
-    {
-        return new PixelyConventionsOptions(options.Resolved.IsComplete ? options.ProductionAssemblies.ToArray() : []);
-    }
-
     /// <summary>A type with a static Create returning itself hides its constructors.</summary>
     public bool FactoriesHideConstructors { get; init; } = true;
 

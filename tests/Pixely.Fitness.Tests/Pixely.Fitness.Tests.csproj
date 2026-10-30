@@ -17,14 +17,10 @@
 
     <ItemGroup>
         <Using Include="NUnit.Framework"/>
-        <Compile Remove="Fixture\**\*.cs" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Pixely.Fitness\Pixely.Fitness.csproj" />
-        <ProjectReference Include="Fixture\Peachy.Game\Peachy.Game.csproj" />
-        <ProjectReference Include="Fixture\Peachy.Frontend\Peachy.Frontend.csproj" />
-        <ProjectReference Include="Fixture\Peachy.Executable\Peachy.Executable.csproj" />
     </ItemGroup>
 
 </Project>
