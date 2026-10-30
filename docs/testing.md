@@ -1,6 +1,6 @@
-# Testing renderers without a GPU
+# Testing renderers and input without devices
 
-`Pixely.Testing` gives a game's tests a GPU device without a GPU. `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+`Pixely.Testing` gives a game's tests a GPU device without a GPU, and a keyboard and gamepads that a test presses ([Input](#input)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ## The app
 
@@ -50,3 +50,38 @@ The stub keeps what is uploaded. An upload reaches the contents when its command
 ## What the stub cannot tell
 
 It runs no shader, so it cannot show what a frame looks like or catch a shader bug, SDL's own validation or a driver's. It does not check a texture's usage against its binding, which Pixely does not check either. Its fences are signalled at once. It runs on the desktop build of Pixely only, not the browser one.
+
+## Input
+
+`StubKeyboardService` is an `IKeyboardService` and `StubGamepadService` an `IGamepadService`, for frontend code that takes them. A test presses keys and buttons through Pixely's own keyboard and gamepad services, so the code under test gets the events the game gets:
+
+```csharp
+StubKeyboardService keyboard = new();
+using PauseMenu pauseMenu = new(keyboard);
+
+keyboard.Down(Scancode.LeftCtrl);
+keyboard.Press(Scancode.G);
+
+StubGamepadService gamepads = new();
+using PlayerController controller = new(gamepads);
+Gamepad pad = gamepads.Connect();
+
+gamepads.Press(pad, GamepadButton.Start);
+gamepads.MoveLeftStick(pad, new Vector2(1f, 0f));
+gamepads.Disconnect(pad);
+```
+
+- `Down` presses and holds, `Up` releases, and `Press` does both. They raise the events at once, on the calling thread, with no frame.
+- Handlers run in their order, and a consumed event stops at the handler that consumed it.
+- `KeyEventArgs.Keyboard` holds the keys held, so `Ctrl` and `Shift` follow `Down` and `Up`. A `Down` on a held key is a repeat. A key's `VirtualKey` is SDL's for the scancode; before SDL starts, that is the US layout on every machine, for example `Scancode.G` is `VirtualKey.G`.
+- A key goes to the main view unless the call names a `ViewScope`, which reaches only the handlers subscribed for that view.
+- `Connect()` returns a new `Gamepad` with its own `DeviceId`, so a test can connect several. No gamepad is connected before it.
+- A `Down` on a held button raises nothing, as on a real gamepad.
+- `MoveLeftStick` and `MoveRightStick` take each axis from -1 to 1, with Y growing downwards. The game sees the position through Pixely's dead zone: a stick moved less than 0.2 from the center reads as at rest, and a full move reads as 1. A move raises one event, or none when what the game sees stays the same, for example `(0.1, 0)` from rest.
+- `MoveLeftTrigger` and `MoveRightTrigger` take 0, at rest, to 1, fully pulled. A value the trigger already has raises nothing.
+- `Disconnect` releases the held buttons and returns the sticks and triggers to rest before `GamepadDisconnected`, as SDL reports an unplug.
+- A gamepad that is not connected to the stub throws `InvalidOperationException`. A scancode or button outside its enum, `GamepadButton.Invalid` and `GamepadButton.Count` among them, and a stick or trigger value out of range or NaN throw `ArgumentOutOfRangeException`.
+- A call from one of the stub's own event handlers throws `InvalidOperationException`, because the handlers after it would get the new event in place of theirs.
+- Every event's `Timestamp` is 0.
+
+Neither stub needs an app, a window or SDL started, so a test creates it with `new` and passes it to the code under test.

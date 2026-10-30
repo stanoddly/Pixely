@@ -16,12 +16,6 @@ internal sealed class InputAutomation
     // Gamepads are not per window, so there is one synthetic gamepad.
     private const SDL_JoystickID VirtualGamepadId = (SDL_JoystickID)VirtualDeviceIdBase;
 
-    private static readonly SDL_GamepadAxis[] GamepadAxes =
-    [
-        SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTY, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTX,
-        SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER
-    ];
-
     private readonly WindowRegistry _windowRegistry;
     private readonly MouseService _mouseService;
     private readonly KeyboardService _keyboardService;
@@ -130,24 +124,10 @@ internal sealed class InputAutomation
         _gamepad = _gamepadService.AddGamepad(VirtualGamepadId);
     }
 
-    // Like SDL on an unplug: every held button is released and every axis returns to 0, in that order, before the gamepad goes.
     public void GamepadDisconnect()
     {
-        Gamepad gamepad = GetGamepad();
-        foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
-        {
-            if (gamepad.IsPressed(button))
-            {
-                _gamepadService.OnGamepadButtonEvent(VirtualGamepadId, button, false, GetTimestamp());
-            }
-        }
-
-        foreach (SDL_GamepadAxis axis in GamepadAxes)
-        {
-            _gamepadService.OnGamepadAxisMotion(VirtualGamepadId, axis, 0, GetTimestamp());
-        }
-
-        _gamepadService.OnGamepadRemoved(VirtualGamepadId);
+        GetGamepad();
+        _gamepadService.RemoveGamepad(VirtualGamepadId, GetTimestamp());
         _gamepad = null;
     }
 
