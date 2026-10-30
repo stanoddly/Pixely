@@ -90,6 +90,7 @@ The console differs from headless mode:
 - Only game commands, with an optional `@<n>`, and `quit` run. The built-in input, `screenshot` and `wait` commands are unknown commands here.
 - A malformed command, such as an unknown one, one with an invalid `@<n>` or one whose `Execute` throws `FormatException`, is written to standard error and the app goes on. Any other exception from `Execute` ends the app, the same as in headless mode.
 - The end of the input ends only the console; the app keeps running. A command left without its newline or `;` at the end still runs.
+- A failed read of the input, such as an `IOException` when its terminal has gone away, is written to standard error and ends the console as the end of the input does.
 - The reading thread starts with the first frame. A read it is blocked in cannot be cancelled, so the thread does not keep the process alive after the app ends.
 
 Headless mode reads standard input with its own console, so with `PixelyConfig.Headless` this setting does nothing. Neither console exists in the browser, which has no standard input, so the setting does nothing there either.

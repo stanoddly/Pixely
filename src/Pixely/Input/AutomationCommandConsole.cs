@@ -82,7 +82,7 @@ internal sealed class AutomationCommandConsole : IUpdatable
     {
         StringBuilder command = new();
         int character;
-        while ((character = _input.Read()) != -1)
+        while ((character = ReadCharacter()) != -1)
         {
             if (character is ';' or '\n')
             {
@@ -96,5 +96,21 @@ internal sealed class AutomationCommandConsole : IUpdatable
         }
 
         _readCommands.Enqueue(command.ToString());
+    }
+
+    // A failed read ends the input. The reader is a background thread, so an exception escaping it would end the process,
+    // and a console for cheats must not take the game down with it. Such a read is, for example, standard input whose
+    // terminal has gone away, or an interrupted system call (EINTR), which a blocked read of a pipe has failed with on Linux CI.
+    private int ReadCharacter()
+    {
+        try
+        {
+            return _input.Read();
+        }
+        catch (IOException exception)
+        {
+            _error.WriteLine($"Reading commands failed, so the command console stops: {exception.Message}");
+            return -1;
+        }
     }
 }
