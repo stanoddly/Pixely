@@ -62,6 +62,7 @@ public abstract class CommandBuffer: IDisposable
         }
 
         byte[] pixels = new byte[layerSizeInBytes];
+        _isFinished = true;
         SubmitAndDownloadTextureCore(texture, pixels);
         return new RawImage(pixels, texture.Size, pixelFormat);
 #endif
@@ -343,7 +344,8 @@ public abstract class CommandBuffer: IDisposable
     internal abstract void SubmitCore();
     internal abstract GpuFence SubmitAndAcquireFenceCore();
 #if !BROWSER
-    // Records the download, submits, waits and fills pixels with the texture's first layer.
+    // Records the download, submits, waits and fills pixels with the texture's first layer. A failure before the submit
+    // cancels the command buffer.
     internal abstract void SubmitAndDownloadTextureCore(Texture texture, byte[] pixels);
 #endif
     internal abstract void PushVertexUniformDataCore(uint slot, ReadOnlySpan<byte> data);

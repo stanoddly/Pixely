@@ -56,7 +56,13 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 size = (uint)pixels.Length
             };
             SDL_GPUTransferBuffer* transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(_gpuDevice.Pointer, &transferBufferCreateInfo);
-            SdlError.ThrowOnNull(transferBuffer);
+            if (transferBuffer == null)
+            {
+                // The command buffer is already marked finished, so nothing else would cancel it.
+                string? error = SDL3.SDL_GetError();
+                CancelCore();
+                throw new PixelyException(error);
+            }
 
             try
             {
@@ -67,7 +73,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
                 SDL3.SDL_EndGPUCopyPass(copyPass);
 
-                using (GpuFence fence = SubmitAndAcquireFence())
+                using (GpuFence fence = SubmitAndAcquireFenceCore())
                 {
                     _gpuDevice.WaitForFences([fence]);
                 }
@@ -215,6 +221,8 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 bufferBindings,
                 (uint)readWriteStorageBuffers.Length);
 
+            // SDL returns no pass for a misuse, such as a pass begun while another is still recording.
+            SdlError.ThrowOnNull<SDL_GPUComputePass>(computePass, "SDL_BeginGPUComputePass");
             return new SdlComputePass(computePass, (uint)readWriteStorageTextures.Length, (uint)readWriteStorageBuffers.Length, readWriteStorageBufferElementSizes);
         }
     }

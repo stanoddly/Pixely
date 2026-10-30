@@ -101,6 +101,34 @@ public class StubGpuDeviceTests
     }
 
     [Test]
+    public void Submit_OfAnUploadToAReleasedTexture_KeepsNoContents()
+    {
+        using StubGpuDevice device = StubGpuDevice.Create();
+        using GpuMemorySystem gpuMemorySystem = new(device);
+        Texture texture = gpuMemorySystem.CreateTexture(new RawImage([9, 8, 7, 6], new ShortSize(1, 1), PixelFormat.Rgba8888));
+
+        texture.Dispose();
+        gpuMemorySystem.Submit();
+
+        Assert.That(device.TextureContentCount, Is.Zero);
+    }
+
+    [Test]
+    public void Dispose_OfATextureArray_ReleasesTheContentsOfEveryLayer()
+    {
+        using StubGpuDevice device = StubGpuDevice.Create();
+        using GpuMemorySystem gpuMemorySystem = new(device);
+        RawImage first = new([1, 1, 1, 1], new ShortSize(1, 1), PixelFormat.Rgba8888);
+        RawImage second = new([2, 2, 2, 2], new ShortSize(1, 1), PixelFormat.Rgba8888);
+        TextureArray textureArray = gpuMemorySystem.CreateTextureArray([first, second]);
+        gpuMemorySystem.Submit();
+
+        textureArray.Dispose();
+
+        Assert.That(device.TextureContentCount, Is.Zero);
+    }
+
+    [Test]
     public void ReadTexture_OfAColorTarget_ReadsZeros()
     {
         using StubGpuDevice device = StubGpuDevice.Create();
@@ -166,6 +194,24 @@ public class StubGpuDeviceTests
         using Image image = device.AcquireCommandBuffer().SubmitAndDownloadTexture(texture);
 
         Assert.That(image.Data.ToArray(), Is.EqualTo(pixels));
+    }
+
+    [Test]
+    public void SubmitAndDownloadTexture_FinishesTheCommandBuffer()
+    {
+        using StubGpuDevice device = StubGpuDevice.Create();
+        Texture texture = device.CreateColorTargetTexture(new ShortSize(1, 1), TextureFormat.R8G8B8A8Unorm);
+        StubCommandBuffer commandBuffer = (StubCommandBuffer)device.AcquireCommandBuffer();
+
+        using Image image = commandBuffer.SubmitAndDownloadTexture(texture);
+        commandBuffer.Cancel();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(commandBuffer.IsCancelled, Is.False);
+            Assert.That(device.SubmittedCommandBuffers, Has.Count.EqualTo(1));
+            Assert.Throws<ObjectDisposedException>(() => commandBuffer.Submit());
+        });
     }
 
     [Test]

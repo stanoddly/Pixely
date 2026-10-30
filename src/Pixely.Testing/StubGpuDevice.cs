@@ -17,6 +17,7 @@ public sealed class StubGpuDevice : GpuDevice
     private readonly Lock _lock = new();
     private readonly List<StubCommandBuffer> _submittedCommandBuffers = new();
     private readonly Dictionary<nint, byte[]> _bufferContents = new();
+    private readonly Dictionary<nint, uint> _textureLayerCounts = new();
     private readonly Dictionary<(nint Texture, uint Layer), byte[]> _textureContents = new();
     private long _lastHandle;
 
@@ -112,6 +113,18 @@ public sealed class StubGpuDevice : GpuDevice
         return new byte[texture.Format.CalculateSizeInBytes(texture.Size.Width, texture.Size.Height)];
     }
 
+    // The texture layers holding uploaded contents, for the stub's own tests.
+    internal int TextureContentCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _textureContents.Count;
+            }
+        }
+    }
+
     internal void OnSubmitted(StubCommandBuffer commandBuffer)
     {
         lock (_lock)
@@ -127,13 +140,17 @@ public sealed class StubGpuDevice : GpuDevice
 
     private void Apply(StubUpload upload)
     {
+        // A buffer or texture released before the upload's submission has no contents left to write.
         if (upload.IsTexture)
         {
-            _textureContents[(upload.Handle, upload.Layer)] = upload.Data;
+            if (_textureLayerCounts.ContainsKey(upload.Handle))
+            {
+                _textureContents[(upload.Handle, upload.Layer)] = upload.Data;
+            }
+
             return;
         }
 
-        // A buffer released before the upload's submission has no contents left to write.
         if (_bufferContents.TryGetValue(upload.Handle, out byte[]? contents))
         {
             upload.Data.CopyTo(contents.AsSpan());
@@ -179,8 +196,16 @@ public sealed class StubGpuDevice : GpuDevice
 
     internal override Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config) => NextHandle<SDL_GPUSampler>();
 
-    internal override Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount) =>
-        NextHandle<SDL_GPUTexture>();
+    internal override Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount)
+    {
+        Pointer<SDL_GPUTexture> texture = NextHandle<SDL_GPUTexture>();
+        lock (_lock)
+        {
+            _textureLayerCounts.Add(HandleOf(texture), layerCount);
+        }
+
+        return texture;
+    }
 
     internal override Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes)
     {
@@ -209,8 +234,14 @@ public sealed class StubGpuDevice : GpuDevice
         nint handle = HandleOf(texture);
         lock (_lock)
         {
-            for (uint layer = 0; _textureContents.Remove((handle, layer)); layer++)
+            if (!_textureLayerCounts.Remove(handle, out uint layerCount))
             {
+                return;
+            }
+
+            for (uint layer = 0; layer < layerCount; layer++)
+            {
+                _textureContents.Remove((handle, layer));
             }
         }
     }
