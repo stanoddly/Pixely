@@ -1,6 +1,6 @@
-namespace Pixely;
+namespace Pixely.Headless;
 
-// The frame clock of a headless app (PixelyConfig.Headless). Game time starts at 0 and advances by a fixed step per frame,
+// The frame clock of a headless app. Game time starts at 0 and advances by a fixed step per frame,
 // so every run of a script sees the same frame times however fast its frames run.
 internal sealed class FixedStepFrameClock : PixelyFrameClock
 {

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.Gpu;
+using Pixely.Headless;
 using Pixely.Utilities;
 using SDL;
 

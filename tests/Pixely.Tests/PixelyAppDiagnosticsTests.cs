@@ -13,7 +13,6 @@ public class PixelyAppDiagnosticsTests
     private static readonly string[] ConfigVariables =
     [
         PixelyConfigEnvironment.GpuBackendVariable,
-        PixelyConfigEnvironment.HeadlessVariable,
         PixelyConfigEnvironment.SdlLoggingVariable,
         PixelyConfigEnvironment.GpuValidationVariable,
         PixelyConfigEnvironment.PreferLowPowerGpuVariable,

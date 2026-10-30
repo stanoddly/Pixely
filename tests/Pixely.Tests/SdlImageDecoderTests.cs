@@ -1,5 +1,6 @@
 using Pixely.Content;
 using Pixely.Gpu;
+using Pixely.Headless;
 
 namespace Pixely.Tests;
 

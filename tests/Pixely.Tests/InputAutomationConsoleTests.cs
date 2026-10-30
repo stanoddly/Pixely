@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Pipes;
 using Pixely.App;
 using Pixely.Content;
+using Pixely.Headless;
 using Pixely.Input;
 
 namespace Pixely.Tests;

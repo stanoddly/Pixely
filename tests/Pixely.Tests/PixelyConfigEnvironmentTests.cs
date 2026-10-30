@@ -16,12 +16,11 @@ public class PixelyConfigEnvironmentTests
     [TestCase("   ")]
     public void Apply_WithoutVariables_KeepsConfig(string? value)
     {
-        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, Headless: true, PreferLowPowerGpu: true, EnableDiagnostics: true,
+        PixelyConfig config = new(EnableSdlLogging: true, EnableGpuValidation: false, GpuBackend: GpuBackend.Direct3D12, PreferLowPowerGpu: true, EnableDiagnostics: true,
             UploadWait: UploadWait.On, EnableCommandConsole: true);
         PixelyConfig original = config with { };
         Func<string, string?> variables = Variables(
             (PixelyConfigEnvironment.GpuBackendVariable, value),
-            (PixelyConfigEnvironment.HeadlessVariable, value),
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
             (PixelyConfigEnvironment.GpuValidationVariable, value),
             (PixelyConfigEnvironment.PreferLowPowerGpuVariable, value),
@@ -89,10 +88,9 @@ public class PixelyConfigEnvironmentTests
     [TestCase("false", false)]
     public void Apply_WithBooleanVariables_OverridesEachFlag(string value, bool expected)
     {
-        PixelyConfig config = new(EnableSdlLogging: !expected, EnableGpuValidation: !expected, Headless: !expected, PreferLowPowerGpu: !expected, EnableDiagnostics: !expected,
+        PixelyConfig config = new(EnableSdlLogging: !expected, EnableGpuValidation: !expected, PreferLowPowerGpu: !expected, EnableDiagnostics: !expected,
             EnableCommandConsole: !expected);
         Func<string, string?> variables = Variables(
-            (PixelyConfigEnvironment.HeadlessVariable, value),
             (PixelyConfigEnvironment.SdlLoggingVariable, value),
             (PixelyConfigEnvironment.GpuValidationVariable, value),
             (PixelyConfigEnvironment.PreferLowPowerGpuVariable, value),
@@ -101,7 +99,6 @@ public class PixelyConfigEnvironmentTests
 
         PixelyConfigEnvironment.Apply(config, variables);
 
-        Assert.That(config.Headless, Is.EqualTo(expected));
         Assert.That(config.EnableSdlLogging, Is.EqualTo(expected));
         Assert.That(config.EnableGpuValidation, Is.EqualTo(expected));
         Assert.That(config.PreferLowPowerGpu, Is.EqualTo(expected));
@@ -113,9 +110,9 @@ public class PixelyConfigEnvironmentTests
     public void Apply_WithUnsupportedBoolean_Throws()
     {
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => PixelyConfigEnvironment.Apply(new PixelyConfig(), Variables((PixelyConfigEnvironment.HeadlessVariable, "yes"))))!;
+            () => PixelyConfigEnvironment.Apply(new PixelyConfig(), Variables((PixelyConfigEnvironment.DiagnosticsVariable, "yes"))))!;
 
-        Assert.That(exception.Message, Does.Contain("PIXELY_HEADLESS"));
+        Assert.That(exception.Message, Does.Contain("PIXELY_DIAGNOSTICS"));
         Assert.That(exception.Message, Does.Contain("yes"));
     }
 
@@ -123,9 +120,9 @@ public class PixelyConfigEnvironmentTests
     public void Apply_LeavesUnrelatedFields()
     {
         PixelyConfig config = new(ApplicationIdentifier: "com.example.app", TaskbarIconPath: "icon.png", DeliverActivatingMouseClicks: false);
-        PixelyConfig expected = config with { Headless = true };
+        PixelyConfig expected = config with { EnableDiagnostics = true };
 
-        PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.HeadlessVariable, "1")));
+        PixelyConfigEnvironment.Apply(config, Variables((PixelyConfigEnvironment.DiagnosticsVariable, "1")));
 
         Assert.That(config, Is.EqualTo(expected));
     }
@@ -133,8 +130,8 @@ public class PixelyConfigEnvironmentTests
     [Test]
     public void PixelyAppBuilder_RegistersConfigWithEnvironmentApplied()
     {
-        string? previous = Environment.GetEnvironmentVariable(PixelyConfigEnvironment.HeadlessVariable);
-        Environment.SetEnvironmentVariable(PixelyConfigEnvironment.HeadlessVariable, "1");
+        string? previous = Environment.GetEnvironmentVariable(PixelyConfigEnvironment.DiagnosticsVariable);
+        Environment.SetEnvironmentVariable(PixelyConfigEnvironment.DiagnosticsVariable, "1");
         try
         {
             PixelyAppBuilder appBuilder = new();
@@ -144,12 +141,12 @@ public class PixelyConfigEnvironmentTests
 
             PixelyConfig config = provider.GetRequiredService<PixelyConfig>();
             Assert.That(config, Is.SameAs(registered));
-            Assert.That(config.Headless, Is.True);
+            Assert.That(config.EnableDiagnostics, Is.True);
             Assert.That(config.ApplicationIdentifier, Is.EqualTo("com.example.app"));
         }
         finally
         {
-            Environment.SetEnvironmentVariable(PixelyConfigEnvironment.HeadlessVariable, previous);
+            Environment.SetEnvironmentVariable(PixelyConfigEnvironment.DiagnosticsVariable, previous);
         }
     }
 }

@@ -196,9 +196,6 @@ public sealed class StubGpuDevice : GpuDevice
 
     internal override CommandBuffer AcquireCommandBufferCore() => new StubCommandBuffer(this);
 
-    internal override Window CreateWindowCore(ViewScope viewScope, Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowCloseBehavior closeBehavior) =>
-        new StubWindow(this, viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior);
-
     internal override Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config) => NextHandle<SDL_GPUSampler>();
 
     // Creation does not refuse a format the options leave out. A game picks its fallback through IsTextureFormatSupported

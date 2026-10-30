@@ -1,6 +1,7 @@
 using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
+using Pixely.Headless;
 using Pixely.RenderOrchestration;
 using Pixely.Ui;
 using SDL;
@@ -78,7 +79,7 @@ public class UseStubGpuTests
     public void Build_WithTheStubInHeadlessMode_Throws()
     {
         PixelyAppBuilder builder = new();
-        builder.AddSingleton(new PixelyConfig(Headless: true));
+        builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? "1" : null);
         builder.UseStubGpu();
         builder.UseDefaultRendering();
 

@@ -10,4 +10,9 @@
         <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.Tutorials.AfterSdk.targets</AfterMicrosoftNETSdkTargets>
     </PropertyGroup>
 
+    <!-- The generated Main of a hosted tutorial adds headless support on the desktop, which the Pixely package gives a consumer. -->
+    <ItemGroup Condition="'$(PixelyHosting)' == 'true' and '$(_PixelyBrowser)' != 'true'">
+        <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Pixely.Headless\Pixely.Headless.csproj" />
+    </ItemGroup>
+
 </Project>

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <!-- The offscreen window and the image writer hand SDL pointers to SDL. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Desktop only: built for the desktop and copied into the browser folder of the package, where it cannot load. -->
+        <AssemblyAttribute Include="System.Runtime.Versioning.UnsupportedOSPlatformAttribute">
+            <_Parameter1>browser</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Pixely.Tests" />
+        <InternalsVisibleTo Include="Pixely.Testing.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
+        <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+    </ItemGroup>
+
+</Project>

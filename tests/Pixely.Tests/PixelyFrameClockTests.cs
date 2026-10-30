@@ -1,16 +1,9 @@
+using Pixely.Headless;
+
 namespace Pixely.Tests;
 
 public sealed class PixelyFrameClockTests
 {
-    [TestCase(true, typeof(FixedStepFrameClock))]
-    [TestCase(false, typeof(SdlFrameClock))]
-    public void CreateFrameClock_PicksTheClockByHeadlessMode(bool headless, Type expectedType)
-    {
-        using PixelyFactory factory = new(new PixelyConfig(Headless: headless), null);
-
-        Assert.That(factory.CreateFrameClock(), Is.TypeOf(expectedType));
-    }
-
     [Test]
     public void StartFrame_FixedStep_StartsAtZeroAndAdvancesByTheStep()
     {

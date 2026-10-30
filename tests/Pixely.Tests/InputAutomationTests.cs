@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Pixely.Headless;
 using Pixely.Input;
 
 namespace Pixely.Tests;

@@ -1,18 +1,18 @@
 using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
-using System.Runtime.Versioning;
+using Pixely.App;
 using Pixely.Content;
+using Pixely.Input;
 using SDL;
 
-namespace Pixely.Input;
+namespace Pixely.Headless;
 
 /// <summary>
 /// Runs one command of the text command grammar, without its terminating <c>;</c>, against <see cref="InputAutomation"/> and
 /// returns how many frames to hold the commands after it. A blank command does nothing; a command that cannot run throws
 /// <see cref="FormatException"/>. Exceptions from input handlers propagate, the same as for real input.
 /// </summary>
-[UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationCommandInterpreter
 {
     // Key names from other naming schemes (DOM KeyboardEvent.code, Unity KeyCode, XNA Keys, SDL short forms) that people and

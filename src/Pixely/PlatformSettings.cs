@@ -3,16 +3,16 @@ using SDL;
 
 namespace Pixely;
 
-// A headless run reports the Unknown theme and never raises ThemeChanged, so a scenario behaves the same whatever theme the host
-// desktop uses. Locales stay readable there, since SDL_HINT_PREFERRED_LOCALES lets a scenario pin them.
+// An isolated app, such as a headless run, reports the Unknown theme and never raises ThemeChanged, so a scenario behaves the same
+// whatever theme the host desktop uses. Locales stay readable there, since SDL_HINT_PREFERRED_LOCALES lets a scenario pin them.
 // SDL_GetSystemTheme is main-thread only and SDL_GetPreferredLocales is not thread safe, so both members throw on another thread.
 public sealed class PlatformSettings : IPlatformSettings
 {
-    private readonly bool _headless;
+    private readonly bool _isolated;
 
-    internal PlatformSettings(bool headless)
+    internal PlatformSettings(bool isolated)
     {
-        _headless = headless;
+        _isolated = isolated;
     }
 
     public SystemTheme Theme
@@ -20,7 +20,7 @@ public sealed class PlatformSettings : IPlatformSettings
         get
         {
             ThrowIfNotMainThread();
-            return _headless ? SystemTheme.Unknown : (SystemTheme)SDL3.SDL_GetSystemTheme();
+            return _isolated ? SystemTheme.Unknown : (SystemTheme)SDL3.SDL_GetSystemTheme();
         }
     }
 
@@ -70,7 +70,7 @@ public sealed class PlatformSettings : IPlatformSettings
 
     internal void OnSystemThemeChanged(ulong timestamp)
     {
-        if (!_headless)
+        if (!_isolated)
         {
             ThemeChanged?.Invoke(new SystemThemeChangedEventArgs(Theme, timestamp));
         }

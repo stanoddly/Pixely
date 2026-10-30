@@ -27,6 +27,7 @@ public class PackageIntegrationTests
     [
         "Pixely.PathFinding",
         "Pixely.Fitness",
+        "Pixely.Headless",
         "Pixely.Audio",
         "Pixely.Collections",
         "Pixely.Core",
@@ -383,7 +384,10 @@ public class PackageIntegrationTests
         await BuildConsumerAsync(consumerDirectory);
         string generatedFile = Path.Combine(consumerDirectory, "obj", "Release", "net11.0", "PixelyProgram.g.cs");
         Assert.That(File.Exists(generatedFile), Is.True);
-        Assert.That(File.ReadAllText(generatedFile), Does.Contain("namespace HostedConsumer;"));
+        string generated = File.ReadAllText(generatedFile).ReplaceLineEndings("\n");
+        Assert.That(generated, Does.Contain("namespace HostedConsumer;"));
+        // Only a Debug build adds headless support; a Release build opts in from Configure.
+        Assert.That(generated, Does.Contain("#if DEBUG\n            global::Pixely.Headless.HeadlessExtensions.AddHeadlessSupport(builder);\n#endif\n"));
 
         string outputDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0");
         (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(

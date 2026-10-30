@@ -1,12 +1,12 @@
 # Testing renderers without a GPU
 
-`Pixely.Testing` gives a game's tests a GPU device without a GPU. `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders.
+`Pixely.Testing` gives a game's tests a GPU device without a GPU. `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ## The app
 
 `UseStubGpu()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it. Call it before `UseGpu`, `UseDefaultRendering` or a registrar that calls them, which then keep the stub; after another device it throws. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, so the app picks SDL's dummy video driver at default priority, which `SDL_VIDEO_DRIVER` in the environment overrides; with another driver the windows show. The choice lasts as long as the app, so another app in the same test process, on the GPU or not, is unaffected.
 
-Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so creating a window in an app with both it and the stub throws `PixelyInitializationException`, whether `PixelyConfig.Headless` or `PIXELY_HEADLESS` asks for it.
+Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so creating a window in an app with both it and the stub throws `PixelyInitializationException`. A test that calls `AddHeadlessSupport()` therefore runs with `PIXELY_HEADLESS` unset.
 
 ```csharp
 PixelyAppBuilder builder = new();

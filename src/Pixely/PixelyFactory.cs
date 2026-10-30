@@ -12,7 +12,7 @@ namespace Pixely;
 
 public partial class PixelyFactory: IDisposable
 {
-    private static readonly Size<uint> DefaultSize = (640, 480);
+    internal static readonly Size<uint> DefaultSize = (640, 480);
 
     private readonly PixelyConfig _config;
     private readonly ILogger? _sdlLogger;
@@ -62,8 +62,8 @@ public partial class PixelyFactory: IDisposable
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
         SdlLogOutput.Install(_sdlLogger);
         SDL_InitFlags initFlags = SDL_InitFlags.SDL_INIT_EVENTS | SDL_InitFlags.SDL_INIT_VIDEO;
-        // A headless run sees only the synthetic gamepad, so a scenario behaves the same whether or not a pad is plugged in.
-        if (!_config.Headless)
+        // An isolated app sees only synthetic gamepads, so it behaves the same whether or not a pad is plugged in.
+        if (!_config.IsIsolated)
         {
             initFlags |= SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
         }
@@ -98,36 +98,12 @@ public partial class PixelyFactory: IDisposable
         PlatformInfo platformInfo,
         IImageLoader imageLoader)
     {
-        if (_config.Headless)
-        {
-#if BROWSER
-            // Headless mode reads commands from standard input and frames back from the GPU, neither of which the page has.
-            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
-#else
-            if (gpuDevice == null)
-            {
-                throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
-            }
-
-            if (gpuDevice is not SdlGpuDevice)
-            {
-                // Headless mode exists to run the game on the GPU and read its frames back; another device, such as the stub of
-                // a game's tests, renders nothing to read.
-                throw new PixelyInitializationException($"Headless mode renders on the GPU and cannot run on {gpuDevice.GetType().Name}. Unset PixelyConfig.Headless and PIXELY_HEADLESS.");
-            }
-
-            return CreateOffscreenWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
-#endif
-        }
-
-#if !BROWSER
-        // Only the SDL device has swapchains. Another device, such as the stub of a game's tests, creates a window of its own type.
-        // Such a window gets no taskbar icon: a test does not show it, and a wrong icon path shows on the game's first run.
+        // Only the SDL device has swapchains. Another device, such as the stub of Pixely.Testing, registers an IWindowFactory, which
+        // AddWindow uses instead of this method.
         if (gpuDevice is { } and not SdlGpuDevice)
         {
-            return CreateWindowWithoutSwapchain(viewScope, gpuDevice, frameClock, platformInfo, config);
+            throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains to create windows with. Register the stub GPU device of Pixely.Testing with UseStubGpu(), which also creates its windows.");
         }
-#endif
 
         Window window = CreateWindow(viewScope, (SdlGpuDevice?)gpuDevice, frameClock, platformInfo, config);
 
@@ -301,8 +277,8 @@ public partial class PixelyFactory: IDisposable
         EnsureSdlInitialized();
         
         GamepadService gamepadService = new();
-        // Without the gamepad subsystem, which a headless run does not start, SDL cannot list gamepads.
-        if (!_config.Headless)
+        // Without the gamepad subsystem, which an isolated app does not start, SDL cannot list gamepads.
+        if (!_config.IsIsolated)
         {
             gamepadService.SetupGamepads();
         }
@@ -328,7 +304,7 @@ public partial class PixelyFactory: IDisposable
     {
         EnsureSdlInitialized();
 
-        return new PlatformSettings(_config.Headless);
+        return new PlatformSettings(_config.IsIsolated);
     }
 
     internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
@@ -338,49 +314,12 @@ public partial class PixelyFactory: IDisposable
         return new TextInputService(windowRegistry);
     }
 
-    // Automation exists in headless mode only; a null result registers nothing.
-    internal InputAutomation? CreateInputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService,
-        TextInputService textInputService, GamepadService gamepadService, FrameClock frameClock)
-    {
-        return _config.Headless ? new InputAutomation(windowRegistry, mouseService, keyboardService, textInputService, gamepadService, frameClock) : null;
-    }
-
-    public PixelyFrameClock CreateFrameClock()
-    {
-#if BROWSER
-        // Also fails an app without a window, which never reaches the check in CreateWindow.
-        if (_config.Headless)
-        {
-            throw new PixelyInitializationException("Headless mode is not supported in the browser.");
-        }
-#endif
-        return _config.Headless ? new FixedStepFrameClock() : new SdlFrameClock();
-    }
-
-    internal IImageWriter? CreateImageWriter()
-    {
-        return _config.Headless ? new SdlImageWriter() : null;
-    }
-
-    [UnsupportedOSPlatform("browser")]
-    internal InputAutomationConsole? CreateInputAutomationConsole(InputAutomation? inputAutomation, WindowRegistry windowRegistry, IImageWriter? imageWriter,
-        AppControl appControl, IFrameTimingRecorder frameTimingRecorder, AutomationCommandRegistry commands)
-    {
-        if (inputAutomation is null || imageWriter is null)
-        {
-            return null;
-        }
-
-        InputAutomationCommandInterpreter interpreter = new(inputAutomation, windowRegistry, imageWriter, appControl, commands);
-        // Raw standard streams, so reading never changes the terminal mode the way Console.In does on Unix.
-        return new InputAutomationConsole(interpreter, new StreamReader(Console.OpenStandardInput()), appControl, frameTimingRecorder);
-    }
-
-    // Headless mode reads standard input with its own console, so this one exists only outside it; a null result registers nothing.
+    // A null result registers nothing. Headless mode (Pixely.Headless) reads standard input with a console of its own and turns
+    // EnableCommandConsole off.
     [UnsupportedOSPlatform("browser")]
     internal AutomationCommandConsole? CreateAutomationCommandConsole(AutomationCommandRegistry commands, AppControl appControl)
     {
-        if (!_config.EnableCommandConsole || _config.Headless)
+        if (!_config.EnableCommandConsole)
         {
             return null;
         }

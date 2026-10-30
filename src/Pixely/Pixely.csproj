@@ -18,6 +18,8 @@
         <InternalsVisibleTo Include="Pixely.Models.Tests" />
         <!-- The stub GPU device derives from GpuDevice and the other backend types, whose backend members are internal. -->
         <InternalsVisibleTo Include="Pixely.Testing" />
+        <!-- Headless mode registers its services, windows and clock through the internal seams of the app. -->
+        <InternalsVisibleTo Include="Pixely.Headless" />
     </ItemGroup>
 
     <ItemGroup>

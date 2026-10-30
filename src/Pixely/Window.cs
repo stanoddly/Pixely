@@ -13,8 +13,8 @@ public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventAr
 
 /// <summary>
 /// An SDL window: its events, size, input and dialogs. How its frames reach the screen is up to the derived window:
-/// <see cref="SwapchainWindow"/> presents them through a swapchain, <see cref="OffscreenWindow"/> renders them into a texture.
-/// A device without swapchains, such as the stub of Pixely.Testing, has a window of its own.
+/// <see cref="SwapchainWindow"/> presents them through a swapchain. Headless mode (Pixely.Headless) renders them into a texture
+/// with an <c>OffscreenWindow</c>, and the stub GPU device of Pixely.Testing has a window of its own.
 /// </summary>
 public abstract class Window : IDisposable
 {
@@ -186,6 +186,9 @@ public abstract class Window : IDisposable
             }
         }
     }
+
+    // Whether the frames go to a texture instead of the screen, as a headless app's do (Pixely.Headless); the diagnostics report it.
+    internal virtual bool IsOffscreen => false;
 
     /// <summary>
     /// Whether frames rendered to the window can be seen right now. The render coordinator skips its renderers,

@@ -1,4 +1,5 @@
 using Pixely.Content;
+using Pixely.Headless;
 using Pixely.Input;
 
 namespace Pixely.Tests;

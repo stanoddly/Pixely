@@ -93,15 +93,8 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<EventService, PixelyFactory>();
 
-        // Headless mode only, see PixelyConfig.Headless; the factories return null otherwise.
-        AddSingleton<InputAutomation, PixelyFactory>();
-        if (!IsRegistered<IImageWriter>())
-        {
-            AddSingleton<IImageWriter, PixelyFactory>();
-        }
 #if !BROWSER
-        AddSingleton<InputAutomationConsole, PixelyFactory>();
-        // PixelyConfig.EnableCommandConsole outside headless mode only; the factory returns null otherwise.
+        // PixelyConfig.EnableCommandConsole only; the factory returns null otherwise.
         AddSingleton<AutomationCommandConsole, PixelyFactory>();
 #endif
 
@@ -109,7 +102,12 @@ public class PixelyAppBuilder : ServiceCollection
 
         AddSingleton<ComputeShaderMetadataLoader>();
 
-        AddSingleton<PixelyFrameClock, PixelyFactory>();
+        // Headless mode (Pixely.Headless) registers a clock of its own, which the latest registration would otherwise replace.
+        if (!IsRegistered<PixelyFrameClock>())
+        {
+            AddSingleton<PixelyFrameClock>(static _ => new SdlFrameClock());
+        }
+
         AddAlias<FrameClock, PixelyFrameClock>();
 
         AddSingleton<AppControl>();
