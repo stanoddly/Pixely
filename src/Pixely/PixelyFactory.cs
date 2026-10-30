@@ -26,7 +26,7 @@ public partial class PixelyFactory: IDisposable
         _sdlLogger = loggerFactory?.CreateLogger("SDL");
     }
 
-    internal void EnsureSdlInitialized()
+    private void EnsureSdlInitialized()
     {
         if (_initialized)
         {

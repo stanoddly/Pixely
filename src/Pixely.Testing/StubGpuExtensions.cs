@@ -27,13 +27,7 @@ public static class StubGpuExtensions
             }
         });
 
-        // SDL is initialized before the device, as for the SDL device: SDL_ttf, which the font system starts while the app is
-        // built, finds SDL only once SDL is loaded.
-        services.AddSingleton<StubGpuDevice>(provider =>
-        {
-            provider.GetService<PixelyFactory>()?.EnsureSdlInitialized();
-            return StubGpuDevice.Create(options);
-        });
+        services.AddSingleton<StubGpuDevice>(_ => StubGpuDevice.Create(options));
         services.AddAlias<GpuDevice, StubGpuDevice>();
         GpuExtensions.AddGpuServices(services);
         return services;

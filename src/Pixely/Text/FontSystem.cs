@@ -26,7 +26,8 @@ internal class FontSystem: IFontSystem, IUpdatable
         _contentSource = contentSource;
     }
 
-    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, ContentSource contentSource)
+    // TTF_Init is the first SDL_ttf call, so SDL3 must be loaded before it.
+    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, ContentSource contentSource, SdlLibrary sdlLibrary)
     {
         if (!SDL3_ttf.TTF_Init())
         {
