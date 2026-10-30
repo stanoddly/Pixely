@@ -170,6 +170,8 @@ public sealed class StubGpuDevice : GpuDevice
         }
     }
 
+    // Handles are numbered per device, and the reads do not check that a resource belongs to this device. Another device's
+    // resource, a stub's or the GPU's, is the caller's mistake on the GPU too, so the stub does not guard against it.
     internal Pointer<T> NextHandle<T>() where T : unmanaged
     {
         unsafe
@@ -199,6 +201,9 @@ public sealed class StubGpuDevice : GpuDevice
 
     internal override Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config) => NextHandle<SDL_GPUSampler>();
 
+    // Creation does not refuse a format the options leave out. A game picks its fallback through IsTextureFormatSupported
+    // before it creates the texture, which the options do narrow, and the formats SDL itself refuses differ per driver, GPU and
+    // OS, so no stub could mirror them.
     internal override Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount)
     {
         Pointer<SDL_GPUTexture> texture = NextHandle<SDL_GPUTexture>();

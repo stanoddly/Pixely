@@ -52,6 +52,8 @@ public partial class PixelyFactory: IDisposable
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
 
         // At default priority, so the environment overrides it. SDL_Quit clears it with every other hint, so it lasts as long as the app.
+        // A failed SDL_Init skips SDL_Quit and leaves it set, like the hints above. Only a later app in the same process would inherit
+        // it, after a start that has already failed and been reported, so it is not cleared there.
         if (_config.SdlVideoDriver != null)
         {
             SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, _config.SdlVideoDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
@@ -120,6 +122,7 @@ public partial class PixelyFactory: IDisposable
 
 #if !BROWSER
         // Only the SDL device has swapchains. Another device, such as the stub of a game's tests, creates a window of its own type.
+        // Such a window gets no taskbar icon: a test does not show it, and a wrong icon path shows on the game's first run.
         if (gpuDevice is { } and not SdlGpuDevice)
         {
             return CreateWindowWithoutSwapchain(viewScope, gpuDevice, frameClock, platformInfo, config);

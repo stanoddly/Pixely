@@ -66,6 +66,8 @@ public sealed class StubCommandBuffer : CommandBuffer
 
     internal override void PushComputeUniformDataCore(uint slot, ReadOnlySpan<byte> data) => ComputeUniforms = ComputeUniforms.With(slot, data);
 
+    // A pass begun while another is still recording is not refused. SDL refuses it only in debug mode (CHECK_ANY_PASS_IN_PROGRESS
+    // in SDL_BeginGPURenderPass and SDL_BeginGPUComputePass), which is SDL's validation, and the stub has none of it.
     internal override RenderPass CreateRenderPassCore(in RenderPassTargets targets, DepthBufferFormat depthBufferFormat, SampleCount sampleCount, ShortSize targetSize)
     {
         StubRenderPass renderPass = new(this, targets, depthBufferFormat, sampleCount, targetSize);

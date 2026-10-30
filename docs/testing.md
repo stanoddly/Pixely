@@ -6,7 +6,7 @@
 
 `UseStubGpu()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it. Call it before `UseGpu`, `UseDefaultRendering` or a registrar that calls them, which then keep the stub; after another device it throws. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, so the app picks SDL's dummy video driver at default priority, which `SDL_VIDEO_DRIVER` in the environment overrides; with another driver the windows show. The choice lasts as long as the app, so another app in the same test process, on the GPU or not, is unaffected.
 
-Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so building an app with both it and the stub throws `PixelyInitializationException`, whether `PixelyConfig.Headless` or `PIXELY_HEADLESS` asks for it.
+Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so creating a window in an app with both it and the stub throws `PixelyInitializationException`, whether `PixelyConfig.Headless` or `PIXELY_HEADLESS` asks for it.
 
 ```csharp
 PixelyAppBuilder builder = new();
@@ -25,7 +25,7 @@ Assert.That(draw.FragmentSamplers[0].Texture, Is.SameAs(spriteRenderer.Atlas));
 Assert.That(draw.ReadVertexUniform<Matrix4x4>(0), Is.EqualTo(expectedCamera));
 ```
 
-Shaders load from the content as in the game, so the test project needs the compiled shaders, metadata included. The stub reads the metadata, whose binding layout the validation checks draws against, and supports every shader format, so it never reads the shader code.
+Shaders load from the content as in the game, so the test project needs the compiled shaders, metadata included. The stub reads the metadata, whose binding layout the validation checks draws against, and supports every shader format by default.
 
 A renderer can also be called without a frame: `StubGpuDevice.CreateSwapchainTexture(size)` makes the target of a `BasicRenderContext`, and `device.AcquireCommandBuffer()` returns a `StubCommandBuffer` to record into and submit.
 
