@@ -179,7 +179,7 @@ services.AddSystem<MovementSystem>();
 
 ### Code outside systems
 
-Code outside systems, such as a renderer, a UI view or audio, reads the world and never writes it. Like a system, it takes the queries and lookups it reads in its constructor, once the service collection registers them:
+Code outside systems, such as a renderer or audio, reads the world and never writes it. Under the Orange architecture a UI view reads the world only through its view model, see [orange-architecture.md](orange-architecture.md). Other code outside systems takes the queries and lookups it reads in its constructor, like a system, once the service collection registers them:
 
 ```csharp
 internal sealed class Bodies : Query<ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>;
