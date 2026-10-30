@@ -2,7 +2,7 @@
 
     <!--
       Generates the entry point for a project that sets PixelyHosting=true: a partial Program in the
-      project's RootNamespace whose Main adds headless support on the desktop (Pixely.Headless, which PIXELY_HEADLESS turns on),
+      project's RootNamespace whose Main adds headless support to a Debug build on the desktop (Pixely.Headless, which PIXELY_HEADLESS turns on),
       builds the app from the project's Configure, runs it and
       hands a failure to the project's OnException, plus a default OnException as an extension member
       of Program, which on the desktop reports the failure in a message box in Release builds outside
@@ -52,8 +52,14 @@
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20global::Pixely.App.IPixelyApp%3F app = null%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20try" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />
-            <!-- Before Configure, so an image writer the project registers replaces headless mode's. Headless mode is desktop-only, so a net11.0-browser build without browser-wasm skips it too. -->
+            <!--
+              Before Configure, so an image writer the project registers replaces headless mode's. Debug builds only: a Release build
+              that wants headless mode calls AddHeadlessSupport in Configure, and in a Debug build that call does nothing. Headless mode
+              is desktop-only, so a net11.0-browser build without browser-wasm skips it too.
+            -->
+            <_PixelyEntryPointLine Include="#if DEBUG" Condition="'$(_PixelyBrowser)' != 'true' and '$(TargetPlatformIdentifier)' != 'browser'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20global::Pixely.Headless.HeadlessExtensions.AddHeadlessSupport(builder)%3B" Condition="'$(_PixelyBrowser)' != 'true' and '$(TargetPlatformIdentifier)' != 'browser'" />
+            <_PixelyEntryPointLine Include="#endif" Condition="'$(_PixelyBrowser)' != 'true' and '$(TargetPlatformIdentifier)' != 'browser'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20Program.Configure(builder)%3B" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20await global::Pixely.App.BrowserHost.PrepareAsync(builder)%3B" Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20%20%20%20%20app = builder.Build()%3B" />
@@ -94,7 +100,7 @@
             <_PixelyEntryPointLine Include="{" />
             <_PixelyEntryPointLine Include="%20%20%20%20extension(Program)" />
             <_PixelyEntryPointLine Include="%20%20%20%20{" />
-            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// A Release build writes the failure to standard error, shows it to the player and exits with 1. A Debug build and a headless run (PIXELY_HEADLESS) rethrow it with its original stack trace, so a debugger stops on it and nobody has to dismiss a box." Condition="'$(_PixelyBrowser)' != 'true'" />
+            <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// A Release build writes the failure to standard error, shows it to the player and exits with 1. A Debug build and a run with PIXELY_HEADLESS set, headless or not, rethrow it with its original stack trace, so a debugger stops on it and nobody has to dismiss a box." Condition="'$(_PixelyBrowser)' != 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20// Rethrown with its original stack trace, so a failure fails the process as it would from a hand-written Main, and the page reports it." Condition="'$(_PixelyBrowser)' == 'true'" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20internal static int OnException(global::System.Exception exception)" />
             <_PixelyEntryPointLine Include="%20%20%20%20%20%20%20%20{" />

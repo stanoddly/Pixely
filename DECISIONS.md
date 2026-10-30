@@ -4,14 +4,14 @@ Design decisions with the constraints that decided them and their known costs, n
 
 ## 2026-10-30: Headless mode is its own assembly that an app adds
 
-Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its standard-input console and command interpreter, the offscreen window, the fixed-step clock and the image writer. An app adds it with `AddHeadlessSupport()`, and `PIXELY_HEADLESS` then turns it on. The generated `Main` of a hosted app calls it on the desktop. `PixelyConfig.Headless` is removed (`docs/headless.md`).
+Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its standard-input console and command interpreter, the offscreen window, the fixed-step clock and the image writer. An app adds it with `AddHeadlessSupport()`, and `PIXELY_HEADLESS` then turns it on. The generated `Main` of a hosted app calls it in Debug builds on the desktop. `PixelyConfig.Headless` is removed (`docs/headless.md`).
 
 - An agent turns headless mode on with the variable, never through the config, so the variable is the one switch. An explicit call keeps that working for every hosted app without a module initializer or reflection, which a trimmed publish would break.
-- A game decides whether its builds carry headless mode: a hand-written `Main` can call `AddHeadlessSupport()` under `#if DEBUG` only.
+- A game decides whether its Release builds carry headless mode: a hosted game opts in by calling `AddHeadlessSupport()` in `Configure`, which in a Debug build does nothing, and a hand-written `Main` calls it where it wants.
 - Core keeps three internal seams that `Pixely.Headless` uses through `InternalsVisibleTo`: a frame clock registered before `Build()` replaces the real one, an `IWindowFactory` creates the windows instead of the SDL device's swapchain windows, and `PixelyConfig.IsIsolated` leaves out real gamepads and the OS theme. The stub GPU device of `Pixely.Testing` creates its windows through `IWindowFactory` as well, and an app with two window factories fails when it creates a window.
 - `IImageWriter` and `OffscreenWindow` moved with it into the `Pixely.Headless` namespace.
 
-Cost: an app with its own `Main` that does not call `AddHeadlessSupport()` ignores `PIXELY_HEADLESS`. `Pixely.Headless` is built for the desktop and copied into the browser folder of the package, where it cannot load; the browser's generated `Main` does not call it, and the assembly is marked unsupported in the browser.
+Cost: a hosted app's Release build and an app with its own `Main` that does not call `AddHeadlessSupport()` ignore `PIXELY_HEADLESS`. `Pixely.Headless` is built for the desktop and copied into the browser folder of the package, where it cannot load; the browser's generated `Main` does not call it, and the assembly is marked unsupported in the browser.
 
 ## 2026-10-29: The GPU types are abstract, and a stub device backs a game's renderer tests
 

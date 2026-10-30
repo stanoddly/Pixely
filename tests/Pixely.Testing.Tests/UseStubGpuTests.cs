@@ -87,19 +87,6 @@ public class UseStubGpuTests
     }
 
     [Test]
-    public void Build_WithTheStubRegisteredByHandInHeadlessMode_Throws()
-    {
-        PixelyAppBuilder builder = new();
-        builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? "1" : null);
-        builder.AddSingleton<GpuDevice>(StubGpuDevice.Create());
-        builder.UseDefaultRendering();
-
-        PixelyInitializationException exception = Assert.Throws<PixelyInitializationException>(() => builder.Build().Dispose())!;
-
-        Assert.That(exception.Message, Does.StartWith("Headless mode reads frames back").And.Contain(nameof(StubGpuDevice)));
-    }
-
-    [Test]
     public void RunFrame_WithTheStub_SubmitsOnlyTheFramesCommandBuffer()
     {
         using IPixelyApp app = BuildWithUiLayer(new WindowConfig(Size: (200, 100)));

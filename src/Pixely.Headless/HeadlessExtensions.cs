@@ -10,8 +10,8 @@ public static class HeadlessExtensions
     /// <summary>
     /// Lets the environment variable <c>PIXELY_HEADLESS</c> run the app in headless mode (<c>docs/headless.md</c>): hidden windows
     /// that render into GPU textures, synthetic input and game commands from standard input, screenshots, and a fixed-step clock.
-    /// Without the variable it adds nothing, so the app runs as usual. A hosted app (<c>PixelyHosting</c>) calls it in its
-    /// generated <c>Main</c>.
+    /// Without the variable it adds nothing, so the app runs as usual. The generated <c>Main</c> of a hosted app
+    /// (<c>PixelyHosting</c>) calls it in a Debug build; a Release build that wants headless mode calls it in <c>Configure</c>.
     /// </summary>
     public static PixelyAppBuilder AddHeadlessSupport(this PixelyAppBuilder builder)
     {

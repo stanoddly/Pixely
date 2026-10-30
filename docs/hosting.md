@@ -44,9 +44,10 @@ static partial class Program
   that needs built services runs in `OnBuilt` (`docs/class-registration.md`), a stage is loaded
   through `IStageManager.Load`, and a registered `UiView` is added to its root by `Pixely.Ui`
   (`docs/ui.md`).
-- On the desktop the generated `Main` calls `AddHeadlessSupport()` (`Pixely.Headless`) before
-  `Configure`, so `PIXELY_HEADLESS` runs any hosted app headless (`docs/headless.md`). An image writer
-  that `Configure` registers replaces headless mode's.
+- On the desktop a Debug build's generated `Main` calls `AddHeadlessSupport()` (`Pixely.Headless`)
+  before `Configure`, so `PIXELY_HEADLESS` runs any hosted app headless in Debug (`docs/headless.md`).
+  An image writer that `Configure` registers replaces headless mode's. A Release build ignores the
+  variable unless `Configure` calls `AddHeadlessSupport()` itself, which in a Debug build does nothing.
 - Command-line arguments come from `Environment.GetCommandLineArgs()`; its first element is the
   executable.
 - `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
@@ -58,8 +59,10 @@ static partial class Program
 On the desktop a Release build reports a failure on its own: the generated default `OnException`
 writes the exception to standard error, shows its message in an error `MessageBox` titled
 "Fatal error" and exits with 1. A system that cannot show the box gets a second entry on standard
-error instead. A Debug build and a headless run (`PIXELY_HEADLESS` set to `1` or `true`, see
-headless.md) rethrow the exception instead, so a debugger stops on it and nobody has to dismiss a box.
+error instead. A Debug build and a run with `PIXELY_HEADLESS` set to `1` or `true` (see headless.md) rethrow the
+exception instead, so a debugger stops on it and nobody has to dismiss a box. The variable is enough,
+because a script or agent sets it: a Release build that ignores it, without `AddHeadlessSupport()` in
+`Configure`, rethrows too.
 In the browser the default page shows failures (see [The frame loop](#the-frame-loop)).
 
 A project that wants other behavior declares the optional `OnException`, whose return value is the
@@ -96,7 +99,7 @@ passing it as a method group, and an invocation binds to the declared method wha
 
 `obj/<Configuration>/<TargetFramework>/PixelyProgram.g.cs`, with a `<RuntimeIdentifier>` segment
 after the framework when the build has one, shown in the IDE under `Properties/PixelyProgram.g.cs`.
-It adds `Main` to `Program`, which adds headless support on the desktop, builds the app from `Configure`, runs it, hands a failure to
+It adds `Main` to `Program`, which adds headless support to a Debug build on the desktop, builds the app from `Configure`, runs it, hands a failure to
 `OnException` and disposes the app last, and `PixelyProgramDefaults` to the namespace, which holds the
 default `OnException`. Nothing else is added. On the desktop `Main` is `static int Main()` and calls
 `app.Run()`; for `browser-wasm` it is `static async Task<int> Main()`, marked

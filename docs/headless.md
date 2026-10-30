@@ -16,7 +16,7 @@ Headless mode is in `Pixely.Headless`, which the Pixely package ships. An app ad
 - Unset, empty, `0` or `false` runs the app as usual, and `AddHeadlessSupport()` registers nothing.
 - Any other value throws `InvalidOperationException` from `AddHeadlessSupport()`, naming the variable and the accepted values. Values are trimmed and matched case-insensitively.
 
-The generated `Main` of a hosted app (`PixelyHosting`, see hosting.md) calls it on the desktop before `Configure`. An app with its own `Main` calls it itself. An app that never calls it ignores `PIXELY_HEADLESS`. For example, a game that keeps standard-input automation out of its Release builds calls it only in Debug:
+The generated `Main` of a hosted app (`PixelyHosting`, see hosting.md) calls it in a Debug build on the desktop, before `Configure`, so a Release build ignores `PIXELY_HEADLESS`. A hosted app that wants headless mode in Release, for example for screenshots of a Release build in CI, calls it in `Configure`; in a Debug build that second call does nothing. An app with its own `Main` calls it itself, for example only in Debug the way the generated `Main` does:
 
 ```csharp
 PixelyAppBuilder builder = new();
@@ -155,7 +155,7 @@ builder.AddHeadlessSupport();
 builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
 ```
 
-An agent needs no code change for this: `PIXELY_HEADLESS=1` switches any app that calls `AddHeadlessSupport()`, which every hosted app does, see [Turning it on](#turning-it-on).
+An agent needs no code change for this: `PIXELY_HEADLESS=1` switches any app that calls `AddHeadlessSupport()`, which every hosted app does in a Debug build, see [Turning it on](#turning-it-on).
 
 `screenshot <path>` writes the last rendered frame as a PNG; the file exists once the command's frame has run. Missing directories of the path are created. A path that still cannot be written, such as one whose parent is a file, throws out of the frame loop. So does a screenshot before the first frame has rendered. Commands run before that frame's render, so a screenshot right after the commands it should show is one frame too early; put `wait 1;` before it. The capture waits for the GPU, so that frame takes longer.
 
