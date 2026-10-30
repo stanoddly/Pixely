@@ -20,7 +20,8 @@ public static class EcsServiceCollectionExtensions
     }
 
     // The Pixely.Ecs generator intercepts this call. It creates TSystem with the queries, lookups and writers its constructor takes from the SystemBuilder
-    // and the rest from the provider, and adds it to the SystemScheduler. Systems run in the order of these calls.
+    // and the rest from the provider, and adds it to the SystemScheduler. Systems that declare no order between them with IAfter<...> and IBefore<...> run in
+    // the order of these calls.
     public static void AddSystem<TSystem>(this ServiceCollection services) where TSystem : class, ISystem
     {
         throw new InvalidOperationException(
