@@ -74,11 +74,7 @@ public sealed class StubKeyboardService : IKeyboardService
     // event the handlers after it get.
     private void Raise(Scancode scancode, ViewScope viewScope, bool isPressed)
     {
-        if (scancode >= Scancode.Count)
-        {
-            throw new ArgumentOutOfRangeException(nameof(scancode), scancode, "Not a scancode.");
-        }
-
+        ValidateScancode(scancode);
         if (_raising)
         {
             throw new InvalidOperationException($"{nameof(StubKeyboardService)} cannot be called from one of its own event handlers.");
@@ -99,5 +95,14 @@ public sealed class StubKeyboardService : IKeyboardService
     private static VirtualKey GetVirtualKey(Scancode scancode)
     {
         return (VirtualKey)SdlBoolInterop.SDL_GetKeyFromScancode((SDL_Scancode)scancode, SDL_Keymod.SDL_KMOD_NONE, true);
+    }
+
+    // The enum has gaps where SDL defines no key, such as 1 to 3.
+    internal static void ValidateScancode(Scancode scancode)
+    {
+        if (scancode == Scancode.Count || !Enum.IsDefined(scancode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scancode), scancode, "Not a scancode.");
+        }
     }
 }

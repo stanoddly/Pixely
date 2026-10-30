@@ -1,17 +1,46 @@
-# Testing renderers, input and text without devices
+# Testing a game, its renderers, input and text without devices
 
-`Pixely.Testing` gives a game's tests a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+`Pixely.Testing` runs a game's own app in its tests ([The game's app](#the-games-app)), and gives them a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
-## The app
+## The game's app
 
-`UseStubGpu()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it. Call it before `UseGpu`, `UseDefaultRendering` or a registrar that calls them, which then keep the stub; after another device it throws. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, so the app picks SDL's dummy video driver at default priority, which `SDL_VIDEO_DRIVER` in the environment overrides; with another driver the windows show. The choice lasts as long as the app, so another app in the same test process, on the GPU or not, is unaffected.
-
-Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so creating a window in an app with both it and the stub throws `PixelyInitializationException`. A test that calls `AddHeadlessSupport()` therefore runs with `PIXELY_HEADLESS` unset.
+`TestApp.CreateBuilder()` returns a `PixelyAppBuilder` that a test hands to the game's own `Configure` (hosting.md), so the test builds the app the game builds, without a GPU, a display, a sound card or a controller. `TestInput` sends it input:
 
 ```csharp
-PixelyAppBuilder builder = new();
+PixelyAppBuilder builder = TestApp.CreateBuilder();
+Program.Configure(builder);
+using IPixelyApp app = builder.Build();
+
+TestInput input = app.GetRequiredService<TestInput>();
+input.KeyPress(Scancode.Space);
+input.MouseClick(MouseButton.Left, new Vector2(40, 20));
+app.RunFrame();
+```
+
+- The game makes `Program` and `Configure` public, and its test project references the game's project, so the test can call `Configure`. The content, shaders included, loads from the test's output directory, so the test project needs the game's content there.
+- The app renders on the stub GPU device ([The stub GPU device](#the-stub-gpu-device)), with every window a `StubWindow`. `CreateBuilder(options)` passes `StubGpuDeviceOptions` to it ([Options](#options)).
+- SDL uses its dummy video and audio drivers, at default priority, so `SDL_VIDEO_DRIVER` and `SDL_AUDIO_DRIVER` in the environment override them. `Pixely.Audio` then plays into nothing.
+- The app ignores the machine's gamepads and the OS's theme, as in headless mode (headless.md): a pad plugged into the machine and a dark theme do not reach the test, and `IPlatformSettings.Theme` is `Unknown`.
+- Game time starts at 0 and advances by 1/30 s per frame, however fast the frames run. Three `RunFrame` calls make 2/30 s of `ElapsedNanoseconds`, since the first frame has no previous one.
+- A frame that no window drew, for example one whose windows are hidden, does not wait for the display, so a test with a hidden window runs its frames at once.
+- No console reads standard input: `AddHeadlessSupport()` in `Configure` adds nothing, even with `PIXELY_HEADLESS` set, and `PIXELY_COMMAND_CONSOLE` has no effect.
+
+`TestInput` is the synthetic input of headless mode:
+
+- A call is queued, and the queued calls reach the game at `UpdateOrders.Input` of the next `RunFrame`, in the order they were made. That frame changes the stage first, so input sent before a stage change reaches the new stage. Input sent from a handler during that frame waits for the frame after.
+- Each view has its own mouse and keyboard, and a call without a `ViewScope` goes to the main view. Mouse calls take window coordinates, as headless mode's do.
+- `KeyPress` presses and releases a key, `MouseClick` moves the mouse, presses and releases a button, and `TextInput` types text. `KeyDown`, `KeyUp`, `MouseDown`, `MouseUp`, `MouseMoveTo`, `MouseMoveBy`, `MouseWheel` and `MouseLeave` do one step each.
+- There is one gamepad, which `GamepadConnect` connects and `GamepadDisconnect` disconnects. `GamepadButtonDown`, `GamepadButtonUp` and `GamepadButtonPress` press its buttons. `GamepadLeftStick` and `GamepadRightStick` take each axis from -1 to 1, with Y growing downwards, and `GamepadLeftTrigger` and `GamepadRightTrigger` take 0, at rest, to 1, fully pulled.
+- A scancode, mouse button or gamepad button outside its enum, and a stick or trigger value out of range or NaN, throw `ArgumentOutOfRangeException` at the call. A view without a window, and a gamepad call without a connected gamepad or a second `GamepadConnect`, throw `InvalidOperationException` out of the `RunFrame` that runs them.
+- Event timestamps follow game time.
+
+## The stub GPU device
+
+`TestApp.CreateBuilder()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it, so `UseGpu`, `UseDefaultRendering` and the game's registrars that call them keep the stub. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, with the dummy driver of [The game's app](#the-games-app); with another driver from `SDL_VIDEO_DRIVER` the windows show. The choice lasts as long as the app, so another app in the same test process, on the GPU or not, is unaffected.
+
+```csharp
+PixelyAppBuilder builder = TestApp.CreateBuilder();
 builder.UseDefaultContent();
-builder.UseStubGpu();
 builder.AddFooRendering();   // the game's own registrar, which calls UseDefaultRendering
 using IPixelyApp app = builder.Build();
 
@@ -45,7 +74,7 @@ The stub keeps what is uploaded. An upload reaches the contents when its command
 
 ## Options
 
-`StubGpuDevice.Create(options)` and `UseStubGpu(options)` take a `StubGpuDeviceOptions`. By default the stub supports every shader format, texture format and sample count; `ShaderFormats`, `IsTextureFormatSupported` and `IsSampleCountSupported` narrow them, for a test of a fallback.
+`StubGpuDevice.Create(options)` and `TestApp.CreateBuilder(options)` take a `StubGpuDeviceOptions`. By default the stub supports every shader format, texture format and sample count; `ShaderFormats`, `IsTextureFormatSupported` and `IsSampleCountSupported` narrow them, for a test of a fallback.
 
 ## What the stub cannot tell
 

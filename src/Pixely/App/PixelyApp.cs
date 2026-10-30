@@ -19,6 +19,9 @@ public class PixelyApp : IPixelyApp
     private readonly ServiceRegistry<IUpdatable> _updatables;
     private readonly StageManager _stageManager;
     private readonly IFrameTimingRecorder _frameTimingRecorder;
+#if !BROWSER
+    private readonly bool _pacesUndrawnFrames;
+#endif
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
@@ -28,7 +31,8 @@ public class PixelyApp : IPixelyApp
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
         ServiceRegistry<IUpdatable> updatables,
         StageManager stageManager,
-        IFrameTimingRecorder frameTimingRecorder)
+        IFrameTimingRecorder frameTimingRecorder,
+        bool pacesUndrawnFrames)
     {
         ServiceProvider = serviceProvider;
         _frameClock = frameClock;
@@ -38,6 +42,9 @@ public class PixelyApp : IPixelyApp
         _updatables = updatables;
         _stageManager = stageManager;
         _frameTimingRecorder = frameTimingRecorder;
+#if !BROWSER
+        _pacesUndrawnFrames = pacesUndrawnFrames;
+#endif
     }
 
     public T GetRequiredService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] T>() where T : class
@@ -80,8 +87,9 @@ public class PixelyApp : IPixelyApp
         // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
         // sees. An event, such as the window being restored, ends the wait early and stays queued for the next frame. The
-        // browser needs no wait: requestAnimationFrame paces its frames.
-        if (!drawn)
+        // browser needs no wait: requestAnimationFrame paces its frames. An isolated app, headless or under test, needs none either:
+        // its game time steps by a fixed amount per frame, and a test with a hidden window would otherwise wait every frame.
+        if (!drawn && _pacesUndrawnFrames)
         {
             unsafe
             {

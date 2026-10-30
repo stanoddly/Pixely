@@ -17,6 +17,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Pixely.Tests" />
+        <InternalsVisibleTo Include="Pixely.Testing" />
         <InternalsVisibleTo Include="Pixely.Testing.Tests" />
     </ItemGroup>
 

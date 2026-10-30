@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-30: A game's tests build the game's app from a test builder
+
+`TestApp.CreateBuilder()` in `Pixely.Testing` returns a `PixelyAppBuilder` with the test environment registered, and a test passes it to the game's own `Configure`, which the game makes public (`docs/testing.md`). The app runs on the stub GPU device and SDL's dummy video and audio drivers, is isolated from the machine's gamepads and theme, steps game time by 1/30 s per frame, and takes synthetic input through `TestInput`.
+
+- A hosted game registers everything in `Configure`, so a test that runs `Configure` tests the app the game runs, instead of a registration copied into the test.
+- A static factory returns a plain `PixelyAppBuilder` instead of a derived builder. The test environment has to be registered before `Configure`: the DI container creates every singleton at build, also one that a later registration hides, so a stub registered after `UseDefaultRendering` would still leave the SDL GPU device created. Registered first, the stub is kept by `UseGpu`, and `Build()` keeps the fixed-step clock.
+- `AddHeadlessSupport()` adds nothing when synthetic input is already registered, so a `Configure` that calls it does not put a console on standard input into a test, even with `PIXELY_HEADLESS` set.
+- `TestInput` queues its calls and replays them at `UpdateOrders.Input` of the next frame. Input sent at once between frames would reach the stage that the next frame replaces.
+- An isolated app, headless or under test, does not wait 16 ms after a frame that no window drew: its game time does not follow the real clock, so nothing needs pacing.
+
+Cost: a game that tests its app makes `Program` and `Configure` public. `Pixely.Testing` now depends on `Pixely.Headless` and uses its internals through `InternalsVisibleTo`, like the seams in core.
+
 ## 2026-10-30: Headless mode is its own assembly that an app adds
 
 Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its standard-input console and command interpreter, the offscreen window, the fixed-step clock and the image writer. An app adds it with `AddHeadlessSupport()`, and `PIXELY_HEADLESS` then turns it on. The generated `Main` of a hosted app calls it in Debug builds on the desktop. `PixelyConfig.Headless` is removed (`docs/headless.md`).
@@ -24,7 +36,7 @@ Cost: a hosted app's Release build and an app with its own `Main` that does not 
 - The stub ships as its own assembly in the Pixely package, like `Pixely.Fitness`. A game that never references it has it trimmed away at publish, so NativeAOT sees no second subclass to dispatch between.
 - `GpuMemorySystem` records into a `CommandBuffer` instead of holding SDL's command buffer, so its uploads go through whichever device it was given. The stub applies an upload when its command buffer is submitted and drops it when it is cancelled.
 - Only SDL has swapchains, so a window over another device is that device's own, which the factory gets through an internal `GpuDevice.CreateWindowCore` around an SDL window it created unclaimed. The stub's `StubWindow` hands out a swapchain texture at once; the headless `OffscreenWindow` would wait on the GPU each frame and keep a color target that nothing renders into. Headless mode on another device throws, because it exists to read frames back from the GPU.
-- `UseGpu` keeps its rule that a registered device means the block is present; `UseStubGpu` registers the stub and the same services through the internal `GpuExtensions.AddGpuServices`. It picks SDL's dummy video driver through the internal `PixelyConfig.SdlVideoDriver`, which the factory sets just before `SDL_Init` and `SDL_Quit` clears, so the choice lasts as long as the app.
+- `UseGpu` keeps its rule that a registered device means the block is present; the stub is registered before it, with the same services, through the internal `GpuExtensions.AddGpuServices`. SDL's dummy video driver is picked through the internal `PixelyConfig.SdlVideoDriver`, which the factory sets just before `SDL_Init` and `SDL_Quit` clears, so the choice lasts as long as the app.
 
 Cost: each GPU call goes through one virtual call, which the JIT's dynamic PGO turns into a guarded direct call where only the SDL subclass is seen; Mono AOT keeps the virtual call. Code outside the SDL subclasses that needs an SDL object, the swapchain window and window creation, casts to the SDL type. `SDL_BeginGPURenderPass` and `SDL_BeginGPUComputePass` returning no pass now throw instead of handing out a pass that throws `ObjectDisposedException` on first use, so `RenderPass.IsDefault()`, which reported such a pass, is removed. The stub runs no shader and has no SDL validation, so GPU behavior still has no automated tests. `Pixely.Testing` is built for the desktop and copied into the browser folder of the package, where it cannot load; the assembly is marked unsupported in the browser.
 

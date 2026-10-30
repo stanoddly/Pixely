@@ -211,7 +211,7 @@ public sealed class StubGamepadService : IGamepadService
         return (SDL_JoystickID)gamepad.DeviceId;
     }
 
-    private static void ValidateButton(GamepadButton button)
+    internal static void ValidateButton(GamepadButton button)
     {
         if (button is < 0 or >= GamepadButton.Count)
         {
@@ -220,7 +220,7 @@ public sealed class StubGamepadService : IGamepadService
     }
 
     // Written so that NaN fails, as every comparison with it is false.
-    private static void ValidateStick(Vector2 position)
+    internal static void ValidateStick(Vector2 position)
     {
         if (!(position.X is >= -1 and <= 1 && position.Y is >= -1 and <= 1))
         {
@@ -229,7 +229,7 @@ public sealed class StubGamepadService : IGamepadService
     }
 
     // Written so that NaN fails, as every comparison with it is false.
-    private static void ValidateTrigger(float value)
+    internal static void ValidateTrigger(float value)
     {
         if (value is not (>= 0 and <= 1))
         {

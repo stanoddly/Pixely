@@ -51,12 +51,19 @@ public partial class PixelyFactory: IDisposable
         // click whenever the user switches windows, including between two windows of the same application.
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
 
-        // At default priority, so the environment overrides it. SDL_Quit clears it with every other hint, so it lasts as long as the app.
+        // At default priority, so the environment overrides it. So would a driver hint the process sets at normal priority, but nothing
+        // in Pixely sets one, and a test that does chose its driver. SDL_Quit clears it with every other hint, so it lasts as long as the app.
         // A failed SDL_Init skips SDL_Quit and leaves it set, like the hints above. Only a later app in the same process would inherit
         // it, after a start that has already failed and been reported, so it is not cleared there.
         if (_config.SdlVideoDriver != null)
         {
             SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, _config.SdlVideoDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
+        }
+
+        // The same for audio, which Pixely.Audio initializes later, while the hint still holds.
+        if (_config.SdlAudioDriver != null)
+        {
+            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_AUDIO_DRIVER, _config.SdlAudioDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
         }
 
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
@@ -102,7 +109,7 @@ public partial class PixelyFactory: IDisposable
         // AddWindow uses instead of this method.
         if (gpuDevice is { } and not SdlGpuDevice)
         {
-            throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains to create windows with. Register the stub GPU device of Pixely.Testing with UseStubGpu(), which also creates its windows.");
+            throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains to create windows with. Build the app from TestApp.CreateBuilder() of Pixely.Testing, which also creates the stub's windows.");
         }
 
         Window window = CreateWindow(viewScope, (SdlGpuDevice?)gpuDevice, frameClock, platformInfo, config);

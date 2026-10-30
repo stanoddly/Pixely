@@ -27,8 +27,9 @@ public static class HeadlessExtensions
         }
 
         // A second call, such as one in a hosted app's Configure after the generated Main's, would register a second console on
-        // standard input and a second window factory.
-        if (builder.IsRegistered<InputAutomationConsole>())
+        // standard input and a second window factory. A test's builder from Pixely.Testing has synthetic input of its own, without a
+        // console, and its game's Configure may call this too; a console on standard input would block the test.
+        if (builder.IsRegistered<InputAutomation>())
         {
             return builder;
         }

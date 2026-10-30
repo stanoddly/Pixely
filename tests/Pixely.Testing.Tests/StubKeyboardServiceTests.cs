@@ -96,6 +96,7 @@ public class StubKeyboardServiceTests
 
     [TestCase(Scancode.Count)]
     [TestCase((Scancode)600)]
+    [TestCase((Scancode)1)]
     public void Down_WithAValueOutsideTheEnum_Throws(Scancode scancode)
     {
         StubKeyboardService keyboard = new();
