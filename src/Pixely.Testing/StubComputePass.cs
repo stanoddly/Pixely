@@ -40,29 +40,14 @@ public sealed class StubComputePass : ComputePass
 
     internal override void BindComputePipelineCore(ComputePipeline pipeline) => _pipeline = pipeline;
 
-    internal override void BindSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler)
-    {
-        for (int i = 0; i < textures.Length; i++)
-        {
-            _samplers = _samplers.SetItem(slot + (uint)i, new StubSamplerBinding(textures[i], sampler));
-        }
-    }
+    internal override void BindSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler) =>
+        _samplers = StubBindings.BindSamplers(_samplers, slot, textures, sampler);
 
-    internal override void BindReadOnlyStorageTexturesCore(uint slot, ReadOnlySpan<Texture> textures)
-    {
-        for (int i = 0; i < textures.Length; i++)
-        {
-            _readOnlyStorageTextures = _readOnlyStorageTextures.SetItem(slot + (uint)i, textures[i]);
-        }
-    }
+    internal override void BindReadOnlyStorageTexturesCore(uint slot, ReadOnlySpan<Texture> textures) =>
+        _readOnlyStorageTextures = StubBindings.Bind(_readOnlyStorageTextures, slot, textures);
 
-    internal override void BindReadOnlyStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
-    {
-        for (int i = 0; i < buffers.Length; i++)
-        {
-            _readOnlyStorageBuffers = _readOnlyStorageBuffers.SetItem(slot + (uint)i, buffers[i]);
-        }
-    }
+    internal override void BindReadOnlyStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers) =>
+        _readOnlyStorageBuffers = StubBindings.Bind(_readOnlyStorageBuffers, slot, buffers);
 
     internal override void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ) =>
         _dispatches.Add(CreateDispatch(groupCountX, groupCountY, groupCountZ, null, 0));

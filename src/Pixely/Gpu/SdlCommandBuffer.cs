@@ -10,7 +10,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
 
     internal Pointer<SDL_GPUCommandBuffer> Pointer { get; private set; }
 
-    internal SdlCommandBuffer(SdlGpuDevice gpuDevice, Pointer<SDL_GPUCommandBuffer> pointer) : base(gpuDevice)
+    internal SdlCommandBuffer(SdlGpuDevice gpuDevice, Pointer<SDL_GPUCommandBuffer> pointer)
     {
         _gpuDevice = gpuDevice;
         Pointer = pointer;

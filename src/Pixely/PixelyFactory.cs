@@ -26,7 +26,7 @@ public partial class PixelyFactory: IDisposable
         _sdlLogger = loggerFactory?.CreateLogger("SDL");
     }
 
-    private void EnsureSdlInitialized()
+    internal void EnsureSdlInitialized()
     {
         if (_initialized)
         {
@@ -50,6 +50,12 @@ public partial class PixelyFactory: IDisposable
         // SDL swallows the mouse click that activates an unfocused window by default, which loses the first
         // click whenever the user switches windows, including between two windows of the same application.
         SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
+
+        // At default priority, so the environment overrides it. SDL_Quit clears it with every other hint, so it lasts as long as the app.
+        if (_config.SdlVideoDriver != null)
+        {
+            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, _config.SdlVideoDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
+        }
 
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
         SdlLogOutput.Install(_sdlLogger);

@@ -55,16 +55,16 @@ public sealed class StubRenderPass : RenderPass
     internal override void BindIndexBufferCore(GpuIndexBuffer buffer) => _indexBuffer = buffer;
 
     internal override void BindVertexSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler) =>
-        _vertexSamplers = BindSamplers(_vertexSamplers, slot, textures, sampler);
+        _vertexSamplers = StubBindings.BindSamplers(_vertexSamplers, slot, textures, sampler);
 
     internal override void BindFragmentSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler) =>
-        _fragmentSamplers = BindSamplers(_fragmentSamplers, slot, textures, sampler);
+        _fragmentSamplers = StubBindings.BindSamplers(_fragmentSamplers, slot, textures, sampler);
 
     internal override void BindVertexStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers) =>
-        _vertexStorageBuffers = BindBuffers(_vertexStorageBuffers, slot, buffers);
+        _vertexStorageBuffers = StubBindings.Bind(_vertexStorageBuffers, slot, buffers);
 
     internal override void BindFragmentStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers) =>
-        _fragmentStorageBuffers = BindBuffers(_fragmentStorageBuffers, slot, buffers);
+        _fragmentStorageBuffers = StubBindings.Bind(_fragmentStorageBuffers, slot, buffers);
 
     internal override void SetStencilReferenceCore(byte reference) => _stencilReference = reference;
 
@@ -98,26 +98,6 @@ public sealed class StubRenderPass : RenderPass
         VertexUniforms = _commandBuffer.VertexUniforms,
         FragmentUniforms = _commandBuffer.FragmentUniforms
     };
-
-    private static ImmutableDictionary<uint, StubSamplerBinding> BindSamplers(ImmutableDictionary<uint, StubSamplerBinding> bound, uint slot, ReadOnlySpan<Texture> textures, Sampler sampler)
-    {
-        for (int i = 0; i < textures.Length; i++)
-        {
-            bound = bound.SetItem(slot + (uint)i, new StubSamplerBinding(textures[i], sampler));
-        }
-
-        return bound;
-    }
-
-    private static ImmutableDictionary<uint, GpuStorageBuffer> BindBuffers(ImmutableDictionary<uint, GpuStorageBuffer> bound, uint slot, ReadOnlySpan<GpuStorageBuffer> buffers)
-    {
-        for (int i = 0; i < buffers.Length; i++)
-        {
-            bound = bound.SetItem(slot + (uint)i, buffers[i]);
-        }
-
-        return bound;
-    }
 }
 
 /// <summary>A texture bound to a sampler slot together with the sampler it is read through.</summary>

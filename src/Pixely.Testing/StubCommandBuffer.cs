@@ -16,7 +16,7 @@ public sealed class StubCommandBuffer : CommandBuffer
     private readonly List<StubBlit> _blits = new();
     private readonly List<StubUpload> _uploads = new();
 
-    internal StubCommandBuffer(StubGpuDevice gpuDevice) : base(gpuDevice)
+    internal StubCommandBuffer(StubGpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
     }

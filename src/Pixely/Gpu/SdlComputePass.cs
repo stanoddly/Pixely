@@ -27,14 +27,7 @@ internal sealed class SdlComputePass : ComputePass
         unsafe
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-            for (int i = 0; i < textures.Length; i++)
-            {
-                bindings[i] = new SDL_GPUTextureSamplerBinding
-                {
-                    texture = textures[i].SdlGpuTexture,
-                    sampler = sampler.Pointer
-                };
-            }
+            SdlBindings.FillSamplerBindings(bindings, textures, sampler);
             SDL3.SDL_BindGPUComputeSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
@@ -57,10 +50,7 @@ internal sealed class SdlComputePass : ComputePass
         unsafe
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-            for (int i = 0; i < buffers.Length; i++)
-            {
-                sdlBuffers[i] = buffers[i].SdlBuffer;
-            }
+            SdlBindings.FillBuffers(sdlBuffers, buffers);
             SDL3.SDL_BindGPUComputeStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }

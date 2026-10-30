@@ -3,6 +3,7 @@ using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using Pixely.Ui;
+using SDL;
 
 namespace Pixely.Testing.Tests;
 
@@ -45,6 +46,31 @@ public class UseStubGpuTests
         {
             Assert.That(app.GetRequiredService<GpuDevice>(), Is.SameAs(app.GetRequiredService<StubGpuDevice>()));
             Assert.That(app.GetRequiredService<Window>(), Is.InstanceOf<StubWindow>());
+        });
+    }
+
+    [Test]
+    public void UseStubGpu_PicksTheDummyVideoDriverOnlyWhileTheAppRuns()
+    {
+        string? environment = Environment.GetEnvironmentVariable("SDL_VIDEO_DRIVER");
+        PixelyAppBuilder builder = new();
+        builder.UseStubGpu();
+        builder.UseDefaultRendering();
+
+        string? registered = SDL3.SDL_GetHint(SDL3.SDL_HINT_VIDEO_DRIVER);
+        string? running;
+        using (builder.Build())
+        {
+            running = SDL3.SDL_GetHint(SDL3.SDL_HINT_VIDEO_DRIVER);
+        }
+
+        string? disposed = SDL3.SDL_GetHint(SDL3.SDL_HINT_VIDEO_DRIVER);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(registered, Is.EqualTo(environment));
+            Assert.That(running, Is.EqualTo(environment ?? "dummy"));
+            Assert.That(disposed, Is.EqualTo(environment));
         });
     }
 

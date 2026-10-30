@@ -350,6 +350,15 @@ public class StubGpuDeviceTests
     }
 
     [Test]
+    public void PushComputeUniformData_ToASlotAboveThree_FailsPixelysValidation()
+    {
+        using StubGpuDevice device = StubGpuDevice.Create();
+        using CommandBuffer commandBuffer = device.AcquireCommandBuffer();
+
+        Assert.That(() => commandBuffer.PushComputeUniformData(4, 7), Throws.TypeOf<ArgumentOutOfRangeException>().With.Message.StartsWith("Slot must be between 0 and 3."));
+    }
+
+    [Test]
     public void WaitForFences_ReturnsAtOnce()
     {
         using StubGpuDevice device = StubGpuDevice.Create();

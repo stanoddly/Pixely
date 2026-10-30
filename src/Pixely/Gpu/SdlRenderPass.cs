@@ -49,7 +49,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-            FillSamplerBindings(bindings, textures, sampler);
+            SdlBindings.FillSamplerBindings(bindings, textures, sampler);
             SDL3.SDL_BindGPUVertexSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
@@ -59,7 +59,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-            FillSamplerBindings(bindings, textures, sampler);
+            SdlBindings.FillSamplerBindings(bindings, textures, sampler);
             SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
@@ -69,7 +69,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-            FillBuffers(sdlBuffers, buffers);
+            SdlBindings.FillBuffers(sdlBuffers, buffers);
             SDL3.SDL_BindGPUVertexStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }
@@ -79,7 +79,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-            FillBuffers(sdlBuffers, buffers);
+            SdlBindings.FillBuffers(sdlBuffers, buffers);
             SDL3.SDL_BindGPUFragmentStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
         }
     }
@@ -132,22 +132,6 @@ internal sealed class SdlRenderPass : RenderPass
         }
 
         _nativePointer = Pointer<SDL_GPURenderPass>.Null;
-    }
-
-    private static unsafe void FillSamplerBindings(SDL_GPUTextureSamplerBinding* bindings, ReadOnlySpan<Texture> textures, Sampler sampler)
-    {
-        for (int i = 0; i < textures.Length; i++)
-        {
-            bindings[i] = new SDL_GPUTextureSamplerBinding { texture = textures[i].SdlGpuTexture, sampler = sampler.Pointer };
-        }
-    }
-
-    private static unsafe void FillBuffers(SDL_GPUBuffer** sdlBuffers, ReadOnlySpan<GpuStorageBuffer> buffers)
-    {
-        for (int i = 0; i < buffers.Length; i++)
-        {
-            sdlBuffers[i] = buffers[i].SdlBuffer;
-        }
     }
 
     private static SDL_GPUIndexElementSize GetSdlIndexElementSize(IndexElementSize elementSize)

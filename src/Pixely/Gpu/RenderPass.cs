@@ -250,11 +250,6 @@ public abstract class RenderPass : IDisposable
         DrawIndexedPrimitivesCore(indexCount, instanceCount, firstIndex);
     }
 
-    public bool IsDefault()
-    {
-        return _isEnded;
-    }
-
     public void Dispose()
     {
         if (!_isEnded)

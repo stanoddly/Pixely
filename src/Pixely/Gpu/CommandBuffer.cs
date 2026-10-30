@@ -19,14 +19,8 @@ public abstract class CommandBuffer: IDisposable
     public ShaderUniformSlotSizes FragmentShaderUniformSlotSizes => _fragmentShaderUniformSlotSizes;
     public ShaderUniformSlotSizes VertexShaderUniformSlotSizes => _vertexShaderUniformSlotSizes;
 
-    internal GpuDevice GpuDevice { get; }
-
-    // True once the command buffer is submitted or cancelled, after which it records nothing.
-    internal bool IsFinished => _isFinished;
-
-    internal CommandBuffer(GpuDevice gpuDevice)
+    internal CommandBuffer()
     {
-        GpuDevice = gpuDevice;
     }
 
     public void Submit()
@@ -240,6 +234,7 @@ public abstract class CommandBuffer: IDisposable
     public void PushComputeUniformData<TType>(uint slot, TType variable) where TType : unmanaged
     {
         ThrowIfDisposed();
+        ThrowIfInvalidSlot(slot);
         PushComputeUniformDataCore(slot, MemoryMarshal.AsBytes(new ReadOnlySpan<TType>(in variable)));
     }
 
@@ -283,10 +278,7 @@ public abstract class CommandBuffer: IDisposable
 
     private void AssignSlot(ref ShaderUniformSlotSizes slotSizes, uint slot, int size)
     {
-        if (slot > 3)
-        {
-            throw new ArgumentOutOfRangeException(nameof(slot), slot, "Slot must be between 0 and 3.");
-        }
+        ThrowIfInvalidSlot(slot);
 
         byte byteSize = (byte)size;
 
@@ -329,6 +321,15 @@ public abstract class CommandBuffer: IDisposable
     public void Dispose()
     {
         Cancel();
+    }
+
+    // SDL GPU has four uniform slots per stage.
+    private static void ThrowIfInvalidSlot(uint slot)
+    {
+        if (slot > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "Slot must be between 0 and 3.");
+        }
     }
 
     private void ThrowIfDisposed()
