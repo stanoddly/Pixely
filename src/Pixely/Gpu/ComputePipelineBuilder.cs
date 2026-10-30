@@ -1,3 +1,4 @@
+using Pixely.Utilities;
 using SDL;
 
 namespace Pixely.Gpu;
@@ -38,11 +39,7 @@ public class ComputePipelineBuilder
                     threadcount_z = computeShader.ThreadCountZ
                 };
 
-                SDL_GPUComputePipeline* pipeline = SDL3.SDL_CreateGPUComputePipeline(_gpuDevice.SdlGpuDevice, &createInfo);
-                if (pipeline == null)
-                {
-                    throw new PixelyInitializationException($"SDL_CreateGPUComputePipeline failed: {SDL3.SDL_GetError()}");
-                }
+                Pointer<SDL_GPUComputePipeline> pipeline = _gpuDevice.CreateComputePipelineCore(createInfo);
 
                 ComputePipeline computePipeline = new ComputePipeline(_gpuDevice, pipeline, bindingLayout, computeShader.ThreadCountX, computeShader.ThreadCountY, computeShader.ThreadCountZ);
                 _gpuDevice.RegisterComputePipeline(computePipeline);

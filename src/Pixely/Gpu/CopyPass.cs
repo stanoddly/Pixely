@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Utilities;
 using SDL;
@@ -6,85 +7,30 @@ using SDL;
 namespace Pixely.Gpu;
 
 /// <summary>
-/// Records uploads into one submission's native copy pass, which <see cref="GpuMemorySystem"/> keeps open until it submits.
-/// Buffer uploads share the <see cref="UploadTransferBuffer"/> that outlives the pass, which SDL cycles once per submission, so
-/// a steady stream of buffer updates does not create a transfer buffer per update.
+/// Records uploads into one submission's copy pass, which <see cref="GpuMemorySystem"/> keeps open until it submits. The
+/// command buffer's device backs it; the validation and the creation of the buffers and textures happen here.
 /// </summary>
-internal sealed class CopyPass
+internal abstract class CopyPass
 {
-    // WebGPU needs offsets that are multiples of 4; 16 also keeps every vertex and storage element aligned.
-    private const uint Alignment = 16;
-
     private readonly GpuDevice _gpuDevice;
-    private readonly Pointer<SDL_GPUCopyPass> _sdlCopyPass;
-    private readonly UploadTransferBuffer _transferBuffer;
 
-    private uint _transferBufferOffset;
-
-    internal CopyPass(GpuDevice gpuDevice, Pointer<SDL_GPUCopyPass> sdlCopyPass, UploadTransferBuffer transferBuffer)
+    internal CopyPass(GpuDevice gpuDevice)
     {
         _gpuDevice = gpuDevice;
-        _sdlCopyPass = sdlCopyPass;
-        _transferBuffer = transferBuffer;
     }
 
     public bool IsEmpty { get; private set; } = true;
 
-    internal void End()
+    internal void End() => EndCore();
+
+    private void UploadToBuffer<T>(ReadOnlySpan<T> data, Pointer<SDL_GPUBuffer> buffer, bool cycle) where T : unmanaged
     {
-        unsafe
-        {
-            SDL3.SDL_EndGPUCopyPass(_sdlCopyPass);
-        }
-    }
-
-    // An update passes cycle = true: without it, the upload overwrites a buffer that an earlier submission may still read, such
-    // as the previous frame or another window in this frame. SDL then writes into a copy of the buffer when a command buffer in
-    // flight or still recording uses it, and overwrites in place otherwise. A new buffer passes false: nothing reads it yet.
-    // Cycling has these costs:
-    // - The copy starts undefined, so an update replaces the whole contents, not a prefix.
-    // - A pass that bound the buffer before the update keeps the previous copy until it binds the buffer again.
-    // - Each copy has the buffer's full size: one per submission in flight, plus one per extra update in the same submission.
-    //   SDL keeps the copies until the buffer is released, and the GPU memory tracking does not count them.
-    // - In the browser, uploads are already ordered against earlier submissions, so the copies there prevent no race.
-    private unsafe void UploadToBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer, bool cycle) where T : unmanaged
-    {
-        uint sizeBytes = (uint)(Unsafe.SizeOf<T>() * data.Length);
-        SDL_GPUBufferRegion destination = new SDL_GPUBufferRegion { buffer = buffer, offset = 0, size = sizeBytes };
-        uint offset = AlignUp(_transferBufferOffset);
-        bool fits = offset + (ulong)sizeBytes <= _transferBuffer.Capacity;
-
-        // A full buffer at its largest keeps its size: growing it no further, the upload gets a transfer buffer of its own.
-        if (sizeBytes > UploadTransferBuffer.MaxCapacity || (!fits && _transferBuffer.Capacity == UploadTransferBuffer.MaxCapacity))
-        {
-            Pointer<SDL_GPUTransferBuffer> temporary = CreateFilledTransferBuffer(data);
-            SDL_GPUTransferBufferLocation temporarySource = new SDL_GPUTransferBufferLocation { transfer_buffer = temporary, offset = 0 };
-            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, cycle);
-            _gpuDevice.ReleaseTransferBuffer(temporary);
-        }
-        else
-        {
-            if (!fits)
-            {
-                _transferBuffer.Grow(sizeBytes);
-                offset = 0;
-            }
-
-            // Only a write at offset 0 cycles: the first of a submission, so that SDL hands out a copy no submission in flight
-            // still reads, or the first into a grown buffer, which nothing uses yet, so SDL does not copy it. Later writes must
-            // not cycle: the submission's own uploads already mark the buffer as in use, so cycling would create a copy per upload.
-            Write(data, _transferBuffer.SdlTransferBuffer, offset, offset == 0);
-            _transferBufferOffset = offset + sizeBytes;
-
-            SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer.SdlTransferBuffer, offset = offset };
-            SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, cycle);
-        }
-
+        UploadToBufferCore(MemoryMarshal.AsBytes(data), buffer, cycle);
         IsEmpty = false;
     }
 
     // Uploads into a buffer created for it, releasing the buffer if the upload fails, since nothing else holds it yet.
-    private unsafe void UploadToNewBuffer<T>(ReadOnlySpan<T> data, SDL_GPUBuffer* buffer) where T : unmanaged
+    private void UploadToNewBuffer<T>(ReadOnlySpan<T> data, Pointer<SDL_GPUBuffer> buffer) where T : unmanaged
     {
         try
         {
@@ -92,55 +38,15 @@ internal sealed class CopyPass
         }
         catch
         {
-            SDL3.SDL_ReleaseGPUBuffer(_gpuDevice.SdlGpuDevice, buffer);
+            _gpuDevice.ReleaseBufferCore(buffer);
             throw;
         }
     }
 
-    // Textures are uploaded at load time and can be large, so each gets a transfer buffer of its own rather than growing the
-    // shared one for good. It also leaves D3D12's 512-byte offset alignment for texture copies to the offset 0 of a new buffer.
-    private unsafe void UploadToTexture(ReadOnlySpan<byte> data, SDL_GPUTexture* texture, uint layer, uint width, uint height)
+    private void UploadToTexture(ReadOnlySpan<byte> data, Pointer<SDL_GPUTexture> texture, uint layer, uint width, uint height)
     {
-        Pointer<SDL_GPUTransferBuffer> temporary = CreateFilledTransferBuffer(data);
-
-        SDL_GPUTextureTransferInfo source = new SDL_GPUTextureTransferInfo { transfer_buffer = temporary, offset = 0 };
-        SDL_GPUTextureRegion destination = new SDL_GPUTextureRegion { texture = texture, layer = layer, w = width, h = height, d = 1 };
-        SdlBoolInterop.SDL_UploadToGPUTexture(_sdlCopyPass, &source, &destination, false);
-
-        _gpuDevice.ReleaseTransferBuffer(temporary);
+        UploadToTextureCore(data, texture, layer, width, height);
         IsEmpty = false;
-    }
-
-    private Pointer<SDL_GPUTransferBuffer> CreateFilledTransferBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
-    {
-        Pointer<SDL_GPUTransferBuffer> transferBuffer = _gpuDevice.CreateUploadTransferBuffer((uint)(Unsafe.SizeOf<T>() * data.Length));
-        try
-        {
-            Write(data, transferBuffer, 0, false);
-        }
-        catch
-        {
-            _gpuDevice.ReleaseTransferBuffer(transferBuffer);
-            throw;
-        }
-
-        return transferBuffer;
-    }
-
-    private void Write<T>(ReadOnlySpan<T> data, Pointer<SDL_GPUTransferBuffer> transferBuffer, uint offset, bool cycle) where T : unmanaged
-    {
-        unsafe
-        {
-            byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer, cycle);
-            SdlError.ThrowOnNull(mapped);
-            data.CopyTo(new Span<T>(mapped + offset, data.Length));
-            SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.SdlGpuDevice, transferBuffer);
-        }
-    }
-
-    private static uint AlignUp(uint offset)
-    {
-        return (offset + Alignment - 1) & ~(Alignment - 1);
     }
 
     public GpuVertexBuffer<TVertexType> CreateVertexBuffer<TVertexType>(ReadOnlySpan<TVertexType> vertices) where TVertexType: unmanaged, IVertexType
@@ -151,21 +57,12 @@ internal sealed class CopyPass
         }
 
         uint sizeBytes = (uint)(Unsafe.SizeOf<TVertexType>() * vertices.Length);
-        unsafe
-        {
-            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
-            {
-                usage = SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX,
-                size = sizeBytes
-            };
+        Pointer<SDL_GPUBuffer> rawVertexBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes);
+        UploadToNewBuffer(vertices, rawVertexBuffer);
 
-            SDL_GPUBuffer* rawVertexBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToNewBuffer(vertices, rawVertexBuffer);
-
-            GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(_gpuDevice, rawVertexBuffer, vertices.Length);
-            _gpuDevice.RegisterVertexBuffer(vertexBuffer);
-            return vertexBuffer;
-        }
+        GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(_gpuDevice, rawVertexBuffer, vertices.Length);
+        _gpuDevice.RegisterVertexBuffer(vertexBuffer);
+        return vertexBuffer;
     }
 
     public GpuVertexBuffer<TVertexType> CreateVertexBuffer<TVertexType>(Shape<TVertexType> shape)
@@ -190,11 +87,7 @@ internal sealed class CopyPass
             throw new ArgumentException($"{nameof(vertices)} cannot fit to {nameof(vertexBuffer)}");
         }
 
-        unsafe
-        {
-            UploadToBuffer(vertices, vertexBuffer.SdlVertexBuffer, true);
-        }
-
+        UploadToBuffer(vertices, vertexBuffer.SdlVertexBuffer, true);
         vertexBuffer.Size = vertices.Length;
     }
 
@@ -217,21 +110,12 @@ internal sealed class CopyPass
         }
 
         uint sizeBytes = (uint)(Unsafe.SizeOf<TIndexType>() * indices.Length);
-        unsafe
-        {
-            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
-            {
-                usage = SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_INDEX,
-                size = sizeBytes
-            };
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_INDEX, sizeBytes);
+        UploadToNewBuffer(indices, rawBuffer);
 
-            SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToNewBuffer(indices, rawBuffer);
-
-            GpuIndexBuffer indexBuffer = new GpuIndexBuffer(_gpuDevice, rawBuffer, indices.Length, elementSize);
-            _gpuDevice.RegisterIndexBuffer(indexBuffer);
-            return indexBuffer;
-        }
+        GpuIndexBuffer indexBuffer = new GpuIndexBuffer(_gpuDevice, rawBuffer, indices.Length, elementSize);
+        _gpuDevice.RegisterIndexBuffer(indexBuffer);
+        return indexBuffer;
     }
 
     public void UpdateIndexBuffer(GpuIndexBuffer indexBuffer, ReadOnlySpan<ushort> indices)
@@ -266,32 +150,19 @@ internal sealed class CopyPass
             throw new ArgumentException($"{nameof(indices)} cannot fit to {nameof(indexBuffer)}");
         }
 
-        unsafe
-        {
-            UploadToBuffer(indices, indexBuffer.SdlBuffer, true);
-        }
-
+        UploadToBuffer(indices, indexBuffer.SdlBuffer, true);
         indexBuffer.Size = indices.Length;
     }
 
     public GpuStorageBuffer<T> CreateStorageBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
         uint sizeBytes = GpuStorageBuffer<T>.ValidateAllocationSize(data.Length, nameof(data));
-        unsafe
-        {
-            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
-            {
-                usage = SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-                size = sizeBytes
-            };
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, sizeBytes);
+        UploadToNewBuffer(data, rawBuffer);
 
-            SDL_GPUBuffer* rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            UploadToNewBuffer(data, rawBuffer);
-
-            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length, StorageBufferUsage.GraphicsStorageRead);
-            _gpuDevice.RegisterStorageBuffer(storageBuffer);
-            return storageBuffer;
-        }
+        GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length, StorageBufferUsage.GraphicsStorageRead);
+        _gpuDevice.RegisterStorageBuffer(storageBuffer);
+        return storageBuffer;
     }
 
     public void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged
@@ -310,11 +181,7 @@ internal sealed class CopyPass
             throw new ArgumentException($"{nameof(data)} cannot fit to {nameof(storageBuffer)}");
         }
 
-        unsafe
-        {
-            UploadToBuffer(data, storageBuffer.SdlBuffer, true);
-        }
-
+        UploadToBuffer(data, storageBuffer.SdlBuffer, true);
         storageBuffer.Size = data.Length;
     }
 
@@ -332,37 +199,21 @@ internal sealed class CopyPass
         ReadOnlySpan<byte> imageData = image.Data;
         (ushort width, ushort height) = image.Size;
 
-        SdlError.Clear();
+        Pointer<SDL_GPUTexture> sdlGpuTexture = _gpuDevice.CreateTextureCore(TextureType.TwoD, image.Size, 1, format, TextureUsage.Sampler, SampleCount.Count1);
 
-        unsafe
+        try
         {
-            SDL_GPUTextureCreateInfo sdlGpuTextureCreateInfo = new SDL_GPUTextureCreateInfo
-            {
-                type = SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D,
-                format = (SDL_GPUTextureFormat)format,
-                width = (uint)width,
-                height = (uint)height,
-                layer_count_or_depth = 1,
-                num_levels = 1,
-                usage = SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER
-            };
-            Pointer<SDL_GPUTexture> sdlGpuTexture = SDL3.SDL_CreateGPUTexture(_gpuDevice.SdlGpuDevice, &sdlGpuTextureCreateInfo);
-            SdlError.ThrowOnNull(sdlGpuTexture);
-
-            try
-            {
-                UploadToTexture(imageData, sdlGpuTexture, 0, width, height);
-            }
-            catch
-            {
-                SDL3.SDL_ReleaseGPUTexture(_gpuDevice.SdlGpuDevice, sdlGpuTexture);
-                throw;
-            }
-
-            Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), format, TextureUsage.Sampler);
-            _gpuDevice.RegisterTexture(texture);
-            return texture;
+            UploadToTexture(imageData, sdlGpuTexture, 0, width, height);
         }
+        catch
+        {
+            _gpuDevice.ReleaseTextureCore(sdlGpuTexture);
+            throw;
+        }
+
+        Texture texture = new UserTexture(_gpuDevice, sdlGpuTexture, (width, height), format, TextureUsage.Sampler);
+        _gpuDevice.RegisterTexture(texture);
+        return texture;
     }
 
     public TextureArray CreateTextureArray(ReadOnlySpan<Image> images)
@@ -392,43 +243,27 @@ internal sealed class CopyPass
             }
         }
 
-        SdlError.Clear();
-
         (ushort width, ushort height) = size;
         uint layerCount = (uint)images.Length;
 
-        unsafe
+        Pointer<SDL_GPUTexture> sdlGpuTexture = _gpuDevice.CreateTextureCore(TextureType.TwoDArray, size, layerCount, format, TextureUsage.Sampler, SampleCount.Count1);
+
+        try
         {
-            SDL_GPUTextureCreateInfo sdlGpuTextureCreateInfo = new SDL_GPUTextureCreateInfo
+            for (int layer = 0; layer < images.Length; layer++)
             {
-                type = SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D_ARRAY,
-                format = (SDL_GPUTextureFormat)format,
-                width = width,
-                height = height,
-                layer_count_or_depth = layerCount,
-                num_levels = 1,
-                usage = SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER
-            };
-            Pointer<SDL_GPUTexture> sdlGpuTexture = SDL3.SDL_CreateGPUTexture(_gpuDevice.SdlGpuDevice, &sdlGpuTextureCreateInfo);
-            SdlError.ThrowOnNull(sdlGpuTexture);
-
-            try
-            {
-                for (int layer = 0; layer < images.Length; layer++)
-                {
-                    UploadToTexture(images[layer].Data, sdlGpuTexture, (uint)layer, width, height);
-                }
+                UploadToTexture(images[layer].Data, sdlGpuTexture, (uint)layer, width, height);
             }
-            catch
-            {
-                SDL3.SDL_ReleaseGPUTexture(_gpuDevice.SdlGpuDevice, sdlGpuTexture);
-                throw;
-            }
-
-            TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, format, TextureUsage.Sampler);
-            _gpuDevice.RegisterTexture(textureArray);
-            return textureArray;
         }
+        catch
+        {
+            _gpuDevice.ReleaseTextureCore(sdlGpuTexture);
+            throw;
+        }
+
+        TextureArray textureArray = new TextureArray(_gpuDevice, sdlGpuTexture, size, (ushort)layerCount, format, TextureUsage.Sampler);
+        _gpuDevice.RegisterTexture(textureArray);
+        return textureArray;
     }
 
     // Both formats take the image's R, G, B, A bytes as they are; the sRGB one only changes how sampling reads them.
@@ -462,4 +297,10 @@ internal sealed class CopyPass
             throw new ArgumentException($"The image has {image.Data.Length} bytes of data, but {width}x{height} pixels need {expectedLength}.", paramName);
         }
     }
+
+    // The backend. An update passes cycle = true and a new buffer false, see SdlCopyPass. Data is the whole upload, which
+    // starts at the beginning of the buffer or covers one layer of the texture.
+    internal abstract void UploadToBufferCore(ReadOnlySpan<byte> data, Pointer<SDL_GPUBuffer> buffer, bool cycle);
+    internal abstract void UploadToTextureCore(ReadOnlySpan<byte> data, Pointer<SDL_GPUTexture> texture, uint layer, uint width, uint height);
+    internal abstract void EndCore();
 }

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <!-- The stub hands out handles typed as SDL pointers, which it never dereferences. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Pixely.Testing.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
+        <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
+    </ItemGroup>
+
+</Project>

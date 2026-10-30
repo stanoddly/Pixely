@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Pixely.DependencyInjection.Generated</InterceptorsNamespaces>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="coverlet.collector"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="NUnit"/>
+        <PackageReference Include="NUnit.Analyzers"/>
+        <PackageReference Include="NUnit3TestAdapter"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="NUnit.Framework"/>
+    </ItemGroup>
+
+    <!-- A compiled shader written by hand: the stub device reads the metadata's binding layout and never the code. It is copied
+         to where the shader compiler would put it, under a .generated directory that git ignores. -->
+    <ItemGroup>
+        <None Include="ShaderFixture\*" Link="Content\shaders\.generated\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Pixely.Testing\Pixely.Testing.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.Ui\Pixely.Ui.csproj" />
+        <ProjectReference Include="..\..\src\Pixely.DependencyInjection.Generator\Pixely.DependencyInjection.Generator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>

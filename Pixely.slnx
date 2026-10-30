@@ -21,6 +21,7 @@
     <Project Path="src/Pixely/Pixely.csproj" />
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
     <Project Path="src/Pixely.Models/Pixely.Models.csproj" />
+    <Project Path="src/Pixely.Testing/Pixely.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Pixely.Fitness.Tests/Pixely.Fitness.Tests.csproj" />
@@ -36,6 +37,7 @@
     <Project Path="tests/Pixely.Logging.Tests/Pixely.Logging.Tests.csproj" />
     <Project Path="tests/Pixely.Models.Tests/Pixely.Models.Tests.csproj" />
     <Project Path="tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj" />
+    <Project Path="tests/Pixely.Testing.Tests/Pixely.Testing.Tests.csproj" />
     <Project Path="tests/Pixely.Tests/Pixely.Tests.csproj" />
   </Folder>
   <Folder Name="/tutorials/">

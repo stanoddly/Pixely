@@ -1,21 +1,21 @@
 using Pixely.ShaderCommon;
-using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Gpu;
 
-public class ComputePass : IDisposable
+/// <summary>
+/// Records dispatches into a command buffer's compute pass until it is disposed. The command buffer's device backs it.
+/// </summary>
+public abstract class ComputePass : IDisposable
 {
-    private Pointer<SDL_GPUComputePass> _nativePointer;
+    private bool _isEnded;
     private readonly uint _readWriteStorageTextureCount;
     private readonly uint _readWriteStorageBufferCount;
     private ComputePipeline? _boundPipeline;
     private StorageBufferElementSizes _readOnlyStorageBufferElementSizes;
     private StorageBufferElementSizes _readWriteStorageBufferElementSizes;
 
-    internal ComputePass(Pointer<SDL_GPUComputePass> nativePointer, uint readWriteStorageTextureCount, uint readWriteStorageBufferCount, StorageBufferElementSizes readWriteStorageBufferElementSizes)
+    internal ComputePass(uint readWriteStorageTextureCount, uint readWriteStorageBufferCount, StorageBufferElementSizes readWriteStorageBufferElementSizes)
     {
-        _nativePointer = nativePointer;
         _readWriteStorageTextureCount = readWriteStorageTextureCount;
         _readWriteStorageBufferCount = readWriteStorageBufferCount;
         _readWriteStorageBufferElementSizes = readWriteStorageBufferElementSizes;
@@ -26,42 +26,19 @@ public class ComputePass : IDisposable
         ThrowIfDisposed();
         _boundPipeline = pipeline;
         _readOnlyStorageBufferElementSizes = default;
-        unsafe
-        {
-            SDL3.SDL_BindGPUComputePipeline(_nativePointer, pipeline.Pointer);
-        }
+        BindComputePipelineCore(pipeline);
     }
 
     public void BindSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
     {
         ThrowIfDisposed();
-        unsafe
-        {
-            SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-            for (int i = 0; i < textures.Length; i++)
-            {
-                bindings[i] = new SDL_GPUTextureSamplerBinding
-                {
-                    texture = textures[i].SdlGpuTexture,
-                    sampler = sampler.Pointer
-                };
-            }
-            SDL3.SDL_BindGPUComputeSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
-        }
+        BindSamplersCore(slot, textures, sampler);
     }
 
     public void BindReadOnlyStorageTextures(ReadOnlySpan<Texture> textures, uint slot = 0)
     {
         ThrowIfDisposed();
-        unsafe
-        {
-            SDL_GPUTexture** sdlTextures = stackalloc SDL_GPUTexture*[textures.Length];
-            for (int i = 0; i < textures.Length; i++)
-            {
-                sdlTextures[i] = textures[i].SdlGpuTexture;
-            }
-            SDL3.SDL_BindGPUComputeStorageTextures(_nativePointer, slot, sdlTextures, (uint)textures.Length);
-        }
+        BindReadOnlyStorageTexturesCore(slot, textures);
     }
 
     public void BindReadOnlyStorageTexture(Texture texture, uint slot = 0)
@@ -78,15 +55,8 @@ public class ComputePass : IDisposable
             buffers[i].ValidateUsage("Compute read-only storage buffer", slot + (uint)i, StorageBufferUsage.ComputeStorageRead);
             _readOnlyStorageBufferElementSizes = SetStorageBufferSlotSize(_readOnlyStorageBufferElementSizes, slot + (uint)i, (ushort)buffers[i].ElementSize);
         }
-        unsafe
-        {
-            SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-            for (int i = 0; i < buffers.Length; i++)
-            {
-                sdlBuffers[i] = buffers[i].SdlBuffer;
-            }
-            SDL3.SDL_BindGPUComputeStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
-        }
+
+        BindReadOnlyStorageBuffersCore(slot, buffers);
     }
 
     public void BindReadOnlyStorageBuffer(GpuStorageBuffer buffer, uint slot = 0)
@@ -99,37 +69,28 @@ public class ComputePass : IDisposable
     {
         ThrowIfDisposed();
         ThrowIfInvalidDispatch();
-        unsafe
-        {
-            SDL3.SDL_DispatchGPUCompute(_nativePointer, groupCountX, groupCountY, groupCountZ);
-        }
+        DispatchCore(groupCountX, groupCountY, groupCountZ);
     }
 
     public void DispatchIndirect(GpuStorageBuffer buffer, uint offset = 0)
     {
         ThrowIfDisposed();
         ThrowIfInvalidDispatch();
-        unsafe
-        {
-            SDL3.SDL_DispatchGPUComputeIndirect(_nativePointer, buffer.SdlBuffer, offset);
-        }
+        DispatchIndirectCore(buffer, offset);
     }
 
     public void Dispose()
     {
-        if (!_nativePointer.IsNull)
+        if (!_isEnded)
         {
-            unsafe
-            {
-                SDL3.SDL_EndGPUComputePass(_nativePointer);
-            }
-            _nativePointer = Pointer<SDL_GPUComputePass>.Null;
+            _isEnded = true;
+            EndCore();
         }
     }
 
     private void ThrowIfDisposed()
     {
-        if (_nativePointer.IsNull)
+        if (_isEnded)
         {
             throw new ObjectDisposedException(nameof(ComputePass));
         }
@@ -176,4 +137,13 @@ public class ComputePass : IDisposable
             _ => sizes
         };
     }
+
+    // The backend, called only on a pass that has not ended and with validated arguments.
+    internal abstract void BindComputePipelineCore(ComputePipeline pipeline);
+    internal abstract void BindSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler);
+    internal abstract void BindReadOnlyStorageTexturesCore(uint slot, ReadOnlySpan<Texture> textures);
+    internal abstract void BindReadOnlyStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
+    internal abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
+    internal abstract void DispatchIndirectCore(GpuStorageBuffer buffer, uint offset);
+    internal abstract void EndCore();
 }

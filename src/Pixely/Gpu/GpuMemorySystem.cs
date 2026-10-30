@@ -9,9 +9,8 @@ public class GpuMemorySystem: ICopyPass
     private readonly GpuDevice _gpuDevice;
     private readonly UploadTransferBuffer _uploadTransferBuffer;
 
-    // Uploads are recorded from the update phase until the render phase submits them. The native command buffer is held
-    // directly because the copy pass and the cancel on dispose are all this class's own.
-    private Pointer<SDL_GPUCommandBuffer> _sdlCommandBuffer;
+    // Uploads are recorded from the update phase until the render phase submits them, into a command buffer of this class's own.
+    private CommandBuffer? _commandBuffer;
     private CopyPass? _copyPass;
 
     public GpuMemorySystem(GpuDevice gpuDevice) : this(gpuDevice, false)
@@ -34,18 +33,9 @@ public class GpuMemorySystem: ICopyPass
     {
         if (_copyPass == null)
         {
-            if (_sdlCommandBuffer.IsNull)
-            {
-                _sdlCommandBuffer = _gpuDevice.AcquireSdlCommandBuffer();
-            }
-
-            unsafe
-            {
-                Pointer<SDL_GPUCopyPass> sdlCopyPass = SDL3.SDL_BeginGPUCopyPass(_sdlCommandBuffer);
-                // A failure keeps the command buffer, so the next upload begins the copy pass on it again.
-                SdlError.ThrowOnNull(sdlCopyPass);
-                _copyPass = new CopyPass(_gpuDevice, sdlCopyPass, _uploadTransferBuffer);
-            }
+            _commandBuffer ??= _gpuDevice.AcquireCommandBuffer();
+            // A failure keeps the command buffer, so the next upload begins the copy pass on it again.
+            _copyPass = _commandBuffer.BeginCopyPassCore(_uploadTransferBuffer);
         }
 
         return _copyPass;
@@ -102,21 +92,11 @@ public class GpuMemorySystem: ICopyPass
             throw new ArgumentException($"A storage buffer needs one or more of {allUsages}, but the usage is '{usage}'.", nameof(usage));
         }
 
-        unsafe
-        {
-            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
-            {
-                usage = (SDL_GPUBufferUsageFlags)usage,
-                size = sizeBytes
-            };
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore((SDL_GPUBufferUsageFlags)usage, sizeBytes);
 
-            Pointer<SDL_GPUBuffer> rawBuffer = SDL3.SDL_CreateGPUBuffer(_gpuDevice.SdlGpuDevice, &sdlGpuBufferCreateInfo);
-            SdlError.ThrowOnNull(rawBuffer);
-
-            GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, length, usage);
-            _gpuDevice.RegisterStorageBuffer(storageBuffer);
-            return storageBuffer;
-        }
+        GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, length, usage);
+        _gpuDevice.RegisterStorageBuffer(storageBuffer);
+        return storageBuffer;
     }
 
     public void UpdateStorageBuffer<T>(GpuStorageBuffer<T> storageBuffer, ReadOnlySpan<T> data) where T : unmanaged
@@ -152,15 +132,12 @@ public class GpuMemorySystem: ICopyPass
     // rather than submitted; submitting would make the device destruction wait for work nobody reads.
     public void Dispose()
     {
-        if (!_sdlCommandBuffer.IsNull)
+        if (_commandBuffer != null)
         {
             _copyPass?.End();
             _copyPass = null;
-            unsafe
-            {
-                SDL3.SDL_CancelGPUCommandBuffer(_sdlCommandBuffer);
-            }
-            _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+            _commandBuffer.Cancel();
+            _commandBuffer = null;
         }
 
         _uploadTransferBuffer.Dispose();
@@ -192,28 +169,21 @@ public class GpuMemorySystem: ICopyPass
     /// </summary>
     public void Submit()
     {
-        if (_sdlCommandBuffer.IsNull)
+        if (_commandBuffer == null)
         {
             return;
         }
 
         _copyPass?.End();
         _copyPass = null;
-        Pointer<SDL_GPUCommandBuffer> sdlCommandBuffer = _sdlCommandBuffer;
-        _sdlCommandBuffer = Pointer<SDL_GPUCommandBuffer>.Null;
+        CommandBuffer commandBuffer = _commandBuffer;
+        _commandBuffer = null;
 
 #if !BROWSER
         // The fence signals once the uploads have finished, so the frame submitted after this cannot start before them.
         if (WaitsForUploads)
         {
-            Pointer<SDL_GPUFence> sdlFence;
-            unsafe
-            {
-                sdlFence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(sdlCommandBuffer);
-            }
-
-            SdlError.ThrowOnNull(sdlFence, "SDL_SubmitGPUCommandBufferAndAcquireFence");
-            using (GpuFence fence = new(_gpuDevice, sdlFence))
+            using (GpuFence fence = commandBuffer.SubmitAndAcquireFence())
             {
                 _gpuDevice.WaitForFences([fence]);
             }
@@ -222,9 +192,6 @@ public class GpuMemorySystem: ICopyPass
         }
 #endif
 
-        unsafe
-        {
-            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
-        }
+        commandBuffer.Submit();
     }
 }

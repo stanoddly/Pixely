@@ -23,7 +23,7 @@ public sealed class FontSystemTests
         DictionaryContentSource contentSource = new(files.ToFrozenDictionary(), directories.ToFrozenDictionary());
 
         // Loading and measuring never touch the device.
-        _fontSystem = FontSystem.Create(new GpuMemorySystem(null!), contentSource);
+        _fontSystem = FontSystem.Create(new GpuMemorySystem(null!), contentSource, SdlLibrary.Load());
     }
 
     [TearDown]

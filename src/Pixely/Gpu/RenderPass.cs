@@ -1,13 +1,14 @@
-using System.Diagnostics;
 using Pixely.ShaderCommon;
-using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Gpu;
 
-public class RenderPass : IDisposable
+/// <summary>
+/// Records draws into a command buffer's render pass until it is disposed. The command buffer's device backs it; the
+/// validation runs before every call reaches the backend.
+/// </summary>
+public abstract class RenderPass : IDisposable
 {
-    private Pointer<SDL_GPURenderPass> _nativePointer;
+    private bool _isEnded;
     // Both counts are taken at bind time: an update after the bind cycles the buffer into a new copy and changes its Size,
     // while this pass keeps drawing from the copy it bound.
     private uint _verticesCount = 0;
@@ -34,12 +35,10 @@ public class RenderPass : IDisposable
 
     internal RenderPass(
         CommandBuffer commandBuffer,
-        Pointer<SDL_GPURenderPass> nativePointer,
         DepthBufferFormat depthBufferFormat,
         SampleCount sampleCount,
         ShortSize targetSize)
     {
-        _nativePointer = nativePointer;
         DepthBufferFormat = depthBufferFormat;
         SampleCount = sampleCount;
         TargetSize = targetSize;
@@ -51,13 +50,9 @@ public class RenderPass : IDisposable
         ThrowIfDisposed();
 
         _validator.OnBindGraphicsPipeline(this, graphicsPipeline);
-
-        unsafe
-        {
-            SDL3.SDL_BindGPUGraphicsPipeline(_nativePointer, graphicsPipeline.Pointer);
-        }
+        BindGraphicsPipelineCore(graphicsPipeline);
     }
-    
+
     public void BindVertexBuffer<TVertexType>(uint slot, GpuVertexBuffer<TVertexType> buffer)
         where TVertexType : unmanaged, IVertexType
     {
@@ -71,11 +66,7 @@ public class RenderPass : IDisposable
             _verticesCount = (uint)buffer.Size;
         }
 
-        unsafe
-        {
-            SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlVertexBuffer, offset = 0 };
-            SDL3.SDL_BindGPUVertexBuffers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
-        }
+        BindVertexBufferCore(slot, buffer);
     }
 
     public void BindVertexBuffer<TVertexType>(GpuVertexBuffer<TVertexType> buffer)
@@ -91,11 +82,7 @@ public class RenderPass : IDisposable
         _validator.OnBindIndexBuffer(this, buffer);
         _indexCount = (uint)buffer.Size;
 
-        unsafe
-        {
-            SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlBuffer, offset = 0 };
-            SDL3.SDL_BindGPUIndexBuffer(_nativePointer, &sdlGpuBufferBinding, GetSdlIndexElementSize(buffer.ElementSize));
-        }
+        BindIndexBufferCore(buffer);
     }
 
     public void BindVertexSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
@@ -106,24 +93,13 @@ public class RenderPass : IDisposable
         {
             texture.ThrowIfDisposed();
         }
-        
+
         byte numSamplers = (byte)Math.Max(_vertexShaderBindingCounts.NumSamplers, slot + textures.Length);
         _vertexShaderBindingCounts = _vertexShaderBindingCounts with { NumSamplers = numSamplers };
 
         _validator.OnBindVertexSamplers(this, slot, textures.Length);
 
-        unsafe {
-            SDL_GPUTextureSamplerBinding* sdlGpuBufferBindings =
-                stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-
-            for (int i = 0; i < textures.Length; i++)
-            {
-                sdlGpuBufferBindings[i] = new SDL_GPUTextureSamplerBinding
-                    { texture = textures[i].SdlGpuTexture, sampler = sampler.Pointer };
-            }
-
-            SDL3.SDL_BindGPUVertexSamplers(_nativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
-        }
+        BindVertexSamplersCore(slot, textures, sampler);
     }
 
     public void BindFragmentSamplers(ReadOnlySpan<Texture> textures, Sampler sampler, uint slot = 0)
@@ -134,24 +110,13 @@ public class RenderPass : IDisposable
         {
             texture.ThrowIfDisposed();
         }
-        
+
         byte numSamplers = (byte)Math.Max(_fragmentShaderBindingCounts.NumSamplers, slot + textures.Length);
         _fragmentShaderBindingCounts = _fragmentShaderBindingCounts with { NumSamplers = numSamplers };
 
         _validator.OnBindFragmentSamplers(this, slot, textures.Length);
 
-        unsafe {
-            SDL_GPUTextureSamplerBinding* sdlGpuBufferBindings =
-                stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
-
-            for (int i = 0; i < textures.Length; i++)
-            {
-                sdlGpuBufferBindings[i] = new SDL_GPUTextureSamplerBinding
-                    { texture = textures[i].SdlGpuTexture, sampler = sampler.Pointer };
-            }
-
-            SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, sdlGpuBufferBindings, (uint)textures.Length);
-        }
+        BindFragmentSamplersCore(slot, textures, sampler);
     }
 
     public void BindFragmentSampler(Texture texture, Sampler sampler)
@@ -172,16 +137,8 @@ public class RenderPass : IDisposable
 
         _validator.OnBindFragmentSamplers(this, slot, 1);
 
-        unsafe
-        {
-            SDL_GPUTextureSamplerBinding sdlGpuBufferBinding = new SDL_GPUTextureSamplerBinding
-            {
-                texture = textureArray.SdlGpuTexture,
-                sampler = sampler.Pointer
-            };
-
-            SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
-        }
+        ReadOnlySpan<Texture> textures = [textureArray];
+        BindFragmentSamplersCore(slot, textures, sampler);
     }
 
     public void BindVertexStorageBuffers(ReadOnlySpan<GpuStorageBuffer> buffers, uint slot = 0)
@@ -193,17 +150,7 @@ public class RenderPass : IDisposable
 
         _validator.OnBindVertexStorageBuffers(this, slot, buffers);
 
-        unsafe
-        {
-            SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-
-            for (int i = 0; i < buffers.Length; i++)
-            {
-                sdlBuffers[i] = buffers[i].SdlBuffer;
-            }
-
-            SDL3.SDL_BindGPUVertexStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
-        }
+        BindVertexStorageBuffersCore(slot, buffers);
     }
 
     public void BindVertexStorageBuffer(GpuStorageBuffer buffer, uint slot = 0)
@@ -223,17 +170,7 @@ public class RenderPass : IDisposable
 
         _validator.OnBindFragmentStorageBuffers(this, slot, buffers);
 
-        unsafe
-        {
-            SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
-
-            for (int i = 0; i < buffers.Length; i++)
-            {
-                sdlBuffers[i] = buffers[i].SdlBuffer;
-            }
-
-            SDL3.SDL_BindGPUFragmentStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
-        }
+        BindFragmentStorageBuffersCore(slot, buffers);
     }
 
     public void BindFragmentStorageBuffer(GpuStorageBuffer buffer, uint slot = 0)
@@ -247,7 +184,7 @@ public class RenderPass : IDisposable
     public void SetStencilReference(byte reference)
     {
         ThrowIfDisposed();
-        unsafe { SDL3.SDL_SetGPUStencilReference(_nativePointer, reference); }
+        SetStencilReferenceCore(reference);
     }
 
     /// <summary>
@@ -263,20 +200,7 @@ public class RenderPass : IDisposable
         // A scissor restricts drawing to an area, so anything outside the pass is simply not part
         // of it. Intersecting rather than rejecting also keeps the rectangle within what the
         // backends accept, which an arbitrary caller rectangle is not.
-        Rectangle clipped = scissor.Intersect(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height));
-
-        unsafe
-        {
-            SDL_Rect sdlScissor = new SDL_Rect
-            {
-                x = clipped.X,
-                y = clipped.Y,
-                w = clipped.Width,
-                h = clipped.Height
-            };
-
-            SDL3.SDL_SetGPUScissor(_nativePointer, &sdlScissor);
-        }
+        SetScissorCore(scissor.Intersect(new Rectangle(0, 0, TargetSize.Width, TargetSize.Height)));
     }
 
     /// <summary>
@@ -297,11 +221,7 @@ public class RenderPass : IDisposable
         ThrowIfDisposed();
 
         _validator.OnDrawPrimitive(this);
-
-        unsafe
-        {
-            SDL3.SDL_DrawGPUPrimitives(_nativePointer, _verticesCount, instanceCount, 0, 0);
-        }
+        DrawPrimitivesCore(_verticesCount, instanceCount);
     }
 
     public void DrawIndexedPrimitive()
@@ -327,45 +247,38 @@ public class RenderPass : IDisposable
         ThrowIfDisposed();
 
         _validator.OnDrawIndexedPrimitive(this, indexCount, firstIndex);
-
-        unsafe
-        {
-            SDL3.SDL_DrawGPUIndexedPrimitives(_nativePointer, indexCount, instanceCount, firstIndex, 0, 0);
-        }
+        DrawIndexedPrimitivesCore(indexCount, instanceCount, firstIndex);
     }
 
-    public bool IsDefault()
-    {
-        return _nativePointer.IsNull;
-    }
-    
     public void Dispose()
     {
-        if (!_nativePointer.IsNull)
+        if (!_isEnded)
         {
-            unsafe
-            {
-                SDL3.SDL_EndGPURenderPass(_nativePointer);
-            }
-            _nativePointer = Pointer<SDL_GPURenderPass>.Null;
+            _isEnded = true;
+            EndCore();
         }
     }
-    
+
     private void ThrowIfDisposed()
     {
-        if (_nativePointer.IsNull)
+        if (_isEnded)
         {
             throw new ObjectDisposedException(nameof(RenderPass));
         }
     }
 
-    private static SDL_GPUIndexElementSize GetSdlIndexElementSize(IndexElementSize elementSize)
-    {
-        return elementSize switch
-        {
-            IndexElementSize.UInt16 => SDL_GPUIndexElementSize.SDL_GPU_INDEXELEMENTSIZE_16BIT,
-            IndexElementSize.UInt32 => SDL_GPUIndexElementSize.SDL_GPU_INDEXELEMENTSIZE_32BIT,
-            _ => throw new ArgumentOutOfRangeException(nameof(elementSize), elementSize, null)
-        };
-    }
+    // The backend, called only on a pass that has not ended and with validated arguments.
+    internal abstract void BindGraphicsPipelineCore(GraphicsPipeline graphicsPipeline);
+    internal abstract void BindVertexBufferCore(uint slot, GpuVertexBuffer buffer);
+    internal abstract void BindIndexBufferCore(GpuIndexBuffer buffer);
+    internal abstract void BindVertexSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler);
+    internal abstract void BindFragmentSamplersCore(uint slot, ReadOnlySpan<Texture> textures, Sampler sampler);
+    internal abstract void BindVertexStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
+    internal abstract void BindFragmentStorageBuffersCore(uint slot, ReadOnlySpan<GpuStorageBuffer> buffers);
+    internal abstract void SetStencilReferenceCore(byte reference);
+    // The scissor is already clipped to TargetSize.
+    internal abstract void SetScissorCore(Rectangle scissor);
+    internal abstract void DrawPrimitivesCore(uint vertexCount, uint instanceCount);
+    internal abstract void DrawIndexedPrimitivesCore(uint indexCount, uint instanceCount, uint firstIndex);
+    internal abstract void EndCore();
 }

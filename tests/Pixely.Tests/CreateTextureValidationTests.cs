@@ -1,12 +1,12 @@
 using Pixely.Content;
 using Pixely.Gpu;
+using Pixely.Testing;
 
 namespace Pixely.Tests;
 
-// The checks run before the copy pass touches the device, so a copy pass without one is enough.
 public class CreateTextureValidationTests
 {
-    private static readonly CopyPass _copyPass = new(null!, default, null!);
+    private static readonly GpuMemorySystem _copyPass = new(StubGpuDevice.Create());
 
     [TestCase(TextureFormat.B8G8R8A8Unorm)]
     [TestCase(TextureFormat.R16G16B16A16Float)]

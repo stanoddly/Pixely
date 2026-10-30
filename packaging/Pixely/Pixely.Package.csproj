@@ -50,6 +50,7 @@
         <ProjectReference Include="..\..\src\Pixely.Models\Pixely.Models.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Observations\Pixely.Observations.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.ShaderCommon\Pixely.ShaderCommon.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <ProjectReference Include="..\..\src\Pixely.Testing\Pixely.Testing.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Ui\Pixely.Ui.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Utils\Pixely.Utils.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />

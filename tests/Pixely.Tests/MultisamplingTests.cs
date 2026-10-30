@@ -1,5 +1,5 @@
-using System.Runtime.CompilerServices;
 using Pixely.Gpu;
+using Pixely.Testing;
 using Pixely.Utilities;
 using SDL;
 
@@ -131,7 +131,7 @@ public class MultisamplingTests
     [TestCase(4)]
     public void IsSampleCountSupported_WithUndefinedSampleCount_Throws(int value)
     {
-        GpuDevice gpuDevice = (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
+        using GpuDevice gpuDevice = StubGpuDevice.Create();
 
         Assert.Throws<ArgumentOutOfRangeException>(() => gpuDevice.IsSampleCountSupported(TextureFormat.B8G8R8A8Unorm, (SampleCount)value));
     }
@@ -139,7 +139,7 @@ public class MultisamplingTests
     [Test]
     public void UserTexture_SizeInBytes_CountsEverySample()
     {
-        GpuDevice gpuDevice = (GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice));
+        using GpuDevice gpuDevice = StubGpuDevice.Create();
         long singleSampleBytes = TextureFormat.B8G8R8A8Unorm.CalculateSizeInBytes(_size.Width, _size.Height);
 
         Assert.Multiple(() =>

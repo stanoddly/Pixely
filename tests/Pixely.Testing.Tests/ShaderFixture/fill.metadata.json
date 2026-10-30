@@ -1,0 +1,41 @@
+{
+  "stage": "Compute",
+  "bindingLayout": {
+    "bindingCounts": {
+      "numSamplers": 0,
+      "numStorageTextures": 0,
+      "numStorageBuffers": 0,
+      "numReadWriteStorageTextures": 0,
+      "numReadWriteStorageBuffers": 1
+    },
+    "uniformSlotSizes": {
+      "slot0": 4,
+      "slot1": 0,
+      "slot2": 0,
+      "slot3": 0
+    },
+    "storageBufferElementSizes": {
+      "slot0": 0,
+      "slot1": 0,
+      "slot2": 0,
+      "slot3": 0
+    },
+    "readWriteStorageBufferElementSizes": {
+      "slot0": 4,
+      "slot1": 0,
+      "slot2": 0,
+      "slot3": 0
+    }
+  },
+  "shaders": [
+    {
+      "format": "SpirV",
+      "filename": "fill.spv",
+      "entryPoint": "computeMain"
+    }
+  ],
+  "sourceHash": "written by hand for the stub device's tests",
+  "threadCountX": 64,
+  "threadCountY": 1,
+  "threadCountZ": 1
+}

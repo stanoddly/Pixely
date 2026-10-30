@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Pixely.Shaders;
 using Pixely.Utilities;
@@ -7,7 +6,12 @@ using SDL;
 
 namespace Pixely.Gpu;
 
-public class GpuDevice : IDisposable
+/// <summary>
+/// The GPU device: it creates the resources and command buffers and tracks the memory of the resources. SDL GPU backs it in
+/// a game, and the stub device of Pixely.Testing backs it in a game's tests. The constructor and the backend's members are
+/// internal, so no other assembly derives from it.
+/// </summary>
+public abstract class GpuDevice : IDisposable
 {
     private MemoryTrackedSet<Texture> _textures = new();
     private MemoryTrackedSet<GpuVertexBuffer> _vertexBuffers = new();
@@ -17,8 +21,6 @@ public class GpuDevice : IDisposable
     private LockedSet<GraphicsPipeline> _graphicsPipelines = new();
     private LockedSet<ComputePipeline> _computePipelines = new();
     private LockedSet<GraphicsShaderProgram> _graphicsShaderPrograms = new();
-
-    internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; private set; }
 
     public string Driver { get; }
 
@@ -42,126 +44,23 @@ public class GpuDevice : IDisposable
         }
     }
 
-    internal GpuDevice(Pointer<SDL_GPUDevice> sdlGpuDevice)
+    internal GpuDevice(string driver, string? nativeDriverName)
     {
-        SdlGpuDevice = sdlGpuDevice;
-
-        unsafe
-        {
-            byte* driver = SDL3.Unsafe_SDL_GetGPUDeviceDriver(sdlGpuDevice);
-            Driver = Marshal.PtrToStringUTF8((IntPtr)driver) ??
-                     throw new PixelyInitializationException("SDL_GetGPUDeviceDriver returned null");
-        }
-
-        SDL_PropertiesID properties;
-        unsafe
-        {
-            properties = SDL3.SDL_GetGPUDeviceProperties(sdlGpuDevice);
-        }
-
-        NativeDriverName = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, null);
+        Driver = driver;
+        NativeDriverName = nativeDriverName;
     }
 
-    public ShaderFormats GetSupportedShaderFormats()
-    {
-        unsafe
-        {
-            SDL_GPUShaderFormat formats = SDL3.SDL_GetGPUShaderFormats(SdlGpuDevice);
+    public ShaderFormats GetSupportedShaderFormats() => GetSupportedShaderFormatsCore();
 
-            ShaderFormats shaderFormats = new ShaderFormats((uint)formats);
+    public bool IsTextureFormatSupported(TextureFormat format, TextureType type, TextureUsage usage) => IsTextureFormatSupportedCore(format, type, usage);
 
-            return shaderFormats;
-        }
-    }
-
-    public bool IsTextureFormatSupported(TextureFormat format, TextureType type, TextureUsage usage)
-    {
-        unsafe
-        {
-            return SDL3.SDL_GPUTextureSupportsFormat(
-                SdlGpuDevice,
-                (SDL_GPUTextureFormat)format,
-                (SDL_GPUTextureType)type,
-                (SDL_GPUTextureUsageFlags)usage);
-        }
-    }
-
-    public CommandBuffer AcquireCommandBuffer()
-    {
-        return new CommandBuffer(this, AcquireSdlCommandBuffer());
-    }
-
-    internal Pointer<SDL_GPUCommandBuffer> AcquireSdlCommandBuffer()
-    {
-        unsafe
-        {
-            Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL3.SDL_AcquireGPUCommandBuffer(SdlGpuDevice);
-
-            if (sdlGpuCommandBuffer.IsNull)
-            {
-                throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SDL3.SDL_GetError()}");
-            }
-
-            return sdlGpuCommandBuffer;
-        }
-    }
-
-    internal Pointer<SDL_GPUTransferBuffer> CreateUploadTransferBuffer(uint size)
-    {
-        unsafe
-        {
-            SDL_GPUTransferBufferCreateInfo createInfo = new SDL_GPUTransferBufferCreateInfo
-            {
-                usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                size = size
-            };
-            Pointer<SDL_GPUTransferBuffer> transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(SdlGpuDevice, &createInfo);
-            SdlError.ThrowOnNull(transferBuffer);
-            return transferBuffer;
-        }
-    }
-
-    internal void ReleaseTransferBuffer(Pointer<SDL_GPUTransferBuffer> transferBuffer)
-    {
-        if (transferBuffer.IsNull)
-        {
-            return;
-        }
-
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUTransferBuffer(SdlGpuDevice, transferBuffer);
-        }
-    }
+    public CommandBuffer AcquireCommandBuffer() => AcquireCommandBufferCore();
 
     public Sampler CreateSampler(SamplerConfig config)
     {
-        SDL_GPUSamplerCreateInfo sdlGpuSamplerCreateInfo = new SDL_GPUSamplerCreateInfo()
-        {
-            min_filter = (SDL_GPUFilter)config.MinFilter,
-            mag_filter = (SDL_GPUFilter)config.MagFilter,
-            mipmap_mode = (SDL_GPUSamplerMipmapMode)config.MipmapMode,
-            address_mode_u = (SDL_GPUSamplerAddressMode)config.AddressModeU,
-            address_mode_v = (SDL_GPUSamplerAddressMode)config.AddressModeV,
-            address_mode_w = (SDL_GPUSamplerAddressMode)config.AddressModeW,
-            mip_lod_bias = config.MipLodBias,
-            min_lod = config.MinLod,
-            max_lod = config.MaxLod,
-            max_anisotropy = config.MaxAnisotropy,
-            enable_anisotropy = config.EnableAnisotropy,
-            compare_op = (SDL_GPUCompareOp)config.CompareOp,
-            enable_compare = config.EnableCompare
-        };
-
-        unsafe
-        {
-            Pointer<SDL_GPUSampler> samplerPointer = SDL3.SDL_CreateGPUSampler(SdlGpuDevice, &sdlGpuSamplerCreateInfo);
-            SdlError.ThrowOnNull(samplerPointer);
-
-            var sampler = new Sampler(this, samplerPointer);
-            _samplers.Add(sampler);
-            return sampler;
-        }
+        Sampler sampler = new Sampler(this, CreateSamplerCore(config));
+        _samplers.Add(sampler);
+        return sampler;
     }
 
     /// <summary>
@@ -175,13 +74,7 @@ public class GpuDevice : IDisposable
             throw new ArgumentOutOfRangeException(nameof(sampleCount), sampleCount, $"'{sampleCount}' is not a {nameof(SampleCount)}.");
         }
 
-        // On Direct3D 12 the SDL that Pixely pins checks a depth format by its shader-view format, so it can report no multisampling for a depth
-        // format the GPU supports it for, such as Depth24Stencil8. Texture creation and pipeline building then reject that count.
-        // libsdl-org/SDL#16124, fixed by libsdl-org/SDL#16230 in a later SDL.
-        unsafe
-        {
-            return sampleCount == SampleCount.Count1 || SDL3.SDL_GPUTextureSupportsSampleCount(SdlGpuDevice, (SDL_GPUTextureFormat)format, (SDL_GPUSampleCount)sampleCount);
-        }
+        return sampleCount == SampleCount.Count1 || IsSampleCountSupportedCore(format, sampleCount);
     }
 
     /// <summary>
@@ -210,47 +103,30 @@ public class GpuDevice : IDisposable
     /// </summary>
     public Texture CreateTexture(ShortSize size, TextureFormat format, TextureUsage usage, SampleCount sampleCount = SampleCount.Count1)
     {
-        unsafe
+        if (!IsTextureFormatSupported(format, TextureType.TwoD, usage))
         {
-            SDL_GPUTextureUsageFlags sdlUsage = (SDL_GPUTextureUsageFlags)usage;
-
-            if (SDL3.SDL_GPUTextureSupportsFormat(SdlGpuDevice, (SDL_GPUTextureFormat)format, SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D, sdlUsage) == false)
-            {
-                throw new ArgumentException($"Texture format '{format}' is not supported for usage '{usage}' on this GPU.", nameof(format));
-            }
-
-            if (sampleCount != SampleCount.Count1)
-            {
-                if ((usage & ~(TextureUsage.ColorTarget | TextureUsage.DepthStencilTarget)) != 0)
-                {
-                    throw new ArgumentException($"A multisampled texture can only be a color or depth-stencil target, but the usage is '{usage}'.", nameof(usage));
-                }
-
-                if (!IsSampleCountSupported(format, sampleCount))
-                {
-                    throw new ArgumentException($"Sample count '{sampleCount}' is not supported for texture format '{format}' on this GPU.", nameof(sampleCount));
-                }
-            }
-
-            SDL_GPUTextureCreateInfo info = new SDL_GPUTextureCreateInfo
-            {
-                usage = sdlUsage,
-                format = (SDL_GPUTextureFormat)format,
-                width = size.Width,
-                height = size.Height,
-                layer_count_or_depth = 1,
-                num_levels = 1,
-                sample_count = (SDL_GPUSampleCount)sampleCount
-            };
-
-            Pointer<SDL_GPUTexture> rawTexture = SDL3.SDL_CreateGPUTexture(SdlGpuDevice, &info);
-            SdlError.ThrowOnNull(rawTexture);
-
-            Texture texture = new UserTexture(this, rawTexture, size, format, usage, sampleCount);
-            _textures.Add(texture);
-
-            return texture;
+            throw new ArgumentException($"Texture format '{format}' is not supported for usage '{usage}' on this GPU.", nameof(format));
         }
+
+        if (sampleCount != SampleCount.Count1)
+        {
+            if ((usage & ~(TextureUsage.ColorTarget | TextureUsage.DepthStencilTarget)) != 0)
+            {
+                throw new ArgumentException($"A multisampled texture can only be a color or depth-stencil target, but the usage is '{usage}'.", nameof(usage));
+            }
+
+            if (!IsSampleCountSupported(format, sampleCount))
+            {
+                throw new ArgumentException($"Sample count '{sampleCount}' is not supported for texture format '{format}' on this GPU.", nameof(sampleCount));
+            }
+        }
+
+        Pointer<SDL_GPUTexture> handle = CreateTextureCore(TextureType.TwoD, size, 1, format, usage, sampleCount);
+
+        Texture texture = new UserTexture(this, handle, size, format, usage, sampleCount);
+        _textures.Add(texture);
+
+        return texture;
     }
 
     public void RegisterTexture(Texture texture) => _textures.Add(texture);
@@ -269,51 +145,39 @@ public class GpuDevice : IDisposable
     public void ReleaseTexture(Texture texture)
     {
         _textures.Remove(texture);
-        Pointer<SDL_GPUTexture> pointer = texture.SdlGpuTexture;
-        if (pointer.IsNull)
+        Pointer<SDL_GPUTexture> handle = texture.SdlGpuTexture;
+        if (handle.IsNull)
         {
             return;
         }
 
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUTexture(SdlGpuDevice, texture.SdlGpuTexture);
-        }
-
+        ReleaseTextureCore(handle);
         texture.SdlGpuTexture = Pointer<SDL_GPUTexture>.Null;
     }
-    
+
     public void ReleaseGraphicsPipeline(GraphicsPipeline pipeline)
     {
         _graphicsPipelines.Remove(pipeline);
-        Pointer<SDL_GPUGraphicsPipeline> pointer = pipeline.Pointer;
-        if (pointer.IsNull)
+        Pointer<SDL_GPUGraphicsPipeline> handle = pipeline.Pointer;
+        if (handle.IsNull)
         {
             return;
         }
 
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUGraphicsPipeline(SdlGpuDevice, pointer);
-        }
-
+        ReleaseGraphicsPipelineCore(handle);
         pipeline.Pointer = default;
     }
 
     public void ReleaseComputePipeline(ComputePipeline computePipeline)
     {
         _computePipelines.Remove(computePipeline);
-        Pointer<SDL_GPUComputePipeline> pointer = computePipeline.Pointer;
-        if (pointer.IsNull)
+        Pointer<SDL_GPUComputePipeline> handle = computePipeline.Pointer;
+        if (handle.IsNull)
         {
             return;
         }
 
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUComputePipeline(SdlGpuDevice, pointer);
-        }
-
+        ReleaseComputePipelineCore(handle);
         computePipeline.Pointer = default;
     }
 
@@ -326,17 +190,13 @@ public class GpuDevice : IDisposable
 
     internal void ReleaseShader(GraphicsShader shader)
     {
-        Pointer<SDL_GPUShader> pointer = shader.Pointer;
-        if (pointer.IsNull)
+        Pointer<SDL_GPUShader> handle = shader.Pointer;
+        if (handle.IsNull)
         {
             return;
         }
 
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUShader(SdlGpuDevice, pointer);
-        }
-
+        ReleaseShaderCore(handle);
         shader.Pointer = Pointer<SDL_GPUShader>.Null;
     }
 
@@ -345,11 +205,7 @@ public class GpuDevice : IDisposable
         _vertexBuffers.Remove(vertexBuffer);
         if (!vertexBuffer.SdlVertexBuffer.IsNull)
         {
-            unsafe
-            {
-                SDL3.SDL_ReleaseGPUBuffer(SdlGpuDevice, vertexBuffer.SdlVertexBuffer);
-            }
-
+            ReleaseBufferCore(vertexBuffer.SdlVertexBuffer);
             vertexBuffer.SdlVertexBuffer = default;
         }
     }
@@ -359,11 +215,7 @@ public class GpuDevice : IDisposable
         _indexBuffers.Remove(indexBuffer);
         if (!indexBuffer.SdlBuffer.IsNull)
         {
-            unsafe
-            {
-                SDL3.SDL_ReleaseGPUBuffer(SdlGpuDevice, indexBuffer.SdlBuffer);
-            }
-
+            ReleaseBufferCore(indexBuffer.SdlBuffer);
             indexBuffer.SdlBuffer = default;
         }
     }
@@ -375,11 +227,7 @@ public class GpuDevice : IDisposable
         _storageBuffers.Remove(storageBuffer);
         if (!storageBuffer.SdlBuffer.IsNull)
         {
-            unsafe
-            {
-                SDL3.SDL_ReleaseGPUBuffer(SdlGpuDevice, storageBuffer.SdlBuffer);
-            }
-
+            ReleaseBufferCore(storageBuffer.SdlBuffer);
             storageBuffer.SdlBuffer = default;
         }
     }
@@ -387,32 +235,18 @@ public class GpuDevice : IDisposable
     public void ReleaseSampler(Sampler sampler)
     {
         _samplers.Remove(sampler);
-
-        unsafe
-        {
-            SDL3.SDL_ReleaseGPUSampler(SdlGpuDevice, sampler.Pointer);
-        }
-
+        ReleaseSamplerCore(sampler.Pointer);
         sampler.Pointer = default;
     }
 
     public GpuVertexBuffer<TVertexType> CreateVertexBuffer<TVertexType>(int length) where TVertexType: unmanaged, IVertexType
     {
         uint sizeBytes = (uint)(Unsafe.SizeOf<TVertexType>() * length);
-        unsafe
-        {
-            SDL_GPUBufferCreateInfo sdlGpuBufferCreateInfo = new SDL_GPUBufferCreateInfo()
-            {
-                usage = SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX,
-                size = sizeBytes
-            };
+        Pointer<SDL_GPUBuffer> handle = CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes);
 
-            SDL_GPUBuffer* rawVertexBuffer = SDL3.SDL_CreateGPUBuffer(SdlGpuDevice, &sdlGpuBufferCreateInfo);
-
-            GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(this, rawVertexBuffer, length);
-            RegisterVertexBuffer(vertexBuffer);
-            return vertexBuffer;
-        }
+        GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(this, handle, length);
+        RegisterVertexBuffer(vertexBuffer);
+        return vertexBuffer;
     }
 
     // SDL's WebGPU backend waits by suspending the wasm stack, which a managed frame cannot survive.
@@ -427,22 +261,7 @@ public class GpuDevice : IDisposable
             return;
         }
 
-        Span<Pointer<SDL_GPUFence>> fencePointers = stackalloc Pointer<SDL_GPUFence>[fences.Length];
-        for (int i = 0; i < fences.Length; i++)
-        {
-            fencePointers[i] = fences[i].Pointer;
-        }
-
-        unsafe
-        {
-            fixed (Pointer<SDL_GPUFence>* fencePointersPtr = fencePointers)
-            {
-                if (!SdlBoolInterop.SDL_WaitForGPUFences(SdlGpuDevice, waitAll, (SDL_GPUFence**)fencePointersPtr, (uint)fences.Length))
-                {
-                    throw new PixelyException($"SDL_WaitForGPUFences failed: {SDL3.SDL_GetError()}");
-                }
-            }
-        }
+        WaitForFencesCore(fences, waitAll);
 #endif
     }
 
@@ -490,15 +309,44 @@ public class GpuDevice : IDisposable
             ReleaseSampler(sampler);
         }
 
-#if !BROWSER
-        // In the browser the device lives as long as the page, which frees it. A clean destroy has to wait for the last submissions,
-        // and a submission completes only after the page's event loop turns, which a synchronous Dispose cannot wait for.
-        unsafe
-        {
-            SDL3.SDL_DestroyGPUDevice(SdlGpuDevice);
-            SdlGpuDevice = null;
-        }
-#endif
+        DestroyCore();
     }
 
+    // The backend. Each creation returns a handle that is not null or throws, and only the device that created a handle reads
+    // it: the SDL device takes it as the SDL object, the stub as an identifier. The SDL types are the vocabulary, not a promise
+    // that SDL is behind the device.
+    // The name of the GPU and the version of its driver, for diagnostics. Either may be unknown.
+    internal abstract string? DeviceName { get; }
+    internal abstract string? DriverVersion { get; }
+    internal abstract ShaderFormats GetSupportedShaderFormatsCore();
+    internal abstract bool IsTextureFormatSupportedCore(TextureFormat format, TextureType type, TextureUsage usage);
+    // Called with a sample count above Count1 only.
+    internal abstract bool IsSampleCountSupportedCore(TextureFormat format, SampleCount sampleCount);
+    internal abstract CommandBuffer AcquireCommandBufferCore();
+    // The window of a device without swapchains, which is every device but the SDL one, around an SDL window the factory
+    // created for it and left unclaimed. The SDL device's windows have swapchains and are created by the factory itself.
+    internal virtual Window CreateWindowCore(ViewScope viewScope, Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowCloseBehavior closeBehavior) =>
+        throw new NotSupportedException($"{GetType().Name} has no windows.");
+    internal abstract Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config);
+    internal abstract Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount);
+    internal abstract Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes);
+    internal abstract Pointer<SDL_GPUTransferBuffer> CreateUploadTransferBufferCore(uint sizeInBytes);
+    internal abstract Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo);
+    internal abstract Pointer<SDL_GPUGraphicsPipeline> CreateGraphicsPipelineCore(in SDL_GPUGraphicsPipelineCreateInfo createInfo);
+    internal abstract Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(in SDL_GPUComputePipelineCreateInfo createInfo);
+    internal abstract void ReleaseTextureCore(Pointer<SDL_GPUTexture> texture);
+    internal abstract void ReleaseBufferCore(Pointer<SDL_GPUBuffer> buffer);
+    // Called with a null transfer buffer too, which releases nothing.
+    internal abstract void ReleaseTransferBufferCore(Pointer<SDL_GPUTransferBuffer> transferBuffer);
+    internal abstract void ReleaseSamplerCore(Pointer<SDL_GPUSampler> sampler);
+    internal abstract void ReleaseShaderCore(Pointer<SDL_GPUShader> shader);
+    internal abstract void ReleaseGraphicsPipelineCore(Pointer<SDL_GPUGraphicsPipeline> pipeline);
+    internal abstract void ReleaseComputePipelineCore(Pointer<SDL_GPUComputePipeline> pipeline);
+    internal abstract bool QueryFenceCore(Pointer<SDL_GPUFence> fence);
+    internal abstract void ReleaseFenceCore(Pointer<SDL_GPUFence> fence);
+#if !BROWSER
+    internal abstract void WaitForFencesCore(ReadOnlySpan<GpuFence> fences, bool waitAll);
+#endif
+    // Runs once Dispose has released every tracked resource.
+    internal abstract void DestroyCore();
 }

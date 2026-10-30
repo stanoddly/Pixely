@@ -41,6 +41,8 @@ public sealed record PixelyConfig(
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
+    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
+    internal string? SdlVideoDriver { get; set; }
 }
 #else
 public sealed record PixelyConfig(
@@ -64,5 +66,7 @@ public sealed record PixelyConfig(
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
+    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
+    internal string? SdlVideoDriver { get; set; }
 }
 #endif

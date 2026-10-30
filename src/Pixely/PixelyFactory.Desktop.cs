@@ -54,7 +54,36 @@ public partial class PixelyFactory
         }
     }
 
-    private Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    private Window CreateWindow(ViewScope viewScope, SdlGpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    {
+        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowShape(config);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
+
+        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+    }
+
+    // Created as configured, like any other window, but not claimed: there is no swapchain to claim it for.
+    private Window CreateWindowWithoutSwapchain(ViewScope viewScope, GpuDevice gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    {
+        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowShape(config);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, config.Title, width, height, windowFlags);
+
+        try
+        {
+            return gpuDevice.CreateWindowCore(viewScope, sdlWindow, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+        }
+        catch
+        {
+            unsafe
+            {
+                SDL3.SDL_DestroyWindow(sdlWindow);
+            }
+
+            throw;
+        }
+    }
+
+    private static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowShape(WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -88,9 +117,7 @@ public partial class PixelyFactory
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
         }
 
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
-
-        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.SdlGpuDevice ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+        return (width, height, windowFlags);
     }
 
     private OffscreenWindow CreateOffscreenWindow(

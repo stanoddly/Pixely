@@ -14,6 +14,7 @@ string[] runtimeAssemblies =
     "Pixely.Logging",
     "Pixely.Models",
     "Pixely.ShaderCommon",
+    "Pixely.Testing",
     "Pixely.Utils"
 ];
 foreach (string runtimeAssembly in runtimeAssemblies)

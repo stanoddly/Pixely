@@ -16,6 +16,13 @@ public static class GpuExtensions
         }
 
         services.AddSingleton<GpuDevice, PixelyFactory>();
+        AddGpuServices(services);
+        return services;
+    }
+
+    // Every service that needs the device, for a registration that has already registered the device, such as Pixely.Testing's stub.
+    internal static void AddGpuServices(ServiceCollection services)
+    {
         services.AddSingleton<GpuMemorySystem, PixelyFactory>();
 
         services.AddSingleton<ShaderLoader>();
@@ -32,6 +39,5 @@ public static class GpuExtensions
 
         services.AddSingleton<FontSystem>(FontSystem.Create);
         services.AddAlias<IFontSystem, FontSystem>();
-        return services;
     }
 }

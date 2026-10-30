@@ -1,5 +1,5 @@
-using System.Runtime.CompilerServices;
 using Pixely.Gpu;
+using Pixely.Testing;
 
 namespace Pixely.Tests;
 
@@ -38,7 +38,9 @@ public class GpuMemorySystemTests
     {
         using PixelyFactory factory = new(new PixelyConfig(UploadWait: uploadWait), null);
 
-        GpuMemorySystem gpuMemorySystem = factory.CreateGpuMemorySystem((GpuDevice)RuntimeHelpers.GetUninitializedObject(typeof(GpuDevice)));
+        using StubGpuDevice gpuDevice = StubGpuDevice.Create();
+
+        GpuMemorySystem gpuMemorySystem = factory.CreateGpuMemorySystem(gpuDevice);
 
         Assert.That(gpuMemorySystem.WaitsForUploads, Is.EqualTo(expected));
     }
