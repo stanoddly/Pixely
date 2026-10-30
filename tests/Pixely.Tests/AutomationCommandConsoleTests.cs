@@ -72,6 +72,19 @@ public sealed class AutomationCommandConsoleTests
     }
 
     [Test]
+    public void Update_FailedRead_EndsTheConsoleAndKeepsTheCommandsReadBefore()
+    {
+        Fixture fixture = CreateConsole(new FailingReader("give gold 6\ngive gold 7", new IOException("Interrupted system call")));
+
+        Assert.That(() => fixture.UpdateAndGetCalls(), Is.EqualTo(new[] { "give gold 6", "give gold 7" }).After(5000, 10));
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Error.ToString(), Is.EqualTo("Reading commands failed, so the command console stops: Interrupted system call" + Environment.NewLine));
+            Assert.That(fixture.AppControl.QuitRequested, Is.False);
+        });
+    }
+
+    [Test]
     public void Update_GameCommandFailure_Propagates()
     {
         Fixture fixture = CreateConsole("crash\n");
@@ -148,5 +161,13 @@ public sealed class AutomationCommandConsoleTests
     private sealed class FailingCommand(string name, Exception exception) : AutomationCommand(name)
     {
         public override void Execute(string arguments, ViewScope? viewScope) => throw exception;
+    }
+
+    // Reads the text, then throws instead of reporting the end of the input.
+    private sealed class FailingReader(string text, Exception exception) : TextReader
+    {
+        private int _position;
+
+        public override int Read() => _position < text.Length ? text[_position++] : throw exception;
     }
 }
