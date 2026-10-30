@@ -6,12 +6,13 @@ namespace Pixely.Text;
 
 public class Font : IFont, IDisposable
 {
-    private FontSystem _fontSystem;
+    // The font system that loaded it: Pixely's own, or the stub of Pixely.Testing, whose fonts have no SDL font.
+    private readonly IFontSystem _fontSystem;
     private readonly Pointer<TTF_Font> _ttfFont;
     private readonly unsafe byte* _fontData;
 
     internal unsafe Font(
-        FontSystem fontSystem,
+        IFontSystem fontSystem,
         Pointer<TTF_Font> ttfFont,
         byte* fontData,
         string path,
