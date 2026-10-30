@@ -21,9 +21,12 @@ app.RunFrame();
 - The app renders on the stub GPU device ([The stub GPU device](#the-stub-gpu-device)), with every window a `StubWindow`. `CreateBuilder(options)` passes `StubGpuDeviceOptions` to it ([Options](#options)).
 - SDL uses its dummy video and audio drivers, at default priority, so `SDL_VIDEO_DRIVER` and `SDL_AUDIO_DRIVER` in the environment override them. `Pixely.Audio` then plays into nothing.
 - The app ignores the machine's gamepads and the OS's theme, as in headless mode (headless.md): a pad plugged into the machine and a dark theme do not reach the test, and `IPlatformSettings.Theme` is `Unknown`.
-- Game time starts at 0 and advances by 1/30 s per frame, however fast the frames run. Three `RunFrame` calls make 2/30 s of `ElapsedNanoseconds`, since the first frame has no previous one.
+- Game time starts at 0 and advances by 33,333,334 ns per frame, 1/30 s rounded up, however fast the frames run. Three `RunFrame` calls make 66,666,668 ns of `ElapsedNanoseconds`, since the first frame has no previous one.
 - A frame that no window drew, for example one whose windows are hidden, does not wait for the display, so a test with a hidden window runs its frames at once.
 - No console reads standard input: `AddHeadlessSupport()` in `Configure` adds nothing, even with `PIXELY_HEADLESS` set, and `PIXELY_COMMAND_CONSOLE` has no effect.
+- Text uses Pixely's font system, which loads the game's font files from the content, as in the game. [Fonts](#fonts) has a stub that needs no font files.
+- The app starts SDL when it is built and stops it when it is disposed, and SDL is shared by the whole process. Only one app may exist at a time, so tests that build one must not run in parallel; in NUnit they are `[NonParallelizable]`, as Pixely's own are.
+- `Build`, `RunFrame` and disposal run on the same thread, because SDL reads its events on the thread that started its video. For example, an `async` test that continues on another thread after an `await` must not call `RunFrame` there.
 
 `TestInput` is the synthetic input of headless mode:
 
@@ -78,7 +81,7 @@ The stub keeps what is uploaded. An upload reaches the contents when its command
 
 ## What the stub cannot tell
 
-It runs no shader, so it cannot show what a frame looks like or catch a shader bug, SDL's own validation or a driver's. It does not check a texture's usage against its binding, which Pixely does not check either. Its fences are signalled at once. It runs on the desktop build of Pixely only, not the browser one.
+It runs no shader, so it cannot show what a frame looks like or catch a shader bug, SDL's own validation or a driver's. It does not check a texture's usage against its binding, which Pixely does not check either. Its fences are signalled at once. It records blits without carrying them out, so a texture a blit writes to reads back without the blit's result. It runs on the desktop build of Pixely only, not the browser one.
 
 ## Input
 
