@@ -60,6 +60,23 @@ public class HeadlessExtensionsTests
     }
 
     [Test]
+    public void Build_AfterASecondCall_RegistersHeadlessModeOnce()
+    {
+        PixelyAppBuilder builder = new();
+        builder.AddHeadlessSupport(HeadlessOn);
+        builder.AddHeadlessSupport(HeadlessOn);
+
+        using IPixelyApp app = builder.Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(app.ServiceProvider.GetServices<InputAutomationConsole>(), Has.Count.EqualTo(1));
+            Assert.That(app.ServiceProvider.GetServices<IWindowFactory>(), Has.Count.EqualTo(1));
+            Assert.That(app.ServiceProvider.GetServices<PixelyFrameClock>(), Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void Build_WithAnImageWriterRegisteredBefore_KeepsIt()
     {
         RecordingImageWriter imageWriter = new();

@@ -1,4 +1,3 @@
-using System.Runtime.Versioning;
 using System.Text;
 using Pixely.App;
 using Pixely.Input;
@@ -10,7 +9,6 @@ namespace Pixely.Headless;
 /// <c>wait</c>, and while no command is left to run the frame blocks until the next one arrives. The end of the input quits
 /// the app.
 /// </summary>
-[UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationConsole : IUpdatable
 {
     private readonly InputAutomationCommandInterpreter _interpreter;

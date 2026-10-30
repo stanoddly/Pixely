@@ -1,8 +1,7 @@
 namespace Pixely;
 
 /// <summary>
-/// The frame clock of a Pixely app. <see cref="PixelyFactory.CreateFrameClock"/> picks which one: the real clock, or a fixed step
-/// per frame in headless mode.
+/// The frame clock of a Pixely app: the real clock, or a fixed step per frame in headless mode (<c>Pixely.Headless</c>).
 /// </summary>
 public abstract class PixelyFrameClock: FrameClock
 {

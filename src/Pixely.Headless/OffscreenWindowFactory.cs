@@ -20,6 +20,12 @@ internal sealed class OffscreenWindowFactory : IWindowFactory
             throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
         }
 
+        // A device such as the stub of Pixely.Testing renders nothing, so a screenshot would read back frames never rendered.
+        if (gpuDevice is not SdlGpuDevice)
+        {
+            throw new PixelyInitializationException($"Headless mode reads frames back from the GPU, which {gpuDevice.GetType().Name} does not render.");
+        }
+
         // Only size and title matter: the SDL window is never shown, it just backs events and text input.
         // It is not claimed for the GPU device: with a claimed window, SDL's Vulkan backend frees finished work only on a
         // submit that requested a swapchain texture, which an offscreen window never does.

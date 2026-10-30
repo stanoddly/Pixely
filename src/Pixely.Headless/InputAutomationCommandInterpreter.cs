@@ -1,7 +1,6 @@
 using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
-using System.Runtime.Versioning;
 using Pixely.App;
 using Pixely.Content;
 using Pixely.Input;
@@ -14,7 +13,6 @@ namespace Pixely.Headless;
 /// returns how many frames to hold the commands after it. A blank command does nothing; a command that cannot run throws
 /// <see cref="FormatException"/>. Exceptions from input handlers propagate, the same as for real input.
 /// </summary>
-[UnsupportedOSPlatform("browser")]
 internal sealed class InputAutomationCommandInterpreter
 {
     // Key names from other naming schemes (DOM KeyboardEvent.code, Unity KeyCode, XNA Keys, SDL short forms) that people and

@@ -314,11 +314,6 @@ public partial class PixelyFactory: IDisposable
         return new TextInputService(windowRegistry);
     }
 
-    public PixelyFrameClock CreateFrameClock()
-    {
-        return new SdlFrameClock();
-    }
-
     // A null result registers nothing. Headless mode (Pixely.Headless) reads standard input with a console of its own and turns
     // EnableCommandConsole off.
     [UnsupportedOSPlatform("browser")]

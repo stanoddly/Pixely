@@ -9,6 +9,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Desktop only: built for the desktop and copied into the browser folder of the package, where it cannot load. -->
+        <AssemblyAttribute Include="System.Runtime.Versioning.UnsupportedOSPlatformAttribute">
+            <_Parameter1>browser</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <InternalsVisibleTo Include="Pixely.Tests" />
         <InternalsVisibleTo Include="Pixely.Testing.Tests" />
     </ItemGroup>

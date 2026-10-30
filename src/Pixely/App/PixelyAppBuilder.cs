@@ -105,7 +105,7 @@ public class PixelyAppBuilder : ServiceCollection
         // Headless mode (Pixely.Headless) registers a clock of its own, which the latest registration would otherwise replace.
         if (!IsRegistered<PixelyFrameClock>())
         {
-            AddSingleton<PixelyFrameClock, PixelyFactory>();
+            AddSingleton<PixelyFrameClock>(static _ => new SdlFrameClock());
         }
 
         AddAlias<FrameClock, PixelyFrameClock>();

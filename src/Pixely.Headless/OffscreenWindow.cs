@@ -1,4 +1,3 @@
-using System.Runtime.Versioning;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Utilities;
@@ -12,7 +11,6 @@ namespace Pixely.Headless;
 /// the SDL window. Without a swapchain there is no vsync, so acquiring waits for the GPU to finish all earlier work instead, which
 /// keeps at most about one frame in flight.
 /// </summary>
-[UnsupportedOSPlatform("browser")]
 public sealed class OffscreenWindow : Window
 {
     private readonly GpuDevice _gpuDevice;
