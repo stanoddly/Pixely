@@ -179,7 +179,6 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 - Autonomous actors, e.g. a non player participant or a scripted scenario
 - Hidden information and what each participant perceives
 - References between entities, and finding the children of an entity without scanning every entity
-- Optional components in queries
 - Iteration order, and the tie-breaks a rule needs where order matters
 - Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
   cleared

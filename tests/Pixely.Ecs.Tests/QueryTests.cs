@@ -32,6 +32,71 @@ public class QueryTests
     }
 
     [Test]
+    public void OptionalSpanIsPresentOnlyInArchetypesWithItsComponent()
+    {
+        using TestWorld world = new TestWorld();
+        Entity moving = world.Spawn(new Position(0, 0), new Velocity(1, 2));
+        Entity still = world.Spawn(new Position(0, 0));
+        world.Spawn(new Velocity(1, 1));
+
+        List<Entity> visited = [];
+        List<Entity> withVelocity = [];
+        world.Scheduler.RunOnce(builder => builder.Query<OptionalMovement>(), movement =>
+        {
+            foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, Optional<ReadOnlySpan<Velocity>> velocities) in movement)
+            {
+                visited.AddRange(entities.ToArray());
+                if (velocities.TryGet(out ReadOnlySpan<Velocity> present))
+                {
+                    Assert.That(velocities.HasValue, Is.True);
+                    withVelocity.AddRange(entities.ToArray());
+                    for (int i = 0; i < positions.Length; i++)
+                    {
+                        positions[i].X += present[i].X;
+                        positions[i].Y += present[i].Y;
+                    }
+                }
+                else
+                {
+                    Assert.That(velocities.HasValue, Is.False);
+                }
+            }
+        });
+
+        Assert.That(visited, Is.EquivalentTo(new[] { moving, still }));
+        Assert.That(withVelocity, Is.EqualTo(new[] { moving }));
+        Assert.That(world.Lookup<Position>()[moving], Is.EqualTo(new Position(1, 2)));
+        Assert.That(world.Lookup<Position>()[still], Is.EqualTo(new Position(0, 0)));
+    }
+
+    [Test]
+    public void OptionalSpanWritesTheEntitiesThatHaveItsComponent()
+    {
+        using TestWorld world = new TestWorld();
+        Entity moving = world.Spawn(new Position(), new Velocity());
+        world.Spawn(new Position());
+
+        world.Scheduler.RunOnce(builder => builder.Query<Query<ReadOnlySpan<Position>, Optional<Span<Velocity>>>>(), query =>
+        {
+            foreach ((_, Optional<Span<Velocity>> velocities) in query)
+            {
+                if (velocities.HasValue)
+                {
+                    velocities.Value[0] = new Velocity(3, 4);
+                }
+            }
+        });
+
+        Assert.That(world.Lookup<Velocity>()[moving], Is.EqualTo(new Velocity(3, 4)));
+    }
+
+    [Test]
+    public void ValueOfAnAbsentOptionalSpanThrows()
+    {
+        Assert.Throws<InvalidOperationException>(() => _ = default(Optional<ReadOnlySpan<Velocity>>).Value);
+    }
+
+    [Test]
     public void WithoutExcludesEntitiesThatHaveTheComponent()
     {
         using TestWorld world = new TestWorld();
@@ -257,6 +322,23 @@ public class QueryTests
         SystemScheduler scheduler = new SystemScheduler(new World());
 
         Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<ExcludedPositions>(), _ => { })));
+    }
+
+    [Test]
+    public void QueryRequiringOnlyOptionalComponentsThrows()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<Query<Optional<ReadOnlySpan<Position>>>>(), _ => { })));
+    }
+
+    [Test]
+    public void QueryFilteringOnAnOptionalComponentThrows()
+    {
+        SystemScheduler scheduler = new SystemScheduler(new World());
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<OptionalRequiredVelocities>(), _ => { })));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<OptionalExcludedVelocities>(), _ => { })));
     }
 
     private static List<Entity> CollectEntities(Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> query)

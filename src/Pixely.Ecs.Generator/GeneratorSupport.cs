@@ -8,6 +8,8 @@ enum SpanKind
     Entities,
     Span,
     ReadOnlySpan,
+    OptionalSpan,
+    OptionalReadOnlySpan,
     Tag,
     Invalid
 }
@@ -22,12 +24,35 @@ static class GeneratorSupport
     public const string SpawnerName = "Pixely.Ecs.Spawner";
     private const string SpanName = "System.Span<T>";
     private const string ReadOnlySpanName = "System.ReadOnlySpan<T>";
+    private const string OptionalName = "Pixely.Ecs.Optional<TSpan>";
 
     public static bool IsTag(ITypeSymbol type) => type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == TagName);
 
     // What a type argument of Query<...> reads: ReadOnlySpan<Entity>, or Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct,
-    // a type parameter or a tag. element is the T of a span.
+    // a type parameter or a tag, or such a span in Optional<...>. element is the T of a span.
     public static SpanKind ClassifySpan(ITypeSymbol type, out ITypeSymbol? element)
+    {
+        element = null;
+        if (type is not INamedTypeSymbol { IsGenericType: true } named)
+        {
+            return SpanKind.Invalid;
+        }
+
+        if (named.ConstructedFrom.ToDisplayString() == OptionalName)
+        {
+            return ClassifyRequiredSpan(named.TypeArguments[0], out element) switch
+            {
+                SpanKind.Span => SpanKind.OptionalSpan,
+                SpanKind.ReadOnlySpan => SpanKind.OptionalReadOnlySpan,
+                SpanKind.Tag => SpanKind.Tag,
+                _ => SpanKind.Invalid
+            };
+        }
+
+        return ClassifyRequiredSpan(named, out element);
+    }
+
+    private static SpanKind ClassifyRequiredSpan(ITypeSymbol type, out ITypeSymbol? element)
     {
         element = null;
         if (type is not INamedTypeSymbol { IsGenericType: true } named)

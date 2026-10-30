@@ -44,6 +44,16 @@ public class CodeOutsideSystemsTests
         Assert.That(exception.Message, Does.StartWith($"The query {nameof(Movement)} writes through a Span<T>"));
     }
 
+    [Test]
+    public void QueryOfAddQueryWritingThroughAnOptionalSpanThrowsWhenTheProviderCreatesIt()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddQuery<Query<ReadOnlySpan<Position>, Optional<Span<Velocity>>>>();
+
+        Assert.Throws<InvalidOperationException>(() => services.BuildServiceProvider());
+    }
+
     // Unlike a system's lookup, which reads only during its system's Update.
     [Test]
     public void AddReadOnlyComponentLookupReadsOutsideAnySystemsUpdate()

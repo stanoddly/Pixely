@@ -48,6 +48,7 @@ A query is a class that derives from `Query<...>`. Its type arguments are spans,
 - `Span<T>`: the entity must have `T`, and the query may write it.
 - `ReadOnlySpan<T>`: the entity must have `T`, and the query only reads it.
 - `ReadOnlySpan<Entity>`: the matched entities.
+- `Optional<Span<T>>` and `Optional<ReadOnlySpan<T>>`: the entity may lack `T`, see [Optional components](#optional-components).
 
 `IWith<...>` and `IWithout<...>` on the class filter the entities without reading their components:
 
@@ -75,11 +76,39 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
 
-The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that `services.AddQuery<T>()` or `builder.Query<T>()` names, or that the constructor of a system added with `AddSystem<T>` takes. The generator reads that constructor from the type `AddSystem<T>` names, so a generic system's queries are closed with its type arguments. A query type closed only through a generic helper, such as `Get<Of<Mass>>(builder)` around `builder.Query<TQuery>()`, is not registered, because the generator sees only `TQuery`: write the closed type in an `AddQuery` or `Query` call or in the constructor of a system added with `AddSystem<T>`. A type argument that nothing registered throws when its query is created.
+### Optional components
+
+`Optional<...>` around a span matches entities with or without its component. Every entity of an archetype has the same components, so the span is there for all of an archetype's entities or for none of them, and the query checks it once per archetype:
+
+```csharp
+internal sealed class Movers : Query<Span<Position>, Optional<ReadOnlySpan<Velocity>>>;
+
+foreach ((Span<Position> positions, Optional<ReadOnlySpan<Velocity>> velocities) in movers)
+{
+    if (velocities.TryGet(out ReadOnlySpan<Velocity> present))
+    {
+        for (int i = 0; i < positions.Length; i++)
+        {
+            positions[i].Value += present[i].Value;
+        }
+    }
+}
+```
+
+- `HasValue` says whether the archetype has the component, `Value` returns the span or throws, and `TryGet` does both.
+- An optional component does not count as required, so a query still requires one component through `Span<T>`, `ReadOnlySpan<T>` or `IWith<...>`.
+- An optional component is not in `IWith<...>` or `IWithout<...>` too, because it would always be present or always absent.
+- `Optional<ReadOnlySpan<Entity>>` and an optional tag are errors: the entities are always there, and a tag has no data.
+- An optional component counts as named for [sync points](#sync-points), so the query sees an earlier system's change that adds or removes it.
+- `Optional<Span<T>>` writes like `Span<T>`, so `AddQuery` refuses it.
+
+C# cannot write this as `ReadOnlySpan<Velocity>?`, because `Nullable<T>` cannot hold a ref struct such as a span.
+
+The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, inside `Optional<...>` too, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that `services.AddQuery<T>()` or `builder.Query<T>()` names, or that the constructor of a system added with `AddSystem<T>` takes. The generator reads that constructor from the type `AddSystem<T>` names, so a generic system's queries are closed with its type arguments. A query type closed only through a generic helper, such as `Get<Of<Mass>>(builder)` around `builder.Query<TQuery>()`, is not registered, because the generator sees only `TQuery`: write the closed type in an `AddQuery` or `Query` call or in the constructor of a system added with `AddSystem<T>`. A type argument that nothing registered throws when its query is created.
 
 A system gets its queries through its constructor. Code outside systems, such as a renderer, takes them in its constructor too, once `services.AddQuery<T>()` registers them, see [Code outside systems](#code-outside-systems). The world creates one instance of each query class, which the systems and other code share, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
 
-The generator checks the spans wherever `Query<...>` is written, and the filters of every query that the constructor of a system added with `AddSystem<T>` takes. The world checks a query again when it creates it, and throws `InvalidOperationException` when the query requires no component, reads a component in two spans, reads a tag, or requires and excludes the same component.
+The generator checks the spans wherever `Query<...>` is written, and the filters of every query that the constructor of a system added with `AddSystem<T>` takes. The world checks a query again when it creates it, and throws `InvalidOperationException` when the query requires no component, reads a component in two spans, reads a tag, requires and excludes the same component, or filters on an optional component.
 
 Structural changes wait for the sync points between systems, so they never move rows under the spans of a query that a system runs. A query ends when `foreach` ends, including on `break` or an exception.
 
@@ -258,7 +287,7 @@ internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 Writers record their changes, and the scheduler applies them at sync points:
 
 - After the last system of every update.
-- Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, `IWith<...>` and `IWithout<...>`. A spawner changes every component it spawns, tags included.
+- Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, optional ones included, `IWith<...>` and `IWithout<...>`. A spawner changes every component it spawns, tags included.
 - Before any system with a query, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component.
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
@@ -298,7 +327,7 @@ The generator fails the build on these:
 | Id | Rule |
 |----|------|
 | PXECS001 | A query that the constructor of a system takes is a non-abstract class without type parameters, accessible anywhere in its assembly, with a public parameterless constructor. |
-| PXECS002 | Each type argument of `Query<...>` is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct` or a tag, or `ReadOnlySpan<Entity>`. |
+| PXECS002 | Each type argument of `Query<...>` is `Span<T>` or `ReadOnlySpan<T>` of a struct component that is not a `ref struct` or a tag, such a span in `Optional<...>`, or `ReadOnlySpan<Entity>`. |
 | PXECS003 | No component appears in two type arguments of `Query<...>`. |
 | PXECS004 | A query requires at least one component through `Span<T>`, `ReadOnlySpan<T>` or `IWith<...>`. |
 | PXECS005 | No component is both required and excluded by a query. |
@@ -312,14 +341,15 @@ The generator fails the build on these:
 | PXECS013 | A tag has no instance fields, auto-properties or captured primary constructor parameters, because a tag has no column and their data would be dropped. |
 | PXECS014 | A system does not implement `IUpdatable`, which would update it a second time. |
 | PXECS015 | `AddSystem<T>` is called where the generator can intercept it, and not used as a method group, such as `Action add = services.AddSystem<T>;`, or it would throw. |
+| PXECS016 | No component of an `Optional<...>` type argument is in the `IWith<...>` or `IWithout<...>` of its query. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. The world makes the same checks at runtime when it creates a query. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
+PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004, PXECS005 and PXECS016 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. The world makes the same checks at runtime when it creates a query. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
 
 `AddSystem<T>` requires `T` to be a class that implements `ISystem`, which the compiler checks.
 
 ## Not supported yet
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
-- Optional components, change detection, events on add or remove, relations between entities.
+- Change detection, events on add or remove, relations between entities.
 - Pixely.Fitness has no rules for the [Orange architecture](orange-architecture.md) yet.
 - The browser is untested. Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and no browser test runs it under Mono, the browser's runtime, with or without AOT.

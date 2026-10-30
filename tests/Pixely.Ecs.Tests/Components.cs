@@ -17,6 +17,14 @@ public sealed class MovingEntities : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Po
 
 public sealed class UnfrozenPositions : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>>, IWithout<Frozen>;
 
+// Moves the entities that have a Velocity and visits those that lack it too.
+public sealed class OptionalMovement : Query<ReadOnlySpan<Entity>, Span<Position>, Optional<ReadOnlySpan<Velocity>>>;
+
+// Wrong on purpose: IWith<...> or IWithout<...> names the optional component. No system names them, so only the world checks them.
+public sealed class OptionalRequiredVelocities : Query<ReadOnlySpan<Position>, Optional<ReadOnlySpan<Velocity>>>, IWith<Velocity>;
+
+public sealed class OptionalExcludedVelocities : Query<ReadOnlySpan<Position>, Optional<ReadOnlySpan<Velocity>>>, IWithout<Velocity>;
+
 public sealed class PlayerEntities : Query<ReadOnlySpan<Entity>>, IWith<Player>;
 
 // Wrong on purpose: it requires no component.

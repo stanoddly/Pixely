@@ -84,6 +84,9 @@ public class GeneratorTests
     [TestCase("sealed class Q : Query<ReadOnlySpan<Entity>>, IWithout<Position>;", "PXECS004")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Position>>, IWithout<Position>;", "PXECS005")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Entity>>, IWith<Frozen>, IWithout<Frozen>;", "PXECS005")]
+    [TestCase("sealed class Q : Query<Optional<ReadOnlySpan<Position>>>;", "PXECS004")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Optional<ReadOnlySpan<Velocity>>>, IWith<Velocity>;", "PXECS016")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Optional<Span<Velocity>>>, IWithout<Velocity>;", "PXECS016")]
     public void InvalidQueryOfASystemReportsDiagnostic(string declaration, string expectedId)
     {
         string source = Components + declaration + """
@@ -132,7 +135,12 @@ public class GeneratorTests
     [TestCase("sealed class Q : Query<Span<string>>;", "PXECS002")]
     [TestCase("public struct T : ITag; sealed class Q : Query<ReadOnlySpan<T>>;", "PXECS002")]
     [TestCase("ref struct R; sealed class Q : Query<Span<R>>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Optional<ReadOnlySpan<Entity>>>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<Optional<Position>>;", "PXECS002")]
+    [TestCase("sealed class Q : Query<Optional<Optional<Span<Position>>>>;", "PXECS002")]
+    [TestCase("public struct T : ITag; sealed class Q : Query<ReadOnlySpan<Position>, Optional<ReadOnlySpan<T>>>;", "PXECS002")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Span<Position>>;", "PXECS003")]
+    [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Optional<Span<Position>>>;", "PXECS003")]
     [TestCase("static class R { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Query<Span<Entity>>>(); }", "PXECS002")]
     [TestCase("static class R { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Query<ReadOnlySpan<Position>, ReadOnlySpan<Position>>>(); }", "PXECS003")]
     public void InvalidSpanTypeArgumentReportsDiagnostic(string declaration, string expectedId)
@@ -150,6 +158,8 @@ public class GeneratorTests
             sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>;
 
             sealed class Positions : Query<ReadOnlySpan<Position>>;
+
+            sealed class Steering : Query<Optional<Span<Velocity>>, Optional<ReadOnlySpan<Position>>>, IWith<Frozen>;
 
             sealed class S : ISystem
             {
@@ -179,7 +189,9 @@ public class GeneratorTests
             "global::Pixely.Ecs.QueryTerms.RegisterSpan<global::Position>();",
             "global::Pixely.Ecs.QueryTerms.RegisterReadOnlySpan<global::Position>();",
             "global::Pixely.Ecs.QueryTerms.RegisterReadOnlySpan<global::Velocity>();",
-            "global::Pixely.Ecs.QueryTerms.RegisterSpan<global::Velocity>();"
+            "global::Pixely.Ecs.QueryTerms.RegisterSpan<global::Velocity>();",
+            "global::Pixely.Ecs.QueryTerms.RegisterOptionalSpan<global::Velocity>();",
+            "global::Pixely.Ecs.QueryTerms.RegisterOptionalReadOnlySpan<global::Position>();"
         }));
     }
 

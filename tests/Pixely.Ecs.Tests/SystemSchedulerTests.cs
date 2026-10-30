@@ -405,6 +405,26 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void AddingAComponentALaterQueryReadsAsOptionalForcesASyncPointBeforeIt()
+    {
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position());
+        bool sawVelocity = false;
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Velocity>(), velocities => velocities.Add(entity, new Velocity(1, 0))));
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.Query<OptionalMovement>(), movement =>
+        {
+            foreach ((_, _, Optional<ReadOnlySpan<Velocity>> velocities) in movement)
+            {
+                sawVelocity = velocities.HasValue;
+            }
+        }));
+
+        world.Scheduler.Update();
+
+        Assert.That(sawVelocity, Is.True);
+    }
+
+    [Test]
     public void SpanWritesAreVisibleToLaterSystemsWithoutASyncPoint()
     {
         using TestWorld world = new TestWorld();

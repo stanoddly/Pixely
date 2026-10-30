@@ -6,12 +6,12 @@ using Pixely.DependencyInjection.Generator;
 
 namespace Pixely.Ecs.Generator;
 
-// A registration is "RegisterSpan" or "RegisterReadOnlySpan" with the component it reads.
+// A registration is "RegisterSpan", "RegisterReadOnlySpan", "RegisterOptionalSpan" or "RegisterOptionalReadOnlySpan" with the component it reads.
 readonly record struct TermRegistration(string Method, string Component);
 
 readonly record struct TermExtraction(EquatableArray<TermRegistration> Registrations, DiagnosticInfo? Diagnostic);
 
-// Registers every Span<T> and ReadOnlySpan<T> that a Query<...> in the assembly names, through a module initializer, because the library cannot get T
+// Registers every Span<T>, ReadOnlySpan<T> and their Optional<...> that a Query<...> in the assembly names, through a module initializer, because the library cannot get T
 // from a span type argument without reflection. It finds them wherever Query<...> is written: in the base list of a query class, and in a call of
 // AddQuery or SystemBuilder.Query. A query whose Query<...> comes through a generic base, such as Positions : ComponentQuery<Position>, is found
 // through its declaration, or through the closed type named in AddQuery or SystemBuilder.Query, or by the constructor of a system that AddSystem
@@ -205,9 +205,9 @@ public class QueryTermGenerator : IIncrementalGenerator
                 case SpanKind.Entities:
                     continue;
                 case SpanKind.Tag:
-                    return Fail("PXECS002", $"{queryName} reads {element!.Name}, a tag, which has no data. Use IWith<{element.Name}> instead.", location);
+                    return Fail("PXECS002", $"{queryName} reads {element!.Name}, a tag, which has no data. Filter on it with IWith<{element.Name}> or IWithout<{element.Name}> instead.", location);
                 case SpanKind.Invalid:
-                    return Fail("PXECS002", $"The type argument {argumentName} of {queryName} must be Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct, or ReadOnlySpan<Entity>.", location);
+                    return Fail("PXECS002", $"The type argument {argumentName} of {queryName} must be Span<T> or ReadOnlySpan<T> of a struct component that is not a ref struct, such a span in Optional<...>, or ReadOnlySpan<Entity>.", location);
             }
 
             string component = element!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -217,7 +217,14 @@ public class QueryTermGenerator : IIncrementalGenerator
             }
 
             read.Add(component);
-            registrations.Add(new TermRegistration(kind == SpanKind.Span ? "RegisterSpan" : "RegisterReadOnlySpan", component));
+            string method = kind switch
+            {
+                SpanKind.Span => "RegisterSpan",
+                SpanKind.ReadOnlySpan => "RegisterReadOnlySpan",
+                SpanKind.OptionalSpan => "RegisterOptionalSpan",
+                _ => "RegisterOptionalReadOnlySpan"
+            };
+            registrations.Add(new TermRegistration(method, component));
         }
 
         return new TermExtraction(new EquatableArray<TermRegistration>([.. registrations]), null);
