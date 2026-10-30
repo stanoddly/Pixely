@@ -32,6 +32,7 @@ public class PackageIntegrationTests
         "Pixely.Componentize",
         "Pixely.Core",
         "Pixely.DependencyInjection",
+        "Pixely.Ecs",
         "Pixely.Events",
         "Pixely.Logging",
         "Pixely.Messages",
@@ -183,6 +184,7 @@ public class PackageIntegrationTests
         Assert.Multiple(() =>
         {
             Assert.That(entries, Does.Contain("analyzers/dotnet/cs/Pixely.DependencyInjection.Generator.dll"));
+            Assert.That(entries, Does.Contain("analyzers/dotnet/cs/Pixely.Ecs.Generator.dll"));
             Assert.That(entries, Does.Contain("Sdk/Sdk.props"));
             Assert.That(entries, Does.Contain("Sdk/Sdk.targets"));
             Assert.That(entries, Does.Contain("Sdk/Pixely.AfterSdk.targets"));
@@ -204,6 +206,7 @@ public class PackageIntegrationTests
             Assert.That(entries.Where(entry => entry.StartsWith("lib/", StringComparison.Ordinal)).Select(entry => entry[..entry.LastIndexOf('/')]).Distinct(), Is.EquivalentTo(LibFolders));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.DependencyInjection.Generator.dll"));
+            Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.Ecs.Generator.dll"));
             Assert.That(entries.Any(entry => entry.StartsWith("tools/slang/", StringComparison.Ordinal)), Is.False);
             Assert.That(entries.Any(IsNuGetEmptyFolderPlaceholder), Is.False);
         });

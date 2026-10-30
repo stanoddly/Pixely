@@ -47,6 +47,9 @@
         <ProjectReference Include="..\..\src\Pixely.Componentize\Pixely.Componentize.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Core\Pixely.Core.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <ProjectReference Include="..\..\src\Pixely.Ecs\Pixely.Ecs.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <!-- Built here only to be packed into analyzers/; ResolvePixelyRuntimeOutputs keeps it out of lib/. -->
+        <ProjectReference Include="..\..\src\Pixely.Ecs.Generator\Pixely.Ecs.Generator.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Events\Pixely.Events.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Logging\Pixely.Logging.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
         <ProjectReference Include="..\..\src\Pixely.Models\Pixely.Models.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
@@ -62,6 +65,8 @@
         <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
         <None Include="..\..\docs\*.md" Pack="true" PackagePath="docs" />
         <None Include="..\..\src\Pixely.DependencyInjection.Generator\bin\$(Configuration)\netstandard2.0\Pixely.DependencyInjection.Generator.dll"
+              Pack="true" PackagePath="analyzers\dotnet\cs" />
+        <None Include="..\..\src\Pixely.Ecs.Generator\bin\$(Configuration)\netstandard2.0\Pixely.Ecs.Generator.dll"
               Pack="true" PackagePath="analyzers\dotnet\cs" />
         <None Include="..\..\src\Pixely.SdlangCompiler\bin\$(Configuration)\net11.0\Pixely.SdlangCompiler.dll"
               Pack="true" PackagePath="tools\net11.0\any" />
@@ -98,7 +103,7 @@
     -->
     <Target Name="ResolvePixelyRuntimeOutputs">
         <ItemGroup>
-            <_PixelyRuntimeProject Include="@(ProjectReference)" Exclude="..\..\src\Pixely\Pixely.csproj" RemoveProperties="TargetFramework" />
+            <_PixelyRuntimeProject Include="@(ProjectReference)" Exclude="..\..\src\Pixely\Pixely.csproj;..\..\src\Pixely.Ecs.Generator\Pixely.Ecs.Generator.csproj" RemoveProperties="TargetFramework" />
             <_PixelyRuntimeProject Include="..\..\src\Pixely\Pixely.csproj" RemoveProperties="" />
         </ItemGroup>
         <MSBuild Projects="@(_PixelyRuntimeProject)"
