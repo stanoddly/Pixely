@@ -6,7 +6,7 @@ frame. It follows Bevy's messages: `Messages<T>`, `MessageWriter<T>` and `Messag
 
 A message is an intent or an observation:
 
-- An intent is what code outside systems asks the systems to do, for example switch the flashlight.
+- An intent is what code asks the systems to do, for example save the game.
 - An observation is a transition that two reads of game state one frame apart cannot derive: a unit that walked
   a path and arrived, one that appeared and was gone again, an action that resolved and was reversed inside the
   same frame. State answers what is true now, and a rule can resolve many transitions between two reads, so any

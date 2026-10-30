@@ -13,7 +13,7 @@
   - Systems: how it changes
   - Messages: what crosses into or out of the systems, as intents and observations
 - Code divides into the world, the systems and the code outside systems. Systems write the world.
-  Code outside systems reads it and writes intents as messages
+  Code outside systems reads it and passes intents to systems through view models or messages
 - Speed is a side benefit. Components are stored by type in contiguous arrays
 
 ## Status
@@ -21,8 +21,6 @@
 Parts of this document describe Pixely APIs that do not exist yet:
 
 - `Pixely.Ecs` is experimental and not in the Pixely package yet
-- `Pixely.Ui` still has `IUiViewModel` and `UiView<TViewModel>`. Views without view models are
-  planned
 - `Pixely.Fitness` has no Orange rules yet
 
 ## Foo.Vocabulary namespace
@@ -45,7 +43,7 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 - Every rule lives in a system, so a system is the only code that changes game state
 - A system implements `ISystem`. Its constructor takes its contract: queries, lookups, writers,
-  spawners, and message readers and writers
+  spawners, message readers and writers, and the view models it syncs
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
 - A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
   only breaks ties
@@ -55,15 +53,17 @@ Parts of this document describe Pixely APIs that do not exist yet:
 ## Messages
 
 - A message is an intent or an observation
-  - An intent is what code outside systems asks the systems to do, e.g. switch the flashlight
+  - An intent is what code asks the systems to do, e.g. save the game
   - An observation is a transition that two reads of the world one frame apart cannot derive
+- A message is for a flow with more than one reader, or one whose writer does not know its readers.
+  A flow between one view and one system goes through a view model, see UI
 - Messages are `Pixely.Messages`, see `docs/messages.md`. Each message type is registered with
   `AddMessages<T>`
 - A system takes `MessageWriter<T>` in its constructor like any service
 - A system that consumes a message takes its own `MessageReader<T>` in its constructor and reads it
   in `Update`. A reader MUST read at the same point in every frame, because a message lasts only
   until `UpdateOrders.Maintenance` of the next frame
-- Any code on the main thread MAY write a message, so a UI handler needs no spawner
+- Any code on the main thread MAY write a message
 - Messages are not saved. A save captures the world at `UpdateOrders.Maintenance`, so state that
   must outlive a frame MUST be a component, e.g. a queued order
 - Code MUST NOT save directly. It writes an intent, and the saver reads it at
@@ -82,12 +82,42 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 - `Pixely.Ui` keeps its retained element tree and its events. Layout, focus, the caret and an edit in
   progress are UI state, not game state
-- A view has no view model
-- An event handler MUST write intents as messages. It MUST NOT call a rule or write the world
-- A view takes the `MessageWriter<T>` types it writes in its constructor, as a system takes its
-  writers, so its writes stay visible
-- A view's `Sync` runs every frame and reads read-only queries and lookups. It needs no change
-  detection, because an element setter ignores an unchanged value
+- A view takes one view model, see `docs/ui.md`. Pixely.Fitness checks it with
+  `ViewsTakeOneViewModel`
+- A view model holds what its view shows and the intents its view requested. It is UI state, not
+  game state
+- An event handler calls its view model, e.g. `viewModel.Toggle()`. It MUST NOT call a rule or
+  write the world
+- A sync system copies the world into a view model and takes the requested intents from it. It is
+  a system that takes the view model in its constructor
+
+```csharp
+internal sealed class FlashlightSync(Query<Span<Flashlight>> flashlights, FlashlightViewModel viewModel) : ISystem
+{
+    public void Update()
+    {
+        foreach (Columns<Span<Flashlight>> columns in flashlights)
+        {
+            if (viewModel.ToggleRequested)
+            {
+                columns.Item1[0].On = !columns.Item1[0].On;
+            }
+            viewModel.On = columns.Item1[0].On;
+        }
+        viewModel.ToggleRequested = false;
+    }
+}
+```
+
+- Only a sync system writes a view model. A rule system MUST NOT, because its changes apply at the
+  next sync point and are dropped if a later system throws, so the view could show a state the world
+  never reached
+- A sync system SHOULD run after the systems whose components it copies, declared with
+  `IAfter<...>`. The scheduler then applies their changes at a sync point before it
+- A sync system writes every value every frame, because Pixely.Ecs has no change detection. The
+  view model raises `Changed` only when a value differs, and the view's `Sync` runs only then
+- An intent waits in the view model until the next `Update` of its sync system. An intent that
+  more than one system reads is a message, which the sync system writes
 
 ## Rendering and audio
 
