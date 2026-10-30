@@ -7,6 +7,22 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Fluidify">
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        <PrivateAssets>all</PrivateAssets>
+      </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Fluidify Include="ComponentLookups.cs.fluid" />
+        <Fluidify Include="ComponentRefs.cs.fluid" />
+        <Fluidify Include="Queries.cs.fluid" />
+        <Fluidify Include="QueryFilters.cs.fluid" />
+        <Fluidify Include="Spawners.cs.fluid" />
+        <Fluidify Include="SystemBuilder.Lookups.cs.fluid" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\Pixely.Collections\Pixely.Collections.csproj" />
       <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
       <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
