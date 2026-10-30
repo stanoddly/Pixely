@@ -10,10 +10,11 @@ public class OffscreenWindowFactoryTests
     public void CreateWindow_OnTheStubDevice_Throws()
     {
         using PixelyFactory pixelyFactory = new(new PixelyConfig(), null);
+        using StubGpuDevice gpuDevice = StubGpuDevice.Create();
         OffscreenWindowFactory factory = new(pixelyFactory);
 
         PixelyInitializationException exception = Assert.Throws<PixelyInitializationException>(
-            () => factory.CreateWindow(new ViewScope(0), StubGpuDevice.Create(), new FixedStepFrameClock(), new WindowConfig(), new PlatformInfo(null)))!;
+            () => factory.CreateWindow(new ViewScope(0), gpuDevice, new FixedStepFrameClock(), new WindowConfig(), new PlatformInfo(null)))!;
 
         Assert.That(exception.Message, Does.StartWith("Headless mode reads frames back").And.Contain(nameof(StubGpuDevice)));
     }

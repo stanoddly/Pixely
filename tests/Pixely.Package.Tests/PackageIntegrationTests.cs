@@ -409,6 +409,28 @@ public class PackageIntegrationTests
         Assert.That(File.Exists(generatedFile), Is.False);
     }
 
+    // The other hosted consumer builds are Release, whose generated Main leaves the call out. A Debug build compiles it against the
+    // package's Pixely.Headless and runs it before Configure, and an unsupported value makes the call itself fail.
+    [Test]
+    public async Task HostedConsumerDebugBuildAddsHeadlessSupportBeforeConfigure()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await BuildConsumerAsync(consumerDirectory, configuration: "Debug");
+        string outputDirectory = Path.Combine(consumerDirectory, "bin", "Debug", "net11.0");
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(
+            consumerDirectory,
+            new Dictionary<string, string> { ["PIXELY_HEADLESS"] = "yes" },
+            Path.Combine(outputDirectory, "HostedConsumer.dll"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.EqualTo(1));
+            Assert.That(output, Does.Contain("OnException ran: ").And.Contain("PIXELY_HEADLESS"));
+            Assert.That(output, Does.Not.Contain("Configure ran."));
+        });
+    }
+
     // The narrow handler is the documented hazard: an OnException that does not take Exception is not applicable, so the default applies.
     // The default of a Release build shows a message box outside headless mode, so PIXELY_HEADLESS makes it rethrow instead. The fixture
     // exits with 3 from AppDomain.UnhandledException, which fires only once the exception has left Main; the no-handler variant is covered
@@ -1377,14 +1399,15 @@ public class PackageIntegrationTests
         });
     }
 
-    private Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null)
+    private Task<string> BuildConsumerAsync(string consumerDirectory, string? runtimeIdentifier = null, string? defineConstants = null, bool expectSuccess = true, string[]? properties = null,
+        string configuration = "Release")
     {
-        return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties, noBuild: false);
+        return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties, noBuild: false, configuration);
     }
 
     private Task<string> PublishConsumerAsync(string consumerDirectory, string runtimeIdentifier, string? defineConstants = null, string[]? properties = null, bool noBuild = false)
     {
-        return RunConsumerBuildCommandAsync("publish", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess: true, properties, noBuild);
+        return RunConsumerBuildCommandAsync("publish", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess: true, properties, noBuild, "Release");
     }
 
     private static string GetPublishedWwwroot(string consumerDirectory)
@@ -1392,7 +1415,8 @@ public class PackageIntegrationTests
         return Path.Combine(consumerDirectory, "bin", "Release", "net11.0-browser", "browser-wasm", "publish", "wwwroot");
     }
 
-    private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties, bool noBuild)
+    private async Task<string> RunConsumerBuildCommandAsync(string command, string consumerDirectory, string? runtimeIdentifier, string? defineConstants, bool expectSuccess, string[]? properties, bool noBuild,
+        string configuration)
     {
         string[] projectPaths = Directory.GetFiles(consumerDirectory, "*.csproj");
         Assert.That(projectPaths, Has.Length.EqualTo(1), $"Expected one consumer project in {consumerDirectory}.");
@@ -1402,7 +1426,7 @@ public class PackageIntegrationTests
         Assert.That(projectContents, Does.Not.Contain("src\\").And.Not.Contain("src/"));
         WriteConsumerConfiguration(consumerDirectory);
         // The implicit restore saves a separate restore process per command, and its warnings (NU*) appear in the same output.
-        List<string> arguments = [command, projectPath, "--configuration", "Release", $"--property:PixelyPackageVersion={_packageVersion}", "--nologo"];
+        List<string> arguments = [command, projectPath, "--configuration", configuration, $"--property:PixelyPackageVersion={_packageVersion}", "--nologo"];
         if (noBuild)
         {
             arguments.Add("--no-build");
