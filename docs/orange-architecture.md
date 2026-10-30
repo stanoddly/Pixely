@@ -43,12 +43,13 @@ Parts of this document describe Pixely APIs that do not exist yet:
 ## Systems
 
 - Every rule lives in a system, so a system is the only code that changes game state
-- A system implements `ISystem`. Its constructor takes its contract: queries, lookups, writers,
-  spawners, message readers and writers, and the view models it syncs
+- A system implements `ISystem`. Its constructor takes its contract, which is queries, lookups,
+  writers and spawners, and services, such as message readers and writers and the view model it
+  writes
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
 - A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
   only breaks ties
-- A system that consumes an intent MUST validate it. A rejected intent becomes an observation
+- A system that handles an intent MUST validate it. A rejected intent becomes an observation
   message
 
 ## Messages
@@ -61,10 +62,10 @@ Parts of this document describe Pixely APIs that do not exist yet:
 - Messages are `Pixely.Messages`, see `docs/messages.md`. Each message type is registered with
   `AddMessages<T>`
 - A system takes `MessageWriter<T>` in its constructor like any service
-- A system that consumes a message takes its own `MessageReader<T>` in its constructor and reads it
+- A system that reads a message takes its own `MessageReader<T>` in its constructor and reads it
   in `Update`. A reader MUST read at the same point in every frame, because a message lasts only
   until `UpdateOrders.Maintenance` of the next frame
-- Any code on the main thread MAY write a message, except a view's event handler, see UI
+- Any code on the main thread MAY write a message, except a view's UI event handler, see UI
 - Messages are not saved. A save captures the world at `UpdateOrders.Maintenance`, so state that
   must outlive a frame MUST be a component, e.g. a queued order
 - Code MUST NOT save directly. It writes an intent, and the saver reads it at
@@ -74,7 +75,8 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 - An input system reads Pixely's input services and writes intents
 - A continuous intent is a component, e.g. the direction the player steers
-- A one-shot intent is a message, e.g. switching the flashlight
+- A one-shot intent is a message, e.g. a key that switches the flashlight. A button that does the
+  same goes through its view model, see UI
 - Any system MAY read Pixely's input services
 - Pixely dispatches input at the start of the frame, before any updatable runs, so the intents of
   that frame are in place before the first system
@@ -83,26 +85,35 @@ Parts of this document describe Pixely APIs that do not exist yet:
 
 - `Pixely.Ui` keeps its retained element tree and its events. Layout, focus, the caret and an edit in
   progress are UI state, not game state
-- A view takes exactly one view model. Pixely.Fitness checks it with `ViewsTakeOneViewModel`. This
-  is stricter than `Pixely.Ui`, which lets a view observe several models, see `docs/ui.md`
+- The rules below cover view models that show game state. View models of state outside the world
+  are not settled yet, see the last section
+- A view takes exactly one view model. `Pixely ViewsTakeOneViewModel`, a Pixely conventions rule in
+  Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
+  observe several models, see `docs/ui.md`
 - A view reads the world only through its view model. It MUST NOT take queries or lookups
 - A view model holds what its view shows and the intents its view requested. It is UI state, not
   game state
-- An event handler calls its view model, e.g. `viewModel.Toggle()`. It MUST NOT call a rule, write
-  the world or write a message
-- A sync system copies the world into a view model and takes the requested intents from it. It is
-  a system that takes the view model in its constructor. It validates each intent like any system,
-  and a rejected one becomes an observation
+- A view's UI event handler calls its view model, e.g. `viewModel.Toggle()`. It MUST NOT call a
+  system, write the world or write a message
+- A system that writes a view model takes it in its constructor. It handles each intent the view
+  model holds: it reads the intent, validates it like any intent, and clears it in the same
+  `Update`, whether it applies or rejects it. Then it writes what the view shows
+- It MAY also apply other rules and derive what the view shows, e.g. a percentage from two
+  components
+- Exactly one system MUST write each view model, and it MUST handle every intent the view model
+  holds. With two writers, `Changed` is raised twice every frame and the view shows only the later
+  system's values. An intent that no system handles waits forever
 
 ```csharp
-internal sealed class PlayerFlashlights : Query<Span<Flashlight>>, IWith<Player>;
+internal sealed class PlayerFlashlights : Query<Span<Flashlight>>, IWith<Player>, IWithout<Dead>;
 
-internal sealed class FlashlightSync(PlayerFlashlights flashlights, FlashlightViewModel viewModel, MessageWriter<FlashlightRejected> rejections)
+internal sealed class FlashlightSystem(PlayerFlashlights flashlights, FlashlightViewModel viewModel, MessageWriter<FlashlightRejected> rejections)
     : ISystem
 {
     public void Update()
     {
-        bool toggled = false;
+        bool found = false;
+        bool on = false;
         foreach (Columns<Span<Flashlight>> columns in flashlights)
         {
             Span<Flashlight> lights = columns.Item1;
@@ -111,38 +122,46 @@ internal sealed class FlashlightSync(PlayerFlashlights flashlights, FlashlightVi
                 if (viewModel.ToggleRequested)
                 {
                     lights[i].On = !lights[i].On;
-                    toggled = true;
                 }
-                viewModel.On = lights[i].On;
+                found = true;
+                on = lights[i].On;
             }
         }
-        if (viewModel.ToggleRequested && !toggled)
+        if (viewModel.ToggleRequested && !found)
         {
-            // no player has a flashlight, e.g. the player is dead
+            // no living player has a flashlight
             rejections.Write(new FlashlightRejected());
         }
         viewModel.ToggleRequested = false;
+        viewModel.On = on;
     }
 }
 ```
 
-- Only a sync system writes a view model. A rule system MUST NOT, because its structural changes,
-  through adders, removers, spawners and destroyers, apply at the next sync point and are dropped
-  if a system throws before it. The view could show a state the world never reached. Writes through
-  spans and lookups apply at once
-- A sync system SHOULD declare `IAfter<...>` for the systems whose components it copies. Its
-  queries name those components, so the scheduler applies their structural changes at a sync point
-  before it
-- A sync system writes every value every frame, because Pixely.Ecs has no change detection. A view
-  model MUST raise `Changed` only when a value differs. The view's `Sync` runs on attach and then
-  on each `Changed`
-- `Changed` calls the view's `Sync` directly, so `Sync` runs inside the sync system's `Update`. An
-  exception in `Sync` drops the structural changes recorded since the last sync point, like an
-  exception in any system
-- An intent waits in the view model until the next `Update` of its sync system. A sync system that
-  takes the intent and applies it through a structural change loses it if a later system throws
-  before the next sync point
-- An intent that more than one system reads is a message, which the sync system writes
+- Every value that shows game state MUST come from what the system reads: the world, or messages,
+  e.g. an observation shown as a toast. It MUST NOT come from a structural change the system
+  recorded itself
+- E.g. `DeathSystem` adds `Dead` through `ComponentAdder<Dead>`, so it MUST NOT set
+  `viewModel.Dead = true` in the same `Update`. `Dead` exists only after the next sync point, and is
+  dropped if a system throws before it. The system that writes the view model sets
+  `viewModel.Dead` from a query or lookup that names `Dead`
+- A write through a span or a lookup applies at once, so reading it back is reading the world, as
+  `lights[i].On` above
+- A rejected intent becomes an observation message, see Systems. The system MAY also show the
+  rejection in the view model
+- A system that writes a view model SHOULD declare `IAfter<...>` for the systems that change the
+  components its queries and lookups name, including those in `IWithout<...>`. The scheduler then
+  applies their structural changes at a sync point before it
+- A system MUST write every value of its view model every frame, because Pixely.Ecs has no change
+  detection. A view model MUST raise `Changed` when, and only when, a value its view shows changes
+- The view's `Sync` runs on attach, and then on each `Changed` while the view is attached. A view
+  model that raises `Changed` in a setter runs `Sync` inside the system's `Update`, so an exception
+  in `Sync` drops the structural changes recorded since the last sync point, like an exception in
+  any system
+- An intent waits in the view model until the next `Update` of the system that handles it. A system
+  that applies it through a structural change loses it if a system throws before the next sync point
+- An intent that more than one system reads is a message. The system that writes the view model
+  forwards it as one
 
 ## Rendering and audio
 
@@ -164,3 +183,7 @@ internal sealed class FlashlightSync(PlayerFlashlights flashlights, FlashlightVi
 - Iteration order, and the tie-breaks a rule needs where order matters
 - Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
   cleared
+- Whether two views may share one view model, which would run both views' `Sync` on each change and
+  merge their intents
+- View models of state outside the world, e.g. settings, an FPS counter, or a main menu before a
+  world exists, and what writes them
