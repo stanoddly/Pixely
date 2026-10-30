@@ -34,7 +34,7 @@ public class UseStubGpuTests
     }
 
     [Test]
-    public void Build_WithTheStub_ResolvesTheStubAsTheDeviceAndRendersIntoAnOffscreenWindow()
+    public void Build_WithTheStub_ResolvesTheStubAsTheDeviceWithAStubWindow()
     {
         PixelyAppBuilder builder = new();
         builder.UseStubGpu();
@@ -44,16 +44,61 @@ public class UseStubGpuTests
         Assert.Multiple(() =>
         {
             Assert.That(app.GetRequiredService<GpuDevice>(), Is.SameAs(app.GetRequiredService<StubGpuDevice>()));
-            Assert.That(app.GetRequiredService<Window>(), Is.InstanceOf<OffscreenWindow>());
+            Assert.That(app.GetRequiredService<Window>(), Is.InstanceOf<StubWindow>());
         });
+    }
+
+    [Test]
+    public void Build_WithTheStubInHeadlessMode_Throws()
+    {
+        PixelyAppBuilder builder = new();
+        builder.AddSingleton(new PixelyConfig(Headless: true));
+        builder.UseStubGpu();
+        builder.UseDefaultRendering();
+
+        Assert.Throws<PixelyInitializationException>(() => builder.Build().Dispose());
+    }
+
+    [Test]
+    public void RunFrame_WithTheStub_SubmitsOnlyTheFramesCommandBuffer()
+    {
+        using IPixelyApp app = BuildWithUiLayer(new WindowConfig(Size: (200, 100)));
+        StubGpuDevice device = app.GetRequiredService<StubGpuDevice>();
+        app.RunFrame();
+        device.ClearSubmittedCommandBuffers();
+
+        app.RunFrame();
+
+        StubCommandBuffer frame = device.SubmittedCommandBuffers.Single();
+        Assert.That(frame.RenderPasses.Single().ColorTargets.Single().Size, Is.EqualTo(new ShortSize(200, 100)));
+    }
+
+    [Test]
+    public void RunFrame_WithAHiddenStubWindow_RendersNothing()
+    {
+        using IPixelyApp app = BuildWithUiLayer(new WindowConfig(InitiallyVisible: false));
+
+        app.RunFrame();
+
+        Assert.That(app.GetRequiredService<StubGpuDevice>().SubmittedCommandBuffers.SelectMany(commandBuffer => commandBuffer.RenderPasses), Is.Empty);
     }
 
     [Test]
     public void RunFrame_WithPixelyUi_RecordsTheUisDraws()
     {
+        using IPixelyApp app = BuildWithUiLayer(new WindowConfig(Size: (200, 100)));
+
+        app.RunFrame();
+
+        StubCommandBuffer frame = app.GetRequiredService<StubGpuDevice>().SubmittedCommandBuffers.Single(commandBuffer => commandBuffer.RenderPasses.Count > 0);
+        Assert.That(frame.RenderPasses.SelectMany(renderPass => renderPass.Draws), Is.Not.Empty);
+    }
+
+    private static IPixelyApp BuildWithUiLayer(WindowConfig windowConfig)
+    {
         PixelyAppBuilder builder = new();
         builder.UseStubGpu();
-        builder.UseDefaultRendering(new WindowConfig(Size: (200, 100)));
+        builder.UseDefaultRendering(windowConfig);
         builder.UseUi();
         builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(new Column
         {
@@ -61,11 +106,6 @@ public class UseStubGpuTests
             Width = Sizing.Grow(),
             Height = Sizing.Grow()
         }));
-        using IPixelyApp app = builder.Build();
-
-        app.RunFrame();
-
-        StubCommandBuffer frame = app.GetRequiredService<StubGpuDevice>().SubmittedCommandBuffers.Single(commandBuffer => commandBuffer.RenderPasses.Count > 0);
-        Assert.That(frame.RenderPasses.SelectMany(renderPass => renderPass.Draws), Is.Not.Empty);
+        return builder.Build();
     }
 }

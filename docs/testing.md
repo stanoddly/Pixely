@@ -4,7 +4,9 @@
 
 ## The app
 
-`UseStubGpu()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it. Call it before `UseGpu`, `UseDefaultRendering` or a registrar that calls them, which then keep the stub; after another device it throws. Every window renders into a texture, as an offscreen window does in headless mode ([headless.md](headless.md)), so no window shows. Building still initializes SDL video, so `UseStubGpu` sets SDL's dummy video driver at default priority, which `SDL_VIDEO_DRIVER` in the environment overrides.
+`UseStubGpu()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it. Call it before `UseGpu`, `UseDefaultRendering` or a registrar that calls them, which then keep the stub; after another device it throws. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, so `UseStubGpu` sets SDL's dummy video driver at default priority, which `SDL_VIDEO_DRIVER` in the environment overrides; with another driver the windows show.
+
+Headless mode ([headless.md](headless.md)) runs the game on the GPU to read its frames back, so building an app with both it and the stub throws `PixelyInitializationException`, whether `PixelyConfig.Headless` or `PIXELY_HEADLESS` asks for it.
 
 ```csharp
 PixelyAppBuilder builder = new();
@@ -29,7 +31,7 @@ A renderer can also be called without a frame: `StubGpuDevice.CreateSwapchainTex
 
 ## What is recorded
 
-- `SubmittedCommandBuffers`: every submitted `StubCommandBuffer`, oldest first, until `ClearSubmittedCommandBuffers()`. Besides the frames this includes the command buffers `GpuMemorySystem` submits its uploads with and the empty ones an offscreen window waits on. A cancelled command buffer is not submitted; it has `IsCancelled`.
+- `SubmittedCommandBuffers`: every submitted `StubCommandBuffer`, oldest first, until `ClearSubmittedCommandBuffers()`. Besides the frames this includes the command buffers `GpuMemorySystem` submits its uploads with. A cancelled command buffer is not submitted; it has `IsCancelled`.
 - A `StubCommandBuffer` holds its `RenderPasses`, `ComputePasses` and `Blits` in recording order.
 - A `StubRenderPass` holds its `ColorTargets`, `ColorTargetSettings`, `ResolveTextures` (one per color target, null for none), `DepthBuffer`, `DepthBufferSettings` and `Draws`.
 - A `StubDraw` holds the state current when it was recorded: the pipeline, the vertex buffers, sampler bindings and storage buffers by slot, the index buffer of an indexed draw, the vertex, index and instance counts, the scissor clipped to the pass's target (null when the pass never set one) and the stencil reference. `ReadVertexUniform<T>(slot)` and `ReadFragmentUniform<T>(slot)` return the value pushed last before the draw and throw when nothing was pushed or its size is not that of `T`. A slot bound earlier in the pass and not bound again keeps its binding, as on the GPU.
@@ -39,7 +41,7 @@ Only calls that pass Pixely's validation are recorded, and a call that fails it 
 
 ## Contents
 
-The stub keeps what is uploaded. An upload reaches the contents when its command buffer is submitted, which `GpuMemorySystem.Submit()` and every frame do, and is dropped when it is cancelled. `ReadVertexBuffer`, `ReadStorageBuffer` and `ReadIndexBuffer` return the buffer's current `Size` elements from its start, 16-bit indices widened to `uint`. `ReadTexture(texture, layer)` returns the layer's uploaded bytes, or zeros for a layer nothing was uploaded to, such as a color target; `SubmitAndDownloadTexture` and a headless screenshot return the same. Reading a released resource throws `ObjectDisposedException`.
+The stub keeps what is uploaded. An upload reaches the contents when its command buffer is submitted, which `GpuMemorySystem.Submit()` and every frame do, and is dropped when it is cancelled. `ReadVertexBuffer`, `ReadStorageBuffer` and `ReadIndexBuffer` return the buffer's current `Size` elements from its start, 16-bit indices widened to `uint`. `ReadTexture(texture, layer)` returns the layer's uploaded bytes, or zeros for a layer nothing was uploaded to, such as a color target; `SubmitAndDownloadTexture` returns the same. Reading a released resource throws `ObjectDisposedException`.
 
 ## Options
 

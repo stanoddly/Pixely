@@ -101,16 +101,22 @@ public partial class PixelyFactory: IDisposable
                 throw new PixelyInitializationException("Headless mode renders into GPU textures and needs a GPU device. Register rendering with UseDefaultRendering or call UseGpu().");
             }
 
+            if (gpuDevice is not SdlGpuDevice)
+            {
+                // Headless mode exists to run the game on the GPU and read its frames back; another device, such as the stub of
+                // a game's tests, renders nothing to read.
+                throw new PixelyInitializationException($"Headless mode renders on the GPU and cannot run on {gpuDevice.GetType().Name}. Unset PixelyConfig.Headless and PIXELY_HEADLESS.");
+            }
+
             return CreateOffscreenWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
 #endif
         }
 
 #if !BROWSER
-        // Only the SDL device has swapchains. Another device, such as the stub of a game's tests, renders into a texture the
-        // way a headless run does.
+        // Only the SDL device has swapchains. Another device, such as the stub of a game's tests, creates a window of its own type.
         if (gpuDevice is { } and not SdlGpuDevice)
         {
-            return CreateOffscreenWindow(viewScope, gpuDevice, frameClock, platformInfo, config);
+            return CreateWindowWithoutSwapchain(viewScope, gpuDevice, frameClock, platformInfo, config);
         }
 #endif
 

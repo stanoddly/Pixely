@@ -33,7 +33,7 @@ public sealed class StubGpuDevice : GpuDevice
 
     /// <summary>
     /// The command buffers submitted so far, oldest first, including the ones <see cref="GpuMemorySystem"/> submits its uploads
-    /// with and the empty ones an offscreen window waits on.
+    /// with.
     /// </summary>
     public IReadOnlyList<StubCommandBuffer> SubmittedCommandBuffers
     {
@@ -56,7 +56,7 @@ public sealed class StubGpuDevice : GpuDevice
 
     /// <summary>
     /// A swapchain texture for a render context of a renderer under test, such as a <c>BasicRenderContext</c>, without a window.
-    /// The format defaults to the one an offscreen window renders into.
+    /// The format defaults to the one a <see cref="StubWindow"/> hands out.
     /// </summary>
     public SwapchainTexture CreateSwapchainTexture(ShortSize size, TextureFormat format = TextureFormat.B8G8R8A8UnormSrgb)
     {
@@ -193,6 +193,9 @@ public sealed class StubGpuDevice : GpuDevice
         _options.IsSampleCountSupported(format, sampleCount);
 
     internal override CommandBuffer AcquireCommandBufferCore() => new StubCommandBuffer(this);
+
+    internal override Window CreateWindowCore(ViewScope viewScope, Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowCloseBehavior closeBehavior) =>
+        new StubWindow(this, viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior);
 
     internal override Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config) => NextHandle<SDL_GPUSampler>();
 

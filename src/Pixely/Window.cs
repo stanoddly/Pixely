@@ -14,6 +14,7 @@ public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventAr
 /// <summary>
 /// An SDL window: its events, size, input and dialogs. How its frames reach the screen is up to the derived window:
 /// <see cref="SwapchainWindow"/> presents them through a swapchain, <see cref="OffscreenWindow"/> renders them into a texture.
+/// A device without swapchains, such as the stub of Pixely.Testing, has a window of its own.
 /// </summary>
 public abstract class Window : IDisposable
 {
