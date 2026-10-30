@@ -9,8 +9,31 @@ namespace Pixely.Ecs.Benchmarks;
 [Config(typeof(BenchmarkConfiguration))]
 public class IterationBenchmarks
 {
+    internal sealed class MoveSystem(Movement movement) : ISystem
+    {
+        public int Visited { get; private set; }
+
+        public void Update()
+        {
+            int visited = 0;
+            foreach ((Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
+            {
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    positions[i].X += velocities[i].X;
+                    positions[i].Y += velocities[i].Y;
+                }
+
+                visited += positions.Length;
+            }
+
+            Visited = visited;
+        }
+    }
+
     private readonly ArchQueryDescription _archMovement = new ArchQueryDescription().WithAll<Position, Velocity>();
-    private World _pixely = null!;
+    private SystemScheduler _pixely = null!;
+    private MoveSystem _moveSystem = null!;
     private ArchWorld _arch = null!;
 
     [Params(10_000, 100_000)]
@@ -19,7 +42,10 @@ public class IterationBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        (_pixely, _) = Worlds.CreatePixely(Count);
+        World world = new World();
+        Worlds.PopulatePixely(world, Count);
+        _pixely = new SystemScheduler(world);
+        _moveSystem = _pixely.Add(builder => new MoveSystem(builder.Query<Movement>()));
         (_arch, ArchEntity[] _) = Worlds.CreateArch(Count);
     }
 
@@ -47,21 +73,11 @@ public class IterationBenchmarks
         return visited;
     }
 
+    // Only a system writes the world, so the scheduler's update, whose sync point has nothing to apply, is part of the measurement.
     [Benchmark]
     public int Pixely()
     {
-        int visited = 0;
-        foreach ((Span<Position> positions, ReadOnlySpan<Velocity> velocities) in _pixely.Query<Movement>())
-        {
-            for (int i = 0; i < positions.Length; i++)
-            {
-                positions[i].X += velocities[i].X;
-                positions[i].Y += velocities[i].Y;
-            }
-
-            visited += positions.Length;
-        }
-
-        return visited;
+        _pixely.Update();
+        return _moveSystem.Visited;
     }
 }

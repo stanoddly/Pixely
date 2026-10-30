@@ -23,26 +23,11 @@ It is not in the Pixely package yet. Reference `src/Pixely.Ecs` and, as an analy
 public record struct Position(Vector2 Value);
 public record struct Velocity(Vector2 Value);
 public struct Frozen : ITag;
-
-World world = new World();
-Entity entity = world.Create();
-world.Add(entity, new Position(Vector2.Zero));
-world.Add(entity, new Velocity(Vector2.UnitX));
-
-world.Get<Position>(entity).Value += Vector2.One;
-bool frozen = world.Has<Frozen>(entity);
-world.Remove<Velocity>(entity);
-world.Destroy(entity);
 ```
 
-- `Get<T>` returns a reference. It stays valid until the next structural change: `Create`, `Destroy`, `Add`, `Remove`, `EnsureCapacity` or a sync point.
-- `Add` throws when the entity already has the component. `Remove` and `Get` throw when it does not.
-- `Get<T>` of a tag returns one value that all entities share, because a tag stores nothing.
-- Every call that takes an entity, except `IsAlive`, throws `ArgumentException` for an entity that is not alive. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
-- An entity belongs to the world that created it. Another world does not detect it: when an entity of its own has the same index and version, the call acts on that entity.
-- `UnsafeGet<T>` is `Get<T>` without its checks, for lookups in hot loops. The entity must be alive in this world and have the component, which only Debug builds assert. Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
-
-Systems do not use these calls. They change the world through writers, described below.
+- A game never changes the world directly. `World` has no public members besides its constructor. Systems change it through the writers, spawners and lookups of their contract. Code outside systems reads it through the queries and lookups that the service collection registers. Both are described below.
+- A spawner creates an entity, and an `EntityDestroyer` destroys it. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
+- An entity belongs to the world that created it. Another world does not detect it: when an entity of its own has the same index and version, a lookup acts on that entity.
 
 ## Storage
 
@@ -51,12 +36,10 @@ Entities with exactly the same component types share an archetype. Adding or rem
 An archetype stores each component type that is not a tag in one array, with a row per entity, so a query reads each component of an archetype as one contiguous span.
 
 - An archetype starts with room for 8 entities. When it runs out, it doubles the room and copies its rows into the new arrays.
-- Doubling leaves the old arrays as garbage, and an array over 85 KB goes on the large object heap, which only a gen 2 collection frees. Growing to a known size with `EnsureCapacity` allocates once instead.
+- Doubling leaves the old arrays as garbage, and an array over 85 KB goes on the large object heap, which only a gen 2 collection frees. Growing to a known size with `EnsureRoomFor` of a spawner allocates once instead.
 - Removing an entity moves the archetype's last entity into its place.
 - The room is kept when entities leave.
 - A tag has no array, so adding or removing one moves the entity's other components and nothing else. An empty struct without `ITag` still takes one byte per row.
-
-`EnsureCapacity<TSpawner>(capacity)` grows the archetype of a spawner's components to hold at least `capacity` entities, and returns its capacity. An archetype that is smaller grows to exactly `capacity`. One that is already larger keeps its size. A level load calls it on the world before spawning or adding many entities. It throws while a query runs, because growing replaces the arrays that the query's spans point into. Systems use `EnsureRoomFor` of their spawner instead, described under spawners.
 
 ## Queries
 
@@ -92,13 +75,13 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
 
-The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that `world.Query<T>()` or `builder.Query<T>()` names, or that the constructor of a system added with `AddSystem<T>` takes. The generator reads that constructor from the type `AddSystem<T>` names, so a generic system's queries are closed with its type arguments. A query type closed only through a generic helper, such as `Get<Of<Mass>>(builder)` around `builder.Query<TQuery>()`, is not registered, because the generator sees only `TQuery`: write the closed type in a `Query` call or in the constructor of a system added with `AddSystem<T>`. A type argument that nothing registered throws when its query is created.
+The library cannot get `T` from a span type argument without reflection, so the generator registers every `Span<T>` and `ReadOnlySpan<T>` it sees in a `Query<...>`, wherever it is written, through a module initializer of the assembly. A query can also derive from a generic base, as `Masses : ComponentQuery<Mass>` with `ComponentQuery<T> : Query<ReadOnlySpan<T>>`: the generator registers its spans through the derived class, or through the closed type that `services.AddQuery<T>()` or `builder.Query<T>()` names, or that the constructor of a system added with `AddSystem<T>` takes. The generator reads that constructor from the type `AddSystem<T>` names, so a generic system's queries are closed with its type arguments. A query type closed only through a generic helper, such as `Get<Of<Mass>>(builder)` around `builder.Query<TQuery>()`, is not registered, because the generator sees only `TQuery`: write the closed type in an `AddQuery` or `Query` call or in the constructor of a system added with `AddSystem<T>`. A type argument that nothing registered throws when its query is created.
 
-A system gets its queries through its constructor. Other code, such as a renderer, gets one from `world.Query<Movement>()`. The world creates one instance of each query class, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
+A system gets its queries through its constructor. Code outside systems, such as a renderer, takes them in its constructor too, once `services.AddQuery<T>()` registers them, see [Code outside systems](#code-outside-systems). The world creates one instance of each query class, which the systems and other code share, so the class needs a public parameterless constructor. A query created with `new` belongs to no world and throws when it is enumerated.
 
 The generator checks the spans wherever `Query<...>` is written, and the filters of every query that the constructor of a system added with `AddSystem<T>` takes. The world checks a query again when it creates it, and throws `InvalidOperationException` when the query requires no component, reads a component in two spans, reads a tag, or requires and excludes the same component.
 
-While a query runs, `Destroy`, `Add` and `Remove` on the world throw `InvalidOperationException`, because they would move rows under the spans. `Create` is allowed, because a new entity has no components and every query requires one. The query ends when `foreach` ends, including on `break` or an exception.
+Structural changes wait for the sync points between systems, so they never move rows under the spans of a query that a system runs. A query ends when `foreach` ends, including on `break` or an exception.
 
 ## Systems
 
@@ -176,7 +159,8 @@ internal sealed class ChaseSystem(Chasers chasers, ReadOnlyComponentLookup<Posit
 - The contract parameters can come in any order, mixed with services.
 - A writer records changes only during its system's `Update`. Used in the constructor, or kept for a callback that runs later, it throws `InvalidOperationException`, so a change cannot apply at a sync point nobody expects. A query has no such check, because renderers enumerate the same instance.
 - A lookup reads components only during its system's `Update`. Used in the constructor, or kept for a callback that runs later, it throws `InvalidOperationException`. A lookup counts as naming `T`, so it sees the changes of earlier systems like a query does.
-- A lookup's indexer returns a reference, which stays valid until `Update` returns, because structural changes wait for the sync point. It throws for an entity that is not alive or has no `T`. `Has` returns `false` for an entity that is not alive, unlike `World.Has`, so it guards the indexer for an entity that may have been destroyed. `UnsafeGet` is the indexer without its checks, like `World.UnsafeGet`, and outside `Update` it throws `NullReferenceException`.
+- A lookup's indexer returns a reference, which stays valid until `Update` returns, because structural changes wait for the sync point. It throws for an entity that is not alive or has no `T`. `Has` returns `false` for an entity that is not alive, so it guards the indexer for an entity that may have been destroyed. `UnsafeGet` is the indexer without its checks, for hot loops, and outside `Update` it throws `NullReferenceException`. The entity must be alive and have the component, which only Debug builds assert. Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
+- The indexer of a lookup of a tag returns one value that all entities share, because a tag stores nothing.
 - A lookup of several components finds the entity once for all of them. Its indexer returns `ComponentRefs<T1, ...>`, or `ReadOnlyComponentRefs<T1, ...>`, whose fields `Item1` to `Item8` are references to the components, because C# cannot deconstruct into references. `Has` returns `true` only for an entity that is alive and has all of them.
 
 Register the world and the systems:
@@ -192,6 +176,27 @@ services.AddSystem<MovementSystem>();
 - Systems run in the order their `IAfter<...>` and `IBefore<...>` declare, described below. Otherwise they run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
 - A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS014 reports one that does.
 - A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
+
+### Code outside systems
+
+Code outside systems, such as a renderer, a UI view or audio, reads the world and never writes it. Like a system, it takes the queries and lookups it reads in its constructor, once the service collection registers them:
+
+```csharp
+internal sealed class Bodies : Query<ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>;
+
+services.AddQuery<Bodies>();
+services.AddReadOnlyComponentLookup<Position>();
+
+internal sealed class BodyRenderer(Bodies bodies, ReadOnlyComponentLookup<Position> positions)
+{
+    ...
+}
+```
+
+- `AddQuery<TQuery>()` registers the world's instance of the query class, the one its systems enumerate. A query with a `Span<T>` throws `InvalidOperationException` when the provider creates it, which is when the provider is built, because only systems write the world.
+- `AddReadOnlyComponentLookup<T1, ...>()` registers a read-only lookup of 1 to 8 components. Unlike a system's lookup, it reads at any time. A reference it returns stays valid until the systems next update, so code outside systems copies what it keeps.
+- Both resolve the `World` that `AddEcs` registered, so a stage's collection can register them too.
+- They need the service collection. Without dependency injection, only systems reach the world.
 
 ### Order
 
@@ -241,9 +246,9 @@ internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 ```
 
 - The type arguments are components with data. A tag goes in `IWith<...>`, and `IWith<...>` names only tags. A spawner has no `IWithout<...>`.
-- A spawner spawns at least one component with data. An entity with only tags is created with `Create` and `Add`.
+- A spawner spawns at least one component with data, so every entity starts with one.
 - The `SystemBuilder` creates one spawner for each system that takes it, so a spawner class needs a public parameterless constructor. Its type arguments and `IWith<...>` are read once, when the first spawner of its type is created in a world.
-- A spawned entity goes directly into the archetype of its components, without the moves of `Create` followed by `Add`. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
+- A spawned entity goes directly into the archetype of its components, without moving through an archetype for each component. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.
 - `Spawn` keeps each component in its own list, and the sync point copies each list into its array.
 
 `EnsureRoomFor(count)` of a spawner grows its archetype at the next sync point, before any of the system's changes, to hold `count` entities more than it holds then. A wave spread over many frames then grows the arrays once. The requests of one system add up for each archetype, and each system's room adds to the entities of the systems before it, so every spawner asks for room for its own spawns. Any change of the system can fill the room: a system that also moves entities into the archetype with `ComponentAdder<T>` or `ComponentRemover<T>` asks for room for them too. A system that throws drops the request with its other changes.
@@ -308,7 +313,7 @@ The generator fails the build on these:
 | PXECS014 | A system does not implement `IUpdatable`, which would update it a second time. |
 | PXECS015 | `AddSystem<T>` is called where the generator can intercept it, and not used as a method group, such as `Action add = services.AddSystem<T>;`, or it would throw. |
 
-PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. `world.Query<T>()` makes the same checks at runtime. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
+PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed type arguments. PXECS001, PXECS004 and PXECS005 are checked for the queries that the constructor of a system added with `AddSystem<T>` takes. The world makes the same checks at runtime when it creates a query. PXECS006 to PXECS009 are checked for the spawners of such a constructor, and the world checks PXECS007 to PXECS009 when it reads a spawner's components. PXECS008 is checked for the lookups of such a constructor too, and `SystemBuilder` checks it again when it creates a lookup.
 
 `AddSystem<T>` requires `T` to be a class that implements `ISystem`, which the compiler checks.
 

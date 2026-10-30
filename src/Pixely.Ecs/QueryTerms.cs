@@ -5,7 +5,7 @@ namespace Pixely.Ecs;
 public static class QueryTerms
 {
     public static void RegisterSpan<T>() where T : struct =>
-        QueryTerm<Span<T>>.Instance ??= new QueryTerm<Span<T>>(static description => description.Read<T>(), static archetype => archetype.GetSpan<T>());
+        QueryTerm<Span<T>>.Instance ??= new QueryTerm<Span<T>>(static description => description.Write<T>(), static archetype => archetype.GetSpan<T>());
 
     public static void RegisterReadOnlySpan<T>() where T : struct =>
         QueryTerm<ReadOnlySpan<T>>.Instance ??= new QueryTerm<ReadOnlySpan<T>>(static description => description.Read<T>(), static archetype => archetype.GetSpan<T>());

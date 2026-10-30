@@ -5,53 +5,52 @@ public class QueryTests
     [Test]
     public void QueryVisitsEveryArchetypeWithTheRequiredComponents()
     {
-        World world = new World();
-        Entity moving = CreateMoving(world, new Position(0, 0), new Velocity(1, 0));
-        Entity movingPlayer = CreateMoving(world, new Position(0, 0), new Velocity(0, 1));
-        world.Add(movingPlayer, new Player());
-        Entity still = world.Create();
-        world.Add(still, new Position(0, 0));
+        using TestWorld world = new TestWorld();
+        Entity moving = world.Spawn(new Position(0, 0), new Velocity(1, 0));
+        Entity movingPlayer = world.Spawn(new Position(0, 0), new Velocity(0, 1), new Player());
+        Entity still = world.Spawn(new Position(0, 0));
 
         List<Entity> visited = [];
-        foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in world.Query<Movement>())
+        world.Scheduler.RunOnce(builder => builder.Query<Movement>(), movement =>
         {
-            for (int i = 0; i < positions.Length; i++)
+            foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<Velocity> velocities) in movement)
             {
-                positions[i].X += velocities[i].X;
-                positions[i].Y += velocities[i].Y;
-                visited.Add(entities[i]);
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    positions[i].X += velocities[i].X;
+                    positions[i].Y += velocities[i].Y;
+                    visited.Add(entities[i]);
+                }
             }
-        }
+        });
 
+        ReadOnlyComponentLookup<Position> positions = world.Lookup<Position>();
         Assert.That(visited, Is.EquivalentTo(new[] { moving, movingPlayer }));
-        Assert.That(world.Get<Position>(moving), Is.EqualTo(new Position(1, 0)));
-        Assert.That(world.Get<Position>(movingPlayer), Is.EqualTo(new Position(0, 1)));
-        Assert.That(world.Get<Position>(still), Is.EqualTo(new Position(0, 0)));
+        Assert.That(positions[moving], Is.EqualTo(new Position(1, 0)));
+        Assert.That(positions[movingPlayer], Is.EqualTo(new Position(0, 1)));
+        Assert.That(positions[still], Is.EqualTo(new Position(0, 0)));
     }
 
     [Test]
     public void WithoutExcludesEntitiesThatHaveTheComponent()
     {
-        World world = new World();
-        Entity free = world.Create();
-        world.Add(free, new Position());
-        Entity frozen = world.Create();
-        world.Add(frozen, new Position());
-        world.Add(frozen, new Frozen());
+        using TestWorld world = new TestWorld();
+        Entity free = world.Spawn(new Position());
+        Entity frozen = world.Spawn(new Position());
+        world.AddComponent(frozen, new Frozen());
 
-        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Is.EquivalentTo(new[] { free }));
+        Assert.That(CollectEntities(world.Get<UnfrozenPositions>()), Is.EquivalentTo(new[] { free }));
     }
 
     [Test]
     public void WithRequiresComponentWithoutReadingIt()
     {
-        World world = new World();
-        Entity player = world.Create();
-        world.Add(player, new Player());
-        world.Create();
+        using TestWorld world = new TestWorld();
+        Entity player = world.Spawn(new Position(), new Player());
+        world.Spawn(new Position());
 
         List<Entity> visited = [];
-        foreach (Columns<ReadOnlySpan<Entity>> columns in world.Query<PlayerEntities>())
+        foreach (Columns<ReadOnlySpan<Entity>> columns in world.Get<PlayerEntities>())
         {
             visited.AddRange(columns.Item1.ToArray());
         }
@@ -62,90 +61,119 @@ public class QueryTests
     [Test]
     public void QuerySeesArchetypesCreatedAfterItsFirstUse()
     {
-        World world = new World();
-        Entity first = world.Create();
-        world.Add(first, new Position());
-        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Has.Count.EqualTo(1));
+        using TestWorld world = new TestWorld();
+        Entity first = world.Spawn(new Position());
+        Assert.That(CollectEntities(world.Get<UnfrozenPositions>()), Has.Count.EqualTo(1));
 
-        Entity second = world.Create();
-        world.Add(second, new Name("late"));
-        world.Add(second, new Position());
+        Entity second = world.Spawn(new Name("late"), new Position());
 
-        Assert.That(CollectEntities(world.Query<UnfrozenPositions>()), Is.EquivalentTo(new[] { first, second }));
+        Assert.That(CollectEntities(world.Get<UnfrozenPositions>()), Is.EquivalentTo(new[] { first, second }));
     }
 
+    // A structural change waits for a sync point, which throws while code outside systems runs a query, and drops the change.
     [Test]
     public void StructuralChangesThrowWhileQueryRuns()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world, new Position(), new Velocity());
-
-        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
+        int change = 0;
+        world.Scheduler.Add(builder => ActionSystem.Of(builder.ComponentAdder<Frozen>(), builder.ComponentRemover<Velocity>(), builder.EntityDestroyer(), (frozen, velocities, destroyer) =>
         {
-            Assert.Throws<InvalidOperationException>(() => world.Add(entity, new Frozen()));
-            Assert.Throws<InvalidOperationException>(() => world.Remove<Velocity>(entity));
-            Assert.Throws<InvalidOperationException>(() => world.Destroy(entity));
+            switch (change)
+            {
+                case 0:
+                    frozen.Add(entity, new Frozen());
+                    break;
+                case 1:
+                    velocities.Remove(entity);
+                    break;
+                default:
+                    destroyer.Destroy(entity);
+                    break;
+            }
+        }));
+
+        int runs = 0;
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> _ in world.Get<MovingEntities>())
+        {
+            runs++;
+            for (change = 0; change < 3; change++)
+            {
+                Assert.Throws<InvalidOperationException>(world.Scheduler.Update);
+            }
         }
+
+        Assert.That(runs, Is.EqualTo(1));
+        Assert.That(world.Lookup<Frozen>().Has(entity), Is.False);
+        Assert.That(world.Lookup<Velocity>().Has(entity), Is.True);
     }
 
+    // A spawn only reserves its entity until the sync point, so a system spawns while its query runs.
     [Test]
-    public void CreateIsAllowedWhileQueryRuns()
+    public void SpawnIsAllowedWhileQueryRuns()
     {
-        World world = new World();
-        CreateMoving(world, new Position(), new Velocity());
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Position(), new Velocity());
 
-        Entity created = default;
-        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
+        Entity spawned = world.Scheduler.RunOnce(builder => (builder.Query<Movement>(), builder.Spawner<Spawner<Position>>()), contract =>
         {
-            created = world.Create();
-        }
+            Entity created = default;
+            foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in contract.Item1)
+            {
+                created = contract.Item2.Spawn(new Position(1, 2));
+            }
 
-        Assert.That(world.IsAlive(created), Is.True);
+            return created;
+        });
+
+        Assert.That(world.Lookup<Position>()[spawned], Is.EqualTo(new Position(1, 2)));
     }
 
     [Test]
     public void StructuralChangesAreAllowedAfterBreakingOutOfQuery()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world, new Position(), new Velocity());
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
 
-        foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
+        foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> _ in world.Get<MovingEntities>())
         {
             break;
         }
 
-        world.Add(entity, new Frozen());
-        Assert.That(world.Has<Frozen>(entity), Is.True);
+        world.AddComponent(entity, new Frozen());
+        Assert.That(world.Lookup<Frozen>().Has(entity), Is.True);
     }
 
     [Test]
     public void QueryAllowsStructuralChangesAfterItsBodyThrows()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world, new Position(), new Velocity());
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
 
         Assert.Throws<InvalidOperationException>(() =>
         {
-            foreach (Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>> _ in world.Query<Movement>())
+            foreach (Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>> _ in world.Get<MovingEntities>())
             {
                 throw new InvalidOperationException("The body failed.");
             }
         });
 
         Assert.DoesNotThrow(() => world.Destroy(entity));
+        Assert.That(world.Lookup<Position>().Has(entity), Is.False);
     }
 
     [Test]
     public void DisposingCopiesOfAnEnumeratorKeepsTheNextQueryRunning()
     {
-        World world = new World();
-        Entity entity = CreateMoving(world, new Position(), new Velocity());
-        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> first = world.Query<Movement>().GetEnumerator();
-        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> copy = first;
+        using TestWorld world = new TestWorld();
+        Entity entity = world.Spawn(new Position(), new Velocity());
+        MovingEntities query = world.Get<MovingEntities>();
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>> first = query.GetEnumerator();
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>> copy = first;
         first.Dispose();
         copy.Dispose();
 
-        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>> next = world.Query<Movement>().GetEnumerator();
+        ColumnsEnumerator<Columns<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>> next = query.GetEnumerator();
         try
         {
             Assert.Throws<InvalidOperationException>(() => world.Destroy(entity));
@@ -161,14 +189,12 @@ public class QueryTests
     [Test]
     public void QueryWithAGenericBaseReadsItsSpans()
     {
-        World world = new World();
-        Entity entity = world.Create();
-        world.Add(entity, new Mass(3));
-        Entity other = world.Create();
-        world.Add(other, new Name("other"));
+        using TestWorld world = new TestWorld();
+        world.Spawn(new Mass(3));
+        Entity other = world.Spawn(new Name("other"));
 
         List<float> masses = [];
-        foreach (Columns<ReadOnlySpan<Mass>> columns in world.Query<Masses>())
+        foreach (Columns<ReadOnlySpan<Mass>> columns in world.Get<Masses>())
         {
             foreach (Mass mass in columns.Item1)
             {
@@ -176,24 +202,32 @@ public class QueryTests
             }
         }
 
-        foreach (Columns<Span<Name>> columns in world.Query<Writable<Name>>())
+        world.Scheduler.RunOnce(builder => builder.Query<Writable<Name>>(), names =>
         {
-            columns.Item1[0] = new Name("written");
-        }
+            foreach (Columns<Span<Name>> columns in names)
+            {
+                columns.Item1[0] = new Name("written");
+            }
+        });
 
         Assert.That(masses, Is.EqualTo(new[] { 3f }));
-        Assert.That(world.Get<Name>(other), Is.EqualTo(new Name("written")));
+        Assert.That(world.Lookup<Name>()[other], Is.EqualTo(new Name("written")));
     }
 
+    // The systems and the code outside systems of a world share its one instance of each query.
     [Test]
-    public void WorldReturnsOneInstanceOfEachQuery()
+    public void WorldHasOneInstanceOfEachQuery()
     {
-        World world = new World();
-        Movement first = world.Query<Movement>();
-        Movement second = world.Query<Movement>();
+        using TestWorld world = new TestWorld();
+        UnfrozenPositions first = null!;
+        UnfrozenPositions second = null!;
+        world.Scheduler.Add(builder => ActionSystem.Of(first = builder.Query<UnfrozenPositions>(), _ => { }));
+        world.Scheduler.Add(builder => ActionSystem.Of(second = builder.Query<UnfrozenPositions>(), _ => { }));
+        using TestWorld other = new TestWorld();
 
         Assert.That(second, Is.SameAs(first));
-        Assert.That(new World().Query<Movement>(), Is.Not.SameAs(first));
+        Assert.That(world.Get<UnfrozenPositions>(), Is.SameAs(first));
+        Assert.That(other.Get<UnfrozenPositions>(), Is.Not.SameAs(first));
     }
 
     [Test]
@@ -212,21 +246,17 @@ public class QueryTests
     [Test]
     public void QueryRequiringNoComponentThrows()
     {
-        Assert.Throws<InvalidOperationException>(() => new World().Query<EntitiesOnly>());
+        SystemScheduler scheduler = new SystemScheduler(new World());
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<EntitiesOnly>(), _ => { })));
     }
 
     [Test]
     public void QueryRequiringAndExcludingAComponentThrows()
     {
-        Assert.Throws<InvalidOperationException>(() => new World().Query<ExcludedPositions>());
-    }
+        SystemScheduler scheduler = new SystemScheduler(new World());
 
-    private static Entity CreateMoving(World world, Position position, Velocity velocity)
-    {
-        Entity entity = world.Create();
-        world.Add(entity, position);
-        world.Add(entity, velocity);
-        return entity;
+        Assert.Throws<InvalidOperationException>(() => scheduler.Add(builder => ActionSystem.Of(builder.Query<ExcludedPositions>(), _ => { })));
     }
 
     private static List<Entity> CollectEntities(Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>> query)

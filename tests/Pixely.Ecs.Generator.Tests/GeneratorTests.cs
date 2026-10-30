@@ -133,8 +133,8 @@ public class GeneratorTests
     [TestCase("public struct T : ITag; sealed class Q : Query<ReadOnlySpan<T>>;", "PXECS002")]
     [TestCase("ref struct R; sealed class Q : Query<Span<R>>;", "PXECS002")]
     [TestCase("sealed class Q : Query<ReadOnlySpan<Position>, Span<Position>>;", "PXECS003")]
-    [TestCase("static class R { static void Read(World world) => world.Query<Query<Span<Entity>>>(); }", "PXECS002")]
-    [TestCase("static class R { static void Read(World world) => world.Query<Query<ReadOnlySpan<Position>, ReadOnlySpan<Position>>>(); }", "PXECS003")]
+    [TestCase("static class R { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Query<Span<Entity>>>(); }", "PXECS002")]
+    [TestCase("static class R { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Query<ReadOnlySpan<Position>, ReadOnlySpan<Position>>>(); }", "PXECS003")]
     public void InvalidSpanTypeArgumentReportsDiagnostic(string declaration, string expectedId)
     {
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
@@ -680,7 +680,7 @@ public class GeneratorTests
         Assert.That(interceptors, Does.Contain("long order = global::Pixely.Ecs.SystemScheduler.ReserveOrder();").And.Contain(", order));"));
     }
 
-    // A query whose Query<...> comes through a generic base is registered through its declaration, or through the closed type that World.Query names
+    // A query whose Query<...> comes through a generic base is registered through its declaration, or through the closed type that AddQuery names
     // or that the constructor of a system added with AddSystem takes.
     [Test]
     public void SpansBehindAGenericBaseAreRegistered()
@@ -709,7 +709,7 @@ public class GeneratorTests
 
             static class Reader
             {
-                static void Read(World world) => world.Query<Of<Heat>>();
+                static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Of<Heat>>();
 
                 static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }
@@ -869,9 +869,9 @@ public class GeneratorTests
         Assert.That(registration, Does.Contain("RegisterSpan<global::Position>();").And.Not.Contain("global::Mark"));
     }
 
-    // The open query already reports its invalid type argument where it is written, so AddSystem and World.Query do not report it again.
+    // The open query already reports its invalid type argument where it is written, so AddSystem and AddQuery do not report it again.
     [TestCase("Query<Span<T>, int>", "")]
-    [TestCase("Of<T>", "sealed class Of<T> : Query<Span<T>, int> where T : struct; static class Reader { static void Read(World world) => world.Query<Of<Velocity>>(); }")]
+    [TestCase("Of<T>", "sealed class Of<T> : Query<Span<T>, int> where T : struct; static class Reader { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Of<Velocity>>(); }")]
     [TestCase("Of<T>", "class Of<T> : Query<Span<T>, int> where T : struct; sealed class Positions : Of<Position>;")]
     public void InvalidSpanOfAnOpenQueryIsReportedOnce(string queryType, string declarations)
     {
@@ -908,7 +908,7 @@ public class GeneratorTests
             CreateReferences(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         using MemoryStream image = new MemoryStream();
         Assert.That(external.Emit(image).Success, Is.True);
-        CSharpCompilation compilation = CreateCompilation(Components + "static class Reader { static void Read(World world) => world.Query<External.Of<Position>>(); }")
+        CSharpCompilation compilation = CreateCompilation(Components + "static class Reader { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<External.Of<Position>>(); }")
             .AddReferences(MetadataReference.CreateFromImage(image.ToArray()));
 
         CreateDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out ImmutableArray<Diagnostic> diagnostics);
@@ -917,7 +917,7 @@ public class GeneratorTests
     }
 
     [TestCase("public struct T : ITag; abstract class ComponentQuery<C> : Query<ReadOnlySpan<C>> where C : struct; sealed class Q : ComponentQuery<T>;")]
-    [TestCase("sealed class Of<C> : Query<Span<C>> where C : struct; static class R { static void Read(World world) => world.Query<Of<Entity>>(); }")]
+    [TestCase("sealed class Of<C> : Query<Span<C>> where C : struct; static class R { static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Of<Entity>>(); }")]
     public void InvalidSpanBehindAGenericBaseReportsDiagnostic(string declaration)
     {
         (ImmutableArray<Diagnostic> diagnostics, _) = Run(Components + declaration);
@@ -960,7 +960,7 @@ public class GeneratorTests
 
             static class Reader
             {
-                static void Read(World world) => world.Query<Game.Of<Light>>();
+                static void Read(Pixely.DependencyInjection.ServiceCollection services) => services.AddQuery<Game.Of<Light>>();
 
                 static void Register(Pixely.DependencyInjection.ServiceCollection services) => services.AddSystem<S>();
             }

@@ -15,6 +15,7 @@
 
     <ItemGroup>
         <Fluidify Include="ComponentLookups.cs.fluid" />
+        <Fluidify Include="EcsServiceCollectionExtensions.Lookups.cs.fluid" />
         <Fluidify Include="ComponentRefs.cs.fluid" />
         <Fluidify Include="Queries.cs.fluid" />
         <Fluidify Include="QueryFilters.cs.fluid" />

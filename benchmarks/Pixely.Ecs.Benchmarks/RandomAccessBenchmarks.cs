@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using Pixely.DependencyInjection;
 using ArchEntity = Arch.Core.Entity;
 using ArchWorld = Arch.Core.World;
 
@@ -57,8 +58,10 @@ public class RandomAccessBenchmarks
         }
     }
 
-    private World _pixely = null!;
+    private ServiceProvider _pixely = null!;
     private Entity[] _pixelyEntities = [];
+    // The lookup that AddReadOnlyComponentLookup registers for code outside systems, which reads at any time.
+    private ReadOnlyComponentLookup<Position> _positions = null!;
     // One scheduler per system, so each benchmark updates only its own.
     private SystemScheduler _lookupScheduler = null!;
     private SystemScheduler _twoLookupsScheduler = null!;
@@ -75,22 +78,32 @@ public class RandomAccessBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        (_pixely, _pixelyEntities) = Worlds.CreatePixely(Count);
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddReadOnlyComponentLookup<Position>();
+        _pixely = services.BuildServiceProvider();
+        World world = _pixely.GetRequiredService<World>();
+        _positions = _pixely.GetRequiredService<ReadOnlyComponentLookup<Position>>();
+        _pixelyEntities = Worlds.PopulatePixely(world, Count);
         (_arch, _archEntities) = Worlds.CreateArch(Count);
         int[] order = Enumerable.Range(0, Count).ToArray();
         new Random(42).Shuffle(order);
         _pixelyEntities = order.Select(i => _pixelyEntities[i]).ToArray();
         _archEntities = order.Select(i => _archEntities[i]).ToArray();
-        _lookupScheduler = new SystemScheduler(_pixely);
+        _lookupScheduler = new SystemScheduler(world);
         _lookupSystem = _lookupScheduler.Add(builder => new LookupSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position>()));
-        _twoLookupsScheduler = new SystemScheduler(_pixely);
+        _twoLookupsScheduler = new SystemScheduler(world);
         _twoLookupsSystem = _twoLookupsScheduler.Add(builder => new TwoLookupsSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position>(), builder.ReadOnlyComponentLookup<Velocity>()));
-        _pairLookupScheduler = new SystemScheduler(_pixely);
+        _pairLookupScheduler = new SystemScheduler(world);
         _pairLookupSystem = _pairLookupScheduler.Add(builder => new PairLookupSystem(_pixelyEntities, builder.ReadOnlyComponentLookup<Position, Velocity>()));
     }
 
     [GlobalCleanup]
-    public void Cleanup() => ArchWorld.Destroy(_arch);
+    public void Cleanup()
+    {
+        _pixely.Dispose();
+        ArchWorld.Destroy(_arch);
+    }
 
     [Benchmark(Baseline = true)]
     public float Arch()
@@ -104,13 +117,14 @@ public class RandomAccessBenchmarks
         return sum;
     }
 
+    // Reads through the lookup of code outside systems, the checked path.
     [Benchmark]
     public float Pixely()
     {
         float sum = 0;
         foreach (Entity entity in _pixelyEntities)
         {
-            sum += _pixely.Get<Position>(entity).X;
+            sum += _positions[entity].X;
         }
 
         return sum;
@@ -123,7 +137,7 @@ public class RandomAccessBenchmarks
         float sum = 0;
         foreach (Entity entity in _pixelyEntities)
         {
-            sum += _pixely.UnsafeGet<Position>(entity).X;
+            sum += _positions.UnsafeGet(entity).X;
         }
 
         return sum;

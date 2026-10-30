@@ -5,6 +5,8 @@ using Pixely.Collections;
 
 namespace Pixely.Ecs;
 
+// The entities and their components. Its members are internal: systems change it through their writers, spawners and lookups, and code outside
+// systems reads it through the queries and lookups that AddQuery and AddReadOnlyComponentLookup register.
 public sealed class World
 {
     // What Get returns for a tag, which has no data to store.
@@ -30,29 +32,12 @@ public sealed class World
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
     private readonly FastList<Query?> _queries = new FastList<Query?>(4);
     private readonly FastList<SpawnerLayout?> _spawnerLayouts = new FastList<SpawnerLayout?>(4);
-    private readonly Archetype _emptyArchetype;
 
     // Each running query has an id, so ending a query twice, as copies of its enumerator do, ends it once.
     private readonly HashSet<long> _activeQueries = [];
     private long _lastQuery;
 
-    public World()
-    {
-        _emptyArchetype = CreateArchetype(ComponentSet.Empty, []);
-    }
-
-    // Allowed while a query runs: a new entity is in the empty archetype, and no query matches it because each requires a component.
-    public Entity Create()
-    {
-        int index = TakeIndex();
-        ref EntityRecord record = ref _records[index];
-        Entity entity = new Entity(index, record.Version);
-        record.Archetype = _emptyArchetype;
-        record.Row = _emptyArchetype.AddRow(entity);
-        return entity;
-    }
-
-    public void Destroy(Entity entity)
+    internal void Destroy(Entity entity)
     {
         ThrowIfQueryRuns();
         ref EntityRecord record = ref GetRecord(entity);
@@ -66,7 +51,7 @@ public sealed class World
         FreeIndex(ref record, entity.Index);
     }
 
-    public bool IsAlive(Entity entity)
+    internal bool IsAlive(Entity entity)
     {
         if ((uint)entity.Index >= (uint)_records.Count)
         {
@@ -77,13 +62,13 @@ public sealed class World
         return record.Version == entity.Version && record.Archetype is not null;
     }
 
-    public bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
+    internal bool Has<T>(Entity entity) where T : struct => GetRecord(entity).Archetype!.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
 
     // Has for an entity that may not be alive, which has no components, for lookups that follow an entity another system may have destroyed.
     internal bool IsAliveWith<T>(Entity entity) where T : struct => FindArchetype(entity)?.GetColumnIndex(ComponentType<T>.Id) is not (null or Archetype.Absent);
 
-    // The reference stays valid until the next structural change: Create, Destroy, Add, Remove, EnsureCapacity or a sync point. For a tag it is one value that all entities share.
-    public ref T Get<T>(Entity entity) where T : struct
+    // The reference stays valid until the next structural change: Destroy, Add, Remove or a sync point. For a tag it is one value that all entities share.
+    internal ref T Get<T>(Entity entity) where T : struct
     {
         ref EntityRecord record = ref GetRecord(entity);
         return ref GetComponent<T>(record.Archetype!, record.Row, entity);
@@ -91,7 +76,7 @@ public sealed class World
 
     // Get without its checks, for lookups in hot loops. The entity must be alive in this world and have T, which only Debug builds assert.
     // Otherwise the behavior is undefined: it may throw, return a reference into another entity's data, or read memory as the wrong type.
-    public ref T UnsafeGet<T>(Entity entity) where T : struct
+    internal ref T UnsafeGet<T>(Entity entity) where T : struct
     {
         Debug.Assert(IsAlive(entity) && Has<T>(entity));
         ref EntityRecord record = ref _records[entity.Index];
@@ -152,7 +137,7 @@ public sealed class World
         return ref Archetype.GetRowUnchecked(archetype.GetItemsUnchecked<T>(ComponentType<T>.Id), row);
     }
 
-    public void Add<T>(Entity entity, T component) where T : struct
+    internal void Add<T>(Entity entity, T component) where T : struct
     {
         ThrowIfQueryRuns();
         ref EntityRecord record = ref GetRecord(entity);
@@ -186,7 +171,7 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
-    public void Remove<T>(Entity entity) where T : struct
+    internal void Remove<T>(Entity entity) where T : struct
     {
         ThrowIfQueryRuns();
         ref EntityRecord record = ref GetRecord(entity);
@@ -216,17 +201,8 @@ public sealed class World
         FixMovedRow(source, row);
     }
 
-    // Grows the archetype of the spawner's components to hold at least capacity entities, so a known number of spawns or adds grows its
-    // columns once. Returns the archetype's capacity, which can be more than requested. Throws while a query runs, because growing replaces the arrays its spans point into.
-    public int EnsureCapacity<TSpawner>(int capacity) where TSpawner : Spawner, new()
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
-        ThrowIfQueryRuns();
-        return GetSpawnerLayout<TSpawner>().Archetype.EnsureCapacity(capacity);
-    }
-
     // One instance per world and query type, created on first use. Enumerate it with foreach.
-    public TQuery Query<TQuery>() where TQuery : Query, new()
+    internal TQuery Query<TQuery>() where TQuery : Query, new()
     {
         int id = QueryId<TQuery>.Id;
         if (id >= _queries.Length)

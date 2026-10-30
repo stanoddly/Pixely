@@ -11,7 +11,7 @@ namespace Pixely.Ecs;
 // behave as those of ComponentLookup<T> do for each component.
 {%- else %}
 // Reads the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
-// behave as those of ReadOnlyComponentLookup<T> do for each component.
+// behave as those of ReadOnlyComponentLookup<T> do for each component, inside a system or outside.
 {%- endif %}
 {%- for n in (2..8) %}
 {%- capture args %}{% for i in (1..n) %}{% unless forloop.first %}, {% endunless %}T{{ i }}{% endfor %}{% endcapture %}
@@ -28,6 +28,13 @@ public sealed class {{ name }}<{{ args }}> : ILookup
     {
         commands.AddLookup(this);
     }
+{%- if kind == 1 %}
+
+    internal {{ name }}(World world)
+    {
+        _world = world;
+    }
+{%- endif %}
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype{% for i in (1..n) %} && Lookup.Has<T{{ i }}>(archetype){% endfor %};
 

@@ -12,6 +12,9 @@ public struct Player;
 
 public sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>;
 
+// Movement without writing, so code outside systems can take it through AddQuery.
+public sealed class MovingEntities : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>, ReadOnlySpan<Velocity>>;
+
 public sealed class UnfrozenPositions : Query<ReadOnlySpan<Entity>, ReadOnlySpan<Position>>, IWithout<Frozen>;
 
 public sealed class PlayerEntities : Query<ReadOnlySpan<Entity>>, IWith<Player>;

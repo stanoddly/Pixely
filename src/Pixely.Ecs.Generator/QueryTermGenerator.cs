@@ -13,14 +13,13 @@ readonly record struct TermExtraction(EquatableArray<TermRegistration> Registrat
 
 // Registers every Span<T> and ReadOnlySpan<T> that a Query<...> in the assembly names, through a module initializer, because the library cannot get T
 // from a span type argument without reflection. It finds them wherever Query<...> is written: in the base list of a query class, and in a call of
-// World.Query or SystemBuilder.Query. A query whose Query<...> comes through a generic base, such as Positions : ComponentQuery<Position>, is found
-// through its declaration, or through the closed type named in World.Query or SystemBuilder.Query, or by the constructor of a system that AddSystem
+// AddQuery or SystemBuilder.Query. A query whose Query<...> comes through a generic base, such as Positions : ComponentQuery<Position>, is found
+// through its declaration, or through the closed type named in AddQuery or SystemBuilder.Query, or by the constructor of a system that AddSystem
 // names. The constructor is read from the closed system type, so a generic system's queries are closed with its type arguments.
 [Generator]
 public class QueryTermGenerator : IIncrementalGenerator
 {
     private const string ExtensionsName = "Pixely.Ecs.EcsServiceCollectionExtensions";
-    private const string WorldName = "Pixely.Ecs.World";
     private const string BuilderName = "Pixely.Ecs.SystemBuilder";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -55,7 +54,7 @@ public class QueryTermGenerator : IIncrementalGenerator
 
     // Query<...>, a Query or AddSystem call, or a class with a base list. The type arguments are read from the symbols, so qualified and aliased names
     // count too.
-    private static bool IsCandidate(SyntaxNode node) => node is GenericNameSyntax { Identifier.Text: "Query" or "AddSystem" } or ClassDeclarationSyntax { BaseList: not null };
+    private static bool IsCandidate(SyntaxNode node) => node is GenericNameSyntax { Identifier.Text: "Query" or "AddQuery" or "AddSystem" } or ClassDeclarationSyntax { BaseList: not null };
 
     private static TermExtraction? Extract(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
@@ -76,7 +75,9 @@ public class QueryTermGenerator : IIncrementalGenerator
         return context.SemanticModel.GetSymbolInfo(syntax, cancellationToken).Symbol switch
         {
             INamedTypeSymbol type when GeneratorSupport.IsQueryType(type) => ExtractTerms(type, syntax.GetLocation()),
-            IMethodSymbol { Name: "Query", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() is WorldName or BuilderName =>
+            IMethodSymbol { Name: "Query", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == BuilderName =>
+                ExtractClosedQueries(method.TypeArguments, context.SemanticModel.Compilation, syntax.GetLocation()),
+            IMethodSymbol { Name: "AddQuery", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == ExtensionsName =>
                 ExtractClosedQueries(method.TypeArguments, context.SemanticModel.Compilation, syntax.GetLocation()),
             // nameof adds no system.
             IMethodSymbol { Name: "AddSystem", TypeArguments.Length: 1 } method when method.ContainingType.ToDisplayString() == ExtensionsName
