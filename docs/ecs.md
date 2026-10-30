@@ -296,4 +296,4 @@ PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed 
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
 - Optional components, change detection, events on add or remove, relations between entities.
-- Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`.
+- Pixely.Fitness still expects Systems to be `IUpdatable`, and has no rules for the [Orange architecture](orange-architecture.md) yet.
