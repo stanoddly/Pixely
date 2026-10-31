@@ -351,5 +351,5 @@ PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed 
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
 - Change detection, events on add or remove, relations between entities.
-- Pixely.Fitness has no rules for the [Orange architecture](orange-architecture.md) yet.
+- Pixely.Fitness checks only the [Orange](orange-architecture.md) rules that constructors and types show, see [fitness](fitness.md).
 - The browser is untested. Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and no browser test runs it under Mono, the browser's runtime, with or without AOT.

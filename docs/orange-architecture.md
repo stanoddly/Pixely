@@ -22,11 +22,12 @@
 Parts of what this document builds on are not final:
 
 - `Pixely.Ecs` is experimental
-- `Pixely.Fitness` has no Orange rules yet
+- `Pixely.Fitness` checks only the rules that constructors and types show, see `docs/fitness.md`
 
 ## Foo.Vocabulary namespace
 
-- Public primitives shared all over: enums, ids, read-only record structures, e.g. `TileCoordinate`
+- Public primitives shared all over: enums, ids, read-only record structures, e.g. `TileCoordinate`,
+  and static classes of `const` fields and `static readonly` fields of value types or strings
 - A type only one namespace names lives with it, not here
 - An id is its own type
 
@@ -36,6 +37,9 @@ Parts of what this document builds on are not final:
 - A component is a struct. A tag is a struct that implements `ITag` and holds no data
 - Components hold no rules. A system reads them through read-only spans or writes them through
   spans, so a setter or a read-only collection guards nothing
+- A component MUST NOT hold a reference other than a `string`. A read-only span guards only the
+  component's own bytes, so a `List<T>` it holds stays writable to every reader. It holds values or
+  ids instead
 - Code outside systems MUST NOT write the world. `World` has no public members, so only a system's
   writers, spawners and lookups can
 - The camera is components. Aiming is a system that runs after the camera system
@@ -91,6 +95,7 @@ Parts of what this document builds on are not final:
   Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
   observe several models, see `docs/ui.md`
 - A view reads the world only through its view model. It MUST NOT take queries or lookups
+- A view MUST NOT take a message reader or writer
 - A view model holds what its view shows and the intents its view requested. It is UI state, not
   game state
 - A view's UI event handler calls its view model, e.g. `viewModel.Toggle()`. It MUST NOT call a
@@ -169,7 +174,8 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
   `AddQuery` and `AddReadOnlyComponentLookup`, see `docs/ecs.md`
 - They MUST NOT write
 - A renderer MUST NOT read messages, because Pixely skips rendering while a window is minimized. An
-  updatable reads them and keeps what the renderer draws
+  updatable reads them and keeps what the renderer draws. The updatable that reads them MUST NOT be
+  the renderer
 
 ## Not settled yet
 

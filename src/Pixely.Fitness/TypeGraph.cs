@@ -49,6 +49,12 @@ public static class TypeGraph
         return false;
     }
 
+    // An open generic interface such as IRenderer<> matches every closed one.
+    public static bool Implements(Type type, Type interfaceType)
+    {
+        return type.GetInterfaces().Any(candidate => candidate == interfaceType || candidate.IsGenericType && candidate.GetGenericTypeDefinition() == interfaceType);
+    }
+
     public static IEnumerable<MethodInfo> DeclaredMethods(Type type)
     {
         return type.GetMethods(Declared).Where(method => method.GetCustomAttribute<CompilerGeneratedAttribute>() == null);
