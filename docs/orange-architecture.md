@@ -40,6 +40,8 @@ Parts of what this document builds on are not final:
 - A component MUST NOT hold a reference other than a `string`. A read-only span guards only the
   component's own bytes, so a `List<T>` it holds stays writable to every reader. It holds values or
   ids instead
+- The stage the game is played in calls `AddEcs`, not the root, so unloading or reloading the stage
+  drops the world with its entities. A stage without a world, e.g. a main menu, does not call it
 - Code outside systems MUST NOT write the world. `World` has no public members, so only a system's
   writers, spawners and lookups can
 - The camera is components. Aiming is a system that runs after the camera system
@@ -180,8 +182,7 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 ## Not settled yet
 
 - Project layout and the references between projects
-- Registrars, stages and where each stage's `World` lives. A child collection that calls `AddEcs`
-  keeps its parent's world
+- Registrars, and how stages pass state to each other
 - Autonomous actors, e.g. a non player participant or a scripted scenario
 - Hidden information and what each participant perceives
 - References between entities, and finding the children of an entity without scanning every entity

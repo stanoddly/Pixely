@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-31: A stage that calls AddEcs owns its World, and a child of a collection with a world cannot call AddEcs
+
+`AddEcs` registers a new `World` and `SystemScheduler` in the collection it is called on. They live as long as that collection's provider, so unloading or reloading a stage drops its entities. Calling `AddEcs` on a child of a collection that already has a world throws. Before, a child that called `AddEcs` kept its parent's world, so the entities of a stage outlived it.
+
+- `StageManager` already disposes the whole stage provider on every load and reload, so the world only had to be registered in the stage.
+- Reloading a stage, such as loading a save, starts from an empty world, and the messages registered in the stage are dropped with it.
+- Throwing instead of giving the child a second world keeps one world per provider chain. With two, code registered with `AddQuery` in the root would read the root's world while the stage's systems wrote the stage's.
+
+Cost: a game whose world lives in a stage has no systems in the root, so its input systems are added by the stage too. State that must survive a stage transition has to be passed outside the world. A child collection that adds systems without calling `AddEcs` still adds them to its parent's world, and the entities they spawn outlive it.
+
 ## 2026-10-30: A game's tests build the game's app from a test builder
 
 `TestApp.CreateBuilder()` in `Pixely.Testing` returns a `PixelyAppBuilder` with the test environment registered, and a test passes it to the game's own `Configure`, which the game makes public (`docs/testing.md`). The app runs on the stub GPU device and SDL's dummy video and audio drivers, is isolated from the machine's gamepads and theme, steps game time by 1/30 s per frame, and takes synthetic input through `TestInput`.

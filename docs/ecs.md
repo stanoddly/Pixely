@@ -200,11 +200,13 @@ services.AddSystem<DeathSystem>();
 services.AddSystem<MovementSystem>();
 ```
 
-- `AddEcs` registers a `World` and a `SystemScheduler`. The scheduler is an `IUpdatable` at the default `UpdateOrder` and updates every system once per frame. A child collection that calls `AddEcs` keeps its parent's world and scheduler.
+- `AddEcs` registers a `World` and a `SystemScheduler`. The scheduler is an `IUpdatable` at the default `UpdateOrder` and updates every system once per frame.
+- The world lives as long as the provider of the collection that called `AddEcs`. A stage that calls `AddEcs` owns its world, so unloading or reloading the stage drops its entities, and the next stage starts with an empty world.
+- Calling `AddEcs` again on the same collection does nothing. Calling it on a child of a collection that already has a world throws `InvalidOperationException`, because the child would share that world and its entities would outlive the child.
 - `AddSystem<T>` is intercepted by the generator, also through `?.`. The generated code registers `T` as a singleton of its own type. When the provider creates it, before any `OnBuilt` callback runs, the generated code creates its queries, lookups and writers through a `SystemBuilder`, which records them as the contract, resolves its other parameters from the provider, and adds it to the scheduler.
-- Systems run in the order their `IAfter<...>` and `IBefore<...>` declare, described below. Otherwise they run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a stage run after those of its parent. Adding a system type twice adds two instances.
+- Systems run in the order their `IAfter<...>` and `IBefore<...>` declare, described below. Otherwise they run in the order of their `AddSystem` calls, even when a service needs a system and the provider creates it early, and the systems of a child collection that did not call `AddEcs` run after those of its parent. Adding a system type twice adds two instances.
 - A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS014 reports one that does.
-- A system registered in a stage's collection leaves the scheduler when the stage's provider is disposed.
+- A child collection that adds systems without calling `AddEcs` adds them to its parent's world. They leave the scheduler when the child's provider is disposed, but the entities they spawned stay in the parent's world.
 
 ### Code outside systems
 
@@ -241,9 +243,9 @@ internal sealed class AimSystem(Aimers aimers) : ISystem, IAfter<CameraSystem>, 
 - `AimSystem` runs after every `CameraSystem` and before every `WeaponSystem`, whatever order they were added in.
 - Each type argument is a class that implements `ISystem`, which the compiler checks.
 - `IAfter<...>` and `IBefore<...>` take 1 to 8 systems. A system implements at most one `IAfter<...>` and one `IBefore<...>`; two of a kind give the compiler error CS8705. So two targets are `IAfter<CameraSystem, InputSystem>`.
-- A type argument that no added system has is ignored, so a system of the root may name one that only some stages add.
+- A type argument that no added system has is ignored, so a system may name one that only some child collections add.
 - Systems that declare no order between them keep the order of their `AddSystem` or `Add` calls. Each step runs the earliest added system whose systems to run after have run.
-- A stage shares its parent's scheduler, so a system of a stage may run before one of its parent through `IBefore<...>`.
+- A child collection without `AddEcs` shares its parent's scheduler, so one of its systems may run before one of the parent's through `IBefore<...>`.
 - The scheduler reads the declarations when it adds a system and sorts at the start of the next `Update`. Sync points follow the sorted order.
 - A cycle, such as two systems that each run after the other, throws `InvalidOperationException` from `Update`, naming the systems of the cycle. Every `Update` throws until a system of the cycle is removed.
 

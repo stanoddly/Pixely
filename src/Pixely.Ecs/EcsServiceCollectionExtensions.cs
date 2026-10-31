@@ -1,15 +1,28 @@
+using System.Runtime.CompilerServices;
 using Pixely.DependencyInjection;
 
 namespace Pixely.Ecs;
 
 public static partial class EcsServiceCollectionExtensions
 {
-    // Registers a World and the SystemScheduler that updates its systems every frame. A child collection keeps its parent's.
+    // The collections AddEcs registered a world in. IsRegistered also sees the parent's services, so it cannot tell a second call on the same collection
+    // from a call on a child of a collection with a world.
+    private static readonly ConditionalWeakTable<ServiceCollection, World> Worlds = new ConditionalWeakTable<ServiceCollection, World>();
+
+    // Registers a World and the SystemScheduler that updates its systems every frame. Both live as long as the provider of this collection, so a stage
+    // that calls AddEcs drops its entities when it unloads. A child collection that would share its parent's world throws, because its entities would
+    // outlive it. A child collection that adds systems without calling AddEcs adds them to its parent's world.
     public static void AddEcs(this ServiceCollection services)
     {
-        if (services.IsRegistered<SystemScheduler>())
+        if (Worlds.TryGetValue(services, out _))
         {
             return;
+        }
+
+        if (services.IsRegistered<SystemScheduler>())
+        {
+            throw new InvalidOperationException(
+                "A parent collection already has a World, so this collection would share it and its entities would outlive this collection's provider. Call AddEcs only in the collection whose provider owns the world, such as the stage that plays the game.");
         }
 
         World world = new World();
@@ -17,6 +30,7 @@ public static partial class EcsServiceCollectionExtensions
         services.AddSingleton(world);
         services.AddSingleton(scheduler);
         services.OnDisposing((instance, _) => scheduler.Remove(instance));
+        Worlds.Add(services, world);
     }
 
     // Registers the world's TQuery for code outside systems, such as a renderer or a view, which takes it in its constructor. A query that writes through a

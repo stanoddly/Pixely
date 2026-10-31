@@ -150,7 +150,6 @@ public class SystemRegistrationTests
         services.AddEcs();
         using ServiceProvider root = services.BuildServiceProvider();
         ServiceCollection stage = root.CreateServiceCollection();
-        stage.AddEcs();
         stage.AddSystem<Cleaner>();
         ServiceProvider child = stage.BuildServiceProvider();
         SystemScheduler scheduler = root.GetRequiredService<SystemScheduler>();
@@ -160,6 +159,57 @@ public class SystemRegistrationTests
         scheduler.Update();
 
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Cleaner) }));
+    }
+
+    [Test]
+    public void AddEcsInAChildOfACollectionWithAWorldThrows()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        using ServiceProvider root = services.BuildServiceProvider();
+        ServiceCollection stage = root.CreateServiceCollection();
+
+        Assert.Throws<InvalidOperationException>(() => stage.AddEcs());
+    }
+
+    [Test]
+    public void AddEcsTwiceInOneCollectionRegistersOneWorld()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddEcs();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetServices<World>(), Has.Count.EqualTo(1));
+        Assert.That(provider.GetServices<SystemScheduler>(), Has.Count.EqualTo(1));
+    }
+
+    // A stage that calls AddEcs owns its world: the next stage starts empty, and the unloaded stage's scheduler leaves the root's updatables.
+    [Test]
+    public void StageThatCallsAddEcsDropsItsWorldWhenDisposed()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
+        using ServiceProvider root = services.BuildServiceProvider();
+        ServiceRegistry<IUpdatable> updatables = root.GetRequiredService<ServiceRegistry<IUpdatable>>();
+        ServiceCollection first = root.CreateServiceCollection();
+        first.AddEcs();
+        ServiceProvider firstStage = first.BuildServiceProvider();
+        SystemScheduler firstScheduler = firstStage.GetRequiredService<SystemScheduler>();
+        World firstWorld = firstStage.GetRequiredService<World>();
+        firstScheduler.RunOnce(builder => builder.Spawner<MovingSpawner>(), spawner => spawner.Spawn(default, default));
+
+        Assert.That(updatables, Is.EqualTo(new IUpdatable[] { firstScheduler }));
+
+        firstStage.Dispose();
+        ServiceCollection second = root.CreateServiceCollection();
+        second.AddEcs();
+        second.AddQuery<MovingEntities>();
+        using ServiceProvider secondStage = second.BuildServiceProvider();
+
+        Assert.That(updatables, Is.EqualTo(new IUpdatable[] { secondStage.GetRequiredService<SystemScheduler>() }));
+        Assert.That(secondStage.GetRequiredService<World>(), Is.Not.SameAs(firstWorld));
+        Assert.That(CountMoving(secondStage.GetRequiredService<MovingEntities>()), Is.Zero);
     }
 
     [Test]
@@ -265,7 +315,6 @@ public class SystemRegistrationTests
         services.AddSystem<First>();
         using ServiceProvider root = services.BuildServiceProvider();
         ServiceCollection stage = root.CreateServiceCollection();
-        stage.AddEcs();
         stage.AddSystem<Second>();
         stage.AddSystem<First>();
         using ServiceProvider child = stage.BuildServiceProvider();
@@ -276,7 +325,7 @@ public class SystemRegistrationTests
         Assert.That(log.Systems[2], Is.Not.SameAs(log.Systems[0]));
     }
 
-    // A stage shares its parent's scheduler, so its systems are ordered among the parent's.
+    // A child collection that adds systems without calling AddEcs shares its parent's scheduler, so its systems are ordered among the parent's.
     [Test]
     public void SystemOfAStageCanRunBeforeOneOfItsParent()
     {
@@ -287,7 +336,6 @@ public class SystemRegistrationTests
         services.AddSystem<First>();
         using ServiceProvider root = services.BuildServiceProvider();
         ServiceCollection stage = root.CreateServiceCollection();
-        stage.AddEcs();
         stage.AddSystem<StageOpener>();
         using ServiceProvider child = stage.BuildServiceProvider();
 
@@ -331,7 +379,6 @@ public class SystemRegistrationTests
         services.AddSystem<First>();
         using ServiceProvider root = services.BuildServiceProvider();
         ServiceCollection stage = root.CreateServiceCollection();
-        stage.AddEcs();
         stage.AddSystem<Second>();
         stage.OnBuilt(static _ => throw new InvalidOperationException("The stage failed."));
 
