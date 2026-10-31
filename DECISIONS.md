@@ -2,15 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-10-31: An Orange game is one project, with namespaces for the game and for the code outside systems
+## 2026-10-31: An Orange game is one project, and one internal AddGame registers its stage
 
-An Orange game is one project, `src/Foo/Foo.csproj`. The game is in `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels` and `Foo.Systems`, and code outside systems in `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Types are internal. Two internal methods register a stage: `AddGame` for the world, messages, systems and view models, and `AddFrontend` for the rest. Peach had seven projects, from `Game` to `Executable`.
+An Orange game is one project, `src/Foo/Foo.csproj`, with the namespaces `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels`, `Foo.Systems`, `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Types are internal, except `Program` and `Configure`, which tests call. One internal `AddGame` registers the stage the game is played in, views and renderers included. Peach had seven projects, from `Game` to `Executable`, and split `Game` from `Frontend`.
 
 - Peach needed projects to keep code outside `Game` from writing State. In Pixely.Ecs only a system's writers, spawners and lookups write the world, so a project boundary adds nothing there.
 - Systems are internal, and `IAfter<...>` and `IBefore<...>` name system types. Across projects a system could not name an internal system of another, so every system lives in one assembly.
-- A test composes `AddGame` alone, so the rules run without a window or a GPU, as a separate game project allowed.
+- A test builds the whole app with `TestApp.CreateBuilder()` and the game's `Configure`, on the stub GPU device and synthetic input, so nothing needs the game composed without its views and renderers.
+- The constructor rules keep the game apart from how it is shown: a view reads only its view model, and code outside systems reads the world through read-only queries and lookups.
 
-Cost: the compiler no longer stops the game from naming a view or a renderer. The doc makes it a MUST, and no Fitness rule checks it yet. Salvagery, on the Peach layout, merges four projects into one to follow this.
+Cost: nothing stops a system from naming a view or a renderer. Salvagery, on the Peach layout, merges four projects into one to follow this.
 
 ## 2026-10-31: A stage that calls AddEcs owns its World, and a child of a collection with a world cannot call AddEcs
 

@@ -27,12 +27,10 @@ Parts of what this document builds on are not final:
 ## Project
 
 - A game is one project, `src/Foo/Foo.csproj`, that sets `PixelyHosting`, see `docs/hosting.md`
-- The game is in `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels` and
-  `Foo.Systems`. Input systems are systems too
-- Code outside systems is in `Foo.Views`, `Foo.Rendering` and `Foo.Audio`
-- A type of the game MUST NOT name a type of `Foo.Views`, `Foo.Rendering` or `Foo.Audio`, so the game
-  composes without them
-- Types SHOULD be internal. Tests reach them through `InternalsVisibleTo`. Pixely.Ecs, not a project
+- Its namespaces are `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels`,
+  `Foo.Systems`, `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Input systems are systems too
+- Types SHOULD be internal, except `Program` and its `Configure`, which a test calls, see
+  `docs/testing.md`. Tests reach the rest through `InternalsVisibleTo`. Pixely.Ecs, not a project
   boundary, keeps code outside systems from writing the world
 - Every system is in the project, so a system orders itself after or before any other with
   `IAfter<...>` and `IBefore<...>`
@@ -41,13 +39,16 @@ Parts of what this document builds on are not final:
 
 - `Configure` in `Program.cs` registers the root: Pixely and what survives a stage change, e.g. render
   targets and content. An `OnBuilt` callback loads the first stage through `IStageManager.Load`
-- Two internal extension methods on `ServiceCollection` register a stage:
-  - `AddGame` calls `AddEcs` and registers the messages, the systems and the view models
-  - `AddFrontend` registers the views, the renderers, audio, and the queries and lookups they read
-- A stage calls both. A test calls `AddGame` alone and runs without a window or a GPU
-- Each method registers the same types whatever its arguments. Arguments configure values
-- A stage owns its world, see World. State that the next stage needs is a value passed to its
-  `AddGame`, e.g. `AddGame(new GameStart(Seed: 42))`, which registers it for the systems that read it
+- `AddGame`, an internal extension method on `ServiceCollection` in the root namespace `Foo`,
+  registers the stage the game is played in. It calls `AddEcs` and registers the messages, the
+  systems, the view models, the views, the renderers, audio, and the queries and lookups that code
+  outside systems reads
+- It registers the same types whatever its arguments. Arguments configure values
+- A stage owns its world, see World. State that the next stage needs is passed to its `AddGame` as an
+  object, e.g. `AddGame(new GameStart(Seed: 42))` with `GameStart` a sealed record class, which it
+  registers for the systems that read it. The container holds only classes
+- A test builds the game's app with `TestApp.CreateBuilder()` and the game's `Configure`, sends input
+  through `TestInput` and runs frames with `RunFrame`, see `docs/testing.md`
 
 ## Foo.Vocabulary namespace
 
