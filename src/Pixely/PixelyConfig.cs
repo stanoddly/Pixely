@@ -39,10 +39,12 @@ public sealed record PixelyConfig(
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
-    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
+    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the test app builder of Pixely.Testing.
     internal string? SdlVideoDriver { get; set; }
+    // The SDL audio driver of the app, which SDL_AUDIO_DRIVER overrides; set by the test app builder of Pixely.Testing.
+    internal string? SdlAudioDriver { get; set; }
     // The app ignores the machine's gamepads and the OS's theme, so it behaves the same on any machine; set by headless mode
-    // (Pixely.Headless).
+    // (Pixely.Headless) and the test app builder of Pixely.Testing.
     internal bool IsIsolated { get; set; }
 }
 #else
@@ -65,10 +67,12 @@ public sealed record PixelyConfig(
     public bool EnableDiagnostics { get; internal set; } = EnableDiagnostics;
     public UploadWait UploadWait { get; internal set; } = UploadWait;
     public bool EnableCommandConsole { get; internal set; } = EnableCommandConsole;
-    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the stub GPU device of Pixely.Testing.
+    // The SDL video driver of the app, which SDL_VIDEO_DRIVER overrides; set by the test app builder of Pixely.Testing.
     internal string? SdlVideoDriver { get; set; }
+    // The SDL audio driver of the app, which SDL_AUDIO_DRIVER overrides; set by the test app builder of Pixely.Testing.
+    internal string? SdlAudioDriver { get; set; }
     // The app ignores the machine's gamepads and the OS's theme, so it behaves the same on any machine; set by headless mode
-    // (Pixely.Headless).
+    // (Pixely.Headless) and the test app builder of Pixely.Testing.
     internal bool IsIsolated { get; set; }
 }
 #endif

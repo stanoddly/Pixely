@@ -146,6 +146,7 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),
             serviceProvider.GetRequiredService<StageManager>(),
-            serviceProvider.GetRequiredService<IFrameTimingRecorder>());
+            serviceProvider.GetRequiredService<IFrameTimingRecorder>(),
+            !serviceProvider.GetRequiredService<PixelyConfig>().IsIsolated);
     }
 }

@@ -80,9 +80,8 @@ public class RendererTests
 
     private static IPixelyApp BuildApp()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = TestApp.CreateBuilder();
         builder.UseDefaultContent();
-        builder.UseStubGpu();
         builder.UseDefaultRendering(new WindowConfig(Size: (WindowSize.Width, WindowSize.Height)));
         builder.AddSingleton<IRenderer<BasicRenderContext>, SpriteRenderer>();
         return builder.Build();

@@ -53,9 +53,8 @@ public class StubComputePassTests
 
     private static IPixelyApp BuildApp()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = TestApp.CreateBuilder();
         builder.UseDefaultContent();
-        builder.UseStubGpu();
         return builder.Build();
     }
 }

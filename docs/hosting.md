@@ -50,8 +50,9 @@ static partial class Program
   variable unless `Configure` calls `AddHeadlessSupport()` itself, which in a Debug build does nothing.
 - Command-line arguments come from `Environment.GetCommandLineArgs()`; its first element is the
   executable.
-- `Configure` and `OnException` are ordinary private methods. The generated `Main` is another part of
-  the same class, so nothing needs to be `internal` or `partial` beyond the class itself.
+- `Configure` and `OnException` are ordinary methods, private unless tests call them. The generated `Main` is another part of
+  the same class, so nothing needs to be `internal` or `partial` beyond the class itself. A game whose tests build its app
+  makes `Program` and `Configure` public, so a test passes `Configure` a builder from `TestApp.CreateBuilder()` (`docs/testing.md`).
 - A missing `Configure` is CS0117: the generated `Main` names `Program.Configure`.
 
 ## Reporting failures
