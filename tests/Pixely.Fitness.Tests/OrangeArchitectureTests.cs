@@ -101,19 +101,19 @@ public sealed class OrangeArchitectureTests
     }
 
     [Test]
-    public void VocabularyHoldsOnlyPublicEnumsReadOnlyRecordStructsAndConstants()
+    public void VocabularyHoldsOnlyEnumsReadOnlyRecordStructsAndConstants()
     {
         IReadOnlyList<string> violations = OrangeArchitecture.VocabularyHoldsOnlyPrimitives(Options);
 
         Assert.That(violations, Has.None.Contains(typeof(Facing).FullName!));
         Assert.That(violations, Has.None.Contains(typeof(ItemId).FullName!));
         Assert.That(violations, Has.None.Contains(typeof(Limits).FullName!));
-        Assert.That(violations, Has.One.StartsWith($"{typeof(MutableCoordinate).FullName}: Orangey.Vocabulary holds only public enums, read-only record structs and static classes of constant values"));
+        Assert.That(violations, Has.One.StartsWith($"{typeof(MutableCoordinate).FullName}: Orangey.Vocabulary holds only enums, read-only record structs and static classes of constant values"));
         Assert.That(violations, Has.One.StartsWith($"{typeof(Thresholds).FullName}: "));
         Assert.That(violations, Has.One.StartsWith($"{typeof(Counters).FullName}: "));
         Assert.That(violations, Has.One.StartsWith($"{typeof(Formulas).FullName}: "));
         Assert.That(violations, Has.One.StartsWith($"{typeof(Helper).FullName}: "));
-        Assert.That(violations, Has.One.StartsWith("Orangey.Vocabulary.Hidden: "));
+        Assert.That(violations, Has.None.Contains("Orangey.Vocabulary.Hidden"));
     }
 
     [Test]

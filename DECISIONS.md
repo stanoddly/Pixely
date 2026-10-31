@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-10-31: An Orange game is one project, with namespaces for the game and for the code outside systems
+
+An Orange game is one project, `src/Foo/Foo.csproj`. The game is in `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels` and `Foo.Systems`, and code outside systems in `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Types are internal. Two internal methods register a stage: `AddGame` for the world, messages, systems and view models, and `AddFrontend` for the rest. Peach had seven projects, from `Game` to `Executable`.
+
+- Peach needed projects to keep code outside `Game` from writing State. In Pixely.Ecs only a system's writers, spawners and lookups write the world, so a project boundary adds nothing there.
+- Systems are internal, and `IAfter<...>` and `IBefore<...>` name system types. Across projects a system could not name an internal system of another, so every system lives in one assembly.
+- A test composes `AddGame` alone, so the rules run without a window or a GPU, as a separate game project allowed.
+
+Cost: the compiler no longer stops the game from naming a view or a renderer. The doc makes it a MUST, and no Fitness rule checks it yet. Salvagery, on the Peach layout, merges four projects into one to follow this.
+
 ## 2026-10-31: A stage that calls AddEcs owns its World, and a child of a collection with a world cannot call AddEcs
 
 `AddEcs` registers a new `World` and `SystemScheduler` in the collection it is called on. They live as long as that collection's provider, so unloading or reloading a stage drops its entities. Calling `AddEcs` on a child of a collection that already has a world throws. Before, a child that called `AddEcs` kept its parent's world, so the entities of a stage outlived it.

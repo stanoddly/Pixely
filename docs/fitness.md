@@ -49,7 +49,7 @@ FitnessReport report = FitnessReport.Merge(PixelyConventions.Evaluate(new Pixely
 - `Orange RenderersReadNoMessages`: no constructor of an `IRenderer<T>` takes a `MessageReader<T>`, a `ParticipantMessageReader<,>` or `Messages<T>`. A renderer that is also an updatable fails too, because the rule cannot tell which method reads. A renderer may take a `MessageWriter<T>`.
 - `Orange OutsideSystemsTakeNoWritingQueries`: no constructor of an `IUpdatable` or `IRenderer<T>` that is not a system takes a query with a `Span<T>` or `Optional<Span<T>>`. `AddQuery` throws for one too, but only when the provider is built. A helper that a system builds is not checked.
 - `Orange ViewModelsHaveOneWriter`: no view model is taken by the constructors of two systems, counting a parameter typed by an interface or base class of the view model, except `object`. A view model no system takes passes, because view models of state outside the world are not settled.
-- `Orange VocabularyHoldsOnlyPrimitives`: `Foo.Vocabulary` holds only public enums, read-only record structs, and static classes whose only members are `const` fields and `static readonly` fields of a value type or `string`.
+- `Orange VocabularyHoldsOnlyPrimitives`: `Foo.Vocabulary` holds only enums, read-only record structs, and static classes whose only members are `const` fields and `static readonly` fields of a value type or `string`.
 - `Orange ComponentsHoldNoReferences`: no component holds a reference other than a `string`, also inside a struct it holds. A component is any struct that a query, spawner, filter, lookup, adder or remover names in the scanned assemblies.
 
 ## Other rule sets

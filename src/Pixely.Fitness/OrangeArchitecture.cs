@@ -85,8 +85,8 @@ public static class OrangeArchitecture
     public static IReadOnlyList<string> VocabularyHoldsOnlyPrimitives(OrangeArchitectureOptions options)
     {
         return options.Assemblies.SelectMany(assembly => TypeGraph.TypesIn(assembly, options.VocabularyNamespace))
-            .Where(type => !type.IsVisible || !type.IsEnum && !TypeGraph.IsReadOnlyRecordStruct(type) && !IsConstants(type))
-            .Select(type => $"{type.FullName}: {options.VocabularyNamespace} holds only public enums, read-only record structs and static classes of constant values; move it to the namespace that names it")
+            .Where(type => !type.IsEnum && !TypeGraph.IsReadOnlyRecordStruct(type) && !IsConstants(type))
+            .Select(type => $"{type.FullName}: {options.VocabularyNamespace} holds only enums, read-only record structs and static classes of constant values; move it to the namespace that names it")
             .ToArray();
     }
 

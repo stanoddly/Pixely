@@ -24,9 +24,34 @@ Parts of what this document builds on are not final:
 - `Pixely.Ecs` is experimental
 - `Pixely.Fitness` checks only the rules that constructors and types show, see `docs/fitness.md`
 
+## Project
+
+- A game is one project, `src/Foo/Foo.csproj`, that sets `PixelyHosting`, see `docs/hosting.md`
+- The game is in `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels` and
+  `Foo.Systems`. Input systems are systems too
+- Code outside systems is in `Foo.Views`, `Foo.Rendering` and `Foo.Audio`
+- A type of the game MUST NOT name a type of `Foo.Views`, `Foo.Rendering` or `Foo.Audio`, so the game
+  composes without them
+- Types SHOULD be internal. Tests reach them through `InternalsVisibleTo`. Pixely.Ecs, not a project
+  boundary, keeps code outside systems from writing the world
+- Every system is in the project, so a system orders itself after or before any other with
+  `IAfter<...>` and `IBefore<...>`
+
+## Composition
+
+- `Configure` in `Program.cs` registers the root: Pixely and what survives a stage change, e.g. render
+  targets and content. An `OnBuilt` callback loads the first stage through `IStageManager.Load`
+- Two internal extension methods on `ServiceCollection` register a stage:
+  - `AddGame` calls `AddEcs` and registers the messages, the systems and the view models
+  - `AddFrontend` registers the views, the renderers, audio, and the queries and lookups they read
+- A stage calls both. A test calls `AddGame` alone and runs without a window or a GPU
+- Each method registers the same types whatever its arguments. Arguments configure values
+- A stage owns its world, see World. State that the next stage needs is a value passed to its
+  `AddGame`, e.g. `AddGame(new GameStart(Seed: 42))`, which registers it for the systems that read it
+
 ## Foo.Vocabulary namespace
 
-- Public primitives shared all over: enums, ids, read-only record structures, e.g. `TileCoordinate`,
+- Primitives shared all over: enums, ids, read-only record structures, e.g. `TileCoordinate`,
   and static classes of `const` fields and `static readonly` fields of value types or strings
 - A type only one namespace names lives with it, not here
 - An id is its own type
@@ -181,8 +206,6 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 
 ## Not settled yet
 
-- Project layout and the references between projects
-- Registrars, and how stages pass state to each other
 - Autonomous actors, e.g. a non player participant or a scripted scenario
 - Hidden information and what each participant perceives
 - References between entities, and finding the children of an entity without scanning every entity
