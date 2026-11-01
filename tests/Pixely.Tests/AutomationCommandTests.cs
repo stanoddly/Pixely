@@ -9,7 +9,6 @@ public sealed class AutomationCommandTests
     [TestCase("spawn enemy")]
     [TestCase("spawn\t")]
     [TestCase("spawn;")]
-    [TestCase("@spawn")]
     public void Constructor_NameThatCannotMatch_Throws(string? name)
     {
         ArgumentException? exception = Assert.Throws<ArgumentException>(() => new NamedCommand(name!));
@@ -83,7 +82,7 @@ public sealed class AutomationCommandTests
 
     private sealed class NamedCommand(string name) : AutomationCommand(name)
     {
-        public override void Execute(string arguments, ViewScope? viewScope)
+        public override void Execute(string arguments)
         {
         }
     }

@@ -7,7 +7,6 @@ public interface IRenderer<in TRenderContext>
     /// </summary>
     int RenderOrder => 0;
 
-    ViewScope ViewScope => default;
     void Render(TRenderContext renderContext);
 }
 

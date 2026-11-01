@@ -8,8 +8,11 @@ public interface IRenderCoordinator
 {
     /// <summary>
     /// Runs one frame for the window. Returns true when the window could show the frame: it was renderable and a swapchain
-    /// texture came back, even if no renderer drew. When every coordinator returns false, the frame loop waits up to 16 ms
-    /// for an event, except in the browser.
+    /// texture came back, even if no renderer drew. When it returns false, the frame loop waits up to 16 ms for an event, except in
+    /// the browser. The app runs exactly one coordinator each frame, so a custom one takes over everything the built-in one does:
+    /// on the desktop it acquires a command buffer every frame, requests a swapchain texture on it, submits the pending uploads of
+    /// <see cref="GpuMemorySystem"/> and then submits that command buffer, even when no texture comes back. SDL's Vulkan backend
+    /// frees finished GPU work only on the submit of a command buffer that requested a swapchain texture, or on a fence wait.
     /// </summary>
     bool Execute();
 }
@@ -130,10 +133,7 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
         {
             foreach (IRenderer<TRenderContext> renderer in _renderers)
             {
-                if (renderer.ViewScope == _window.ViewScope)
-                {
-                    renderer.Render(renderContext);
-                }
+                renderer.Render(renderContext);
             }
         }
     }

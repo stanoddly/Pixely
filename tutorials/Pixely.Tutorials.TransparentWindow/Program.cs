@@ -17,12 +17,13 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
+            .ConfigureWindow(
                 new WindowConfig(
                     Size: (800, 600),
                     Title: "Transparent Window",
                     Transparent: true,
-                    Borderless: true));
+                    Borderless: true))
+            .UseDefaultRendering();
         if (OperatingSystem.IsWindows())
         {
             builder.AddSingleton(new PixelyConfig(GpuBackend: GpuBackend.Vulkan));

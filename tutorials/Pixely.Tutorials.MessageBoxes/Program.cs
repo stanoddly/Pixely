@@ -12,7 +12,8 @@ static partial class Program
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-            .UseDefaultRendering(new WindowConfig(Size: (960, 540), Title: "Message Box"));
+            .ConfigureWindow(new WindowConfig(Size: (960, 540), Title: "Message Box"))
+            .UseDefaultRendering();
 
         builder.UseUi();
         builder.AddSingleton<UiStyle>(provider =>

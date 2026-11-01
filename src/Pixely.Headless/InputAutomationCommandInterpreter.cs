@@ -20,16 +20,16 @@ internal sealed class InputAutomationCommandInterpreter
     private static readonly FrozenDictionary<string, Scancode> ScancodeAliases = CreateScancodeAliases();
 
     private readonly InputAutomation _automation;
-    private readonly WindowRegistry _windowRegistry;
+    private readonly Window _window;
     private readonly IImageWriter _imageWriter;
     private readonly AppControl _appControl;
     private readonly AutomationCommandRegistry _commands;
 
-    public InputAutomationCommandInterpreter(InputAutomation automation, WindowRegistry windowRegistry, IImageWriter imageWriter, AppControl appControl,
+    public InputAutomationCommandInterpreter(InputAutomation automation, Window window, IImageWriter imageWriter, AppControl appControl,
         AutomationCommandRegistry commands)
     {
         _automation = automation;
-        _windowRegistry = windowRegistry;
+        _window = window;
         _imageWriter = imageWriter;
         _appControl = appControl;
         _commands = commands;
@@ -43,9 +43,7 @@ internal sealed class InputAutomationCommandInterpreter
             return 0;
         }
 
-        // An optional "@<n>" prefix picks the window by ViewScope value; the default scope needs none.
-        command = AutomationCommandRegistry.SplitViewScope(command, out ViewScope? viewScope);
-        if (_commands.TryExecute(command, viewScope))
+        if (_commands.TryExecute(command))
         {
             return 0;
         }
@@ -54,66 +52,58 @@ internal sealed class InputAutomationCommandInterpreter
         switch (words)
         {
             case ["wait", string frames]:
-                RejectViewScope(viewScope, command);
                 return ParseFrameCount(frames);
             case ["quit"]:
-                RejectViewScope(viewScope, command);
                 _appControl.Quit();
                 return 0;
             case ["gamepad", ..]:
-                RejectViewScope(viewScope, command);
                 ExecuteGamepad(words, command);
                 return 0;
         }
 
-        ExecuteWindowCommand(words, command, viewScope ?? default);
+        ExecuteWindowCommand(words, command);
         return 0;
     }
 
-    private void ExecuteWindowCommand(string[] words, string command, ViewScope viewScope)
+    private void ExecuteWindowCommand(string[] words, string command)
     {
-        if (!_windowRegistry.TryGetWindow(viewScope, out Window window))
-        {
-            throw new FormatException($"no window for view scope {viewScope.Value}");
-        }
-
         switch (words)
         {
             case ["mouse", "move", string x, string y]:
-                _automation.MouseMoveTo(ParseVector(x, y), viewScope);
+                _automation.MouseMoveTo(ParseVector(x, y));
                 break;
             case ["mouse", "moveby", string dx, string dy]:
-                _automation.MouseMoveBy(ParseVector(dx, dy), viewScope);
+                _automation.MouseMoveBy(ParseVector(dx, dy));
                 break;
             case ["mouse", "down", string button, string x, string y]:
-                _automation.MouseDown(ParseEnum<MouseButton>(button), ParseVector(x, y), viewScope);
+                _automation.MouseDown(ParseEnum<MouseButton>(button), ParseVector(x, y));
                 break;
             case ["mouse", "up", string button, string x, string y]:
-                _automation.MouseUp(ParseEnum<MouseButton>(button), ParseVector(x, y), viewScope);
+                _automation.MouseUp(ParseEnum<MouseButton>(button), ParseVector(x, y));
                 break;
             case ["mouse", "click", string button, string x, string y]:
-                _automation.MouseClick(ParseEnum<MouseButton>(button), ParseVector(x, y), viewScope);
+                _automation.MouseClick(ParseEnum<MouseButton>(button), ParseVector(x, y));
                 break;
             case ["mouse", "wheel", string dx, string dy, string x, string y]:
-                _automation.MouseWheel(ParseVector(dx, dy), ParseVector(x, y), viewScope);
+                _automation.MouseWheel(ParseVector(dx, dy), ParseVector(x, y));
                 break;
             case ["mouse", "leave"]:
-                _automation.MouseLeave(viewScope);
+                _automation.MouseLeave();
                 break;
             case ["key", "down", string scancode]:
-                _automation.KeyDown(ParseScancode(scancode), viewScope);
+                _automation.KeyDown(ParseScancode(scancode));
                 break;
             case ["key", "up", string scancode]:
-                _automation.KeyUp(ParseScancode(scancode), viewScope);
+                _automation.KeyUp(ParseScancode(scancode));
                 break;
             case ["key", "press", string scancode]:
-                _automation.KeyPress(ParseScancode(scancode), viewScope);
+                _automation.KeyPress(ParseScancode(scancode));
                 break;
             case ["text", ..]:
-                _automation.TextInput(command["text".Length..].Trim(), viewScope);
+                _automation.TextInput(command["text".Length..].Trim());
                 break;
             case ["screenshot", _, ..]:
-                Screenshot(window, command["screenshot".Length..].Trim());
+                Screenshot(command["screenshot".Length..].Trim());
                 break;
             default:
                 throw new FormatException($"unknown command '{command}'");
@@ -187,18 +177,10 @@ internal sealed class InputAutomationCommandInterpreter
         }
     }
 
-    private static void RejectViewScope(ViewScope? viewScope, string command)
+    private void Screenshot(string path)
     {
-        if (viewScope != null)
-        {
-            throw new FormatException($"'{command}' takes no view scope");
-        }
-    }
-
-    private void Screenshot(Window window, string path)
-    {
-        // Every window is offscreen in headless mode, which is the only mode this console exists in.
-        using Image image = ((OffscreenWindow)window).CaptureLastFrame();
+        // The window is offscreen in headless mode, which is the only mode this console exists in.
+        using Image image = ((OffscreenWindow)_window).CaptureLastFrame();
         _imageWriter.SavePng(image, path);
     }
 

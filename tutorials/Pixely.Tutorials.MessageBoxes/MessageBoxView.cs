@@ -16,9 +16,9 @@ public sealed class MessageBoxView : UiView
 
     private readonly Window _window;
 
-    public MessageBoxView(WindowRegistry windowRegistry)
+    public MessageBoxView(Window window)
     {
-        _window = windowRegistry.GetWindow();
+        _window = window;
     }
 
     protected override Element BuildRoot()

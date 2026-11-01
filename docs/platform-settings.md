@@ -10,7 +10,7 @@ builder.OnBuilt((IPlatformSettings settings) =>
 });
 ```
 
-The settings belong to the whole app, not to a window, so the service is a singleton without a `ViewScope`.
+The settings belong to the whole app, so the service is a singleton.
 
 Both events are raised on the main thread while Pixely processes events, before the frame's updates. Their `Timestamp` is SDL's event timestamp in nanoseconds.
 

@@ -3,15 +3,13 @@ using Pixely.DependencyInjection;
 namespace Pixely.Ui;
 
 /// <summary>
-/// Adds every <see cref="UiView"/> the container builds to the root for its window, and takes it
-/// away again when it is disposed.
+/// Adds every <see cref="UiView"/> the container builds to the app's root, and takes it away again
+/// when it is disposed.
 /// </summary>
 /// <remarks>
 /// <para>
 /// So that registering a view is one line beside everything else it needs, rather than a line of
-/// registration and a second line somewhere else remembering to add it to a root. Which root is the
-/// view's own answer, through <see cref="IUiView.ViewScope"/> — an application with a window per
-/// screen registers the same way for all of them.
+/// registration and a second line somewhere else remembering to add it to a root.
 /// </para>
 /// <para>
 /// Views are held until there is a provider to resolve their root from, because nothing says a view
@@ -138,7 +136,7 @@ internal sealed class UiViewRegistry
             return null;
         }
 
-        UiRoot root = ScopedUiRoot.GetRequired(_provider, view.ViewScope).Root;
+        UiRoot root = _provider.GetRequiredService<UiRoot>();
         root.AddView(view);
         return root;
     }

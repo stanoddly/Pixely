@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Depth-Only Pipeline Test"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Depth-Only Pipeline Test"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<DepthOnlyRenderer>(DepthOnlyRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, DepthOnlyRenderer>();

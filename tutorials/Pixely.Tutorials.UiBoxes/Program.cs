@@ -24,11 +24,12 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(new WindowConfig(Size: (800, 600), Title: "Pixely.Ui — Static Boxes"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Pixely.Ui — Static Boxes"))
+            .UseDefaultRendering();
 
         builder.UseUi();
 
-        builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(BuildUi()));
+        builder.OnBuilt((UiRoot root) => root.AddLayer(BuildUi()));
 
         builder.OnBuilt((IKeyboardService keyboardService, AppControl appControl) =>
         {

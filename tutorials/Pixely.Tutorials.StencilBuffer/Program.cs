@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (1280, 720), Title: "Stencil Buffer"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Stencil Buffer"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<StencilBufferRenderer>(StencilBufferRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, StencilBufferRenderer>();

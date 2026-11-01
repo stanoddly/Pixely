@@ -4,23 +4,10 @@ using Pixely.Text;
 
 namespace Pixely.Gpu;
 
-public static class GpuExtensions
+internal static class GpuExtensions
 {
-    // The device and every service that needs it. A registered device, whatever registered it, means the block is present.
-    public static ServiceCollection UseGpu(this ServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        if (services.IsRegistered<GpuDevice>())
-        {
-            return services;
-        }
-
-        services.AddSingleton<GpuDevice, PixelyFactory>();
-        AddGpuServices(services);
-        return services;
-    }
-
-    // Every service that needs the device, for a registration that has already registered the device, such as Pixely.Testing's stub.
+    // Every service that needs the device. PixelyAppBuilder.Build() registers them when they are missing, and Pixely.Testing registers
+    // them next to its stub device.
     internal static void AddGpuServices(ServiceCollection services)
     {
         services.AddSingleton<GpuMemorySystem, PixelyFactory>();

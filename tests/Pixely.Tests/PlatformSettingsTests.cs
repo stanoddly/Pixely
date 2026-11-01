@@ -148,7 +148,7 @@ public class PlatformSettingsTests
 
     private ServiceProvider Build(PixelyConfig config)
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddSingleton(config);
         _app = builder.Build();
         return ((PixelyApp)_app).ServiceProvider;

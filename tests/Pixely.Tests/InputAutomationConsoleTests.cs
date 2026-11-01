@@ -157,16 +157,14 @@ public sealed class InputAutomationConsoleTests
 
     private static Fixture CreateConsole(TextReader input, IFrameTimingRecorder? frameTimingRecorder = null)
     {
-        WindowRegistry windowRegistry = new();
-        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
-        (InputAutomation automation, _, KeyboardService keyboardService, _) = InputAutomationTests.CreateAutomation(windowRegistry);
+        (InputAutomation automation, _, KeyboardService keyboardService, _) = InputAutomationTests.CreateAutomation();
 
         // Concurrent, because the pipe test runs the update on another thread.
         ConcurrentQueue<Scancode> presses = new();
         keyboardService.SubscribeKeyDown(0, eventArgs => presses.Enqueue(eventArgs.Scancode));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, new AutomationCommandRegistry());
+        InputAutomationCommandInterpreter interpreter = new(automation, InputAutomationTests.CreateWindow(42), new NoImageWriter(), appControl, new AutomationCommandRegistry());
         return new Fixture(new InputAutomationConsole(interpreter, input, appControl, frameTimingRecorder ?? NullFrameTimingRecorder.Instance), presses, appControl);
     }
 

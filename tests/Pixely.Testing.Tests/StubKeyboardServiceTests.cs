@@ -81,19 +81,6 @@ public class StubKeyboardServiceTests
         Assert.That(called, Is.EqualTo(new[] { 0, 1 }));
     }
 
-    [Test]
-    public void Down_InAView_ReachesOnlyThatViewsHandlers()
-    {
-        StubKeyboardService keyboard = new();
-        List<string> called = [];
-        keyboard.KeyDown += _ => called.Add("main");
-        keyboard.SubscribeKeyDown(new ViewScope(1), 0, _ => called.Add("second"));
-
-        keyboard.Down(Scancode.A, new ViewScope(1));
-
-        Assert.That(called, Is.EqualTo(new[] { "second" }));
-    }
-
     [TestCase(Scancode.Count)]
     [TestCase((Scancode)600)]
     [TestCase((Scancode)1)]

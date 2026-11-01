@@ -32,7 +32,7 @@ static partial class Program
 {
     static void Configure(PixelyAppBuilder builder)
     {
-        builder.UseDefaultContent().UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Game"));
+        builder.UseDefaultContent().ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Game")).UseDefaultRendering();
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
     }
 }
@@ -284,7 +284,7 @@ SDL has no WebGPU backend in its releases. Pixely uses the one in the
 the upstream pull request libsdl-org/SDL#16020. `SDL3.a` is built from that fork with
 `-DSDL_WEBGPU=ON -DSDL_WEBGPU_EMSCRIPTEN=ON` under the workload's Emscripten (the recipe above, with
 `emcmake cmake` and `cmake --build --target SDL3-static` in place of the port), and takes the place
-of the port's archive. `UseGpu()` creates the font system too, so `SDL3_ttf.a` is linked with it,
+of the port's archive. Every app creates the font system with its GPU device, so `SDL3_ttf.a` is linked with it,
 built against the fork's build directory (`SDL3_DIR`) with `SDLTTF_VENDORED=ON`: the Emscripten
 FreeType port is built with legacy exception instructions, which the .NET link rejects.
 
@@ -299,12 +299,12 @@ once. The whole publish:
 dotnet publish -r browser-wasm -c Release -p:BrowserNativeLibraryDirectory=/path/to/archives -p:PixelyBrowserWebGpu=true -p:WasmCachePath=/path/to/emcache
 ```
 
-Every window claimed for the GPU device needs an sRGB swapchain (`SDR_LINEAR`, see [window-rendering.md](window-rendering.md#the-gpu-device)). A WebGPU canvas cannot be configured with an sRGB format, so the backend configures it as `bgra8unorm` or `rgba8unorm` and renders through an sRGB view of it, which needs the device feature `core-features-and-limits`. [stanoddly/XDL_wgpu](https://github.com/stanoddly/XDL_wgpu) does this from release `v20261020.072236`; link its `libXDL_wgpu.a` ahead of `SDL3.a` (see the `NativeUrlReference` example above). Without it, or on a device without the feature, window creation fails with `PixelyInitializationException`.
+The window needs an sRGB swapchain (`SDR_LINEAR`, see [window-rendering.md](window-rendering.md#the-gpu-device)). A WebGPU canvas cannot be configured with an sRGB format, so the backend configures it as `bgra8unorm` or `rgba8unorm` and renders through an sRGB view of it, which needs the device feature `core-features-and-limits`. [stanoddly/XDL_wgpu](https://github.com/stanoddly/XDL_wgpu) does this from release `v20261020.072236`; link its `libXDL_wgpu.a` ahead of `SDL3.a` (see the `NativeUrlReference` example above). Without it, or on a device without the feature, window creation fails with `PixelyInitializationException`.
 
 Requesting a WebGPU adapter and device is asynchronous, and SDL would wait it out by suspending the
 wasm stack, which no managed frame survives. So the page requests them: the generated `Main` awaits
-`BrowserHost.PrepareAsync(builder)` before `Build()`, and when the builder has a `GpuDevice`
-registered, `pixely-host.js` requests an adapter, requests a device with every feature the adapter offers,
+`BrowserHost.PrepareAsync(builder)` before `Build()`, and since every app has a GPU device,
+`pixely-host.js` requests an adapter, requests a device with every feature the adapter offers,
 imports both into emdawnwebgpu beneath an instance of its own, and `PixelyFactory` hands the three
 pointers to `SDL_CreateGPUDeviceWithProperties`, which adopts them without waiting. SDL decides which
 features it requires: when the device lacks one, adopting it fails and `PixelyFactory` throws
@@ -318,11 +318,11 @@ reported WebGPU as hardware accelerated. The app then runs at a few frames per s
 `pixely-host.js` reads `adapter.info.isFallbackAdapter`, or `adapter.isFallbackAdapter` in browsers
 that predate it, and for a fallback adapter warns in the console with the adapter's name.
 
-When the app registers a `GpuDevice`, `pixely-host.js` dispatches a `pixelygpuadapter` event on
+`pixely-host.js` dispatches a `pixelygpuadapter` event on
 `window` after requesting the adapter and before requesting the device. Its `detail` has `name`
 and `isFallbackAdapter`. `name` is the adapter's vendor, architecture, device and description,
 whichever the browser reveals, or `unknown` when it reveals none. `readGpuAdapter()` returns the
-same object afterwards, and `null` before the request or for an app without a `GpuDevice`, so a
+same object afterwards, and `null` before the request, so a
 page that subscribes late reads it there. The default `main.js` shows a notice for a fallback
 adapter (see [The page](#the-page)); a page of its own can show its own. The diagnostics name the
 device by the same name, with `(fallback adapter)` for a fallback adapter (see
@@ -340,7 +340,7 @@ where a game saves or shows a message of its own; the default page shows one eit
 [The page](#the-page)).
 
 The app runs in a tab and ends with it, so the browser does the final cleanup. Disposing the app
-releases Pixely's own GPU resources and windows, but it calls neither `SDL_DestroyGPUDevice` nor
+releases Pixely's own GPU resources and window, but it calls neither `SDL_DestroyGPUDevice` nor
 `SDL_Quit`: a clean destroy has to wait for the last submissions, and a submission completes only
 after the page's event loop turns, which a synchronous `Dispose` cannot wait for. The WebGPU device,
 its memory, SDL and the wasm memory stay until the page unloads, also after a failed `Build()` and
@@ -351,8 +351,8 @@ Not supported in the browser, each throwing `PlatformNotSupportedException`: `Gp
 and `CommandBuffer.SubmitAndDownloadTexture` (SDL's wait and download mapping suspend the wasm
 stack under a managed frame). Headless mode reads commands from standard input and frames back
 through that download, so it is desktop-only: the generated `Main` of a browser build does not call
-`AddHeadlessSupport()`, and a call is a CA1416 warning. An app with the GPU device
-(`UseGpu()`, which rendering registers) and `UploadWait.On` (`PIXELY_UPLOAD_WAIT=on`), which waits on a
+`AddHeadlessSupport()`, and a call is a CA1416 warning. An app with `UploadWait.On`
+(`PIXELY_UPLOAD_WAIT=on`), which waits on a
 fence after each upload submit, fails at `Build()` with `PixelyInitializationException`;
 `UploadWait.Automatic` never waits there. The swapchain is acquired
 with the non-waiting `SDL_AcquireGPUSwapchainTexture`, so a frame with no texture ready is skipped;

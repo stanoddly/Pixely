@@ -28,39 +28,29 @@ public class KeyboardService : IKeyboardService
 
     // Cached to avoid per-event allocations. Do not hold references to event args beyond the callback.
     private readonly KeyEventArgs _keyEventArgs = new();
-    private readonly ViewScopedOrderedEventHandlers<KeyEventArgs> _keyDownHandlers = new();
-    private readonly ViewScopedOrderedEventHandlers<KeyEventArgs> _keyUpHandlers = new();
+    private readonly OrderedEventHandlers<KeyEventArgs> _keyDownHandlers = new();
+    private readonly OrderedEventHandlers<KeyEventArgs> _keyUpHandlers = new();
 
     public event InputEventHandler<KeyEventArgs> KeyDown
     {
-        add => _keyDownHandlers.Add(default, 0, value);
-        remove => _keyDownHandlers.Remove(default, value);
+        add => _keyDownHandlers.Add(0, value);
+        remove => _keyDownHandlers.Remove(value);
     }
 
     public event InputEventHandler<KeyEventArgs> KeyUp
     {
-        add => _keyUpHandlers.Add(default, 0, value);
-        remove => _keyUpHandlers.Remove(default, value);
+        add => _keyUpHandlers.Add(0, value);
+        remove => _keyUpHandlers.Remove(value);
     }
 
     public void SubscribeKeyDown(int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyDownHandlers.Add(default, order, handler);
+        _keyDownHandlers.Add(order, handler);
     }
 
     public void SubscribeKeyUp(int order, InputEventHandler<KeyEventArgs> handler)
     {
-        _keyUpHandlers.Add(default, order, handler);
-    }
-
-    public void SubscribeKeyDown(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
-    {
-        _keyDownHandlers.Add(viewScope, order, handler);
-    }
-
-    public void SubscribeKeyUp(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
-    {
-        _keyUpHandlers.Add(viewScope, order, handler);
+        _keyUpHandlers.Add(order, handler);
     }
 
     internal KeyboardService(AppControl appControl)
@@ -68,7 +58,7 @@ public class KeyboardService : IKeyboardService
         _appControl = appControl;
     }
 
-    internal void OnKeyEvent(ViewScope viewScope, SDL_KeyboardID keyboardId, Scancode scancode, VirtualKey virtualKey, bool isPressed, ulong timestamp)
+    internal void OnKeyEvent(SDL_KeyboardID keyboardId, Scancode scancode, VirtualKey virtualKey, bool isPressed, ulong timestamp)
     {
         ref Keyboard? keyboard = ref CollectionsMarshal.GetValueRefOrAddDefault(_keyboards, keyboardId, out bool exists);
 
@@ -96,7 +86,7 @@ public class KeyboardService : IKeyboardService
             }
 
             _keyEventArgs.Repeat = repeat;
-            _keyDownHandlers.Invoke(viewScope, _keyEventArgs);
+            _keyDownHandlers.Invoke(_keyEventArgs);
         }
         else
         {
@@ -105,7 +95,7 @@ public class KeyboardService : IKeyboardService
             // The event args are cached and reused, so Repeat has to be reset here or a
             // key up would carry the flag left behind by the previous key down.
             _keyEventArgs.Repeat = false;
-            _keyUpHandlers.Invoke(viewScope, _keyEventArgs);
+            _keyUpHandlers.Invoke(_keyEventArgs);
         }
     }
 }

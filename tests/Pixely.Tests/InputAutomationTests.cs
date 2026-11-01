@@ -8,17 +8,15 @@ namespace Pixely.Tests;
 
 public sealed class InputAutomationTests
 {
-    private static readonly ViewScope _viewScope = new(7);
-
     [Test]
     public void MouseMoveTo_UsesWindowPositionAndDerivesRelativeMotion()
     {
         (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
         List<(Vector2 Position, Vector2 RelativeMotion)> motions = new();
-        mouseService.SubscribeMotion(_viewScope, 0, eventArgs => motions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
+        mouseService.SubscribeMotion(0, eventArgs => motions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
 
-        automation.MouseMoveTo(new Vector2(20, 30), _viewScope);
-        automation.MouseMoveTo(new Vector2(25, 28), _viewScope);
+        automation.MouseMoveTo(new Vector2(20, 30));
+        automation.MouseMoveTo(new Vector2(25, 28));
 
         Assert.That(motions, Is.EqualTo(new[]
         {
@@ -32,10 +30,10 @@ public sealed class InputAutomationTests
     {
         (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
         List<(Vector2 Position, Vector2 RelativeMotion)> motions = new();
-        mouseService.SubscribeMotion(_viewScope, 0, eventArgs => motions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
-        automation.MouseMoveTo(new Vector2(20, 30), _viewScope);
+        mouseService.SubscribeMotion(0, eventArgs => motions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
+        automation.MouseMoveTo(new Vector2(20, 30));
 
-        automation.MouseMoveBy(new Vector2(5, -2), _viewScope);
+        automation.MouseMoveBy(new Vector2(5, -2));
 
         Assert.That(motions[^1], Is.EqualTo((new Vector2(25, 28), new Vector2(5, -2))));
     }
@@ -46,19 +44,19 @@ public sealed class InputAutomationTests
         (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
         List<string> events = new();
         List<bool> pressedStates = new();
-        mouseService.SubscribeMotion(_viewScope, 0, _ => events.Add("motion"));
-        mouseService.SubscribeButtonPress(_viewScope, 0, eventArgs =>
+        mouseService.SubscribeMotion(0, _ => events.Add("motion"));
+        mouseService.SubscribeButtonPress(0, eventArgs =>
         {
             events.Add("press");
             pressedStates.Add(eventArgs.Mouse.IsPressed(MouseButton.Left));
         });
-        mouseService.SubscribeButtonRelease(_viewScope, 0, eventArgs =>
+        mouseService.SubscribeButtonRelease(0, eventArgs =>
         {
             events.Add("release");
             pressedStates.Add(eventArgs.Mouse.IsPressed(MouseButton.Left));
         });
 
-        automation.MouseClick(MouseButton.Left, new Vector2(20, 30), _viewScope);
+        automation.MouseClick(MouseButton.Left, new Vector2(20, 30));
 
         Assert.Multiple(() =>
         {
@@ -72,12 +70,12 @@ public sealed class InputAutomationTests
     {
         (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
         List<(string Event, bool IsInWindow)> events = new();
-        mouseService.SubscribeWindowEnter(_viewScope, 0, eventArgs => events.Add(("enter", mouseService.IsInWindow(_viewScope))));
-        mouseService.SubscribeMotion(_viewScope, 0, _ => events.Add(("motion", mouseService.IsInWindow(_viewScope))));
-        bool isInWindowBefore = mouseService.IsInWindow(_viewScope);
+        mouseService.SubscribeWindowEnter(0, eventArgs => events.Add(("enter", mouseService.IsInWindow())));
+        mouseService.SubscribeMotion(0, _ => events.Add(("motion", mouseService.IsInWindow())));
+        bool isInWindowBefore = mouseService.IsInWindow();
 
-        automation.MouseMoveTo(new Vector2(20, 30), _viewScope);
-        automation.MouseMoveBy(new Vector2(1, 1), _viewScope);
+        automation.MouseMoveTo(new Vector2(20, 30));
+        automation.MouseMoveBy(new Vector2(1, 1));
 
         Assert.Multiple(() =>
         {
@@ -91,25 +89,17 @@ public sealed class InputAutomationTests
     {
         (InputAutomation automation, MouseService mouseService, _, _) = CreateAutomation();
         List<(string Event, bool IsInWindow)> events = new();
-        mouseService.SubscribeWindowEnter(_viewScope, 0, _ => events.Add(("enter", mouseService.IsInWindow(_viewScope))));
-        mouseService.SubscribeWindowLeave(_viewScope, 0, eventArgs => events.Add(("leave", mouseService.IsInWindow(_viewScope))));
-        mouseService.SubscribeButtonPress(_viewScope, 0, _ => events.Add(("press", mouseService.IsInWindow(_viewScope))));
+        mouseService.SubscribeWindowEnter(0, _ => events.Add(("enter", mouseService.IsInWindow())));
+        mouseService.SubscribeWindowLeave(0, eventArgs => events.Add(("leave", mouseService.IsInWindow())));
+        mouseService.SubscribeButtonPress(0, _ => events.Add(("press", mouseService.IsInWindow())));
 
-        automation.MouseLeave(_viewScope);
-        automation.MouseDown(MouseButton.Left, new Vector2(20, 30), _viewScope);
-        automation.MouseLeave(_viewScope);
-        automation.MouseLeave(_viewScope);
-        automation.MouseMoveBy(Vector2.One, _viewScope);
+        automation.MouseLeave();
+        automation.MouseDown(MouseButton.Left, new Vector2(20, 30));
+        automation.MouseLeave();
+        automation.MouseLeave();
+        automation.MouseMoveBy(Vector2.One);
 
         Assert.That(events, Is.EqualTo(new[] { ("enter", true), ("press", true), ("leave", false), ("enter", true) }));
-    }
-
-    [Test]
-    public void MouseLeave_ForUnregisteredView_Throws()
-    {
-        (InputAutomation automation, _, _, _) = CreateAutomation();
-
-        Assert.Throws<InvalidOperationException>(() => automation.MouseLeave(new ViewScope(99)));
     }
 
     [Test]
@@ -117,10 +107,10 @@ public sealed class InputAutomationTests
     {
         (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation();
         List<(string Event, bool IsPressed)> events = new();
-        keyboardService.SubscribeKeyDown(_viewScope, 0, eventArgs => events.Add(("down", eventArgs.Keyboard.IsPressed(Scancode.A))));
-        keyboardService.SubscribeKeyUp(_viewScope, 0, eventArgs => events.Add(("up", eventArgs.Keyboard.IsPressed(Scancode.A))));
+        keyboardService.SubscribeKeyDown(0, eventArgs => events.Add(("down", eventArgs.Keyboard.IsPressed(Scancode.A))));
+        keyboardService.SubscribeKeyUp(0, eventArgs => events.Add(("up", eventArgs.Keyboard.IsPressed(Scancode.A))));
 
-        automation.KeyPress(Scancode.A, _viewScope);
+        automation.KeyPress(Scancode.A);
 
         Assert.That(events, Is.EqualTo(new[] { ("down", true), ("up", false) }));
     }
@@ -130,60 +120,23 @@ public sealed class InputAutomationTests
     {
         (InputAutomation automation, _, _, TextInputService textInputService) = CreateAutomation();
         string? receivedText = null;
-        textInputService.SubscribeTextInput(_viewScope, 0, eventArgs => receivedText = eventArgs.Text);
+        textInputService.SubscribeTextInput(0, eventArgs => receivedText = eventArgs.Text);
 
-        automation.TextInput("Hello 👋", _viewScope);
+        automation.TextInput("Hello 👋");
 
         Assert.That(receivedText, Is.EqualTo("Hello 👋"));
-    }
-
-    [Test]
-    public void EachView_HasItsOwnMouseAndKeyboard()
-    {
-        ViewScope otherViewScope = new(8);
-        WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
-        windowRegistry.Register(CreateWindow(otherViewScope, 43));
-        (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry);
-        List<(Vector2 Position, Vector2 RelativeMotion)> otherMotions = new();
-        mouseService.SubscribeMotion(otherViewScope, 0, eventArgs => otherMotions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
-        bool? ctrlPressedInOtherView = null;
-        keyboardService.SubscribeKeyDown(otherViewScope, 0, eventArgs => ctrlPressedInOtherView = eventArgs.Keyboard.IsPressed(Scancode.LeftCtrl));
-
-        automation.MouseMoveTo(new Vector2(100, 100), _viewScope);
-        automation.KeyDown(Scancode.LeftCtrl, _viewScope);
-        automation.MouseMoveBy(new Vector2(1, 1), otherViewScope);
-        automation.KeyDown(Scancode.A, otherViewScope);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(otherMotions, Is.EqualTo(new[] { (new Vector2(1, 1), new Vector2(1, 1)) }));
-            Assert.That(ctrlPressedInOtherView, Is.False);
-        });
-    }
-
-    [Test]
-    public void InputForUnregisteredView_Throws()
-    {
-        (InputAutomation automation, _, _, _) = CreateAutomation();
-
-        InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() => automation.MouseMoveTo(Vector2.Zero, new ViewScope(99)));
-
-        Assert.That(exception!.Message, Does.Contain("ViewScope 99"));
     }
 
     [Test]
     public void Input_IsTimestampedWithGameTime()
     {
         TestFrameClock frameClock = new();
-        WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
-        (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry, frameClock: frameClock);
+        (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(frameClock: frameClock);
         ulong? timestamp = null;
-        keyboardService.SubscribeKeyDown(_viewScope, 0, eventArgs => timestamp = eventArgs.Timestamp);
+        keyboardService.SubscribeKeyDown(0, eventArgs => timestamp = eventArgs.Timestamp);
         frameClock.StartTestFrame(1500);
 
-        automation.KeyDown(Scancode.A, _viewScope);
+        automation.KeyDown(Scancode.A);
 
         Assert.That(timestamp, Is.EqualTo(1_500_000_000UL));
     }
@@ -192,7 +145,7 @@ public sealed class InputAutomationTests
     public void GamepadConnect_AddsGamepadAndRaisesConnected()
     {
         GamepadService gamepadService = new();
-        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        (InputAutomation automation, _, _, _) = CreateAutomation(gamepadService);
         Gamepad? connected = null;
         gamepadService.GamepadConnected += gamepad => connected = gamepad;
 
@@ -209,7 +162,7 @@ public sealed class InputAutomationTests
     [Test]
     public void GamepadInput_WithoutConnect_Throws()
     {
-        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry());
+        (InputAutomation automation, _, _, _) = CreateAutomation();
 
         Assert.Multiple(() =>
         {
@@ -223,7 +176,7 @@ public sealed class InputAutomationTests
     public void GamepadButtonPress_DispatchesPressAndReleaseWithCorrespondingState()
     {
         GamepadService gamepadService = new();
-        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        (InputAutomation automation, _, _, _) = CreateAutomation(gamepadService);
         List<(string Event, GamepadButton Button, bool IsPressed)> events = new();
         gamepadService.SubscribeButtonPress(0, eventArgs => events.Add(("press", eventArgs.Button, eventArgs.Gamepad.IsPressed(eventArgs.Button))));
         gamepadService.SubscribeButtonRelease(0, eventArgs => events.Add(("release", eventArgs.Button, eventArgs.Gamepad.IsPressed(eventArgs.Button))));
@@ -238,7 +191,7 @@ public sealed class InputAutomationTests
     public void GamepadAxisMotion_AppliesStickDeadZoneButNotToTriggers()
     {
         GamepadService gamepadService = new();
-        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        (InputAutomation automation, _, _, _) = CreateAutomation(gamepadService);
         List<Vector2> sticks = new();
         List<float> triggers = new();
         gamepadService.SubscribeLeftStickMotion(0, eventArgs => sticks.Add(eventArgs.Value));
@@ -260,7 +213,7 @@ public sealed class InputAutomationTests
     public void GamepadDisconnect_ReleasesButtonsThenRecentersAxesBeforeDisconnecting()
     {
         GamepadService gamepadService = new();
-        (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
+        (InputAutomation automation, _, _, _) = CreateAutomation(gamepadService);
         automation.GamepadConnect();
         automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, -1);
         automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0.5f);
@@ -282,34 +235,22 @@ public sealed class InputAutomationTests
         });
     }
 
-    private static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation()
-    {
-        WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
-        return CreateAutomation(windowRegistry);
-    }
-
     internal static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation(
-        WindowRegistry windowRegistry, GamepadService? gamepadService = null, FrameClock? frameClock = null)
+        GamepadService? gamepadService = null, FrameClock? frameClock = null)
     {
-        MouseService mouseService = new(windowRegistry);
+        MouseService mouseService = new();
         KeyboardService keyboardService = new(new AppControl());
-        TextInputService textInputService = new(windowRegistry);
-        InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameClock ?? new TestFrameClock());
+        TextInputService textInputService = new(CreateWindow(42));
+        InputAutomation automation = new(mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameClock ?? new TestFrameClock());
         return (automation, mouseService, keyboardService, textInputService);
     }
 
-    internal static Window CreateWindow(ViewScope viewScope, uint sdlId)
+    // A window without an SDL window behind it, for code that only reads its SDL window ID.
+    internal static Window CreateWindow(uint sdlId)
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
+        FieldInfo field = typeof(Window).GetField($"<{nameof(Window.SdlId)}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        field.SetValue(window, sdlId);
         return window;
-    }
-
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
-    {
-        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        field.SetValue(window, value);
     }
 }

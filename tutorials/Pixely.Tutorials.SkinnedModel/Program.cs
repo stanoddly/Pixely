@@ -10,7 +10,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(new WindowConfig(Size: (800, 600), Title: "Skinned model"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Skinned model"))
+            .UseDefaultRendering();
 
         builder.RegisterModelLoading();
         builder.AddSingleton<AnimatedModel>(AnimatedModel.Create);

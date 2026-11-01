@@ -14,7 +14,8 @@ static partial class Program
     {
         builder
             .ConfigureContent(content => content.AddSource(EmbeddedContentSource.Create(typeof(Program).Assembly)))
-            .UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Browser"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Browser"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(TriangleRenderer.Create);
 

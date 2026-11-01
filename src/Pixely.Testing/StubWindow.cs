@@ -13,15 +13,8 @@ public sealed class StubWindow : Window
 {
     private readonly StubGpuDevice _gpuDevice;
 
-    internal StubWindow(
-        StubGpuDevice gpuDevice,
-        ViewScope viewScope,
-        Pointer<SDL_Window> sdlWindow,
-        uint sdlId,
-        PixelyFrameClock frameClock,
-        PlatformInfo platformInfo,
-        WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
+    internal StubWindow(StubGpuDevice gpuDevice, Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo)
+        : base(sdlWindow, sdlId, frameClock, platformInfo)
     {
         _gpuDevice = gpuDevice;
     }

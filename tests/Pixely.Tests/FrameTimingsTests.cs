@@ -116,8 +116,8 @@ public class FrameTimingsTests
 
         Assert.That(timings.SwapchainChanges, Is.EqualTo(new[]
         {
-            new SwapchainState(default, new ShortSize(1920, 1080), TextureFormat.B8G8R8A8Unorm, false),
-            new SwapchainState(default, new ShortSize(1280, 720), TextureFormat.B8G8R8A8Unorm, false)
+            new SwapchainState(new ShortSize(1920, 1080), TextureFormat.B8G8R8A8Unorm, false),
+            new SwapchainState(new ShortSize(1280, 720), TextureFormat.B8G8R8A8Unorm, false)
         }));
     }
 

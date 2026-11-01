@@ -82,7 +82,7 @@ public class RendererTests
     {
         PixelyAppBuilder builder = TestApp.CreateBuilder();
         builder.UseDefaultContent();
-        builder.UseDefaultRendering(new WindowConfig(Size: (WindowSize.Width, WindowSize.Height)));
+        builder.ConfigureWindow(new WindowConfig(Size: (WindowSize.Width, WindowSize.Height))).UseDefaultRendering();
         builder.AddSingleton<IRenderer<BasicRenderContext>, SpriteRenderer>();
         return builder.Build();
     }

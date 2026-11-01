@@ -16,16 +16,8 @@ public sealed class OffscreenWindow : Window
     private readonly GpuDevice _gpuDevice;
     private Texture? _colorTarget;
 
-    internal OffscreenWindow(
-        ViewScope viewScope,
-        Pointer<SDL_Window> sdlWindow,
-        GpuDevice gpuDevice,
-        TextureFormat colorTargetFormat,
-        uint sdlId,
-        PixelyFrameClock frameClock,
-        PlatformInfo platformInfo,
-        WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
+    internal OffscreenWindow(Pointer<SDL_Window> sdlWindow, GpuDevice gpuDevice, TextureFormat colorTargetFormat, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo)
+        : base(sdlWindow, sdlId, frameClock, platformInfo)
     {
         _gpuDevice = gpuDevice;
         ColorTargetFormat = colorTargetFormat;
@@ -78,6 +70,14 @@ public sealed class OffscreenWindow : Window
     /// </summary>
     public Image CaptureLastFrame()
     {
+        // A device such as the stub of Pixely.Testing renders nothing, so the frame read back would never have been rendered. Checked
+        // here rather than when the window is created, so a test can build a headless app on the stub; checked first, so the error
+        // does not depend on whether a frame ran.
+        if (_gpuDevice is not SdlGpuDevice)
+        {
+            throw new InvalidOperationException($"Headless mode reads frames back from the GPU, which {_gpuDevice.GetType().Name} does not render.");
+        }
+
         if (_colorTarget is not { } lastFrame)
         {
             throw new InvalidOperationException("No frame has been rendered yet.");

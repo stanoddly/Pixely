@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (1280, 720), Title: "Indexed Render Pass"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Indexed Render Pass"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(IndexedRenderPassRenderer.Create);
     }

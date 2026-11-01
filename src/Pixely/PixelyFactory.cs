@@ -96,23 +96,16 @@ public partial class PixelyFactory: IDisposable
         return new PlatformInfo(GetCurrentVideoDriver());
     }
 
-    // A null device is an app that registered no rendering: the window is created without being claimed for a device.
-    internal Window CreateWindow(
-        ViewScope viewScope,
-        GpuDevice? gpuDevice,
-        PixelyFrameClock frameClock,
-        WindowConfig config,
-        PlatformInfo platformInfo,
-        IImageLoader imageLoader)
+    internal Window CreateWindow(GpuDevice gpuDevice, PixelyFrameClock frameClock, WindowConfig config, PlatformInfo platformInfo, IImageLoader imageLoader)
     {
         // Only the SDL device has swapchains. Another device, such as the stub of Pixely.Testing, registers an IWindowFactory, which
-        // AddWindow uses instead of this method.
-        if (gpuDevice is { } and not SdlGpuDevice)
+        // the app builder uses instead of this method.
+        if (gpuDevice is not SdlGpuDevice sdlGpuDevice)
         {
             throw new PixelyInitializationException($"{gpuDevice.GetType().Name} has no swapchains to create windows with. Build the app from TestApp.CreateBuilder() of Pixely.Testing, which also creates the stub's windows.");
         }
 
-        Window window = CreateWindow(viewScope, (SdlGpuDevice?)gpuDevice, frameClock, platformInfo, config);
+        Window window = CreateWindow(sdlGpuDevice, frameClock, platformInfo, config);
 
         if (_config.TaskbarIconPath != null)
         {
@@ -146,8 +139,8 @@ public partial class PixelyFactory: IDisposable
         try
         {
             // A claimed window makes SDL's Vulkan backend free finished GPU work only on a submit that requested a swapchain texture,
-            // or on a fence wait. Without window rendering nothing requests one, so such an app must wait on a fence regularly, and
-            // must also submit GpuMemorySystem itself.
+            // or on a fence wait. The app's one render coordinator requests a texture every frame, see RenderCoordinator.Execute.
+            // Only an IWindowFactory's window is created without a device, and it stays unclaimed.
             if (gpuDevice != null)
             {
                 unsafe
@@ -293,11 +286,11 @@ public partial class PixelyFactory: IDisposable
         return gamepadService;
     }
 
-    internal MouseService CreateMouseService(WindowRegistry windowRegistry)
+    internal MouseService CreateMouseService()
     {
         EnsureSdlInitialized();
 
-        return new MouseService(windowRegistry);
+        return new MouseService();
     }
 
     internal CursorService CreateCursorService()
@@ -314,11 +307,11 @@ public partial class PixelyFactory: IDisposable
         return new PlatformSettings(_config.IsIsolated);
     }
 
-    internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
+    internal TextInputService CreateTextInputService(Window window)
     {
         EnsureSdlInitialized();
 
-        return new TextInputService(windowRegistry);
+        return new TextInputService(window);
     }
 
     // A null result registers nothing. Headless mode (Pixely.Headless) reads standard input with a console of its own and turns
@@ -340,7 +333,7 @@ public partial class PixelyFactory: IDisposable
         MouseService mouseService,
         TextInputService textInputService,
         PlatformSettings platformSettings,
-        WindowRegistry windowRegistry,
+        Window window,
         AppControl appControl)
     {
         EnsureSdlInitialized();
@@ -351,7 +344,7 @@ public partial class PixelyFactory: IDisposable
             mouseService,
             textInputService,
             platformSettings,
-            windowRegistry,
+            window,
             appControl);
     }
 

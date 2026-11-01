@@ -20,11 +20,7 @@ public interface IUiViewModel
 /// Implemented by <see cref="UiView"/>, which is what an application derives from. This is the role
 /// it registers under, not a second way of being a view.
 /// </remarks>
-public interface IUiView
-{
-    /// <summary>Which window this view belongs to.</summary>
-    ViewScope ViewScope { get; }
-}
+public interface IUiView;
 
 /// <summary>
 /// A view over one or more view models. The element tree is built once and afterwards the view only
@@ -46,9 +42,6 @@ public abstract class UiView : IUiView
     /// <summary>The built tree. Available once the view has been added to a <see cref="UiRoot"/>.</summary>
     public Element Root => _root ?? throw new InvalidOperationException(
         $"{GetType().Name} has not been attached yet. Add it to a UiRoot before using its Root.");
-
-    /// <summary>Which window this view belongs to, for whatever adds it to a root on the view's behalf.</summary>
-    public virtual ViewScope ViewScope => default;
 
     internal bool IsAttached => _root != null;
 

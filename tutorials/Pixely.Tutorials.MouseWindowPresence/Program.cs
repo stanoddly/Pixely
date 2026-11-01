@@ -9,8 +9,8 @@ static partial class Program
     static void Configure(PixelyAppBuilder builder)
     {
         builder
-            .UseDefaultRendering(
-                new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Mouse Window Presence"))
+            .UseDefaultRendering();
 
         builder.OnBuilt((IMouseService mouseService) =>
         {

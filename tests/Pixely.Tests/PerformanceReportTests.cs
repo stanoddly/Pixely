@@ -125,8 +125,8 @@ public class PerformanceReportTests
 
         Assert.That(logger.Messages, Is.EqualTo(new[]
         {
-            "Swapchain of view 0: 1920x1080, B8G8R8A8Unorm, present mode vsync",
-            "Swapchain of view 0: 800x600, B8G8R8A8Unorm, offscreen"
+            "Swapchain: 1920x1080, B8G8R8A8Unorm, present mode vsync",
+            "Swapchain: 800x600, B8G8R8A8Unorm, offscreen"
         }));
     }
 

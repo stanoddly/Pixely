@@ -15,7 +15,6 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse wheel 0 -1 330 175", "wheel <0, -1> <330, 175>")]
     // A leave is only dispatched for a mouse in the window, so the command under test comes after a mouse command.
     [TestCase("mouse move 1 2|mouse leave", "motion <1, 2>", "leave")]
-    [TestCase("@7 mouse move 1 2|mouse leave", "7: motion <1, 2>")]
     [TestCase("key down LeftCtrl", "down LeftCtrl")]
     [TestCase("key up e", "up E")]
     [TestCase("key press Return", "down Return", "up Return")]
@@ -35,12 +34,7 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("text hello  world ", "text 'hello  world'")]
     [TestCase("text\n hi\tthere\n", "text 'hi\tthere'")]
     [TestCase("key\r\ndown\tA", "down A")]
-    [TestCase("@7\nkey press A", "7: down A", "7: up A")]
     [TestCase("text", "text ''")]
-    [TestCase("@0 key press Return", "down Return", "up Return")]
-    [TestCase("@7 key press Return", "7: down Return", "7: up Return")]
-    [TestCase("@7 mouse move 1 2", "7: motion <1, 2>")]
-    [TestCase("@7 text hi", "7: text 'hi'")]
     [TestCase("gamepad connect|gamepad press east", "gamepad connected", "gamepad press East", "gamepad release East")]
     [TestCase("gamepad connect|gamepad down South|gamepad up South", "gamepad connected", "gamepad press South", "gamepad release South")]
     [TestCase("gamepad connect|gamepad stick left 1 -0.5", "gamepad connected", "gamepad left stick <1, 0>", "gamepad left stick <0.8944272, -0.4472136>")]
@@ -103,10 +97,6 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("mouse click 9 1 2", "unknown MouseButton '9'")]
     [TestCase("key press Jump", "unknown Scancode 'Jump'")]
     [TestCase("screenshot", "unknown command 'screenshot'")]
-    [TestCase("@x key press A", "invalid view scope 'x'")]
-    [TestCase("@7", "unknown command ''")]
-    [TestCase("@9 key press A", "no window for view scope 9")]
-    [TestCase("@9 screenshot frame.png", "no window for view scope 9")]
     [TestCase("# a comment", "unknown command '# a comment'")]
     [TestCase("mouse move NaN 1", "invalid number 'NaN'")]
     [TestCase("mouse move 1 Infinity", "invalid number 'Infinity'")]
@@ -114,10 +104,8 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("wait -1", "invalid frame count '-1'")]
     [TestCase("wait 0.5", "invalid frame count '0.5'")]
     [TestCase("wait 1 frames", "unknown command 'wait 1 frames'")]
-    [TestCase("@7 wait 1", "'wait 1' takes no view scope")]
     [TestCase("speed 2", "unknown command 'speed 2'")]
     [TestCase("quit now", "unknown command 'quit now'")]
-    [TestCase("@0 quit", "'quit' takes no view scope")]
     [TestCase("gamepad press South", "gamepad is not connected")]
     [TestCase("gamepad disconnect", "gamepad is not connected")]
     [TestCase("gamepad connect|gamepad connect", "gamepad is already connected")]
@@ -128,7 +116,6 @@ public sealed class InputAutomationCommandInterpreterTests
     [TestCase("gamepad connect|gamepad stick left 1.5 0", "invalid axis value '1.5', expected -1 to 1")]
     [TestCase("gamepad connect|gamepad trigger left -0.1", "invalid axis value '-0.1', expected 0 to 1")]
     [TestCase("gamepad bogus", "unknown command 'gamepad bogus'")]
-    [TestCase("@7 gamepad connect", "'gamepad connect' takes no view scope")]
     public void Execute_RejectsMalformedCommandWithoutDispatching(string commands, string expectedMessage)
     {
         Fixture fixture = CreateInterpreter();
@@ -158,30 +145,10 @@ public sealed class InputAutomationCommandInterpreterTests
         Assert.Throws<InvalidOperationException>(() => fixture.Interpreter.Execute("key press A"));
     }
 
-    [Test]
-    public void Execute_WithoutDefaultWindow_FailsOnlyForWindowCommands()
-    {
-        WindowRegistry windowRegistry = new();
-        InputAutomation automation = InputAutomationTests.CreateAutomation(windowRegistry).Automation;
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), new AppControl(), new AutomationCommandRegistry());
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(() => interpreter.Execute("key press A"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
-            Assert.That(() => interpreter.Execute("screenshot frame.png"), Throws.TypeOf<FormatException>().With.Message.EqualTo("no window for view scope 0"));
-            Assert.That(() => interpreter.Execute("wait 1"), Throws.Nothing);
-            Assert.That(() => interpreter.Execute("gamepad connect"), Throws.Nothing);
-            Assert.That(() => interpreter.Execute("quit"), Throws.Nothing);
-        });
-    }
-
-    [TestCase("spawn enemy  3 4 ", "enemy  3 4", null)]
-    [TestCase("spawn", "", null)]
-    [TestCase("\n spawn\tenemy\n", "enemy", null)]
-    [TestCase("@0 spawn enemy", "enemy", 0)]
-    // A game command checks no window, so a scope without one reaches it.
-    [TestCase("@9 spawn enemy", "enemy", 9)]
-    public void Execute_GameCommand_ReceivesArgumentsAndViewScope(string command, string expectedArguments, int? expectedScope)
+    [TestCase("spawn enemy  3 4 ", "enemy  3 4")]
+    [TestCase("spawn", "")]
+    [TestCase("\n spawn\tenemy\n", "enemy")]
+    public void Execute_GameCommand_ReceivesArguments(string command, string expectedArguments)
     {
         RecordingCommand spawn = new("spawn");
         Fixture fixture = CreateInterpreter(spawn);
@@ -191,7 +158,7 @@ public sealed class InputAutomationCommandInterpreterTests
         Assert.Multiple(() =>
         {
             Assert.That(heldFrames, Is.Zero);
-            Assert.That(spawn.Calls, Is.EqualTo(new[] { (expectedArguments, expectedScope is int value ? new ViewScope(value) : (ViewScope?)null) }));
+            Assert.That(spawn.Calls, Is.EqualTo(new[] { expectedArguments }));
         });
     }
 
@@ -228,7 +195,7 @@ public sealed class InputAutomationCommandInterpreterTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(give.Calls, Is.EqualTo(new[] { ("gold 100", (ViewScope?)null) }));
+            Assert.That(give.Calls, Is.EqualTo(new[] { "gold 100" }));
             Assert.That(spawn.Calls, Is.Empty);
         });
     }
@@ -241,12 +208,8 @@ public sealed class InputAutomationCommandInterpreterTests
             commandRegistry.Add(command);
         }
 
-        ViewScope secondary = new(7);
-        WindowRegistry windowRegistry = new();
-        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
-        windowRegistry.Register(InputAutomationTests.CreateWindow(secondary, 43));
         GamepadService gamepadService = new();
-        (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService) = InputAutomationTests.CreateAutomation(windowRegistry, gamepadService);
+        (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService) = InputAutomationTests.CreateAutomation(gamepadService);
 
         List<string> events = new();
         mouseService.SubscribeMotion(0, eventArgs => events.Add($"motion {eventArgs.Position}"));
@@ -257,10 +220,6 @@ public sealed class InputAutomationCommandInterpreterTests
         keyboardService.SubscribeKeyDown(0, eventArgs => events.Add($"down {eventArgs.Scancode}"));
         keyboardService.SubscribeKeyUp(0, eventArgs => events.Add($"up {eventArgs.Scancode}"));
         textInputService.SubscribeTextInput(0, eventArgs => events.Add($"text '{eventArgs.Text}'"));
-        mouseService.SubscribeMotion(secondary, 0, eventArgs => events.Add($"7: motion {eventArgs.Position}"));
-        keyboardService.SubscribeKeyDown(secondary, 0, eventArgs => events.Add($"7: down {eventArgs.Scancode}"));
-        keyboardService.SubscribeKeyUp(secondary, 0, eventArgs => events.Add($"7: up {eventArgs.Scancode}"));
-        textInputService.SubscribeTextInput(secondary, 0, eventArgs => events.Add($"7: text '{eventArgs.Text}'"));
         gamepadService.GamepadConnected += _ => events.Add("gamepad connected");
         gamepadService.GamepadDisconnected += _ => events.Add("gamepad disconnected");
         gamepadService.SubscribeButtonPress(0, eventArgs => events.Add($"gamepad press {eventArgs.Button}"));
@@ -271,7 +230,7 @@ public sealed class InputAutomationCommandInterpreterTests
         gamepadService.SubscribeRightTriggerMotion(0, eventArgs => events.Add($"gamepad right trigger {eventArgs.Value}"));
 
         AppControl appControl = new();
-        InputAutomationCommandInterpreter interpreter = new(automation, windowRegistry, new NoImageWriter(), appControl, commandRegistry);
+        InputAutomationCommandInterpreter interpreter = new(automation, InputAutomationTests.CreateWindow(42), new NoImageWriter(), appControl, commandRegistry);
         return new Fixture(interpreter, events, keyboardService, appControl);
     }
 
@@ -284,13 +243,13 @@ public sealed class InputAutomationCommandInterpreterTests
 
     private sealed class RecordingCommand(string name) : AutomationCommand(name)
     {
-        public List<(string Arguments, ViewScope? ViewScope)> Calls { get; } = new();
+        public List<string> Calls { get; } = new();
 
-        public override void Execute(string arguments, ViewScope? viewScope) => Calls.Add((arguments, viewScope));
+        public override void Execute(string arguments) => Calls.Add(arguments);
     }
 
     private sealed class FailingCommand() : AutomationCommand("fail")
     {
-        public override void Execute(string arguments, ViewScope? viewScope) => throw new FormatException("bad");
+        public override void Execute(string arguments) => throw new FormatException("bad");
     }
 }

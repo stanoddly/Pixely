@@ -6,8 +6,7 @@ public abstract class RenderContextProvider<TRenderContext>
     /// <summary>
     /// Creates the context for a frame the render coordinator acquired. The coordinator calls this only for a frame it draws:
     /// the window is renderable and a swapchain texture came back. It disposes the context after the renderers, then submits
-    /// the command buffer itself, so neither the context nor a renderer submits or cancels it. One provider can serve several
-    /// windows, so <see cref="FrameContext.Window"/> tells them apart.
+    /// the command buffer itself, so neither the context nor a renderer submits or cancels it.
     /// </summary>
     public abstract TRenderContext CreateRenderContext(FrameContext frameContext);
 

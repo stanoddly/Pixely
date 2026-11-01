@@ -104,7 +104,7 @@ Every graphics-program source declares exactly one `vertexMain` and one `fragmen
 
 ## Color spaces
 
-Shaders work in linear light. The swapchain of every window claimed for the GPU device is an sRGB format, so the GPU encodes what a fragment shader writes to sRGB, and blends in linear light. Textures created from images (`ITextureLoader`, `GpuMemorySystem.CreateTexture(Image)`, sprites, glyphs) are `R8G8B8A8UnormSrgb`, so sampling returns linear values. Data that is not color, such as normal maps, masks or lookup tables, is created with `TextureFormat.R8G8B8A8Unorm` through the overloads that take a format, so it is read as stored.
+Shaders work in linear light. The window's swapchain is an sRGB format, so the GPU encodes what a fragment shader writes to sRGB, and blends in linear light. Textures created from images (`ITextureLoader`, `GpuMemorySystem.CreateTexture(Image)`, sprites, glyphs) are `R8G8B8A8UnormSrgb`, so sampling returns linear values. Data that is not color, such as normal maps, masks or lookup tables, is created with `TextureFormat.R8G8B8A8Unorm` through the overloads that take a format, so it is read as stored.
 
 In C#, `SrgbColor` holds a color as authored, in bytes, and `LinearColor` holds what the GPU works with, in floats. `SrgbColor` converts to `LinearColor` implicitly; the other way is an explicit cast that clamps and rounds. Alpha is linear in both. `SrgbColors` names a palette of `SrgbColor` values, and `LinearColors` holds the same palette converted to `LinearColor`.
 

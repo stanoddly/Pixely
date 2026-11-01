@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Storage Buffer Demo"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Storage Buffer Demo"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<StorageBufferRenderer>(StorageBufferRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, StorageBufferRenderer>();

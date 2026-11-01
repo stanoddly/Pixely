@@ -5,14 +5,12 @@ namespace Pixely.Tests;
 
 public sealed class KeyboardRepeatTests
 {
-    private static readonly ViewScope _view = new(1);
-
     [Test]
     public void KeyDown_FirstPress_IsNotMarkedAsRepeat()
     {
         KeyboardService keyboardService = new(new AppControl());
         List<bool> repeats = new();
-        keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
+        keyboardService.SubscribeKeyDown(0, eventArgs => repeats.Add(eventArgs.Repeat));
 
         KeyDown(keyboardService, Scancode.A);
 
@@ -24,7 +22,7 @@ public sealed class KeyboardRepeatTests
     {
         KeyboardService keyboardService = new(new AppControl());
         List<bool> repeats = new();
-        keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
+        keyboardService.SubscribeKeyDown(0, eventArgs => repeats.Add(eventArgs.Repeat));
 
         KeyDown(keyboardService, Scancode.A);
         KeyDown(keyboardService, Scancode.A);
@@ -38,7 +36,7 @@ public sealed class KeyboardRepeatTests
     {
         KeyboardService keyboardService = new(new AppControl());
         List<bool> repeats = new();
-        keyboardService.SubscribeKeyDown(_view, 0, eventArgs => repeats.Add(eventArgs.Repeat));
+        keyboardService.SubscribeKeyDown(0, eventArgs => repeats.Add(eventArgs.Repeat));
 
         KeyDown(keyboardService, Scancode.A);
         KeyDown(keyboardService, Scancode.A);
@@ -53,7 +51,7 @@ public sealed class KeyboardRepeatTests
     {
         KeyboardService keyboardService = new(new AppControl());
         bool? keyUpRepeat = null;
-        keyboardService.SubscribeKeyUp(_view, 0, eventArgs => keyUpRepeat = eventArgs.Repeat);
+        keyboardService.SubscribeKeyUp(0, eventArgs => keyUpRepeat = eventArgs.Repeat);
 
         KeyDown(keyboardService, Scancode.A);
         KeyDown(keyboardService, Scancode.A);
@@ -67,7 +65,7 @@ public sealed class KeyboardRepeatTests
     {
         KeyboardService keyboardService = new(new AppControl());
         List<bool> pressedWhenRepeated = new();
-        keyboardService.SubscribeKeyDown(_view, 0, eventArgs =>
+        keyboardService.SubscribeKeyDown(0, eventArgs =>
         {
             if (eventArgs.Repeat)
             {
@@ -83,11 +81,11 @@ public sealed class KeyboardRepeatTests
 
     private static void KeyDown(KeyboardService keyboardService, Scancode scancode)
     {
-        keyboardService.OnKeyEvent(_view, (SDL_KeyboardID)1, scancode, VirtualKey.A, true, 0);
+        keyboardService.OnKeyEvent((SDL_KeyboardID)1, scancode, VirtualKey.A, true, 0);
     }
 
     private static void KeyUp(KeyboardService keyboardService, Scancode scancode)
     {
-        keyboardService.OnKeyEvent(_view, (SDL_KeyboardID)1, scancode, VirtualKey.A, false, 0);
+        keyboardService.OnKeyEvent((SDL_KeyboardID)1, scancode, VirtualKey.A, false, 0);
     }
 }

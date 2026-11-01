@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Texture Array Demo"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Texture Array Demo"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<TextureArrayRenderer>(TextureArrayRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, TextureArrayRenderer>();

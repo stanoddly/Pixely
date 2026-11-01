@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Compute Shader Demo"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Compute Shader Demo"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<ComputeRenderer>(ComputeRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, ComputeRenderer>();

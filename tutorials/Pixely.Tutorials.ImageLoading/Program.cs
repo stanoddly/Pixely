@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (443, 410), Title: "Image Loading Demo"));
+            .ConfigureWindow(new WindowConfig(Size: (443, 410), Title: "Image Loading Demo"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<ImageLoadingRenderer>(ImageLoadingRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, ImageLoadingRenderer>();

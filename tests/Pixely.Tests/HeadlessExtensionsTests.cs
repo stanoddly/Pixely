@@ -2,11 +2,13 @@ using Pixely.App;
 using Pixely.Content;
 using Pixely.Headless;
 using Pixely.Input;
+using Pixely.Testing;
 using SDL;
 
 namespace Pixely.Tests;
 
-// Builds real apps, which initializes SDL video with the dummy driver.
+// Builds real apps on the stub GPU device, which initializes SDL video with the dummy driver. With headless mode on, the window is an
+// offscreen one on the stub device; the app is built but never runs a frame, because its console would read the test's standard input.
 [NonParallelizable]
 public class HeadlessExtensionsTests
 {
@@ -26,7 +28,7 @@ public class HeadlessExtensionsTests
     [TestCase(" FALSE ")]
     public void Build_WithTheVariableOff_RunsAsUsual(string? value)
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? value : null);
 
         using IPixelyApp app = builder.Build();
@@ -45,7 +47,7 @@ public class HeadlessExtensionsTests
     [TestCase(" TRUE ")]
     public void Build_WithTheVariableOn_RunsHeadless(string value)
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice();
         builder.AddSingleton(new PixelyConfig(EnableCommandConsole: true));
         builder.AddHeadlessSupport(name => name == HeadlessExtensions.HeadlessVariable ? value : null);
 
@@ -68,7 +70,7 @@ public class HeadlessExtensionsTests
     [Test]
     public void Build_AfterASecondCall_RegistersHeadlessModeOnce()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice();
         builder.AddHeadlessSupport(HeadlessOn);
         builder.AddHeadlessSupport(HeadlessOn);
 
@@ -86,13 +88,27 @@ public class HeadlessExtensionsTests
     public void Build_WithAnImageWriterRegisteredBefore_KeepsIt()
     {
         RecordingImageWriter imageWriter = new();
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice();
         builder.AddSingleton<IImageWriter>(imageWriter);
         builder.AddHeadlessSupport(HeadlessOn);
 
         using IPixelyApp app = builder.Build();
 
         Assert.That(app.GetRequiredService<IImageWriter>(), Is.SameAs(imageWriter));
+    }
+
+    // The window's device check runs first, so no frame has to be rendered for it.
+    [Test]
+    public void CaptureLastFrame_OnTheStubDevice_Throws()
+    {
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice();
+        builder.AddHeadlessSupport(HeadlessOn);
+        using IPixelyApp app = builder.Build();
+        OffscreenWindow window = (OffscreenWindow)app.GetRequiredService<Window>();
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => window.CaptureLastFrame())!;
+
+        Assert.That(exception.Message, Does.StartWith("Headless mode reads frames back").And.Contain(nameof(StubGpuDevice)));
     }
 
     [Test]

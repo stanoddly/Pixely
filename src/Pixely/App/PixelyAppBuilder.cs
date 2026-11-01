@@ -11,6 +11,7 @@ namespace Pixely.App;
 public class PixelyAppBuilder : ServiceCollection
 {
     private readonly ContentSourceBuilder _contentSourceBuilder = new();
+    private WindowConfig _windowConfig = new();
 
     public PixelyAppBuilder()
     {
@@ -23,7 +24,6 @@ public class PixelyAppBuilder : ServiceCollection
             }
         });
         AddSingleton<ContentSource>(() => _contentSourceBuilder.Create());
-        WindowRegistry.AddWindowRegistry(this);
         AddRegistry<IRenderCoordinator>();
         AddRegistry<IRenderer<BasicRenderContext>>(static renderer => renderer.RenderOrder);
         AddRegistry<IUpdatable>(static updatable => updatable.UpdateOrder);
@@ -54,6 +54,14 @@ public class PixelyAppBuilder : ServiceCollection
         return this;
     }
 
+    // The app's one window, which Build() creates. A later call replaces the settings of an earlier one.
+    public PixelyAppBuilder ConfigureWindow(WindowConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        _windowConfig = config;
+        return this;
+    }
+
     public PixelyAppBuilder UseDefaultContent(string contentDirectory = "Content")
     {
         return ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddDefaultContent(contentDirectory));
@@ -67,6 +75,22 @@ public class PixelyAppBuilder : ServiceCollection
         }
         AddSingleton<PixelyFactory>();
         AddSingleton<SdlLibrary>(SdlLibrary.Load);
+
+        // Every app has one GPU device and one window. A device registered before Build(), such as the stub of Pixely.Testing, is
+        // kept: the container creates every singleton at build, also one a later registration hides, so registering the SDL device
+        // next to it would create both. The GPU services are registered whenever they are missing, also next to such a device.
+        if (!IsRegistered<GpuDevice>())
+        {
+            AddSingleton<GpuDevice, PixelyFactory>();
+        }
+
+        if (!IsRegistered<GpuMemorySystem>())
+        {
+            GpuExtensions.AddGpuServices(this);
+        }
+
+        WindowConfig windowConfig = _windowConfig;
+        AddSingleton<Window>(provider => CreateWindow(provider, windowConfig));
 
         AddSingleton<PlatformInfo, PixelyFactory>();
 
@@ -148,5 +172,28 @@ public class PixelyAppBuilder : ServiceCollection
             serviceProvider.GetRequiredService<StageManager>(),
             serviceProvider.GetRequiredService<IFrameTimingRecorder>(),
             !serviceProvider.GetRequiredService<PixelyConfig>().IsIsolated);
+    }
+
+    private static Window CreateWindow(ServiceProvider provider, WindowConfig config)
+    {
+        GpuDevice gpuDevice = provider.GetRequiredService<GpuDevice>();
+        PixelyFrameClock frameClock = provider.GetRequiredService<PixelyFrameClock>();
+        PlatformInfo platformInfo = provider.GetRequiredService<PlatformInfo>();
+
+        // Two factories mean two kinds of window, such as headless mode's offscreen one and the stub GPU device's, and neither works
+        // on the other's terms, so picking one would hide the conflict.
+        IReadOnlyList<IWindowFactory> windowFactories = provider.GetServices<IWindowFactory>();
+        if (windowFactories.Count > 1)
+        {
+            throw new PixelyInitializationException(
+                $"An app's window comes from one place, but {string.Join(" and ", windowFactories.Select(static factory => factory.GetType().Name))} are both registered to create it.");
+        }
+
+        if (windowFactories.Count == 1)
+        {
+            return windowFactories[0].CreateWindow(gpuDevice, frameClock, config, platformInfo);
+        }
+
+        return provider.GetRequiredService<PixelyFactory>().CreateWindow(gpuDevice, frameClock, config, platformInfo, provider.GetRequiredService<IImageLoader>());
     }
 }

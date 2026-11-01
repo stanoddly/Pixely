@@ -7,7 +7,7 @@ namespace Pixely.App;
 
 public class PixelyApp : IPixelyApp
 {
-    // How long a frame that no window drew waits for an event, about one frame of a 60 Hz display.
+    // How long a frame that the window did not draw waits for an event, about one frame of a 60 Hz display.
     private const int UndrawnFrameWaitMilliseconds = 16;
 
     public ServiceProvider ServiceProvider { get; }
@@ -69,6 +69,8 @@ public class PixelyApp : IPixelyApp
         // start the frame before applying queued stage transitions
         _frameClock.StartFrame();
         _stageManager.ApplyPendingTransition();
+        // Right after the transition, so a stage without a coordinator, or with one next to the root's, fails before any of it runs.
+        IRenderCoordinator renderCoordinator = GetRenderCoordinator(_renderCoordinators);
         // then process events
         _eventService.Process();
 
@@ -81,10 +83,10 @@ public class PixelyApp : IPixelyApp
         }
 
         // finally render
-        bool drawn = Render(_renderCoordinators);
+        bool drawn = renderCoordinator.Execute();
         _frameTimingRecorder.EndRender();
 #if !BROWSER
-        // A frame that no window drew, such as one whose windows are all hidden or minimized, was not paced by waiting for
+        // A frame that the window did not draw, such as one while it is hidden or minimized, was not paced by waiting for
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
         // sees. An event, such as the window being restored, ends the wait early and stays queued for the next frame. The
         // browser needs no wait: requestAnimationFrame paces its frames. An isolated app, headless or under test, needs none either:
@@ -115,18 +117,23 @@ public class PixelyApp : IPixelyApp
         }
     }
 
-    // Whether a window drew the frame, or the app renders no window at all. An app without render coordinators keeps its
-    // own pacing.
-    internal static bool Render(ServiceRegistry<IRenderCoordinator> renderCoordinators)
+    // Exactly one coordinator renders the app's window each frame: the root's, or the active stage's. Without one, nothing would
+    // submit the uploads GpuMemorySystem records or request the swapchain texture SDL's Vulkan backend frees finished work on.
+    internal static IRenderCoordinator GetRenderCoordinator(ServiceRegistry<IRenderCoordinator> renderCoordinators)
     {
-        bool hasCoordinator = false;
-        bool drawn = false;
+        IRenderCoordinator? found = null;
         foreach (IRenderCoordinator renderCoordinator in renderCoordinators)
         {
-            hasCoordinator = true;
-            drawn |= renderCoordinator.Execute();
+            if (found != null)
+            {
+                throw new PixelyInitializationException(
+                    "The app has more than one render coordinator. Register window rendering, such as UseDefaultRendering(), either in the app's Configure or in every stage, not in both.");
+            }
+
+            found = renderCoordinator;
         }
 
-        return drawn || !hasCoordinator;
+        return found ?? throw new PixelyInitializationException(
+            "The app has no render coordinator. Register window rendering, such as UseDefaultRendering(), in the app's Configure or in every stage.");
     }
 }

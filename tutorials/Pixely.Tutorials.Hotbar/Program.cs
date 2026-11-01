@@ -18,7 +18,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Hotbar"))
+            .UseDefaultRendering();
 
         builder.UseUi();
         builder.AddSingleton<UiStyle>(provider => new UiStyle(provider.GetRequiredService<IFontSystem>().Load("fonts/GohuFont-Medium.ttf", 14)));

@@ -72,7 +72,7 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
             // Pixely never changes SDL's swapchain parameters, so the present mode is SDL's default. An offscreen window presents
             // nothing.
             string presentation = swapchain.Offscreen ? "offscreen" : "present mode vsync";
-            Write($"Swapchain of view {swapchain.ViewScope.Value}: {swapchain.Size.Width}x{swapchain.Size.Height}, {swapchain.Format}, {presentation}");
+            Write($"Swapchain: {swapchain.Size.Width}x{swapchain.Size.Height}, {swapchain.Format}, {presentation}");
         }
 
         _timings.ClearSwapchainChanges();

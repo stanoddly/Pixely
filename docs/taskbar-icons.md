@@ -1,6 +1,6 @@
 # Taskbar icons
 
-`PixelyConfig.TaskbarIconPath` specifies one runtime icon for every window created by the application:
+`PixelyConfig.TaskbarIconPath` specifies the application's runtime icon:
 
 ```csharp
 PixelyAppBuilder builder = new();
@@ -10,11 +10,11 @@ builder.AddSingleton(new PixelyConfig(
 builder.UseDefaultContent();
 ```
 
-The path is resolved through the configured `IImageLoader`, so the image can come from any Pixely virtual content source. Pixely loads the image once and applies it to every window created through `AddWindow` or `UseDefaultRendering`.
+The path is resolved through the configured `IImageLoader`, so the image can come from any Pixely virtual content source. Pixely loads the image and applies it to the app's window when `Build()` creates it.
 
-`ApplicationIdentifier` is optional. When specified, Pixely supplies it to SDL before initialization so desktop compositors can group the application's windows consistently.
+`ApplicationIdentifier` is optional. When specified, Pixely supplies it to SDL before initialization so desktop compositors can group the application's window consistently.
 
-`Window.SetIcon(Image)` remains available as a per-window override and returns whether the active SDL video backend accepted the icon.
+`Window.SetIcon(Image)` remains available to change the icon at runtime and returns whether the active SDL video backend accepted the icon.
 
 ## Platform behavior
 
@@ -30,4 +30,4 @@ References:
 - [SDL Wayland guidance](https://wiki.libsdl.org/SDL3/README-wayland)
 - [SDL application identifiers](https://wiki.libsdl.org/SDL3/SDL_SetAppMetadataProperty)
 
-See [Pixely.Tutorials.TaskbarIcon](../tutorials/Pixely.Tutorials.TaskbarIcon/README.md) for a runnable two-window example.
+See [Pixely.Tutorials.TaskbarIcon](../tutorials/Pixely.Tutorials.TaskbarIcon/README.md) for a runnable example.

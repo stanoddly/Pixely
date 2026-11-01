@@ -43,7 +43,7 @@ Register it before `Build()`. The root reads it once, when the container builds 
 Then add a layer, or a view:
 
 ```csharp
-UiRoot root = pixelyApp.ServiceProvider.GetUiRoot();
+UiRoot root = pixelyApp.GetRequiredService<UiRoot>();
 root.AddLayer(new Column { Children = { new Label("Hello") } });
 ```
 
@@ -277,7 +277,7 @@ A view reading more than one model calls `Observe` for each; the base owns the s
 
 ## Registering views
 
-Register a view as a singleton and it is added to the root for its `ViewScope` automatically:
+Register a view as a singleton and it is added to the root automatically:
 
 ```csharp
 builder.AddSingleton<ScoreViewModel>();
@@ -407,17 +407,6 @@ A control's state reaches the text inside it through `IVisualStateSource`, which
 
 Which state an element is in is the element's own answer. `TextBox` reports `Disabled` before `Focused`, so a disabled field looks disabled even while it holds the keyboard. `Focused` is last in the enum rather than beside the other interaction states, so the values already in use kept their numbers.
 
-## More than one window
-
-Every registration takes a `ViewScope`, and a root belongs to one:
-
-```csharp
-builder.UseUi();
-builder.UseUi(ViewScopes.Inventory);
-```
-
-A view says which root it belongs to by overriding `IUiView.ViewScope`, so registering a view is the same line whichever window it is for. `GetUiRoot(viewScope)` resolves a specific root.
-
 ## Tutorials
 
 - `Pixely.Tutorials.UiBoxes` — layout and sizing on their own.
@@ -426,5 +415,4 @@ A view says which root it belongs to by overriding `IUiView.ViewScope`, so regis
 - `Pixely.Tutorials.UiScrollView` — a list and a strip larger than their panels, scrolled by the wheel, by a press on a bar's track and by dragging its thumb.
 - `Pixely.Tutorials.Hotbar` — a custom `IPointerTarget` element and an anchored label following hover.
 - `Pixely.Tutorials.StageSwitching` — views owned by a stage, added and removed with it.
-- `Pixely.Tutorials.MultiWindowTextInput` — one root per window, each with its own focus.
 - `Pixely.Tutorials.FileDialogs` and `Pixely.Tutorials.MessageBoxes` — buttons opening modal dialogs.

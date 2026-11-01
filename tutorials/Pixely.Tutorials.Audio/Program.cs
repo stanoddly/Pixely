@@ -17,8 +17,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (640, 480), Title: "Audio Tutorial"))
+            .ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Audio Tutorial"))
+            .UseDefaultRendering()
             .RegisterAudio();
 
         builder.OnBuilt((IAudioSystem audioSystem, IKeyboardService keyboardService, AppControl appControl) =>

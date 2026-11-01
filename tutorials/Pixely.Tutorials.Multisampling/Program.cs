@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Multisampling"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Multisampling"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(MultisamplingRenderer.Create);
     }

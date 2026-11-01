@@ -15,7 +15,7 @@ public class UiInputSystemTests
         FakeKeyboardService keyboard = new();
         FakeTextInputService textInput = new();
         RecordingFocusTarget field = Sized();
-        UiRoot root = Bridged(textInput, keyboard, new Column { Children = { field } }, new ViewScope(3), inputOrder: -7);
+        UiRoot root = Bridged(textInput, keyboard, new Column { Children = { field } }, inputOrder: -7);
         root.Focus(field);
         field.Calls.Clear();
 
@@ -26,7 +26,7 @@ public class UiInputSystemTests
         {
             Assert.That(field.Calls, Has.Count.EqualTo(1), "the key reached the field");
             Assert.That(keyEvent.Consumed, Is.True);
-            Assert.That(keyboard.KeyDownSubscription, Is.EqualTo((new ViewScope(3), -7)), "subscribed for its own window, at the order it was given");
+            Assert.That(keyboard.KeyDownOrder, Is.EqualTo(-7), "subscribed at the order it was given");
         });
     }
 
@@ -52,7 +52,7 @@ public class UiInputSystemTests
         FakeKeyboardService keyboard = new();
         FakeTextInputService textInput = new();
         RecordingFocusTarget field = Sized();
-        UiRoot root = Bridged(textInput, keyboard, new Column { Children = { field } }, new ViewScope(3), inputOrder: -7);
+        UiRoot root = Bridged(textInput, keyboard, new Column { Children = { field } }, inputOrder: -7);
         root.Focus(field);
         field.Calls.Clear();
 
@@ -63,7 +63,7 @@ public class UiInputSystemTests
         {
             Assert.That(field.Calls, Is.EqualTo(new[] { "text " }));
             Assert.That(textEvent.Consumed, Is.True);
-            Assert.That(textInput.TextInputSubscription, Is.EqualTo((new ViewScope(3), -7)));
+            Assert.That(textInput.TextInputOrder, Is.EqualTo(-7));
         });
     }
 
@@ -92,14 +92,14 @@ public class UiInputSystemTests
     }
 
     [Test]
-    public void FocusingAField_StartsTextInputForItsScope()
+    public void FocusingAField_StartsTextInput()
     {
         FakeTextInputService textInput = new();
-        UiRoot root = Bridged(textInput, out RecordingFocusTarget field, new ViewScope(2));
+        UiRoot root = Bridged(textInput, out RecordingFocusTarget field);
 
         root.Focus(field);
 
-        Assert.That(textInput.Calls, Is.EqualTo(new[] { $"start {new ViewScope(2)}" }));
+        Assert.That(textInput.Calls, Is.EqualTo(new[] { "start" }));
     }
 
     [Test]
@@ -112,7 +112,7 @@ public class UiInputSystemTests
 
         root.Focus(null);
 
-        Assert.That(textInput.Calls, Is.EqualTo(new[] { $"stop {default(ViewScope)}" }));
+        Assert.That(textInput.Calls, Is.EqualTo(new[] { "stop" }));
     }
 
     [Test]
@@ -142,36 +142,30 @@ public class UiInputSystemTests
 
         root.RemoveLayer(layer);
 
-        Assert.That(textInput.Calls, Is.EqualTo(new[] { $"stop {default(ViewScope)}" }),
+        Assert.That(textInput.Calls, Is.EqualTo(new[] { "stop" }),
             "a closed window runs no further pass, so waiting for one would leave text input on for good");
     }
 
     private static RecordingFocusTarget Sized() =>
         new() { Width = Sizing.Fixed(40), Height = Sizing.Fixed(20) };
 
-    private static UiRoot Bridged(FakeTextInputService textInput, out RecordingFocusTarget field, ViewScope viewScope = default)
+    private static UiRoot Bridged(FakeTextInputService textInput, out RecordingFocusTarget field)
     {
         field = Sized();
-        return Bridged(textInput, new Column { Children = { field } }, viewScope);
+        return Bridged(textInput, new Column { Children = { field } });
     }
 
-    private static UiRoot Bridged(FakeTextInputService textInput, Element layer, ViewScope viewScope = default) =>
-        Bridged(textInput, new FakeKeyboardService(), layer, viewScope);
+    private static UiRoot Bridged(FakeTextInputService textInput, Element layer) =>
+        Bridged(textInput, new FakeKeyboardService(), layer);
 
-    private static UiRoot Bridged(
-        FakeTextInputService textInput,
-        FakeKeyboardService keyboard,
-        Element layer,
-        ViewScope viewScope = default,
-        int inputOrder = 0) =>
-        Bridged(textInput, keyboard, new FakeMouseService(), layer, viewScope, inputOrder);
+    private static UiRoot Bridged(FakeTextInputService textInput, FakeKeyboardService keyboard, Element layer, int inputOrder = 0) =>
+        Bridged(textInput, keyboard, new FakeMouseService(), layer, inputOrder);
 
     private static UiRoot Bridged(
         FakeTextInputService textInput,
         FakeKeyboardService keyboard,
         FakeMouseService mouse,
         Element layer,
-        ViewScope viewScope = default,
         int inputOrder = 0,
         Size<uint>? windowSize = null)
     {
@@ -185,7 +179,6 @@ public class UiInputSystemTests
         _ = new UiInputSystem(
             root,
             () => windowSize ?? new Size<uint>(320, 240),
-            viewScope,
             inputOrder,
             mouse,
             keyboard,
@@ -199,7 +192,7 @@ public class UiInputSystemTests
     {
         FakeMouseService mouse = new();
         ScrollView scrollView = new() { Width = Sizing.Fixed(100), Height = Sizing.Fixed(50), Children = { new MeasuredBox(100, 500) } };
-        Bridged(new FakeTextInputService(), new FakeKeyboardService(), mouse, new Column { Children = { scrollView } }, new ViewScope(3), inputOrder: -7);
+        Bridged(new FakeTextInputService(), new FakeKeyboardService(), mouse, new Column { Children = { scrollView } }, inputOrder: -7);
 
         MouseWheelEventArgs wheelEvent = new() { Delta = new System.Numerics.Vector2(0f, -1f), Position = new System.Numerics.Vector2(10f, 10f) };
         mouse.WheelHandler!(wheelEvent);
@@ -208,7 +201,7 @@ public class UiInputSystemTests
         {
             Assert.That(scrollView.ScrollOffset, Is.EqualTo(new Vector2Int(0, 40)));
             Assert.That(wheelEvent.Consumed, Is.True);
-            Assert.That(mouse.WheelSubscription, Is.EqualTo((new ViewScope(3), -7)), "subscribed for its own window, at the order it was given");
+            Assert.That(mouse.WheelOrder, Is.EqualTo(-7), "subscribed at the order it was given");
         });
     }
 

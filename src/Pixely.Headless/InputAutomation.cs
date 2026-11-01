@@ -6,17 +6,13 @@ namespace Pixely.Headless;
 
 internal sealed class InputAutomation
 {
-    // Every scope gets its own virtual mouse and keyboard, so position, relative motion, buttons and keys held in one
-    // window never leak into another. SDL hands out small incrementing device ids and reserves the top ones
+    // One virtual mouse, keyboard and gamepad. SDL hands out small incrementing device ids and reserves the top ones
     // (SDL_TOUCH_MOUSEID, SDL_PEN_MOUSEID), so the synthetic ids live in the middle of the range.
-    private const uint VirtualDeviceIdBase = 0x4000_0000;
+    private const uint VirtualDeviceId = 0x4000_0000;
+    private const SDL_MouseID VirtualMouseId = (SDL_MouseID)VirtualDeviceId;
+    private const SDL_KeyboardID VirtualKeyboardId = (SDL_KeyboardID)VirtualDeviceId;
+    private const SDL_JoystickID VirtualGamepadId = (SDL_JoystickID)VirtualDeviceId;
 
-    private static SDL_MouseID VirtualMouseId(ViewScope viewScope) => (SDL_MouseID)unchecked(VirtualDeviceIdBase + (uint)viewScope.Value);
-    private static SDL_KeyboardID VirtualKeyboardId(ViewScope viewScope) => (SDL_KeyboardID)unchecked(VirtualDeviceIdBase + (uint)viewScope.Value);
-    // Gamepads are not per window, so there is one synthetic gamepad.
-    private const SDL_JoystickID VirtualGamepadId = (SDL_JoystickID)VirtualDeviceIdBase;
-
-    private readonly WindowRegistry _windowRegistry;
     private readonly MouseService _mouseService;
     private readonly KeyboardService _keyboardService;
     private readonly TextInputService _textInputService;
@@ -24,10 +20,9 @@ internal sealed class InputAutomation
     private readonly FrameClock _frameClock;
     private Gamepad? _gamepad;
 
-    internal InputAutomation(WindowRegistry windowRegistry, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService,
-        GamepadService gamepadService, FrameClock frameClock)
+    internal InputAutomation(MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService, GamepadService gamepadService,
+        FrameClock frameClock)
     {
-        _windowRegistry = windowRegistry;
         _mouseService = mouseService;
         _keyboardService = keyboardService;
         _textInputService = textInputService;
@@ -37,81 +32,70 @@ internal sealed class InputAutomation
 
     public bool IsGamepadConnected => _gamepad != null;
 
-    public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseMoveTo(Vector2 windowPosition)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseMoveTo(VirtualMouseId, windowPosition, GetTimestamp());
     }
 
-    public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default)
+    public void MouseMoveBy(Vector2 delta)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseMoveBy(viewScope, VirtualMouseId(viewScope), delta, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseMoveBy(VirtualMouseId, delta, GetTimestamp());
     }
 
-    public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseDown(MouseButton button, Vector2 windowPosition)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseButtonEvent(VirtualMouseId, button, windowPosition, true, GetTimestamp());
     }
 
-    public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseUp(MouseButton button, Vector2 windowPosition)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseButtonEvent(VirtualMouseId, button, windowPosition, false, GetTimestamp());
     }
 
-    public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseClick(MouseButton button, Vector2 windowPosition)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseMoveTo(viewScope, VirtualMouseId(viewScope), windowPosition, GetTimestamp());
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, true, GetTimestamp());
-        _mouseService.OnMouseButtonEvent(viewScope, VirtualMouseId(viewScope), button, windowPosition, false, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseMoveTo(VirtualMouseId, windowPosition, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(VirtualMouseId, button, windowPosition, true, GetTimestamp());
+        _mouseService.OnMouseButtonEvent(VirtualMouseId, button, windowPosition, false, GetTimestamp());
     }
 
-    public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseWheel(Vector2 delta, Vector2 windowPosition)
     {
-        ValidateView(viewScope);
-        EnterWindow(viewScope);
-        _mouseService.OnMouseWheelEvent(viewScope, VirtualMouseId(viewScope), delta, windowPosition, GetTimestamp());
+        EnterWindow();
+        _mouseService.OnMouseWheelEvent(VirtualMouseId, delta, windowPosition, GetTimestamp());
     }
 
-    public void MouseLeave(ViewScope viewScope = default)
+    public void MouseLeave()
     {
-        ValidateView(viewScope);
-        _mouseService.OnMouseWindowPresenceEvent(viewScope, false, GetTimestamp());
+        _mouseService.OnMouseWindowPresenceEvent(false, GetTimestamp());
     }
 
-    public void KeyDown(Scancode scancode, ViewScope viewScope = default)
+    public void KeyDown(Scancode scancode)
     {
-        ValidateView(viewScope);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, GetVirtualKey(scancode), true, GetTimestamp());
+        _keyboardService.OnKeyEvent(VirtualKeyboardId, scancode, GetVirtualKey(scancode), true, GetTimestamp());
     }
 
-    public void KeyUp(Scancode scancode, ViewScope viewScope = default)
+    public void KeyUp(Scancode scancode)
     {
-        ValidateView(viewScope);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, GetVirtualKey(scancode), false, GetTimestamp());
+        _keyboardService.OnKeyEvent(VirtualKeyboardId, scancode, GetVirtualKey(scancode), false, GetTimestamp());
     }
 
-    public void KeyPress(Scancode scancode, ViewScope viewScope = default)
+    public void KeyPress(Scancode scancode)
     {
-        ValidateView(viewScope);
         VirtualKey virtualKey = GetVirtualKey(scancode);
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, virtualKey, true, GetTimestamp());
-        _keyboardService.OnKeyEvent(viewScope, VirtualKeyboardId(viewScope), scancode, virtualKey, false, GetTimestamp());
+        _keyboardService.OnKeyEvent(VirtualKeyboardId, scancode, virtualKey, true, GetTimestamp());
+        _keyboardService.OnKeyEvent(VirtualKeyboardId, scancode, virtualKey, false, GetTimestamp());
     }
 
-    public void TextInput(string text, ViewScope viewScope = default)
+    public void TextInput(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        ValidateView(viewScope);
-        _textInputService.OnTextInputEvent(viewScope, text, GetTimestamp());
+        _textInputService.OnTextInputEvent(text, GetTimestamp());
     }
 
     public void GamepadConnect()
@@ -162,15 +146,10 @@ internal sealed class InputAutomation
         return _gamepad ?? throw new InvalidOperationException("The synthetic gamepad is not connected.");
     }
 
-    private void ValidateView(ViewScope viewScope)
-    {
-        _windowRegistry.GetWindow(viewScope);
-    }
-
     // SDL raises the window enter before the first motion of a pointer that arrives; the synthetic mouse does the same.
-    private void EnterWindow(ViewScope viewScope)
+    private void EnterWindow()
     {
-        _mouseService.OnMouseWindowPresenceEvent(viewScope, true, GetTimestamp());
+        _mouseService.OnMouseWindowPresenceEvent(true, GetTimestamp());
     }
 
     private static VirtualKey GetVirtualKey(Scancode scancode)

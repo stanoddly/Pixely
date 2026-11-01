@@ -38,41 +38,31 @@ public sealed class StubKeyboardService : IKeyboardService
         _keyboardService.SubscribeKeyUp(order, handler);
     }
 
-    public void SubscribeKeyDown(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
-    {
-        _keyboardService.SubscribeKeyDown(viewScope, order, handler);
-    }
-
-    public void SubscribeKeyUp(ViewScope viewScope, int order, InputEventHandler<KeyEventArgs> handler)
-    {
-        _keyboardService.SubscribeKeyUp(viewScope, order, handler);
-    }
-
     /// <summary>
     /// Presses the key and holds it. Another call while it is held is a repeat, as when the player keeps holding it.
     /// </summary>
-    public void Down(Scancode scancode, ViewScope viewScope = default)
+    public void Down(Scancode scancode)
     {
-        Raise(scancode, viewScope, true);
+        Raise(scancode, true);
     }
 
-    public void Up(Scancode scancode, ViewScope viewScope = default)
+    public void Up(Scancode scancode)
     {
-        Raise(scancode, viewScope, false);
+        Raise(scancode, false);
     }
 
     /// <summary>
     /// Presses the key and releases it.
     /// </summary>
-    public void Press(Scancode scancode, ViewScope viewScope = default)
+    public void Press(Scancode scancode)
     {
-        Down(scancode, viewScope);
-        Up(scancode, viewScope);
+        Down(scancode);
+        Up(scancode);
     }
 
     // The service reuses one event args object and SDL never calls it from a handler, so a call from a handler would change the
     // event the handlers after it get.
-    private void Raise(Scancode scancode, ViewScope viewScope, bool isPressed)
+    private void Raise(Scancode scancode, bool isPressed)
     {
         ValidateScancode(scancode);
         if (_raising)
@@ -83,7 +73,7 @@ public sealed class StubKeyboardService : IKeyboardService
         _raising = true;
         try
         {
-            _keyboardService.OnKeyEvent(viewScope, KeyboardId, scancode, GetVirtualKey(scancode), isPressed, 0);
+            _keyboardService.OnKeyEvent(KeyboardId, scancode, GetVirtualKey(scancode), isPressed, 0);
         }
         finally
         {

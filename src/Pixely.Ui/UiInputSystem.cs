@@ -12,7 +12,6 @@ internal sealed class UiInputSystem
     private readonly UiRoot _root;
     private readonly Func<Size<uint>> _windowSize;
     private readonly ITextInputService _textInputService;
-    private readonly ViewScope _viewScope;
     private bool _textInputStarted;
 
     /// <param name="windowSize">
@@ -23,7 +22,6 @@ internal sealed class UiInputSystem
     internal UiInputSystem(
         UiRoot root,
         Func<Size<uint>> windowSize,
-        ViewScope viewScope,
         int inputOrder,
         IMouseService mouseService,
         IKeyboardService keyboardService,
@@ -32,15 +30,14 @@ internal sealed class UiInputSystem
         _root = root;
         _windowSize = windowSize;
         _textInputService = textInputService;
-        _viewScope = viewScope;
 
         // Motion is never consumed. The UI needs to see it to track hover, but a camera that follows
         // the mouse has to keep seeing it too, even while the pointer is over a button.
-        mouseService.SubscribeMotion(viewScope, inputOrder, eventArgs => _root.PointerMoved(ToUiPosition(eventArgs.Position)));
+        mouseService.SubscribeMotion(inputOrder, eventArgs => _root.PointerMoved(ToUiPosition(eventArgs.Position)));
 
-        mouseService.SubscribeWindowLeave(viewScope, inputOrder, _ => _root.PointerLeft());
+        mouseService.SubscribeWindowLeave(inputOrder, _ => _root.PointerLeft());
 
-        mouseService.SubscribeButtonPress(viewScope, inputOrder, eventArgs =>
+        mouseService.SubscribeButtonPress(inputOrder, eventArgs =>
         {
             if (_root.PointerPressed(ToUiPosition(eventArgs.Position), eventArgs.Button))
             {
@@ -48,7 +45,7 @@ internal sealed class UiInputSystem
             }
         });
 
-        mouseService.SubscribeButtonRelease(viewScope, inputOrder, eventArgs =>
+        mouseService.SubscribeButtonRelease(inputOrder, eventArgs =>
         {
             if (_root.PointerReleased(ToUiPosition(eventArgs.Position), eventArgs.Button))
             {
@@ -58,7 +55,7 @@ internal sealed class UiInputSystem
 
         // Consumed only when something scrolled, so a wheel over a list that has reached its end
         // still zooms the camera underneath.
-        mouseService.SubscribeWheel(viewScope, inputOrder, eventArgs =>
+        mouseService.SubscribeWheel(inputOrder, eventArgs =>
         {
             if (_root.PointerScrolled(ToUiPosition(eventArgs.Position), eventArgs.Delta))
             {
@@ -66,12 +63,12 @@ internal sealed class UiInputSystem
             }
         });
 
-        SubscribeKeyboard(keyboardService, textInputService, viewScope, inputOrder);
+        SubscribeKeyboard(keyboardService, textInputService, inputOrder);
     }
 
-    private void SubscribeKeyboard(IKeyboardService keyboardService, ITextInputService textInputService, ViewScope viewScope, int inputOrder)
+    private void SubscribeKeyboard(IKeyboardService keyboardService, ITextInputService textInputService, int inputOrder)
     {
-        keyboardService.SubscribeKeyDown(viewScope, inputOrder, eventArgs =>
+        keyboardService.SubscribeKeyDown(inputOrder, eventArgs =>
         {
             if (_root.KeyPressed(eventArgs.Scancode, eventArgs.Keyboard, eventArgs.Repeat))
             {
@@ -81,7 +78,7 @@ internal sealed class UiInputSystem
 
         // Committed text only. What the platform is still composing goes to TextEditing, which nothing
         // here draws yet, so an IME's half-finished word is not shown mid-composition.
-        textInputService.SubscribeTextInput(viewScope, inputOrder, eventArgs =>
+        textInputService.SubscribeTextInput(inputOrder, eventArgs =>
         {
             if (_root.TextEntered(eventArgs.Text))
             {
@@ -106,11 +103,11 @@ internal sealed class UiInputSystem
 
         if (active)
         {
-            _textInputService.Start(_viewScope);
+            _textInputService.Start();
         }
         else
         {
-            _textInputService.Stop(_viewScope);
+            _textInputService.Stop();
         }
     }
 

@@ -18,90 +18,80 @@ public class TextEditingEventArgs : ConsumableInputEventArgs
 
 public class TextInputService : ITextInputService
 {
-    private readonly WindowRegistry _windowRegistry;
+    private readonly Window _window;
 
     private readonly TextInputEventArgs _textInputEventArgs = new();
     private readonly TextEditingEventArgs _textEditingEventArgs = new();
-    private readonly ViewScopedOrderedEventHandlers<TextInputEventArgs> _textInputHandlers = new();
-    private readonly ViewScopedOrderedEventHandlers<TextEditingEventArgs> _textEditingHandlers = new();
+    private readonly OrderedEventHandlers<TextInputEventArgs> _textInputHandlers = new();
+    private readonly OrderedEventHandlers<TextEditingEventArgs> _textEditingHandlers = new();
 
-    public bool IsActiveFor(ViewScope viewScope = default)
+    public bool IsActive
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
-        unsafe
+        get
         {
-            return SDL3.SDL_TextInputActive(window.SdlWindow);
+            unsafe
+            {
+                return SDL3.SDL_TextInputActive(_window.SdlWindow);
+            }
         }
     }
 
     public event InputEventHandler<TextInputEventArgs> TextInput
     {
-        add => _textInputHandlers.Add(default, 0, value);
-        remove => _textInputHandlers.Remove(default, value);
+        add => _textInputHandlers.Add(0, value);
+        remove => _textInputHandlers.Remove(value);
     }
 
     public event InputEventHandler<TextEditingEventArgs> TextEditing
     {
-        add => _textEditingHandlers.Add(default, 0, value);
-        remove => _textEditingHandlers.Remove(default, value);
+        add => _textEditingHandlers.Add(0, value);
+        remove => _textEditingHandlers.Remove(value);
     }
 
     public void SubscribeTextInput(int order, InputEventHandler<TextInputEventArgs> handler)
     {
-        _textInputHandlers.Add(default, order, handler);
+        _textInputHandlers.Add(order, handler);
     }
 
     public void SubscribeTextEditing(int order, InputEventHandler<TextEditingEventArgs> handler)
     {
-        _textEditingHandlers.Add(default, order, handler);
+        _textEditingHandlers.Add(order, handler);
     }
 
-    public void SubscribeTextInput(ViewScope viewScope, int order, InputEventHandler<TextInputEventArgs> handler)
+    public void Start()
     {
-        _textInputHandlers.Add(viewScope, order, handler);
-    }
-
-    public void SubscribeTextEditing(ViewScope viewScope, int order, InputEventHandler<TextEditingEventArgs> handler)
-    {
-        _textEditingHandlers.Add(viewScope, order, handler);
-    }
-
-    public void Start(ViewScope viewScope = default)
-    {
-        Window window = _windowRegistry.GetWindow(viewScope);
         unsafe
         {
-            SDL3.SDL_StartTextInput(window.SdlWindow);
+            SDL3.SDL_StartTextInput(_window.SdlWindow);
         }
     }
 
-    public void Stop(ViewScope viewScope = default)
+    public void Stop()
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
         unsafe
         {
-            SDL3.SDL_StopTextInput(window.SdlWindow);
+            SDL3.SDL_StopTextInput(_window.SdlWindow);
         }
     }
 
-    internal TextInputService(WindowRegistry windowRegistry)
+    internal TextInputService(Window window)
     {
-        _windowRegistry = windowRegistry;
+        _window = window;
     }
 
-    internal void OnTextInputEvent(ViewScope viewScope, string text, ulong timestamp)
+    internal void OnTextInputEvent(string text, ulong timestamp)
     {
         _textInputEventArgs.Text = text;
         _textInputEventArgs.Timestamp = timestamp;
-        _textInputHandlers.Invoke(viewScope, _textInputEventArgs);
+        _textInputHandlers.Invoke(_textInputEventArgs);
     }
 
-    internal void OnTextEditingEvent(ViewScope viewScope, string text, int start, int length, ulong timestamp)
+    internal void OnTextEditingEvent(string text, int start, int length, ulong timestamp)
     {
         _textEditingEventArgs.Text = text;
         _textEditingEventArgs.Start = start;
         _textEditingEventArgs.Length = length;
         _textEditingEventArgs.Timestamp = timestamp;
-        _textEditingHandlers.Invoke(viewScope, _textEditingEventArgs);
+        _textEditingHandlers.Invoke(_textEditingEventArgs);
     }
 }

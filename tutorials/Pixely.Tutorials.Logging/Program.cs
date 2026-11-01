@@ -11,8 +11,8 @@ static partial class Program
     static void Configure(PixelyAppBuilder builder)
     {
         builder
-            .UseDefaultRendering(
-                new WindowConfig(Size: (1280, 720), Title: "Logging"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Logging"))
+            .UseDefaultRendering();
 
         builder.AddZLogger(logging =>
         {

@@ -13,9 +13,9 @@ public sealed class AutomationCommandConsoleTests
     [Test]
     public void Update_RunsGameCommandsEndedByNewlineOrSemicolon()
     {
-        Fixture fixture = CreateConsole("give gold 100\nspawn enemy; @7 spawn boss\r\n\n;");
+        Fixture fixture = CreateConsole("give gold 100\nspawn enemy; spawn boss\r\n\n;");
 
-        Assert.That(() => fixture.UpdateAndGetCalls(), Is.EqualTo(new[] { "give gold 100", "spawn enemy", "@7 spawn boss" }).After(5000, 10));
+        Assert.That(() => fixture.UpdateAndGetCalls(), Is.EqualTo(new[] { "give gold 100", "spawn enemy", "spawn boss" }).After(5000, 10));
         Assert.Multiple(() =>
         {
             Assert.That(fixture.Error.ToString(), Is.Empty);
@@ -33,8 +33,6 @@ public sealed class AutomationCommandConsoleTests
 
     [TestCase("key press A", "Command 'key press A' failed: unknown command 'key press A'")]
     [TestCase("Give gold", "Command 'Give gold' failed: unknown command 'Give gold'")]
-    [TestCase("@x give gold", "Command '@x give gold' failed: invalid view scope 'x'")]
-    [TestCase("@7 quit", "Command '@7 quit' failed: 'quit' takes no view scope")]
     [TestCase("fail", "Command 'fail' failed: bad")]
     public void Update_CommandThatCannotRun_IsReportedAndTheNextOneRuns(string command, string expectedError)
     {
@@ -112,7 +110,13 @@ public sealed class AutomationCommandConsoleTests
     {
         // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
         SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
-        PixelyAppBuilder builder = new();
+        // Headless mode brings its own offscreen window.
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice();
+        if (!headless)
+        {
+            builder.AddStubWindows();
+        }
+
         builder.AddSingleton(new PixelyConfig(EnableCommandConsole: enableCommandConsole));
         builder.AddHeadlessSupport(name => headless && name == HeadlessExtensions.HeadlessVariable ? "1" : null);
 
@@ -154,15 +158,15 @@ public sealed class AutomationCommandConsoleTests
 
     private sealed class RecordingCommand(string name, ConcurrentQueue<string> calls) : AutomationCommand(name)
     {
-        public override void Execute(string arguments, ViewScope? viewScope)
+        public override void Execute(string arguments)
         {
-            calls.Enqueue($"{(viewScope is ViewScope scope ? $"@{scope.Value} " : "")}{Name} {arguments}");
+            calls.Enqueue($"{Name} {arguments}");
         }
     }
 
     private sealed class FailingCommand(string name, Exception exception) : AutomationCommand(name)
     {
-        public override void Execute(string arguments, ViewScope? viewScope) => throw exception;
+        public override void Execute(string arguments) => throw exception;
     }
 
     // Reads the text, then throws instead of reporting the end of the input.

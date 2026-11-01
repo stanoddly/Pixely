@@ -1,24 +1,43 @@
 # Window rendering
 
-Pixely uses `default(ViewScope)` for the ordinary single-window case. Applications only need to
-name scopes when they render more than one window.
+Every Pixely app has exactly one window and one GPU device. `PixelyAppBuilder.Build()` creates both.
 
-## Single-window rendering
+## The window
 
-`UseDefaultRendering` creates a DI-owned window and render coordinator:
+`ConfigureWindow` sets the window's size, title and other options. Without it the window gets the defaults of
+`WindowConfig`. A later call replaces the settings of an earlier one:
 
 ```csharp
 PixelyAppBuilder builder = new();
 builder
-    .UseDefaultRendering(
-        new WindowConfig(
-            Size: new Size<uint>(1280, 720),
-            Title: "Game"));
+    .ConfigureWindow(new WindowConfig(Size: new Size<uint>(1280, 720), Title: "Game"))
+    .UseDefaultRendering();
 ```
 
-Omitting `UseDefaultRendering` creates no window; `AddWindow` alone creates one without rendering (see below).
+Code that needs the window takes `Window` from the container:
 
-Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
+```csharp
+public static GameSystem Create(Window window, IMouseService mouseService) => new(window, mouseService);
+```
+
+The window's services need no window argument either:
+
+```csharp
+graphicsPipelineBuilder.AddColorFormatFromDisplay();
+textInputService.Start();
+bool containsMouse = mouseService.IsInWindow();
+```
+
+Closing the window quits the app.
+
+`Window.Show()`, `Raise()` and `Hide()` return whether the native window operation succeeded. Raising a window requests
+input focus, subject to the operating system's window-management policy. `WindowConfig.InitiallyVisible` controls the
+initial visibility; it does not defer native window creation.
+
+## Rendering
+
+`UseDefaultRendering()` registers the render coordinator, which draws the window every frame with
+`IRenderer<BasicRenderContext>` renderers:
 
 ```csharp
 public sealed class GameRenderer : IRenderer<BasicRenderContext>
@@ -36,48 +55,30 @@ Register renderers normally through DI:
 builder.AddSingleton<IRenderer<BasicRenderContext>, GameRenderer>(GameRenderer.Create);
 ```
 
-The default `IRenderer.ViewScope` implementation returns `default`, so single-window renderers do
-not declare a scope.
-
-The default window is available without a scope argument:
+Exactly one render coordinator runs each frame. Either the app's `Configure` registers it, and stages only add
+renderers, or every stage registers its own, and the root registers none. The frame loop checks this at the start of each
+frame, right after loading a stage, and throws `PixelyInitializationException` when there is no coordinator or more than
+one. A stage that draws nothing, such as a loading screen, still registers one:
 
 ```csharp
-Window window = windowRegistry.GetWindow();
-graphicsPipelineBuilder.AddColorFormatFromDisplay();
-textInputService.Start();
-bool containsMouse = mouseService.IsInWindow();
+stageManager.Load(static stage => stage.UseDefaultRendering());
 ```
+
+The coordinator is what keeps the GPU healthy, so it runs even for a window that draws nothing. It submits the uploads
+`GpuMemorySystem` records, and on the desktop it requests a swapchain texture every frame. SDL's Vulkan backend frees
+finished GPU work only on the submit of a command buffer that requested a swapchain texture, or on a fence wait.
 
 ## The GPU device
 
-The GPU device and the services that need it (`GpuMemorySystem`, the shader loaders, `ITextureLoader`, the
-pipeline builders and `IFontSystem`) are registered by `UseGpu()`. `UseDefaultRendering`,
-`UseWindowRendering<T>`, `UseUi`, `RegisterSpriteLoading` and `RegisterAtlas` call it, so an app that renders
-never calls it directly. Call it yourself when the app needs the GPU without a window renderer, such as a
-compute-only app. It is idempotent, and a registered `GpuDevice` from any source makes it a no-op, so it belongs
-at the root when any stage renders: `IsRegistered` sees the parent, and a stage calling `UseDefaultRendering`
-under a root without the device registers the device in that child, so each such stage creates its own device and
-a root window created by `AddWindow` stays unclaimed.
+The GPU device and the services that need it (`GpuMemorySystem`, the shader loaders, `ITextureLoader`, the pipeline
+builders and `IFontSystem`) are registered by `Build()`. A device registered before `Build()`, such as the stub of
+`Pixely.Testing`, is kept, and the services are added next to it when they are missing.
 
-A window claimed for the device gets an sRGB swapchain (`SDR_LINEAR` with vsync): what shaders write is linear light, and the GPU encodes it to sRGB on write (see [shaders.md](shaders.md#color-spaces)). Its `ColorTargetFormat` is `B8G8R8A8UnormSrgb` or `R8G8B8A8UnormSrgb`, whichever the driver has. A driver without an sRGB swapchain for the window fails window creation with `PixelyInitializationException`; there is no fallback, because it would need every shader to encode as well.
-
-Without `UseGpu()` there is no device: `AddWindow` alone creates an SDL window that is not claimed for a device,
-the frame loop processes events and updates, and the window's `ColorTargetFormat` and
-`TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an
-app spins the loop.
-
-With `UseGpu()` but without window rendering, as in a compute-only app, no render coordinator runs, and two things
-fall to the app:
-
-- Only a render coordinator submits the uploads `GpuMemorySystem` records. The app must call `GpuMemorySystem.Submit()`
-  before the GPU work that reads them. Until then the uploads do not run, and on every backend each buffer update makes
-  a new full-size copy of the buffer, because the unsubmitted uploads keep the earlier copies in use.
-- `AddWindow` still claims the window for the device, but nothing requests its swapchain texture. SDL's Vulkan backend
-  then frees finished GPU work only on a fence wait, so the app must also wait on a `GpuFence` regularly.
+The window is claimed for the device and gets an sRGB swapchain (`SDR_LINEAR` with vsync): what shaders write is linear light, and the GPU encodes it to sRGB on write (see [shaders.md](shaders.md#color-spaces)). Its `ColorTargetFormat` is `B8G8R8A8UnormSrgb` or `R8G8B8A8UnormSrgb`, whichever the driver has. A driver without an sRGB swapchain for the window fails window creation with `PixelyInitializationException`; there is no fallback, because it would need every shader to encode as well.
 
 ## Waiting for uploads
 
-Render coordinators submit the frame's uploads before the frame's command buffer. On the Raspberry Pi 5's V3DV driver that
+The render coordinator submits the frame's uploads before the frame's command buffer. On the Raspberry Pi 5's V3DV driver that
 is not enough. Its GPU first sorts each draw's triangles into the 64×64 px screen tiles they cover ("binning"), and it can
 do that before the uploads submitted ahead of the draw have finished. Geometry that a vertex shader reads from a buffer
 updated every frame then has holes in the tiles its triangles have moved into. SDL ends the copy with the barrier Vulkan
@@ -90,7 +91,7 @@ copies every frame, and the copies no longer overlap with the work submitted bef
 | Value | Wait |
 | --- | --- |
 | `Automatic` (default) | On when the graphics driver's name starts with `V3DV`, off everywhere else. Off in the browser. |
-| `On` | Always. In the browser, `Build()` of an app with the GPU device fails with `PixelyInitializationException`, because it cannot wait on a fence. |
+| `On` | Always. In the browser, `Build()` fails with `PixelyInitializationException`, because it cannot wait on a fence. |
 | `Off` | Never. |
 
 `PIXELY_UPLOAD_WAIT` overrides it (see [headless.md](headless.md#environment-variables)), for example to check whether a
@@ -104,25 +105,20 @@ A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync` calls `IPixe
 
 ## Custom render contexts
 
-`AddWindow` creates a Pixely-managed window without selecting a render context. Combine it with
-`UseWindowRendering<T>` when the application needs a context with resources such as depth targets
-or cameras:
+`UseWindowRendering<T>` registers the coordinator with a render context of the application's own, with resources such as
+depth targets or cameras:
 
 ```csharp
 PixelyAppBuilder builder = new();
 builder
-    .AddWindow(
-        new WindowConfig(
-            Size: new Size<uint>(1280, 720),
-            Title: "Game"))
+    .ConfigureWindow(new WindowConfig(Size: new Size<uint>(1280, 720), Title: "Game"))
     .UseWindowRendering<GameRenderContext>();
 
 builder.AddSingleton<GameRenderContextProvider>(GameRenderContextProvider.Create);
 builder.AddAlias<RenderContextProvider<GameRenderContext>, GameRenderContextProvider>();
 ```
 
-The provider uses ordinary dependency injection, including static factory registration. It does not
-receive or resolve a window during construction:
+The provider uses ordinary dependency injection, including static factory registration:
 
 ```csharp
 public sealed class GameRenderContextProvider : RenderContextProvider<GameRenderContext>
@@ -148,7 +144,9 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
-`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. One provider can serve several windows, such as two that use `UseDefaultRendering`, so `FrameContext.Window` tells them apart. The coordinator disposes the context after the renderers and then submits the command buffer itself, so neither the context nor a renderer submits or cancels it. On the desktop the coordinator acquires a frame every frame, even for a window that is not renderable, but calls the provider and the renderers only while the window's `IsRenderable` is true; a frame nobody sees is submitted without a context. In the browser it skips a window that is not renderable: SDL's browser driver does not hide the canvas, so presenting an undrawn texture would blank it. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire policy needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes in headless mode (`Pixely.Headless`), hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
+`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. The coordinator disposes the context after the renderers and then submits the command buffer itself, so neither the context nor a renderer submits or cancels it. On the desktop the coordinator acquires a frame every frame, even while the window is not renderable, but calls the provider and the renderers only while the window's `IsRenderable` is true; a frame nobody sees is submitted without a context. In the browser it skips the frame while the window is not renderable: SDL's browser driver does not hide the canvas, so presenting an undrawn texture would blank it. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. When the window draws no frame, the desktop frame loop waits up to 16 ms for an event, so the app does not spin; in the browser, `requestAnimationFrame` paces the frames.
+
+`Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of the window claimed for the GPU device. `OffscreenWindow`, the window in headless mode (`Pixely.Headless`), hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
@@ -184,117 +182,22 @@ public sealed class GameRenderContext : BasicRenderContext
 }
 ```
 
-For each frame it draws, where the window is renderable and a swapchain texture came back, the framework coordinator
-passes its managed window and the acquired frame to the provider in a `FrameContext`, invokes renderers for the
-same `ViewScope`, and disposes the resulting context. Registration
-order does not matter: `UseWindowRendering<T>` may appear before or after `AddWindow` and the provider
-registration. `BasicRenderContext.Dispose` is virtual and does nothing, so a derived context can add per-frame
-cleanup; the coordinator submits the command buffer after disposing the context. Window registration, event routing
-and disposal remain managed by Pixely.
+`BasicRenderContext.Dispose` is virtual and does nothing, so a derived context can add per-frame cleanup; the coordinator
+submits the command buffer after disposing the context.
 
-## Multiple windows
+## Custom render coordinators
 
-Define stable scope values for additional windows:
-
-```csharp
-internal static class ViewScopes
-{
-    internal static readonly ViewScope Inventory = new(1);
-}
-```
-
-The implicit window remains `default(ViewScope)` while additional windows receive explicit scopes:
-
-```csharp
-PixelyAppBuilder builder = new();
-builder
-    .UseDefaultRendering(
-        new WindowConfig(
-            Size: new Size<uint>(1280, 720),
-            Title: "Game"))
-    .UseDefaultRendering(
-        ViewScopes.Inventory,
-        new WindowConfig(
-            Size: new Size<uint>(480, 360),
-            Title: "Inventory"));
-```
-
-A renderer for an additional window overrides the scope explicitly:
-
-```csharp
-public sealed class InventoryRenderer : IRenderer<BasicRenderContext>
-{
-    ViewScope IRenderer<BasicRenderContext>.ViewScope => ViewScopes.Inventory;
-
-    public void Render(BasicRenderContext renderContext)
-    {
-        // Render the inventory window.
-    }
-}
-```
-
-The renderer registry preserves `IRenderer<T>.RenderOrder` and executes each renderer only for its matching
-scope. A reusable renderer can receive its `ViewScope` through construction and be registered more
-than once.
-
-Resolve resources for additional windows through their scope:
-
-```csharp
-Window inventoryWindow = windowRegistry.GetWindow(ViewScopes.Inventory);
-graphicsPipelineBuilder.AddColorFormatFromDisplay(ViewScopes.Inventory);
-```
-
-Secondary windows can be created hidden and shown on request. A reusable window can hide when its
-close button is pressed instead of quitting the application:
-
-```csharp
-builder.UseDefaultRendering(
-    ViewScopes.Inventory,
-    new WindowConfig(
-        Size: new Size<uint>(480, 360),
-        Title: "Inventory",
-        InitiallyVisible: false,
-        CloseBehavior: WindowCloseBehavior.HideWindow));
-
-Window inventoryWindow = windowRegistry.GetWindow(ViewScopes.Inventory);
-bool shown = inventoryWindow.Show();
-bool raised = inventoryWindow.Raise();
-bool hidden = inventoryWindow.Hide();
-```
-
-`Show()`, `Raise()`, and `Hide()` return whether the native window operation succeeded. Raising a window requests input focus, subject to the operating system's window-management policy.
-
-Hidden and minimized windows remain registered and retain their renderer and GPU resources. Their render
-coordinators do not invoke renderers, and on the desktop they still request a swapchain texture every frame. When
-no window draws a frame, the desktop frame loop waits up to 16 ms for an event, so the app does not spin; in the
-browser, `requestAnimationFrame` paces the frames. They are disposed with the
-service provider that owns them. `InitiallyVisible` controls initial visibility; it does not defer
-native window creation.
-
-SDL window IDs remain internal and are used only to route native events. Windows registered by a
-stage use the stage provider's lifetime. Disposing that provider unregisters and disposes its window
-and render coordinator.
-
-## Scoped input
-
-Window-associated events and subscriptions target the implicit default scope. In a multi-window
-application, use a scoped subscription when a handler belongs to another window:
-
-```csharp
-keyboardService.SubscribeKeyDown(
-    ViewScopes.Inventory,
-    order: 0,
-    eventArgs => HandleInventoryKey(eventArgs));
-```
-
-Scoped overloads exist for keyboard, mouse, and text-input subscriptions.
+A different acquire policy needs a custom `IRenderCoordinator`, registered in place of `UseDefaultRendering()` or
+`UseWindowRendering<T>()`. It takes over everything the built-in coordinator does. On the desktop, every frame it acquires a
+command buffer, requests a swapchain texture on it, submits the pending uploads of `GpuMemorySystem`, and then submits that
+same command buffer, even when no texture comes back. Otherwise the uploads never run, every buffer update makes a new
+full-size copy of the buffer, and SDL's Vulkan backend keeps finished GPU work until a fence wait.
 
 ## Activating mouse clicks
 
-Clicking an unfocused window activates it. SDL discards that click by default, so the first click after
-switching windows is lost, including when switching between two windows of the same application. Pixely
-delivers it instead: it enables `SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH` during initialization. Register
-`PixelyConfig` with `DeliverActivatingMouseClicks: false` to restore the SDL default:
+Clicking an unfocused window activates it. SDL discards that click by default, so the first click after switching to the
+app's window is lost. Pixely delivers it instead: it enables `SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH` during initialization.
+Register `PixelyConfig` with `DeliverActivatingMouseClicks: false` to restore the SDL default:
 
 ```csharp
 builder.AddSingleton(new PixelyConfig(DeliverActivatingMouseClicks: false));
@@ -305,7 +208,4 @@ press never leaves a release behind it.
 
 ## User interface
 
-See `docs/ui.md` for `Pixely.Ui`, which is scoped the same way: `UseUi(viewScope)` configures a root for another window, and a view says which one it belongs to through `IUiView.ViewScope`.
-
-See `Pixely.Tutorials.MultiWindow` for two independently rendered windows and
-`Pixely.Tutorials.MultiWindowTextInput` for independent UI focus and text input.
+See `docs/ui.md` for `Pixely.Ui`, which draws into the window through a renderer of its own.

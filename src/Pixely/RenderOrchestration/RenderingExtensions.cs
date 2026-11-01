@@ -4,46 +4,42 @@ using Pixely.Gpu;
 
 namespace Pixely.RenderOrchestration;
 
+// Registers the render coordinator of the app's one window. Either the root registers it or every stage does, never both: each
+// frame runs exactly one coordinator, see PixelyApp.RunFrame.
 public static class RenderingExtensions
 {
-    public static ServiceCollection UseWindowRendering<TRenderContext>(this ServiceCollection services, ViewScope viewScope = default)
+    public static ServiceCollection UseWindowRendering<TRenderContext>(this ServiceCollection services)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.UseGpu();
-        ConfigureWindowRendering<TRenderContext>(services, viewScope);
+        if (typeof(TRenderContext) == typeof(BasicRenderContext))
+        {
+            AddBasicRenderContextProvider(services);
+        }
+
+        ConfigureWindowRendering<TRenderContext>(services);
         return services;
     }
 
-    public static ServiceCollection UseDefaultRendering(this ServiceCollection services, WindowConfig? config = null)
+    public static ServiceCollection UseDefaultRendering(this ServiceCollection services)
     {
-        return UseDefaultRendering(services, default, config);
+        return UseWindowRendering<BasicRenderContext>(services);
     }
 
-    public static ServiceCollection UseDefaultRendering(this ServiceCollection services, ViewScope viewScope, WindowConfig? config = null)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        services.UseGpu();
-        services.AddWindow(viewScope, config);
-        AddDefaultRendering(services, viewScope);
-        return services;
-    }
-
-    private static void AddDefaultRendering(ServiceCollection services, ViewScope viewScope)
+    private static void AddBasicRenderContextProvider(ServiceCollection services)
     {
         if (!services.IsRegistered<RenderContextProvider<BasicRenderContext>>())
         {
             services.AddSingleton<RenderContextProvider<BasicRenderContext>, BasicRenderContextProvider>(static _ => new BasicRenderContextProvider());
         }
-        ConfigureWindowRendering<BasicRenderContext>(services, viewScope);
     }
 
-    private static void ConfigureWindowRendering<TRenderContext>(ServiceCollection services, ViewScope viewScope)
+    private static void ConfigureWindowRendering<TRenderContext>(ServiceCollection services)
         where TRenderContext : IRenderContext
     {
         services.AddRegistry<IRenderer<TRenderContext>>(static renderer => renderer.RenderOrder);
-        services.AddSingleton<IRenderCoordinator>(provider => new RenderCoordinator<TRenderContext>(
-            provider.GetWindow(viewScope),
+        services.AddSingleton<IRenderCoordinator>(static provider => new RenderCoordinator<TRenderContext>(
+            provider.GetRequiredService<Window>(),
             new RenderCoordinatorGpu(provider.GetRequiredService<GpuDevice>(), provider.GetRequiredService<GpuMemorySystem>()),
             provider.GetRequiredService<RenderContextProvider<TRenderContext>>(),
             provider.GetRequiredService<ServiceRegistry<IRenderer<TRenderContext>>>(),

@@ -23,66 +23,66 @@ public sealed class TestInput : IUpdatable
 
     int IUpdatable.UpdateOrder => UpdateOrders.Input;
 
-    public void MouseMoveTo(Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseMoveTo(Vector2 windowPosition)
     {
-        _queued.Add(automation => automation.MouseMoveTo(windowPosition, viewScope));
+        _queued.Add(automation => automation.MouseMoveTo(windowPosition));
     }
 
-    public void MouseMoveBy(Vector2 delta, ViewScope viewScope = default)
+    public void MouseMoveBy(Vector2 delta)
     {
-        _queued.Add(automation => automation.MouseMoveBy(delta, viewScope));
+        _queued.Add(automation => automation.MouseMoveBy(delta));
     }
 
-    public void MouseDown(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
-    {
-        ValidateMouseButton(button);
-        _queued.Add(automation => automation.MouseDown(button, windowPosition, viewScope));
-    }
-
-    public void MouseUp(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseDown(MouseButton button, Vector2 windowPosition)
     {
         ValidateMouseButton(button);
-        _queued.Add(automation => automation.MouseUp(button, windowPosition, viewScope));
+        _queued.Add(automation => automation.MouseDown(button, windowPosition));
     }
 
-    public void MouseClick(MouseButton button, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseUp(MouseButton button, Vector2 windowPosition)
     {
         ValidateMouseButton(button);
-        _queued.Add(automation => automation.MouseClick(button, windowPosition, viewScope));
+        _queued.Add(automation => automation.MouseUp(button, windowPosition));
     }
 
-    public void MouseWheel(Vector2 delta, Vector2 windowPosition, ViewScope viewScope = default)
+    public void MouseClick(MouseButton button, Vector2 windowPosition)
     {
-        _queued.Add(automation => automation.MouseWheel(delta, windowPosition, viewScope));
+        ValidateMouseButton(button);
+        _queued.Add(automation => automation.MouseClick(button, windowPosition));
     }
 
-    public void MouseLeave(ViewScope viewScope = default)
+    public void MouseWheel(Vector2 delta, Vector2 windowPosition)
     {
-        _queued.Add(automation => automation.MouseLeave(viewScope));
+        _queued.Add(automation => automation.MouseWheel(delta, windowPosition));
     }
 
-    public void KeyDown(Scancode scancode, ViewScope viewScope = default)
+    public void MouseLeave()
     {
-        StubKeyboardService.ValidateScancode(scancode);
-        _queued.Add(automation => automation.KeyDown(scancode, viewScope));
+        _queued.Add(automation => automation.MouseLeave());
     }
 
-    public void KeyUp(Scancode scancode, ViewScope viewScope = default)
-    {
-        StubKeyboardService.ValidateScancode(scancode);
-        _queued.Add(automation => automation.KeyUp(scancode, viewScope));
-    }
-
-    public void KeyPress(Scancode scancode, ViewScope viewScope = default)
+    public void KeyDown(Scancode scancode)
     {
         StubKeyboardService.ValidateScancode(scancode);
-        _queued.Add(automation => automation.KeyPress(scancode, viewScope));
+        _queued.Add(automation => automation.KeyDown(scancode));
     }
 
-    public void TextInput(string text, ViewScope viewScope = default)
+    public void KeyUp(Scancode scancode)
+    {
+        StubKeyboardService.ValidateScancode(scancode);
+        _queued.Add(automation => automation.KeyUp(scancode));
+    }
+
+    public void KeyPress(Scancode scancode)
+    {
+        StubKeyboardService.ValidateScancode(scancode);
+        _queued.Add(automation => automation.KeyPress(scancode));
+    }
+
+    public void TextInput(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        _queued.Add(automation => automation.TextInput(text, viewScope));
+        _queued.Add(automation => automation.TextInput(text));
     }
 
     public void GamepadConnect()

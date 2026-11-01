@@ -45,7 +45,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private ulong _paintedVersion;
 
     public int RenderOrder { get; }
-    public ViewScope ViewScope { get; }
 
     /// <summary>
     /// Builds the pipelines, sampler and textures the renderer needs. Kept out of the constructor
@@ -53,7 +52,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     /// </summary>
     internal static UiRenderer<TRenderContext> Create(
         IUiPaintSource source,
-        ViewScope viewScope,
         int renderOrder,
         bool clearTarget,
         Func<TRenderContext, Texture> selectColorTarget,
@@ -107,12 +105,11 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             gpuMemorySystem.CreateTexture(whitePixel),
             colorTargetFormat);
 
-        return new UiRenderer<TRenderContext>(source, viewScope, renderOrder, clearTarget, selectColorTarget, gpuDevice, resources);
+        return new UiRenderer<TRenderContext>(source, renderOrder, clearTarget, selectColorTarget, gpuDevice, resources);
     }
 
     private UiRenderer(
         IUiPaintSource source,
-        ViewScope viewScope,
         int renderOrder,
         bool clearTarget,
         Func<TRenderContext, Texture> selectColorTarget,
@@ -120,7 +117,6 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         GpuResources resources)
     {
         _source = source;
-        ViewScope = viewScope;
         RenderOrder = renderOrder;
         _clearTarget = clearTarget;
         _selectColorTarget = selectColorTarget;

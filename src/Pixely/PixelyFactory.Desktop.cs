@@ -54,12 +54,12 @@ public partial class PixelyFactory
         }
     }
 
-    private Window CreateWindow(ViewScope viewScope, SdlGpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
+    private Window CreateWindow(SdlGpuDevice gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
         (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowShape(config);
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
 
-        return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
+        return new SwapchainWindow(sdlWindow, gpuDevice.Pointer, sdlWindowId, frameClock, platformInfo);
     }
 
     // For an IWindowFactory: an SDL window that is not claimed for the GPU device, wrapped in a window of the factory's own type.

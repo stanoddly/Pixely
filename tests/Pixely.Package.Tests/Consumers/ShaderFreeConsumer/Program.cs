@@ -24,10 +24,10 @@ public static class ManagedWindowApiConsumer
 {
     public static void ConfigureManagedWindow(PixelyAppBuilder builder)
     {
-        builder.AddWindow(new ViewScope(1), new WindowConfig(Title: "Package consumer"));
+        builder.ConfigureWindow(new WindowConfig(Title: "Package consumer"));
         builder.AddSingleton<PackageRenderContextProvider>(PackageRenderContextProvider.Create);
         builder.AddAlias<RenderContextProvider<PackageRenderContext>, PackageRenderContextProvider>();
-        builder.UseWindowRendering<PackageRenderContext>(new ViewScope(1));
+        builder.UseWindowRendering<PackageRenderContext>();
     }
 }
 

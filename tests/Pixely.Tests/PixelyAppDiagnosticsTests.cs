@@ -2,11 +2,12 @@ using Microsoft.Extensions.Logging;
 using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
-using SDL;
+using Pixely.RenderOrchestration;
+using Pixely.Testing;
 
 namespace Pixely.Tests;
 
-// Builds real apps, which initializes SDL video with the dummy driver.
+// Builds real apps on the stub GPU device, which initializes SDL video with the dummy driver.
 [NonParallelizable]
 public class PixelyAppDiagnosticsTests
 {
@@ -43,7 +44,8 @@ public class PixelyAppDiagnosticsTests
     }
 
     // The report resolves the logger factory, the GPU device and the GPU memory system, so registering diagnostics must not create
-    // any of them ahead of the app's own services. The GPU factories return null, so no GPU is needed, but still record when they run.
+    // any of them ahead of the app's own services. The device is the stub, which the window needs; the GPU memory system factory
+    // returns null, since nothing here uses it. Both record when they run.
     [TestCase(false)]
     [TestCase(true)]
     public void Build_KeepsTheCreationOrderOfTheAppsServices(bool enableDiagnostics)
@@ -63,13 +65,15 @@ public class PixelyAppDiagnosticsTests
         builder.AddSingleton<GpuDevice>(_ =>
         {
             created.Add("GPU device");
-            return null;
+            return StubGpuDevice.Create();
         });
         builder.AddSingleton<GpuMemorySystem>(_ =>
         {
             created.Add("GPU memory system");
             return null;
         });
+        // After the app's services, because the window factory's PixelyFactory resolves the logger factory.
+        builder.AddStubWindows();
 
         using IPixelyApp app = builder.Build();
 
@@ -79,7 +83,7 @@ public class PixelyAppDiagnosticsTests
     [Test]
     public void Build_WithoutDiagnostics_RecordsNothingAndReportsNothing()
     {
-        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig()).Build();
+        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig()).AddStubGpuDevice().AddStubWindows().Build();
 
         Assert.Multiple(() =>
         {
@@ -91,7 +95,7 @@ public class PixelyAppDiagnosticsTests
     [Test]
     public void Build_WithDiagnostics_RecordsFrameTimingsAndUpdatesTheReport()
     {
-        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig(EnableDiagnostics: true)).Build();
+        using PixelyApp app = (PixelyApp)CreateBuilder(new PixelyConfig(EnableDiagnostics: true)).AddStubGpuDevice().AddStubWindows().Build();
 
         Assert.Multiple(() =>
         {
@@ -108,7 +112,8 @@ public class PixelyAppDiagnosticsTests
         RecordingLogger logger = new();
         // Diagnostics stay off, so the FrameTimings that Build() registers comes back null and this one, on a fake clock, is used.
         FrameTimings timings = new(() => now, FrameTimingsTests.Frequency);
-        PixelyAppBuilder builder = CreateBuilder(new PixelyConfig());
+        PixelyAppBuilder builder = CreateBuilder(new PixelyConfig()).AddStubGpuDevice().AddStubWindows();
+        builder.UseDefaultRendering();
         // Only the report's category, so SDL's messages, such as those it logs on quit, cannot come after the report.
         builder.AddSingleton<ILoggerFactory>(_ => new RecordingLoggerFactory(logger, PerformanceReport.LoggerCategoryName));
         builder.AddSingleton<FrameTimings>(_ => timings);
@@ -124,9 +129,9 @@ public class PixelyAppDiagnosticsTests
             "render 0.00/0.00/0.00, swapchain wait 0.00/0.00/0.00; gen0 collections "));
     }
 
+    // Without the stub device and windows, which the creation order test registers after its own services.
     private static PixelyAppBuilder CreateBuilder(PixelyConfig config)
     {
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
         PixelyAppBuilder builder = new();
         builder.AddSingleton(config);
         return builder;

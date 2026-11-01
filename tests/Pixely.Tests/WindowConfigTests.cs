@@ -3,28 +3,14 @@ namespace Pixely.Tests;
 public sealed class WindowConfigTests
 {
     [Test]
-    public void Defaults_AreInitiallyVisibleAndQuitApplicationOnClose()
+    public void Defaults_AreInitiallyVisible()
     {
-        WindowConfig config = new();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(config.InitiallyVisible, Is.True);
-            Assert.That(config.CloseBehavior, Is.EqualTo(WindowCloseBehavior.QuitApplication));
-        });
+        Assert.That(new WindowConfig().InitiallyVisible, Is.True);
     }
 
     [Test]
-    public void Configuration_CanStartHiddenAndHideOnClose()
+    public void Configuration_CanStartHidden()
     {
-        WindowConfig config = new(
-            InitiallyVisible: false,
-            CloseBehavior: WindowCloseBehavior.HideWindow);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(config.InitiallyVisible, Is.False);
-            Assert.That(config.CloseBehavior, Is.EqualTo(WindowCloseBehavior.HideWindow));
-        });
+        Assert.That(new WindowConfig(InitiallyVisible: false).InitiallyVisible, Is.False);
     }
 }

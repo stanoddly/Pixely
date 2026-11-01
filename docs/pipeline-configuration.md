@@ -95,5 +95,5 @@ GraphicsPipeline pipeline = graphicsPipelineBuilder
 
 - Call `.Build()` last to create the pipeline
 - Pipeline is immutable after build
-- GraphicsPipelineBuilder is injected as a dependency once rendering or `UseGpu()` is registered (`docs/window-rendering.md`)
+- GraphicsPipelineBuilder is injected as a dependency; `Build()` registers it with the GPU device (`docs/window-rendering.md`)
 - Store pipelines, don't rebuild every frame

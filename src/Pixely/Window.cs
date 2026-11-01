@@ -20,30 +20,19 @@ public abstract class Window : IDisposable
 {
     internal Pointer<SDL_Window> SdlWindow { get; private set; }
     internal uint SdlId { get; }
-    internal WindowCloseBehavior CloseBehavior { get; }
     private readonly PixelyFrameClock _frameClock;
     private readonly PlatformInfo _platformInfo;
-
-    internal ViewScope ViewScope { get; }
 
     private ShortSize _lastSize;
 
     public event ResolutionChangedHandler? ResolutionChanged;
 
-    internal Window(
-        ViewScope viewScope,
-        Pointer<SDL_Window> sdlWindow,
-        uint sdlId,
-        PixelyFrameClock frameClock,
-        PlatformInfo platformInfo,
-        WindowCloseBehavior closeBehavior)
+    internal Window(Pointer<SDL_Window> sdlWindow, uint sdlId, PixelyFrameClock frameClock, PlatformInfo platformInfo)
     {
-        ViewScope = viewScope;
         SdlWindow = sdlWindow;
         SdlId = sdlId;
         _frameClock = frameClock;
         _platformInfo = platformInfo;
-        CloseBehavior = closeBehavior;
         _lastSize = RenderSizeInPixels;
     }
 
@@ -581,11 +570,6 @@ public abstract class Window : IDisposable
         }
 
         return FileDialogResult.Accepted(paths);
-    }
-
-    public override int GetHashCode()
-    {
-        return ViewScope.GetHashCode();
     }
 
     public virtual void Dispose()

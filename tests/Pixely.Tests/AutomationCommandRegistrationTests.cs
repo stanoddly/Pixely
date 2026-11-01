@@ -17,7 +17,7 @@ public class AutomationCommandRegistrationTests
     [Test]
     public void Build_TwoCommandsWithSameName_Throws()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddSingleton(new PixelyConfig { IsIsolated = true });
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
@@ -30,7 +30,7 @@ public class AutomationCommandRegistrationTests
     [Test]
     public void StageCommand_JoinsOnLoadAndLeavesOnUnload()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddSingleton(new PixelyConfig { IsIsolated = true });
         using IPixelyApp app = builder.Build();
         AutomationCommandRegistry registry = app.GetRequiredService<AutomationCommandRegistry>();
@@ -54,7 +54,7 @@ public class AutomationCommandRegistrationTests
     [Test]
     public void StageCommand_WithNameOfAppCommand_FailsStageLoad()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddSingleton(new PixelyConfig { IsIsolated = true });
         builder.AddSingleton<AutomationCommand>(new SpawnCommand());
         using IPixelyApp app = builder.Build();
@@ -68,7 +68,7 @@ public class AutomationCommandRegistrationTests
     [Test]
     public void FailedStageLoad_RemovesItsCommandsAndKeepsAppCommand()
     {
-        PixelyAppBuilder builder = new();
+        PixelyAppBuilder builder = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows();
         builder.AddSingleton(new PixelyConfig { IsIsolated = true });
         SpawnCommand appSpawn = new();
         builder.AddSingleton<AutomationCommand>(appSpawn);
@@ -99,14 +99,14 @@ public class AutomationCommandRegistrationTests
 
     private sealed class GiveCommand() : AutomationCommand("give")
     {
-        public override void Execute(string arguments, ViewScope? viewScope)
+        public override void Execute(string arguments)
         {
         }
     }
 
     private sealed class SpawnCommand() : AutomationCommand("spawn")
     {
-        public override void Execute(string arguments, ViewScope? viewScope)
+        public override void Execute(string arguments)
         {
         }
     }

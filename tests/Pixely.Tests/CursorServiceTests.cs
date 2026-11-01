@@ -19,7 +19,7 @@ public class CursorServiceTests
     public void SetUp()
     {
         SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
-        _app = new PixelyAppBuilder().Build();
+        _app = new PixelyAppBuilder().AddStubGpuDevice().AddStubWindows().Build();
         _cursorService = ((PixelyApp)_app).ServiceProvider.GetRequiredService<ICursorService>();
     }
 

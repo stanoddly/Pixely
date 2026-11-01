@@ -9,7 +9,7 @@ static partial class Program
     {
         builder
             //.ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddZipPattern("data*.pak").AddProjectDirectory("_Content"))
-            .UseDefaultRendering(
-                new WindowConfig(Size: (1280, 720), Title: "Game"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Game"))
+            .UseDefaultRendering();
     }
 }

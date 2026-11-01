@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (1280, 720), Title: "Index Buffer"));
+            .ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Index Buffer"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(IndexBufferRenderer.Create);
     }

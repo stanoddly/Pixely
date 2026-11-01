@@ -56,19 +56,13 @@ internal sealed class AutomationCommandConsole : IUpdatable
 
         try
         {
-            string rest = AutomationCommandRegistry.SplitViewScope(command, out ViewScope? viewScope);
-            if (rest == "quit")
+            if (command == "quit")
             {
-                if (viewScope is not null)
-                {
-                    throw new FormatException("'quit' takes no view scope");
-                }
-
                 _appControl.Quit();
             }
-            else if (!_commands.TryExecute(rest, viewScope))
+            else if (!_commands.TryExecute(command))
             {
-                throw new FormatException($"unknown command '{rest}'");
+                throw new FormatException($"unknown command '{command}'");
             }
         }
         catch (FormatException exception)

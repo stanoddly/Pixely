@@ -108,7 +108,9 @@ public class TestAppTests
     [Test]
     public void RunFrame_AdvancesGameTimeByAFixedStep()
     {
-        using IPixelyApp app = TestApp.CreateBuilder().Build();
+        PixelyAppBuilder builder = TestApp.CreateBuilder();
+        builder.UseDefaultRendering();
+        using IPixelyApp app = builder.Build();
         FrameClock clock = app.GetRequiredService<FrameClock>();
 
         app.RunFrame();
@@ -123,7 +125,7 @@ public class TestAppTests
     {
         const int Frames = 30;
         PixelyAppBuilder builder = TestApp.CreateBuilder();
-        builder.UseDefaultRendering(new WindowConfig(InitiallyVisible: false));
+        builder.ConfigureWindow(new WindowConfig(InitiallyVisible: false)).UseDefaultRendering();
         using IPixelyApp app = builder.Build();
         app.RunFrame();
 

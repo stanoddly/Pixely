@@ -20,10 +20,10 @@ public sealed class FileDialogsView : UiView<FileDialogsViewModel>
     private readonly Label _loaded = new();
     private readonly Label _saved = new();
 
-    public FileDialogsView(FileDialogsViewModel viewModel, WindowRegistry windowRegistry)
+    public FileDialogsView(FileDialogsViewModel viewModel, Window window)
         : base(viewModel)
     {
-        _window = windowRegistry.GetWindow();
+        _window = window;
 
         _open = new Button("Open file") { Width = Sizing.Fixed(ButtonWidth), Height = Sizing.Fixed(ButtonHeight) };
         _open.Clicked += () => ViewModel.LoadedFilename = FileDialogsViewModel.Describe(_window.ShowModalOpenFileDialog());

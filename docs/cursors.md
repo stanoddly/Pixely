@@ -10,7 +10,7 @@ builder.OnBuilt((ICursorService cursorService) =>
 });
 ```
 
-SDL has one active cursor for the whole application, not one per window, so the service is a singleton without a `ViewScope`.
+SDL has one active cursor for the whole application, so the service is a singleton.
 
 ## Creating cursors
 

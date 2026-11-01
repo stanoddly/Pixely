@@ -10,15 +10,15 @@ static partial class Program
     static void Configure(PixelyAppBuilder builder)
     {
         builder
-            .UseDefaultRendering(
+            .ConfigureWindow(
                 new WindowConfig(
                     Size: (800, 600),
                     Title: "Window Configuration Demo",
-                    AlwaysOnTop: true));
+                    AlwaysOnTop: true))
+            .UseDefaultRendering();
 
-        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
+        builder.OnBuilt((Window window, IKeyboardService keyboardService, PlatformInfo platformInfo) =>
         {
-            Window window = windowRegistry.GetWindow();
             Console.WriteLine($"SDL video driver: {platformInfo.SdlVideoDriver ?? "unknown"}");
             Console.WriteLine($"Always on top: {window.AlwaysOnTop}");
             Console.WriteLine($"Always-on-top supported by current SDL video driver: {window.SupportsAlwaysOnTop}");

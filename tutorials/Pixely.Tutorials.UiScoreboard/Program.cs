@@ -18,7 +18,8 @@ static partial class Program
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-            .UseDefaultRendering(new WindowConfig(Size: (640, 520), Title: "Pixely.Ui — Scoreboard"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 520), Title: "Pixely.Ui — Scoreboard"))
+            .UseDefaultRendering();
 
         builder.UseUi();
         builder.AddSingleton(new ScoreboardViewModel());

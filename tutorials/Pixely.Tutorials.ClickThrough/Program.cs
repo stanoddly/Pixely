@@ -16,18 +16,18 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
+            .ConfigureWindow(
                 new WindowConfig(
                     Size: (400, 400),
                     Title: "Click Through",
                     Transparent: true,
-                    Borderless: true));
+                    Borderless: true))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(ClickThroughRenderer.Create);
 
-        builder.OnBuilt((WindowRegistry windowRegistry, IKeyboardService keyboardService, AppControl appControl) =>
+        builder.OnBuilt((Window window, IKeyboardService keyboardService, AppControl appControl) =>
         {
-            Window window = windowRegistry.GetWindow();
             Size<uint> size = window.Size;
             BitMask shape = new(size);
             for (int y = 0; y < (int)size.Height; y++)

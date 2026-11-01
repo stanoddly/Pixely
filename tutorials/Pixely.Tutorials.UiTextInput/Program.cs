@@ -18,7 +18,8 @@ static partial class Program
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-            .UseDefaultRendering(new WindowConfig(Size: (640, 500), Title: "Pixely.Ui — Text Input"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 500), Title: "Pixely.Ui — Text Input"))
+            .UseDefaultRendering();
 
         builder.UseUi();
         builder.AddSingleton(new SettingsViewModel());

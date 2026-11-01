@@ -9,8 +9,8 @@ static partial class Program
     {
         builder
             .UseDefaultContent()
-            .UseDefaultRendering(
-                new WindowConfig(Size: (800, 600), Title: "Instancing Demo"));
+            .ConfigureWindow(new WindowConfig(Size: (800, 600), Title: "Instancing Demo"))
+            .UseDefaultRendering();
 
         builder.AddSingleton<InstancingRenderer>(InstancingRenderer.Create);
         builder.AddAlias<IRenderer<BasicRenderContext>, InstancingRenderer>();

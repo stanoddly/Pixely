@@ -46,8 +46,9 @@ public static partial class BrowserHost
 #endif
 
     /// <summary>
-    /// Imports the host module and, when the app uses the GPU, has the page request a WebGPU adapter and device for SDL to adopt.
-    /// Requesting them is asynchronous and building the app resolves every singleton, the device included, so this runs before
+    /// Imports the host module and has the page request a WebGPU adapter and device for SDL to adopt. Every app has a GPU device,
+    /// which <see cref="PixelyAppBuilder.Build"/> registers, so the device is requested whatever the builder holds so far.
+    /// Requesting it is asynchronous and building the app resolves every singleton, the device included, so this runs before
     /// <see cref="PixelyAppBuilder.Build"/>.
     /// </summary>
     public static async Task PrepareAsync(PixelyAppBuilder builder)
@@ -55,10 +56,6 @@ public static partial class BrowserHost
         ArgumentNullException.ThrowIfNull(builder);
 #if BROWSER
         await JSHost.ImportAsync(HostModuleName, HostModuleUrl);
-        if (!builder.IsRegistered<GpuDevice>())
-        {
-            return;
-        }
 
         using JSObject handles = await CreateGpuDevice();
         WebGpuHandles = new WebGpuHandles(

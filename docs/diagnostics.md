@@ -22,15 +22,15 @@ In the browser, SDL names no device, so the name is what the browser reveals of 
 GPU device: google swiftshader (fallback adapter), backend webgpu, driver unknown unknown, upload wait off
 ```
 
-`upload wait` says whether `GpuMemorySystem.Submit()` waits for the uploads to finish on the GPU (see [window-rendering.md](window-rendering.md#waiting-for-uploads)). It is left out when the app has no `GpuMemorySystem`.
+`upload wait` says whether `GpuMemorySystem.Submit()` waits for the uploads to finish on the GPU (see [window-rendering.md](window-rendering.md#waiting-for-uploads)).
 
-For each window, its swapchain on the first frame and whenever its size or format changes:
+The window's swapchain on the first frame and whenever its size or format changes:
 
 ```text
-Swapchain of view 0: 800x600, B8G8R8A8UnormSrgb, present mode vsync
+Swapchain: 800x600, B8G8R8A8UnormSrgb, present mode vsync
 ```
 
-Pixely sets every swapchain to `SDR_LINEAR` with vsync, so the format is an sRGB one and the present mode is always vsync. An offscreen window in headless mode reports `offscreen` instead, because it presents nothing.
+Pixely sets the swapchain to `SDR_LINEAR` with vsync, so the format is an sRGB one and the present mode is always vsync. An offscreen window in headless mode reports `offscreen` instead, because it presents nothing.
 
 Every 5 seconds of frames, or every 4096 frames if that comes first, and once more for the remaining frames when the app is disposed:
 
@@ -42,8 +42,8 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 | --- | --- |
 | `frame` | From the end of the previous frame to the end of this one, without the headless input wait. |
 | `update` | Stage transitions, SDL events and every `IUpdatable`, without the headless input wait. |
-| `render` | Every render coordinator, without the swapchain wait: recording commands, uploads and submits, and the upload wait when it is on. |
-| `swapchain wait` | Waiting for each window's swapchain texture, added up over the windows. |
+| `render` | The render coordinator, without the swapchain wait: recording commands, uploads and submits, and the upload wait when it is on. |
+| `swapchain wait` | Waiting for the window's swapchain texture. |
 | `gen0 collections` | Garbage collections of generation 0, per frame. |
 | `GPU memory` | The textures and buffers Pixely created on the root GPU device, at the time of the report. In the report on dispose, stages have already released theirs. |
 
@@ -52,7 +52,7 @@ Every 5 seconds of frames, or every 4096 frames if that comes first, and once mo
 - SDL GPU has no timestamp queries, so the swapchain wait stands in for GPU time. A long wait means the GPU or the display limits the frame rate. A long update or render means the CPU does.
 - With the upload wait on, `render` also includes waiting for the GPU to finish the frame's uploads, so a long render can mean the GPU is busy too.
 - With vsync, the frame rate snaps to the display's rate divided by a whole number, for example 60, 30 or 20 on a 60 Hz display. A frame that misses a refresh by a little takes two.
-- The frame time also includes the 16 ms wait of a frame that no window drew, and, in the browser, the time until the next animation frame.
+- The frame time also includes the 16 ms wait of a frame that the window did not draw, and, in the browser, the time until the next animation frame.
 - In headless mode, the time the app blocks on standard input for its next command is left out of the frame and the update.
 - Only the render coordinator that `UseWindowRendering` or `UseDefaultRendering` registers measures the swapchain wait. A `RenderCoordinator<T>` an app creates itself, or a [custom render coordinator](custom-render-coordinators.md), adds its wait to `render`.
 - The report is written during the update of the frame after a period ends, so that frame's update also counts writing it.

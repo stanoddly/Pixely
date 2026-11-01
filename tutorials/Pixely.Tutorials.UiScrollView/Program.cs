@@ -21,7 +21,8 @@ static partial class Program
     {
         builder
             .ConfigureContent(contentSourceBuilder => contentSourceBuilder.AddProjectDirectory("../Pixely.Tutorials.Hotbar/Content"))
-            .UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Pixely.Ui — Scroll View"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Pixely.Ui — Scroll View"))
+            .UseDefaultRendering();
 
         builder.UseUi();
 
@@ -35,7 +36,7 @@ static partial class Program
             };
         });
 
-        builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(BuildUi()));
+        builder.OnBuilt((UiRoot root) => root.AddLayer(BuildUi()));
 
         builder.OnBuilt((AppControl appControl, IKeyboardService keyboardService) =>
         {

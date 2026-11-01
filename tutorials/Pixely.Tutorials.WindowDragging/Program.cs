@@ -12,17 +12,17 @@ static partial class Program
     static void Configure(PixelyAppBuilder builder)
     {
         builder
-            .UseDefaultRendering(
+            .ConfigureWindow(
                 new WindowConfig(
                     Size: (400, 400),
                     Title: "Window Dragging",
-                    Borderless: true));
+                    Borderless: true))
+            .UseDefaultRendering();
 
         builder.AddSingleton<IRenderer<BasicRenderContext>>(static () => new ClearRenderer(LinearColors.SkyBlue));
 
-        builder.OnBuilt((WindowRegistry windowRegistry, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
+        builder.OnBuilt((Window window, IMouseService mouseService, IKeyboardService keyboardService, UpdateSystem updateSystem, AppControl appControl) =>
         {
-            Window window = windowRegistry.GetWindow();
 
             if (window.SupportsSetWindowPosition)
             {

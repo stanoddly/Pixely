@@ -12,7 +12,7 @@ static partial class Program
 
     static void Configure(PixelyAppBuilder builder)
     {
-        builder.UseDefaultRendering(new WindowConfig(Size: (640, 480), Title: "Cursor"));
+        builder.ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Cursor")).UseDefaultRendering();
 
         builder.OnBuilt((ICursorService cursorService, IKeyboardService keyboardService, AppControl appControl) =>
         {

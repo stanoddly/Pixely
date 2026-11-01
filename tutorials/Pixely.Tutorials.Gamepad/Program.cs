@@ -10,8 +10,8 @@ static partial class Program
     static void Configure(PixelyAppBuilder builder)
     {
         builder
-            .UseDefaultRendering(
-                new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"));
+            .ConfigureWindow(new WindowConfig(Size: (640, 480), Title: "Gamepad Tutorial"))
+            .UseDefaultRendering();
 
         builder.OnBuilt((IGamepadService gamepadService) =>
         {

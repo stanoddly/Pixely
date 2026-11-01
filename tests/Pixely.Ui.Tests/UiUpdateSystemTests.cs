@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.DependencyInjection;
@@ -9,8 +8,8 @@ namespace Pixely.Ui.Tests;
 
 /// <summary>
 /// The build runs in the update phase. What matters is that it happens at all, that it does not
-/// happen for a window nothing will draw, and that each window's system drives its own root against
-/// its own colour target.
+/// happen for a window nothing will draw, and that the system drives its root against the colour
+/// target.
 /// </summary>
 public class UiUpdateSystemTests
 {
@@ -51,7 +50,7 @@ public class UiUpdateSystemTests
         UiRoot root = new();
         SizedContextProvider contextProvider = new(new ShortSize(640, 480));
 
-        UiUpdateSystem<BasicRenderContext> system = new(root, FakeWindow(default, 1, visible: false), contextProvider, 0);
+        UiUpdateSystem<BasicRenderContext> system = new(root, FakeWindow(visible: false), contextProvider, 0);
         system.Update();
 
         Assert.Multiple(() =>
@@ -100,71 +99,9 @@ public class UiUpdateSystemTests
         Assert.That(calls, Is.EqualTo(new[] { "early", "late" }));
     }
 
-    [Test]
-    public void EachViewScope_ResolvesItsOwnRootAndWindow()
-    {
-        ViewScope first = new(1);
-        ViewScope second = new(2);
-        UiRoot firstRoot = new();
-        UiRoot secondRoot = new();
-        Window firstWindow = FakeWindow(first, 1);
-        Window secondWindow = FakeWindow(second, 2);
-
-        ServiceProvider provider = Resolvable(
-            new SizedContextProvider(new ShortSize(320, 240)),
-            (first, firstRoot, firstWindow),
-            (second, secondRoot, secondWindow));
-
-        (UiRoot resolvedFirstRoot, Window resolvedFirstWindow, _) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, first);
-        (UiRoot resolvedSecondRoot, Window resolvedSecondWindow, _) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, second);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(resolvedFirstRoot, Is.SameAs(firstRoot));
-            Assert.That(resolvedFirstWindow, Is.SameAs(firstWindow));
-            Assert.That(resolvedSecondRoot, Is.SameAs(secondRoot));
-            Assert.That(resolvedSecondWindow, Is.SameAs(secondWindow));
-        });
-    }
-
-    [Test]
-    public void TheResolvedProvider_IsTheOneRegistered()
-    {
-        ViewScope viewScope = new(1);
-        SizedContextProvider contextProvider = new(new ShortSize(640, 360));
-
-        ServiceProvider provider = Resolvable(contextProvider, (viewScope, new UiRoot(), FakeWindow(viewScope, 1)));
-
-        (UiRoot _, Window _, RenderContextProvider<BasicRenderContext> resolved) =
-            UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, viewScope);
-
-        Assert.That(resolved, Is.SameAs(contextProvider));
-    }
-
-    [Test]
-    public void ARootRegisteredAfterItsConsumer_IsStillFoundDuringBuild()
-    {
-        UiRoot root = new();
-        UiRoot? resolved = null;
-
-        PixelyAppBuilder builder = new();
-        builder.AddSingleton<Window>(FakeWindow(default, 1));
-        builder.AddSingleton<RenderContextProvider<BasicRenderContext>>(_ => new SizedContextProvider(new ShortSize(320, 240)));
-        builder.AddSingleton<UiUpdateSystem<BasicRenderContext>>(provider =>
-        {
-            (resolved, Window window, RenderContextProvider<BasicRenderContext> contextProvider) = UiExtensions.ResolveUpdateTargets<BasicRenderContext>(provider, default);
-            return new UiUpdateSystem<BasicRenderContext>(resolved, window, contextProvider, 0);
-        });
-        builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(default, root));
-
-        builder.BuildServiceProvider();
-
-        Assert.That(resolved, Is.SameAs(root));
-    }
-
     private static UiUpdateSystem<BasicRenderContext> System(UiRoot root, ShortSize colorTargetSize, int updateOrder = 0)
     {
-        return new UiUpdateSystem<BasicRenderContext>(root, FakeWindow(default, 1), new SizedContextProvider(colorTargetSize), updateOrder);
+        return new UiUpdateSystem<BasicRenderContext>(root, FakeWindow(), new SizedContextProvider(colorTargetSize), updateOrder);
     }
 
     /// <summary>
@@ -174,23 +111,7 @@ public class UiUpdateSystemTests
     private static UiUpdateSystem<BasicRenderContext> Recording(List<string> calls, string name, int updateOrder)
     {
         SizedContextProvider contextProvider = new(new ShortSize(320, 240), () => calls.Add(name));
-        return new UiUpdateSystem<BasicRenderContext>(new UiRoot(), FakeWindow(default, 1), contextProvider, updateOrder);
-    }
-
-    private static ServiceProvider Resolvable(
-        RenderContextProvider<BasicRenderContext> contextProvider,
-        params (ViewScope ViewScope, UiRoot Root, Window Window)[] scopes)
-    {
-        PixelyAppBuilder builder = new();
-        builder.AddSingleton<RenderContextProvider<BasicRenderContext>>(_ => contextProvider);
-
-        foreach ((ViewScope viewScope, UiRoot root, Window window) in scopes)
-        {
-            builder.AddSingleton(window);
-            builder.AddSingleton<ScopedUiRoot>(_ => new ScopedUiRoot(viewScope, root));
-        }
-
-        return builder.BuildServiceProvider();
+        return new UiUpdateSystem<BasicRenderContext>(new UiRoot(), FakeWindow(), contextProvider, updateOrder);
     }
 
     /// <summary>A provider that answers with a fixed colour target size and never creates a context.</summary>
@@ -230,7 +151,7 @@ public class UiUpdateSystemTests
         // reading RenderSizeInPixels from SDL. This exists only because a derived class must name a
         // base constructor to compile.
         private TestWindow()
-            : base(default, default, 0, null!, null!, default)
+            : base(default, 0, null!, null!)
         {
         }
 
@@ -243,20 +164,10 @@ public class UiUpdateSystemTests
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture) => throw new NotSupportedException();
     }
 
-    private static Window FakeWindow(ViewScope viewScope, uint sdlId, bool visible = true)
+    private static Window FakeWindow(bool visible = true)
     {
         TestWindow window = (TestWindow)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
         window.Visible = visible;
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
-
-        // The window registry keys on this, and two windows sharing an id is what it refuses.
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
         return window;
-    }
-
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
-    {
-        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        field.SetValue(window, value);
     }
 }

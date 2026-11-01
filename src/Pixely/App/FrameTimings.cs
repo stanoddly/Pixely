@@ -3,9 +3,9 @@ using Pixely.Gpu;
 
 namespace Pixely.App;
 
-internal readonly record struct SwapchainState(ViewScope ViewScope, ShortSize Size, TextureFormat Format, bool Offscreen);
+internal readonly record struct SwapchainState(ShortSize Size, TextureFormat Format, bool Offscreen);
 
-// The time each frame spends in its parts, and each window's swapchain, recorded while PixelyConfig.EnableDiagnostics is on.
+// The time each frame spends in its parts, and the window's swapchain, recorded while PixelyConfig.EnableDiagnostics is on.
 // PerformanceReport reads and resets it. Times are in seconds.
 internal sealed class FrameTimings : IFrameTimingRecorder
 {
@@ -18,7 +18,7 @@ internal sealed class FrameTimings : IFrameTimingRecorder
     private readonly double[] _updateTimes = new double[Capacity];
     private readonly double[] _renderTimes = new double[Capacity];
     private readonly double[] _swapchainWaitTimes = new double[Capacity];
-    private readonly Dictionary<ViewScope, SwapchainState> _swapchains = new();
+    private SwapchainState? _swapchain;
     private readonly List<SwapchainState> _swapchainChanges = new();
     private bool _hasPreviousFrame;
     private long _previousFrameEnd;
@@ -124,13 +124,13 @@ internal sealed class FrameTimings : IFrameTimingRecorder
 
     public void OnSwapchainAcquired(Window window, SwapchainTexture swapchainTexture)
     {
-        SwapchainState swapchain = new(window.ViewScope, swapchainTexture.Size, swapchainTexture.Format, window.IsOffscreen);
-        if (_swapchains.TryGetValue(window.ViewScope, out SwapchainState recorded) && recorded == swapchain)
+        SwapchainState swapchain = new(swapchainTexture.Size, swapchainTexture.Format, window.IsOffscreen);
+        if (_swapchain == swapchain)
         {
             return;
         }
 
-        _swapchains[window.ViewScope] = swapchain;
+        _swapchain = swapchain;
         _swapchainChanges.Add(swapchain);
     }
 

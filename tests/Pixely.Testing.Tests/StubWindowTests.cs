@@ -45,9 +45,9 @@ public class StubWindowTests
     private static IPixelyApp BuildWithUiLayer(WindowConfig windowConfig)
     {
         PixelyAppBuilder builder = TestApp.CreateBuilder();
-        builder.UseDefaultRendering(windowConfig);
+        builder.ConfigureWindow(windowConfig).UseDefaultRendering();
         builder.UseUi();
-        builder.OnBuilt(provider => provider.GetUiRoot().AddLayer(new Column
+        builder.OnBuilt((UiRoot root) => root.AddLayer(new Column
         {
             Background = new SolidDrawable(new SrgbColor(10, 20, 30, 255)),
             Width = Sizing.Grow(),

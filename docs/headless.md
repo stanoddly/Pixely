@@ -2,11 +2,11 @@
 
 Headless mode runs the app without showing a window (SDL video and a GPU backend are still needed; an app from `TestApp.CreateBuilder()` of [testing.md](testing.md), whose stub device renders nothing, never runs headless) and lets an agent drive it through synthetic mouse, keyboard, text, and gamepad input on standard input, step its game time frame by frame, and observe it through screenshots. Synthetic input goes through the ordinary Pixely input services, so existing view-scoped subscriptions, priorities, consumption, and device state apply to it. Handlers finish within the frame that runs the command.
 
-Mouse positions use logical coordinates relative to the target window's top-left corner. `mouse move` moves to a window position and derives the relative motion from the synthetic mouse's previous position; `mouse moveby` applies a delta to that position. `mouse click` dispatches a motion, a press and a release. `key press` dispatches a key down followed by a key up. `text` delivers text directly and supports characters that do not have a corresponding keyboard scancode.
+Mouse positions use logical coordinates relative to the window's top-left corner. `mouse move` moves to a window position and derives the relative motion from the synthetic mouse's previous position; `mouse moveby` applies a delta to that position. `mouse click` dispatches a motion, a press and a release. `key press` dispatches a key down followed by a key up. `text` delivers text directly and supports characters that do not have a corresponding keyboard scancode.
 
-The first mouse command on a scope raises `WindowEnter` for it and makes `IMouseService.IsInWindow` true for that scope before the command's own event, the same order SDL uses when the pointer arrives in a window. `mouse leave` raises `WindowLeave` and resets that; it is the only way synthetic input leaves a window and works while a button is held, which real input cannot do, so it can drive a press cancellation. The next mouse command enters again.
+The first mouse command raises `WindowEnter` and makes `IMouseService.IsInWindow` true before the command's own event, the same order SDL uses when the pointer arrives in a window. `mouse leave` raises `WindowLeave` and resets that; it is the only way synthetic input leaves a window and works while a button is held, which real input cannot do, so it can drive a press cancellation. The next mouse command enters again.
 
-Automated input affects Pixely's event-derived synthetic device state; every view scope has its own synthetic mouse and keyboard, so positions, held buttons and held keys never cross windows. Gamepads belong to no window, so there is one synthetic gamepad for the whole app. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state. Screenshots do not show the cursor, and SDL animates an animated cursor (`docs/cursors.md`) in real time, not on the fixed-step game clock.
+Automated input affects Pixely's event-derived synthetic device state: there is one synthetic mouse, one keyboard and one gamepad. It does not move the operating-system cursor, change window focus, or modify SDL's physical/global device state. Screenshots do not show the cursor, and SDL animates an animated cursor (`docs/cursors.md`) in real time, not on the fixed-step game clock.
 
 ## Turning it on
 
@@ -39,7 +39,7 @@ A headless app reads commands from the process's standard input (on the desktop 
 | `mouse up <button> <x> <y>` | Button release at the position |
 | `mouse click <button> <x> <y>` | Motion, press and release at the position |
 | `mouse wheel <dx> <dy> <x> <y>` | Wheel delta at the position |
-| `mouse leave` | Window leave for the scope |
+| `mouse leave` | Window leave |
 | `key down <scancode>` | Key down |
 | `key up <scancode>` | Key up |
 | `key press <scancode>` | Key down then key up |
@@ -55,7 +55,7 @@ A headless app reads commands from the process's standard input (on the desktop 
 | `wait <frames>` | Holds the commands after it for that many frames, see [Game time](#game-time) |
 | `quit` | Ends the app after the frame's updatables, the same as `AppControl.Quit()`; the commands after it do not run |
 
-A mouse `<button>` is a `MouseButton` name, a gamepad `<button>` a `GamepadButton` name, and `<scancode>` a `Scancode` name, all case-insensitive. A `<scancode>` also accepts common names from other naming schemes, such as `LeftControl`, `ControlLeft`, `LeftCommand`, `Enter`, `Esc`, `ArrowUp`, `KeyW`, `Digit1`, `1` and `Numpad1`. A side-less modifier, `Ctrl`, `Control`, `Shift`, `Alt`, `Option`, `Gui`, `Meta`, `Super`, `Windows`, `Win`, `Command` or `Cmd`, presses the left key. Numbers use invariant culture; `NaN` and infinities are malformed. `text` and `screenshot` cannot contain `;`. A mouse, key, text or screenshot command targets the default `ViewScope` unless it starts with `@<n>`, the value of the scope whose window it is for: `@7 mouse click Left 10 10;`, `@7 screenshot shot.png;`. A scope without a registered window is malformed. The other commands belong to no window and are malformed with `@<n>`.
+A mouse `<button>` is a `MouseButton` name, a gamepad `<button>` a `GamepadButton` name, and `<scancode>` a `Scancode` name, all case-insensitive. A `<scancode>` also accepts common names from other naming schemes, such as `LeftControl`, `ControlLeft`, `LeftCommand`, `Enter`, `Esc`, `ArrowUp`, `KeyW`, `Digit1`, `1` and `Numpad1`. A side-less modifier, `Ctrl`, `Control`, `Shift`, `Alt`, `Option`, `Gui`, `Meta`, `Super`, `Windows`, `Win`, `Command` or `Cmd`, presses the left key. Numbers use invariant culture; `NaN` and infinities are malformed. `text` and `screenshot` cannot contain `;`.
 
 `gamepad connect` adds the synthetic gamepad to `IGamepadService.Gamepads` and raises `GamepadConnected`. Any other gamepad command before it is malformed, and so is a second connect. `stick` moves the two axes as two events, X first, the way SDL reports a physical stick, so a handler can see the new X with the old Y. Stick values go through the same dead zone as a physical gamepad. It applies to the stick's length, not to each axis: a stick shorter than 0.2 reads (0, 0), and a longer one keeps its direction while its length is rescaled from 0.2–1 to 0–1 and capped at 1. Triggers have no dead zone. `gamepad disconnect` does what SDL does when a gamepad is unplugged: held buttons are released, then sticks and triggers return to 0, before `GamepadDisconnected`. Headless mode does not start SDL's gamepad subsystem, so physical gamepads are not detected and the synthetic gamepad is the only one; a scenario behaves the same whether or not a pad is plugged in. `IPlatformSettings.Theme` is always `Unknown` and `ThemeChanged` is never raised, so a scenario also behaves the same whatever theme the host desktop uses (`docs/platform-settings.md`).
 
@@ -66,13 +66,8 @@ A game adds its own commands by deriving from `AutomationCommand` and registerin
 ```csharp
 public sealed class SpawnCommand(World world) : AutomationCommand("spawn")
 {
-    public override void Execute(string arguments, ViewScope? viewScope)
+    public override void Execute(string arguments)
     {
-        if (viewScope != null)
-        {
-            throw new FormatException("'spawn' takes no view scope");
-        }
-
         world.Spawn(arguments);
     }
 }
@@ -80,15 +75,15 @@ public sealed class SpawnCommand(World world) : AutomationCommand("spawn")
 stage.AddSingleton<AutomationCommand, SpawnCommand>();
 ```
 
-A command whose first word is the `Name` runs the game command, matched case-sensitively, in the same frame and order as the built-in commands around it. `Execute` receives the rest of the command after the name, trimmed, and parses it itself. It also receives the scope of an `@<n>` prefix, or null without one; the interpreter does not check that the scope has a window, so the command decides what the scope means and whether it accepts one. A game command cannot hold frames; a scenario uses `wait` for that. A game command reports a malformed command by throwing `FormatException`; any exception from `Execute` ends the app, the same as for a built-in command. A command that produces output writes it wherever it chooses, such as a file named in its arguments.
+A command whose first word is the `Name` runs the game command, matched case-sensitively, in the same frame and order as the built-in commands around it. `Execute` receives the rest of the command after the name, trimmed, and parses it itself. A game command cannot hold frames; a scenario uses `wait` for that. A game command reports a malformed command by throwing `FormatException`; any exception from `Execute` ends the app, the same as for a built-in command. A command that produces output writes it wherever it chooses, such as a file named in its arguments.
 
 A command is active from when its provider creates it until that provider disposes it: the app's commands for the whole run, a stage's commands from the stage's load until it is unloaded or reloaded. After that its name is an unknown command again. A failed build of the app or load of a stage disposes the commands it created, so their names are free again. Register commands as singletons: a transient command is created only when something resolves it, so the interpreter does not see it before then, and a second resolution creates a second command with the same name, which fails. The service provider creates singletons when it is built (see class-registration.md), so a registered command and its dependencies are created in every run, headless or not; only headless mode or the command console (see below) runs it.
 
-A name is checked when the command is created, in every run. The `AutomationCommand` constructor throws `ArgumentException` for a name that is null or empty, contains whitespace or `;`, or starts with `@`, because it would never match, and for a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`), because one would hide the other. A command with the name of another active command, of the app or of the current stage, throws `InvalidOperationException` that names both types, so the build of the app or the load of the stage fails.
+A name is checked when the command is created, in every run. The `AutomationCommand` constructor throws `ArgumentException` for a name that is null or empty, or contains whitespace or `;`, because it would never match, and for a name of a built-in command (`wait`, `quit`, `gamepad`, `mouse`, `key`, `text`, `screenshot`), because one would hide the other. A command with the name of another active command, of the app or of the current stage, throws `InvalidOperationException` that names both types, so the build of the app or the load of the stage fails.
 
 ### Game commands outside headless mode
 
-`PixelyConfig.EnableCommandConsole` runs game commands typed on standard input while the app runs normally, with its windows shown, physical input and the real clock, for example cheats while testing a game. A game usually turns it on and registers its cheats only in its own Debug build. An app that already registers a `PixelyConfig` passes the flag to that constructor instead of registering a second one, which would replace the first:
+`PixelyConfig.EnableCommandConsole` runs game commands typed on standard input while the app runs normally, with its window shown, physical input and the real clock, for example cheats while testing a game. A game usually turns it on and registers its cheats only in its own Debug build. An app that already registers a `PixelyConfig` passes the flag to that constructor instead of registering a second one, which would replace the first:
 
 ```csharp
 #if DEBUG
@@ -106,8 +101,8 @@ The console differs from headless mode:
 
 - A background thread reads the input, so a frame never waits for it. Each frame runs, at `UpdateOrders.Input`, the commands read since the frame before.
 - A newline ends a command as well as `;`, so a command is a line.
-- Only game commands, with an optional `@<n>`, and `quit` run. The built-in input, `screenshot` and `wait` commands are unknown commands here.
-- A malformed command, such as an unknown one, one with an invalid `@<n>` or one whose `Execute` throws `FormatException`, is written to standard error and the app goes on. Any other exception from `Execute` ends the app, the same as in headless mode.
+- Only game commands and `quit` run. The built-in input, `screenshot` and `wait` commands are unknown commands here.
+- A malformed command, such as an unknown one or one whose `Execute` throws `FormatException`, is written to standard error and the app goes on. Any other exception from `Execute` ends the app, the same as in headless mode.
 - The end of the input ends only the console; the app keeps running. A command left without its newline or `;` at the end still runs.
 - A failed read of the input, such as an `IOException` when its terminal has gone away, is written to standard error and ends the console as the end of the input does.
 - The reading thread starts with the first frame. A read it is blocked in cannot be cancelled, so the thread does not keep the process alive after the app ends.
@@ -142,17 +137,17 @@ In headless mode game time does not follow the real clock. The first frame has a
 
 `wait <frames>` runs that many frames before the commands after it, as fast as the machine can: frames are not paced to the real clock. `wait 30` is one second of game time however long it takes. `wait 0` does nothing. Real time still passes while frames run and while the app waits for input, so work that follows the real clock, such as content loading on a background thread, can finish in a different frame from run to run; a scenario waits for it with a larger `wait`.
 
-While the app waits for input it does not process SDL events. The windows are hidden, so nothing on the desktop waits for them.
+While the app waits for input it does not process SDL events. The window is hidden, so nothing on the desktop waits for it.
 
 Synthetic input carries the `ElapsedNanoseconds` of the frame that runs it as its `Timestamp`, so every synthetic event of one frame has the same timestamp and handlers tell them apart only by order. Events that come from SDL keep SDL's clock, so their timestamps cannot be compared with synthetic ones.
 
 ### Headless mode and screenshots
 
-Headless mode makes every window the app registers an `OffscreenWindow`, whether through `AddWindow` or `UseDefaultRendering`, and whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. The SDL window is not claimed for the GPU device, so it has no swapchain to take a format from. Its colour target format is `B8G8R8A8UnormSrgb`, the format of an sRGB swapchain on Vulkan and D3D12, or `R8G8B8A8UnormSrgb` when the device cannot render to and sample the first; a device with neither fails at build with `PixelyInitializationException`. A Vulkan driver can give a desktop window `R8G8B8A8UnormSrgb` while the offscreen window has `B8G8R8A8UnormSrgb`, so headless and desktop runs can then render in different byte orders of the same color space. Screenshots contain the stored sRGB bytes. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync. Instead, acquiring the window's texture waits for the GPU to finish all work submitted before it, so a headless app keeps at most about one frame in flight however fast `wait` runs frames. Only a render into an offscreen window waits, so a headless app without a window does not. The console and `IImageWriter` are registered only in headless mode. Headless mode renders into GPU textures, so it needs the GPU device: an app that registers a window but no rendering (`docs/window-rendering.md`) fails at build. A builder from `TestApp.CreateBuilder()` of [testing.md](testing.md), whose stub GPU device renders nothing to read back, has synthetic input of its own, so `AddHeadlessSupport()` adds nothing to it. It is not available in the browser: a page has no standard input, and reading a frame back needs a GPU wait the browser build cannot do (`docs/hosting.md`, WebGPU in the browser). `Pixely.Headless` is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+Headless mode makes the app's window an `OffscreenWindow`, whatever render context draws into it: the SDL window stays hidden, `Show()` returns false without showing it, and each frame is rendered into a texture on the GPU instead of the swapchain, so nothing shows on the desktop and the machine stays usable while an agent drives the app. Of `WindowConfig` only `Size` and `Title` apply; the rest is about the desktop. Custom providers work unchanged, because the window's `TryWaitAndAcquireSwapchainTexture` is what hands out the texture. The SDL window is not claimed for the GPU device, so it has no swapchain to take a format from. Its colour target format is `B8G8R8A8UnormSrgb`, the format of an sRGB swapchain on Vulkan and D3D12, or `R8G8B8A8UnormSrgb` when the device cannot render to and sample the first; a device with neither fails at build with `PixelyInitializationException`. A Vulkan driver can give a desktop window `R8G8B8A8UnormSrgb` while the offscreen window has `B8G8R8A8UnormSrgb`, so headless and desktop runs can then render in different byte orders of the same color space. Screenshots contain the stored sRGB bytes. Synthetic input needs no focus, so the hidden window changes nothing for the commands above. Without a swapchain there is no vsync. Instead, acquiring the window's texture waits for the GPU to finish all work submitted before it, so a headless app keeps at most about one frame in flight however fast `wait` runs frames. The console and `IImageWriter` are registered only in headless mode. Like any app, a headless app needs a render coordinator, or its first frame throws (`docs/window-rendering.md`). A builder from `TestApp.CreateBuilder()` of [testing.md](testing.md) has synthetic input of its own, so `AddHeadlessSupport()` adds nothing to it. On another device than the SDL one, such as the stub, the offscreen window is still created, but `CaptureLastFrame()` and the `screenshot` command throw, because that device renders nothing to read back. It is not available in the browser: a page has no standard input, and reading a frame back needs a GPU wait the browser build cannot do (`docs/hosting.md`, WebGPU in the browser). `Pixely.Headless` is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ```csharp
 builder.AddHeadlessSupport();
-builder.UseDefaultRendering(new WindowConfig(Size: (1280, 720), Title: "Hotbar"));
+builder.ConfigureWindow(new WindowConfig(Size: (1280, 720), Title: "Hotbar")).UseDefaultRendering();
 ```
 
 An agent needs no code change for this: `PIXELY_HEADLESS=1` switches any app that calls `AddHeadlessSupport()`, which every hosted app does in a Debug build, see [Turning it on](#turning-it-on).

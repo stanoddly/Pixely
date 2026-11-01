@@ -2,6 +2,20 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-01: An app has one window and one GPU device, and every frame runs one render coordinator
+
+`PixelyAppBuilder.Build()` always registers the GPU device, its services and the window; `ConfigureWindow` sets the window's settings. `AddWindow`, the public `UseGpu()`, `ViewScope`, `WindowRegistry` and `WindowCloseBehavior` are removed, and closing the window quits. `UseDefaultRendering()` and `UseWindowRendering<T>()` register only the render coordinator, in the root or in every stage, never both: `PixelyApp.RunFrame` throws `PixelyInitializationException` right after the stage transition when there is no coordinator or more than one (`docs/window-rendering.md`).
+
+- With one coordinator in every frame, `RenderCoordinator<T>` submits the uploads and, on the desktop, requests a swapchain texture every frame, so #601 cannot happen: no app runs frames without submitting its uploads or with a claimed window that requests no texture. The lazy window claim and release of the closed #607 is not needed.
+- Pixely's use case is a game with one window; compute-only apps and apps without a window are not supported. Events, input subscriptions, the UI root, synthetic input, the command grammar's `@<n>` prefix and the diagnostics no longer route by window.
+- Checking in `RunFrame` covers both layouts: `Build()` cannot check, because when stages own the coordinator the root has none until the first stage loads at the start of frame 1. A stage that draws nothing still registers a coordinator, which is explicit and costs one call.
+- `IRenderCoordinator` stays public, the documented way to change the acquire policy. A custom coordinator takes over the built-in one's duties, so the #601 guarantee holds only for `RenderCoordinator<T>`.
+- Headless mode accepts any device when it creates its offscreen window; `OffscreenWindow.CaptureLastFrame()` rejects a device other than the SDL one. Unit tests can then build an app with headless mode on and the stub device, which a window that always exists would otherwise prevent.
+
+This removes the cost of 2026-09-30 that an app without window rendering must submit `GpuMemorySystem` itself and keeps finished Vulkan work until it waits on a fence.
+
+Cost: no multi-window games, no tool windows and no Pixely apps without a window. A test that builds a raw app gets a window too, so it registers the stub device and its window factory. Headless mode with the stub device fails at its first readback instead of at startup.
+
 ## 2026-10-30: A game's tests build the game's app from a test builder
 
 `TestApp.CreateBuilder()` in `Pixely.Testing` returns a `PixelyAppBuilder` with the test environment registered, and a test passes it to the game's own `Configure`, which the game makes public (`docs/testing.md`). The app runs on the stub GPU device and SDL's dummy video and audio drivers, is isolated from the machine's gamepads and theme, steps game time by 1/30 s per frame, and takes synthetic input through `TestInput`.
