@@ -256,7 +256,6 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 ## Not settled yet
 
 - References between entities, and finding the children of an entity without scanning every entity
-- Iteration order, and the tie-breaks a rule needs where order matters
 - Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
   cleared
 - Whether two views may share one view model, which would run both views' `Sync` on each change and
