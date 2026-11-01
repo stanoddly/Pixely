@@ -49,6 +49,20 @@ public static partial class EcsServiceCollectionExtensions
         });
     }
 
+    // Adds unique to the world of this collection. Systems take it as Unique<T> or ReadOnlyUnique<TReadOnly>, and code outside systems as the
+    // ReadOnlyUnique<TReadOnly> this registers. T itself is not registered, so only systems reach the type that writes. The world does not dispose it.
+    // Only the collection that called AddEcs adds to its world, because a child's unique would outlive the child.
+    public static void AddUnique<T, TReadOnly>(this ServiceCollection services, T unique) where T : class, TReadOnly where TReadOnly : class
+    {
+        if (!Worlds.TryGetValue(services, out World? world))
+        {
+            throw new InvalidOperationException($"AddUnique<{typeof(T).Name}, {typeof(TReadOnly).Name}> adds to the world of its collection, and this collection did not call AddEcs. Call it on the collection that did, such as the stage that plays the game.");
+        }
+
+        world.AddUnique<T, TReadOnly>(unique);
+        services.AddSingleton(new ReadOnlyUnique<TReadOnly>(world));
+    }
+
     // Registers a lookup of T for code outside systems, which takes it in its constructor. It reads at any time, unlike a system's lookup.
     public static void AddReadOnlyComponentLookup<T>(this ServiceCollection services) where T : struct =>
         services.AddSingleton(static provider => new ReadOnlyComponentLookup<T>(provider.GetRequiredService<World>()));

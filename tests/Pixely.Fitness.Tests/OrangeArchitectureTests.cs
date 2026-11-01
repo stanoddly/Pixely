@@ -80,6 +80,27 @@ public sealed class OrangeArchitectureTests
     }
 
     [Test]
+    public void CodeOutsideSystemsTakingAUniqueOrItsWritableClassIsAViolation()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.OutsideSystemsTakeNoWritableUniques(Options);
+        const string reason = "it writes a unique; code outside systems reads a unique through the ReadOnlyUnique of its read-only type";
+
+        Assert.That(violations, Has.One.EqualTo($"{typeof(UniqueUpdatable).FullName}: constructor takes Unique<Terrain> through terrain; {reason}"));
+        Assert.That(violations, Has.One.EqualTo($"{typeof(TerrainRenderer).FullName}: constructor takes Terrain through terrain; {reason}"));
+        Assert.That(violations, Has.One.EqualTo($"{typeof(TerrainView).FullName}: constructor takes Func<Terrain> through terrain; {reason}"));
+        Assert.That(violations, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void ReadOnlyUniqueOutsideSystemsAndUniqueInASystemAreFit()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.OutsideSystemsTakeNoWritableUniques(Options);
+
+        Assert.That(violations, Has.None.Contains(typeof(ReadOnlyUniqueRenderer).FullName!));
+        Assert.That(violations, Has.None.Contains(typeof(TerrainSystem).FullName!));
+    }
+
+    [Test]
     public void ViewModelTakenByTwoSystemsIsAViolation()
     {
         Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(Model).FullName}: 2 systems take it (HealthSystem, SecondModelSystem); one system writes each view model"));
@@ -140,7 +161,7 @@ public sealed class OrangeArchitectureTests
     public void EvaluateRunsEveryRule()
     {
         Assert.That(OrangeArchitecture.Evaluate(Options)["Orange ComponentsHoldNoReferences"].Violations, Is.EqualTo(OrangeArchitecture.ComponentsHoldNoReferences(Options)));
-        Assert.That(OrangeArchitecture.Evaluate(Options).Results, Has.Count.EqualTo(6));
+        Assert.That(OrangeArchitecture.Evaluate(Options).Results, Has.Count.EqualTo(7));
     }
 
     private readonly record struct Health(int Value);
@@ -296,4 +317,38 @@ public sealed class OrangeArchitectureTests
         {
         }
     }
+
+    private interface IReadOnlyTerrain;
+
+    private sealed class Terrain : IReadOnlyTerrain;
+
+    private sealed class TerrainSystem(Unique<Terrain> terrain) : ISystem
+    {
+        public void Update()
+        {
+        }
+    }
+
+    private sealed class UniqueUpdatable(Unique<Terrain> terrain) : IUpdatable
+    {
+        public void Update()
+        {
+        }
+    }
+
+    private sealed class TerrainRenderer(Terrain terrain) : IRenderer<object>
+    {
+        public void Render(object renderContext)
+        {
+        }
+    }
+
+    private sealed class ReadOnlyUniqueRenderer(ReadOnlyUnique<IReadOnlyTerrain> terrain) : IRenderer<object>
+    {
+        public void Render(object renderContext)
+        {
+        }
+    }
+
+    private sealed class TerrainView(Model viewModel, Func<Terrain> terrain) : TestView(viewModel);
 }

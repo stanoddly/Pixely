@@ -20,13 +20,15 @@ public class SystemGenerator : IIncrementalGenerator
     private const string ExtensionsName = "Pixely.Ecs.EcsServiceCollectionExtensions";
     private const string SystemName = "Pixely.Ecs.ISystem";
 
-    // The generic writers and lookups by their arities, each created by the SystemBuilder method of its name with its type arguments.
+    // The generic writers, lookups and uniques by their arities, each created by the SystemBuilder method of its name with its type arguments.
     private static readonly Dictionary<string, (int MinArity, int MaxArity)> BuilderMethods = new Dictionary<string, (int, int)>
     {
         ["ComponentAdder"] = (1, 1),
         ["ComponentRemover"] = (1, 1),
         ["ComponentLookup"] = (1, 8),
-        ["ReadOnlyComponentLookup"] = (1, 8)
+        ["ReadOnlyComponentLookup"] = (1, 8),
+        ["Unique"] = (1, 1),
+        ["ReadOnlyUnique"] = (1, 1)
     };
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat;
@@ -191,7 +193,7 @@ public class SystemGenerator : IIncrementalGenerator
         return null;
     }
 
-    // A query, spawner, lookup or writer comes from the SystemBuilder, which records it as the system's contract, and anything else from the provider.
+    // A query, spawner, lookup, unique or writer comes from the SystemBuilder, which records it as the system's contract, and anything else from the provider.
     private static SystemExtraction? CreateArgument(IParameterSymbol parameter, Compilation compilation, InvocationExpressionSyntax invocation, out string argument)
     {
         ITypeSymbol type = parameter.Type;

@@ -5,8 +5,8 @@ using Pixely.Collections;
 
 namespace Pixely.Ecs;
 
-// The entities and their components. Its members are internal: systems change it through their writers, spawners and lookups, and code outside
-// systems reads it through the queries and lookups that AddQuery and AddReadOnlyComponentLookup register.
+// The entities, their components and the uniques. Its members are internal: systems change it through their writers, spawners, lookups and uniques,
+// and code outside systems reads it through the queries, lookups and read-only uniques that AddQuery, AddReadOnlyComponentLookup and AddUnique register.
 public sealed class World
 {
     // What Get returns for a tag, which has no data to store.
@@ -32,6 +32,11 @@ public sealed class World
     private readonly FastList<Archetype> _archetypes = new FastList<Archetype>();
     private readonly FastList<Query?> _queries = new FastList<Query?>(4);
     private readonly FastList<SpawnerLayout?> _spawnerLayouts = new FastList<SpawnerLayout?>(4);
+
+    // A unique is kept under its type for systems and under its read-only type for everyone, in separate tables, so ReadOnlyUnique<T> of the writable
+    // type finds nothing and code outside systems never gets the type that writes.
+    private readonly Dictionary<Type, object> _uniques = [];
+    private readonly Dictionary<Type, object> _readOnlyUniques = [];
 
     // Each running query has an id, so ending a query twice, as copies of its enumerator do, ends it once.
     private readonly HashSet<long> _activeQueries = [];
@@ -317,6 +322,36 @@ public sealed class World
         _spawnerLayouts[id] = layout;
         return layout;
     }
+
+    internal void AddUnique<T, TReadOnly>(T unique) where T : class, TReadOnly where TReadOnly : class
+    {
+        ArgumentNullException.ThrowIfNull(unique);
+        if (typeof(T) == typeof(TReadOnly))
+        {
+            throw new ArgumentException($"The read-only type of the unique {typeof(T).Name} is {typeof(T).Name} itself, so code outside systems could write it. Give it a read-only interface, as in AddUnique<{typeof(T).Name}, IReadOnly{typeof(T).Name}>.");
+        }
+
+        if (_uniques.ContainsKey(typeof(T)))
+        {
+            throw new InvalidOperationException($"The world already has a unique {typeof(T).Name}.");
+        }
+
+        if (_readOnlyUniques.ContainsKey(typeof(TReadOnly)))
+        {
+            throw new InvalidOperationException($"The world already has a unique whose read-only type is {typeof(TReadOnly).Name}.");
+        }
+
+        _uniques.Add(typeof(T), unique);
+        _readOnlyUniques.Add(typeof(TReadOnly), unique);
+    }
+
+    internal T GetUnique<T>() where T : class => _uniques.TryGetValue(typeof(T), out object? unique)
+        ? (T)unique
+        : throw new InvalidOperationException($"The world has no unique {typeof(T).Name}. Add it with AddUnique<{typeof(T).Name}, ...> on the collection that called AddEcs.");
+
+    internal T GetReadOnlyUnique<T>() where T : class => _readOnlyUniques.TryGetValue(typeof(T), out object? unique)
+        ? (T)unique
+        : throw new InvalidOperationException($"The world has no unique whose read-only type is {typeof(T).Name}. Add it with AddUnique<..., {typeof(T).Name}> on the collection that called AddEcs.");
 
     internal long BeginQuery()
     {

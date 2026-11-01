@@ -26,6 +26,10 @@ public class GeneratorTests
 
                 public struct Dead : ITag;
 
+                internal interface IReadOnlyTerrain;
+
+                internal sealed class Terrain : IReadOnlyTerrain;
+
                 internal sealed class Movement : Query<ReadOnlySpan<Entity>, Span<Position>, ReadOnlySpan<Velocity>>, IWithout<Frozen>;
 
                 public static class Queries
@@ -38,7 +42,7 @@ public class GeneratorTests
                     private readonly Movement _movement;
 
                     public Mover(Movement movement, Queries.Corpses corpses, Query<ReadOnlySpan<Velocity>> velocities, ComponentLookup<Position> positionLookup,
-                        ReadOnlyComponentLookup<Dead> deadLookup, ComponentLookup<Position, Velocity, Dead> lookup)
+                        ReadOnlyComponentLookup<Dead> deadLookup, ComponentLookup<Position, Velocity, Dead> lookup, Unique<Terrain> terrain, ReadOnlyUnique<IReadOnlyTerrain> readTerrain)
                     {
                         _movement = movement;
                     }
@@ -75,6 +79,7 @@ public class GeneratorTests
         Assert.That(interceptors, Does.Contain("builder.Query<global::Game.Queries.Corpses>()").And.Contain("builder.Query<global::Pixely.Ecs.Query<global::System.ReadOnlySpan<global::Velocity>>>()"));
         Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position>()").And.Contain("builder.ReadOnlyComponentLookup<global::Game.Dead>()"));
         Assert.That(interceptors, Does.Contain("builder.ComponentLookup<global::Position, global::Velocity, global::Game.Dead>()"));
+        Assert.That(interceptors, Does.Contain("builder.Unique<global::Game.Terrain>()").And.Contain("builder.ReadOnlyUnique<global::Game.IReadOnlyTerrain>()"));
     }
 
     [TestCase("abstract class Q : Query<ReadOnlySpan<Position>>;", "PXECS001")]

@@ -40,9 +40,9 @@ Parts of what this document builds on are not final:
 - `Configure` in `Program.cs` registers the root: Pixely and what survives a stage change, e.g. render
   targets and content. An `OnBuilt` callback loads the first stage through `IStageManager.Load`
 - `AddGame`, an internal extension method on `ServiceCollection` in the root namespace `Foo`,
-  registers the stage the game is played in. It calls `AddEcs` and registers the messages, the
-  systems, the view models, the views, the renderers, audio, and the queries and lookups that code
-  outside systems reads
+  registers the stage the game is played in. It calls `AddEcs` and registers the uniques, the
+  messages, the systems, the view models, the views, the renderers, audio, and the queries and lookups
+  that code outside systems reads
 - It registers the same types whatever its arguments. Arguments configure values
 - A stage owns its world, see World. State that the next stage needs is passed to its `AddGame` as an
   object, e.g. `AddGame(new GameStart(Seed: 42))` with `GameStart` a sealed record class, which it
@@ -59,17 +59,24 @@ Parts of what this document builds on are not final:
 
 ## World
 
-- Game state is components and tags in a `World`. The `World` is the state root
+- Game state is components, tags and uniques in a `World`. The `World` is the state root
 - A component is a struct. A tag is a struct that implements `ITag` and holds no data
 - Components hold no rules. A system reads them through read-only spans or writes them through
   spans, so a setter or a read-only collection guards nothing
 - A component MUST NOT hold a reference other than a `string`. A read-only span guards only the
   component's own bytes, so a `List<T>` it holds stays writable to every reader. It holds values or
   ids instead
+- State that is not one entity's, e.g. terrain read by coordinate, is a unique, see `docs/ecs.md`. A tile is
+  not an entity: neighbors are read by index, and every tile has the same components, so archetypes
+  add nothing
+- A unique's read-only type MUST NOT expose a reference that writes, e.g. it returns a
+  `ReadOnlySpan<Tile>`, not a `Tile[]`. C# has no deep immutability, so the read-only type is the only guard
+- `AddGame` adds the uniques with `AddUnique`, after `AddEcs`. Code outside systems takes
+  `ReadOnlyUnique<TReadOnly>`, never the class, which `Orange OutsideSystemsTakeNoWritableUniques` checks
 - The stage the game is played in calls `AddEcs`, not the root, so unloading or reloading the stage
   drops the world with its entities. A stage without a world, e.g. a main menu, does not call it
 - Code outside systems MUST NOT write the world. `World` has no public members, so only a system's
-  writers, spawners and lookups can
+  writers, spawners, lookups and uniques can
 - The camera is components. Aiming is a system that runs after the camera system
 
 ## Systems
@@ -122,7 +129,7 @@ Parts of what this document builds on are not final:
 - A view takes exactly one view model. `Pixely ViewsTakeOneViewModel`, a Pixely conventions rule in
   Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
   observe several models, see `docs/ui.md`
-- A view reads the world only through its view model. It MUST NOT take queries or lookups
+- A view reads the world only through its view model. It MUST NOT take queries, lookups or uniques
 - A view MUST NOT take a message reader or writer
 - A view model holds what its view shows and the intents its view requested. It is UI state, not
   game state
@@ -198,8 +205,8 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 
 ## Rendering and audio
 
-- Rendering and audio take read-only queries and lookups in their constructors, registered with
-  `AddQuery` and `AddReadOnlyComponentLookup`, see `docs/ecs.md`
+- Rendering and audio take read-only queries, lookups and uniques in their constructors, registered
+  with `AddQuery`, `AddReadOnlyComponentLookup` and `AddUnique`, see `docs/ecs.md`
 - They MUST NOT write
 - A renderer MUST NOT read messages, because Pixely skips rendering while a window is minimized. An
   updatable reads them and keeps what the renderer draws. The updatable that reads them MUST NOT be

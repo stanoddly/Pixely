@@ -26,6 +26,7 @@ public static class OrangeArchitecture
             new FitnessResult("Orange ViewsReadOnlyTheirViewModel", ViewsReadOnlyTheirViewModel(options)),
             new FitnessResult("Orange RenderersReadNoMessages", RenderersReadNoMessages(options)),
             new FitnessResult("Orange OutsideSystemsTakeNoWritingQueries", OutsideSystemsTakeNoWritingQueries(options)),
+            new FitnessResult("Orange OutsideSystemsTakeNoWritableUniques", OutsideSystemsTakeNoWritableUniques(options)),
             new FitnessResult("Orange ViewModelsHaveOneWriter", ViewModelsHaveOneWriter(options)),
             new FitnessResult("Orange VocabularyHoldsOnlyPrimitives", VocabularyHoldsOnlyPrimitives(options)),
             new FitnessResult("Orange ComponentsHoldNoReferences", ComponentsHoldNoReferences(options))
@@ -59,6 +60,28 @@ public static class OrangeArchitecture
         IEnumerable<Type> outsideSystems = Classes(options).Where(type => !typeof(ISystem).IsAssignableFrom(type) && OutsideSystemTypes.Any(participant => TypeGraph.Implements(type, participant)));
         return ConstructorViolations(outsideSystems, static type =>
             QueryArguments(type).FirstOrDefault(IsWritingTerm) is { } term ? $"it writes through {Name(term)}; code outside systems reads the world, so take a ReadOnlySpan" : null);
+    }
+
+    // AddUnique registers only ReadOnlyUnique<TReadOnly>, so the provider cannot give code outside systems a Unique<T>. A game that also registers the
+    // unique's class as a service can, which this finds by the classes systems take as Unique<T>. A view taking Unique<T> is reported by
+    // ViewsReadOnlyTheirViewModel, so only the class is checked for views.
+    // Classes are matched exactly, not by assignability: the class implements its read-only type, so assignability would flag IReadOnlyTerrain too.
+    // A writable interface of the class gets through only if the game registers the instance a second time under it.
+    // A unique that no system takes as Unique<T> is not known here, because AddUnique calls are neither constructors nor types. Code outside
+    // systems is the updatables and renderers, as in OutsideSystemsTakeNoWritingQueries; audio has no Pixely interface to find it by.
+    public static IReadOnlyList<string> OutsideSystemsTakeNoWritableUniques(OrangeArchitectureOptions options)
+    {
+        HashSet<Type> writableUniques = Classes(options).Where(type => typeof(ISystem).IsAssignableFrom(type))
+            .SelectMany(TypeGraph.Constructors).SelectMany(constructor => constructor.GetParameters())
+            .SelectMany(parameter => TypeGraph.Expand(parameter.ParameterType)).Where(IsUnique)
+            .Select(unique => unique.GetGenericArguments()[0]).ToHashSet();
+        const string reason = "it writes a unique; code outside systems reads a unique through the ReadOnlyUnique of its read-only type";
+        IEnumerable<Type> outsideSystems = Classes(options).Where(type => !typeof(ISystem).IsAssignableFrom(type) && OutsideSystemTypes.Any(participant => TypeGraph.Implements(type, participant)));
+        IEnumerable<Type> views = Classes(options).Where(type => typeof(UiView).IsAssignableFrom(type));
+        return [.. ConstructorViolations(outsideSystems, type => IsUnique(type) || writableUniques.Contains(type) ? reason : null),
+            .. ConstructorViolations(views, type => writableUniques.Contains(type) ? reason : null)];
+
+        static bool IsUnique(Type type) => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Unique<>);
     }
 
     // With two writers, Changed is raised twice every frame and the view shows only the later system's values. A view model no system writes

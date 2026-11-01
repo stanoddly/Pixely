@@ -25,7 +25,7 @@ public record struct Velocity(Vector2 Value);
 public struct Frozen : ITag;
 ```
 
-- A game never changes the world directly. `World` has no public members besides its constructor. Systems change it through the writers, spawners and lookups of their contract. Code outside systems reads it through the queries and lookups that the service collection registers. Both are described below.
+- A game never changes the world directly. `World` has no public members besides its constructor. Systems change it through the writers, spawners, lookups and uniques of their contract. Code outside systems reads it through the queries, lookups and read-only uniques that the service collection registers. Both are described below.
 - A spawner creates an entity, and an `EntityDestroyer` destroys it. An `Entity` keeps a version, so a destroyed entity stays dead after its index is reused. An index whose version runs out is never reused. `default(Entity)` is never alive.
 - An entity belongs to the world that created it. Another world does not detect it: when an entity of its own has the same index and version, a lookup acts on that entity.
 
@@ -227,7 +227,48 @@ internal sealed class BodyRenderer(Bodies bodies, ReadOnlyComponentLookup<Positi
 - `AddQuery<TQuery>()` registers the world's instance of the query class, the one its systems enumerate. A query with a `Span<T>` throws `InvalidOperationException` when the provider creates it, which is when the provider is built, because only systems write the world.
 - `AddReadOnlyComponentLookup<T1, ...>()` registers a read-only lookup of 1 to 8 components. Unlike a system's lookup, it reads at any time. A reference it returns stays valid until the systems next update, so code outside systems copies what it keeps.
 - Both resolve the `World` that `AddEcs` registered, so a stage's collection can register them too.
-- They need the service collection. Without dependency injection, only systems reach the world.
+- They need the service collection. Without dependency injection, only systems reach the world, and a world has no uniques, because only `AddUnique` adds them.
+
+### Uniques
+
+A unique is one instance per type in a world, such as terrain, for state that is not one entity's: dense, uniform data that code reads by coordinate. It is the world's, so it lives as long as the world. Its class implements a read-only type, and the provider gives the class to no one:
+
+```csharp
+internal interface IReadOnlyTerrain
+{
+    ReadOnlySpan<Tile> Chunk(ChunkCoordinate coordinate);
+}
+
+internal sealed class Terrain : IReadOnlyTerrain
+{
+    public Span<Tile> Chunk(ChunkCoordinate coordinate) { ... }
+
+    ReadOnlySpan<Tile> IReadOnlyTerrain.Chunk(ChunkCoordinate coordinate) => Chunk(coordinate);
+}
+
+services.AddEcs();
+services.AddUnique<Terrain, IReadOnlyTerrain>(new Terrain(width: 256, height: 256));
+
+internal sealed class DiggingSystem(Unique<Terrain> terrain, Diggers diggers) : ISystem
+{
+    public void Update() { ... terrain.Value.Chunk(coordinate)[index] = Tile.Air; ... }
+}
+
+internal sealed class TerrainRenderer(ReadOnlyUnique<IReadOnlyTerrain> terrain)
+{
+    ...
+}
+```
+
+- `AddUnique<T, TReadOnly>(unique)` adds the instance to the world of the collection that called `AddEcs`, and registers `ReadOnlyUnique<TReadOnly>` for code outside systems. It does not register `T` or `TReadOnly`, so the provider gives the class that writes to no one.
+- A system takes `Unique<T>` to write, or `ReadOnlyUnique<TReadOnly>` to read, in its constructor. `Value` works only during its system's `Update`, like a lookup, and throws `InvalidOperationException` otherwise. `ReadOnlyUnique<TReadOnly>` from the provider reads at any time.
+- `ReadOnlyUnique<T>` finds a unique only by its read-only type, and `Unique<T>` only by its class, so `ReadOnlyUnique<Terrain>` throws when the system is added.
+- A write to a unique applies at once and is not structural, so a unique places no sync point. Order the systems that write and read it with `IAfter<...>` and `IBefore<...>`.
+- The read-only type keeps out only what its members expose. A member that returns an array, a `List<T>` or the class itself gives code outside systems the means to write. C# has no deep immutability, so return `ReadOnlySpan<T>`, values and other read-only types.
+- `Value` is a class, so a system that keeps it past `Update` can still write it, which nothing checks. Code that casts the read-only type back to the class can write it too, because the cast reaches the same instance.
+- A unique is keyed by the type `AddUnique` names, as a service is, so one class added under two types is two uniques.
+- `AddUnique` throws `ArgumentException` when `T` and `TReadOnly` are the same type, and `InvalidOperationException` for a second unique of the class or of the read-only type, and in a collection that did not call `AddEcs`, such as a child of one that did, because the child's unique would outlive the child.
+- The world does not dispose a unique.
 
 ### Order
 

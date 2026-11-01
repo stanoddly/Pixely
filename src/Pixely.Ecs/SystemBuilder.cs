@@ -56,6 +56,19 @@ public sealed partial class SystemBuilder
     public ReadOnlyComponentLookup<T> ReadOnlyComponentLookup<T>() where T : struct =>
         new ReadOnlyComponentLookup<T>(AddLookup(typeof(ReadOnlyComponentLookup<T>), ComponentType<T>.Id));
 
+    // A unique has no structural changes, so it adds nothing to the contract and places no sync point. Writes to it apply at once.
+    public Unique<T> Unique<T>() where T : class
+    {
+        ThrowIfClosed();
+        return new Unique<T>(Commands);
+    }
+
+    public ReadOnlyUnique<TReadOnly> ReadOnlyUnique<TReadOnly>() where TReadOnly : class
+    {
+        ThrowIfClosed();
+        return new ReadOnlyUnique<TReadOnly>(Commands);
+    }
+
     public EntityDestroyer EntityDestroyer()
     {
         ThrowIfClosed();

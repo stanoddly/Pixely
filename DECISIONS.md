@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-01: State that is not one entity's is a unique of the world, with a read-only type
+
+`AddUnique<T, TReadOnly>(instance)` adds one instance of a class, such as terrain, to the world of the collection that called `AddEcs`. A system takes `Unique<T>` to write it or `ReadOnlyUnique<TReadOnly>` to read it, and code outside systems takes the `ReadOnlyUnique<TReadOnly>` that `AddUnique` registers. Neither `T` nor `TReadOnly` is registered as a service (`docs/ecs.md`).
+
+- Terrain is not entities. Minecraft Bedrock, as its save format and EnTT's list of users show, keeps its mobs in EnTT and its blocks in palette-compressed subchunks: neighbors are read by coordinate, and every tile has the same schema, so archetypes add nothing and an 8-byte entity handle costs more than the tile.
+- Keeping it in the world keeps the world the one state root, so a future save captures it with the entities, and the stage's lifetime covers it.
+- A unique holds references, which `Orange ComponentsHoldNoReferences` forbids in components. Bevy's `Res<T>` is read-only all the way down through Rust's borrow checker, while C# has none, so the read-only side is a type the game writes, such as `IReadOnlyTerrain`. `AddUnique` refuses the class as its own read-only type.
+- The name follows Shipyard's uniques. `Singleton` is the DI lifetime, `Resource` means a GPU binding in Pixely's shader docs, and `Context` is taken by render contexts.
+
+Cost: the read-only type guards only what its members expose, and nothing checks that they return no array or list. A system that keeps `Value` past `Update` can still write it. A unique places no sync point, and the world does not dispose it. Without dependency injection a world has no uniques.
+
 ## 2026-10-31: An Orange game is one project, and one internal AddGame registers its stage
 
 An Orange game is one project, `src/Foo/Foo.csproj`, with the namespaces `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels`, `Foo.Systems`, `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Types are internal, except `Program` and `Configure`, which tests call. One internal `AddGame` registers the stage the game is played in, views and renderers included. Peach had seven projects, from `Game` to `Executable`, and split `Game` from `Frontend`.

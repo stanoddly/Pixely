@@ -6,7 +6,7 @@ namespace Pixely.Ecs;
 
 // Reads and writes the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
 // behave as those of ComponentLookup<T> do for each component.
-public sealed class ComponentLookup<T1, T2> : ILookup
+public sealed class ComponentLookup<T1, T2> : IUpdateScoped
     where T1 : struct
     where T2 : struct
 {
@@ -14,7 +14,7 @@ public sealed class ComponentLookup<T1, T2> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype);
@@ -34,10 +34,10 @@ public sealed class ComponentLookup<T1, T2> : ILookup
         return new ComponentRefs<T1, T2>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3> : ILookup
+public sealed class ComponentLookup<T1, T2, T3> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -46,7 +46,7 @@ public sealed class ComponentLookup<T1, T2, T3> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype);
@@ -66,10 +66,10 @@ public sealed class ComponentLookup<T1, T2, T3> : ILookup
         return new ComponentRefs<T1, T2, T3>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3, T4> : ILookup
+public sealed class ComponentLookup<T1, T2, T3, T4> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -79,7 +79,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype);
@@ -99,10 +99,10 @@ public sealed class ComponentLookup<T1, T2, T3, T4> : ILookup
         return new ComponentRefs<T1, T2, T3, T4>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3, T4, T5> : ILookup
+public sealed class ComponentLookup<T1, T2, T3, T4, T5> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -113,7 +113,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype);
@@ -133,10 +133,10 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5> : ILookup
         return new ComponentRefs<T1, T2, T3, T4, T5>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -148,7 +148,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype);
@@ -168,10 +168,10 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
         return new ComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -184,7 +184,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype) && Lookup.Has<T7>(archetype);
@@ -204,10 +204,10 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
         return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
+public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -221,7 +221,7 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
 
     internal ComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).FindArchetype(entity) is { } archetype && Lookup.Has<T1>(archetype) && Lookup.Has<T2>(archetype) && Lookup.Has<T3>(archetype) && Lookup.Has<T4>(archetype) && Lookup.Has<T5>(archetype) && Lookup.Has<T6>(archetype) && Lookup.Has<T7>(archetype) && Lookup.Has<T8>(archetype);
@@ -241,12 +241,12 @@ public sealed class ComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
         return new ComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row), ref World.UnsafeGetComponent<T8>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
 // Reads the components of its type arguments of a given entity, which it finds once for all of them. Has, the indexer and UnsafeGet
 // behave as those of ReadOnlyComponentLookup<T> do for each component, inside a system or outside.
-public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2> : IUpdateScoped
     where T1 : struct
     where T2 : struct
 {
@@ -254,7 +254,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -279,10 +279,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2> : ILookup
         return new ReadOnlyComponentRefs<T1, T2>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -291,7 +291,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3> : ILookup
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -316,10 +316,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3> : ILookup
         return new ReadOnlyComponentRefs<T1, T2, T3>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -329,7 +329,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : ILookup
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -354,10 +354,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4> : ILookup
         return new ReadOnlyComponentRefs<T1, T2, T3, T4>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -368,7 +368,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : ILookup
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -393,10 +393,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5> : ILookup
         return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -408,7 +408,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -433,10 +433,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6> : ILookup
         return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -449,7 +449,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILooku
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -474,10 +474,10 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7> : ILooku
         return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
 
-public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : ILookup
+public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : IUpdateScoped
     where T1 : struct
     where T2 : struct
     where T3 : struct
@@ -491,7 +491,7 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : IL
 
     internal ReadOnlyComponentLookup(CommandBuffer commands)
     {
-        commands.AddLookup(this);
+        commands.AddUpdateScoped(this);
     }
 
     internal ReadOnlyComponentLookup(World world)
@@ -516,5 +516,5 @@ public sealed class ReadOnlyComponentLookup<T1, T2, T3, T4, T5, T6, T7, T8> : IL
         return new ReadOnlyComponentRefs<T1, T2, T3, T4, T5, T6, T7, T8>(ref World.UnsafeGetComponent<T1>(archetype, row), ref World.UnsafeGetComponent<T2>(archetype, row), ref World.UnsafeGetComponent<T3>(archetype, row), ref World.UnsafeGetComponent<T4>(archetype, row), ref World.UnsafeGetComponent<T5>(archetype, row), ref World.UnsafeGetComponent<T6>(archetype, row), ref World.UnsafeGetComponent<T7>(archetype, row), ref World.UnsafeGetComponent<T8>(archetype, row));
     }
 
-    void ILookup.SetWorld(World? world) => _world = world;
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
 }
