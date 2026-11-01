@@ -75,6 +75,7 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 - A query without filters needs no class of its own: `Query<ReadOnlySpan<Velocity>>` works wherever a query class does.
 - `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
+- The order of archetypes and of entities within them is unspecified. It is the same for the same sequence of changes to the world, so the same inputs yield the same order.
 
 ### Optional components
 
