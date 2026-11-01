@@ -36,6 +36,7 @@ public class PackageIntegrationTests
         "Pixely.Logging",
         "Pixely.Messages",
         "Pixely.Models",
+        "Pixely.Observations",
         "Pixely.ShaderCommon",
         "Pixely.Testing",
         "Pixely.Ui",
@@ -203,6 +204,7 @@ public class PackageIntegrationTests
             Assert.That(entries, Does.Contain("tools/net11.0/any/build/Pixely.SdlangCompiler.targets"));
             Assert.That(entries, Does.Contain("THIRD-PARTY-NOTICES.md"));
             Assert.That(entries, Does.Contain("docs/orange-architecture.md"));
+            Assert.That(entries, Does.Contain("docs/peach-architecture.md"));
             Assert.That(entries.Where(entry => entry.StartsWith("lib/", StringComparison.Ordinal)).Select(entry => entry[..entry.LastIndexOf('/')]).Distinct(), Is.EquivalentTo(LibFolders));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.SdlangCompiler.dll"));
             Assert.That(entries, Does.Not.Contain("lib/net11.0/Pixely.DependencyInjection.Generator.dll"));

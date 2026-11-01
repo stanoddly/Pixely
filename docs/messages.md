@@ -4,6 +4,8 @@
 time. Nothing is called back. Each reader holds its own position and reads when it suits its own point in the
 frame. It follows Bevy's messages: `Messages<T>`, `MessageWriter<T>` and `MessageReader<T>`.
 
+The [Orange architecture](orange-architecture.md) uses `Pixely.Messages`. The [Peach architecture](peach-architecture.md) uses [`Pixely.Observations`](observations.md).
+
 A message is an intent or an observation:
 
 - An intent is what code asks the game to do, for example save the game.

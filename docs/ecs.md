@@ -395,5 +395,5 @@ PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed 
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
 - Change detection, events on add or remove, relations between entities.
-- Pixely.Fitness checks only the [Orange](orange-architecture.md) rules that constructors and types show, see [fitness](fitness.md).
+- Of the [Orange](orange-architecture.md) rules, Pixely.Fitness checks only those that constructors and types show, see [fitness](fitness.md). Its [Peach](peach-architecture.md) rules require Systems to be `IUpdatable`, which a Pixely.Ecs system cannot be, so a Peach game has no Pixely.Ecs systems in `Foo.Game.Systems`.
 - The browser is untested. Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and no browser test runs it under Mono, the browser's runtime, with or without AOT.

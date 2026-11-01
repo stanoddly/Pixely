@@ -17,10 +17,15 @@
 
     <ItemGroup>
         <Using Include="NUnit.Framework"/>
+        <!-- The Peachy fixture is three projects of its own; the Orangey fixture compiles into this one. -->
+        <Compile Remove="Fixture\Peachy.*\**\*.cs" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Pixely.Fitness\Pixely.Fitness.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Game\Peachy.Game.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Frontend\Peachy.Frontend.csproj" />
+        <ProjectReference Include="Fixture\Peachy.Executable\Peachy.Executable.csproj" />
     </ItemGroup>
 
 </Project>

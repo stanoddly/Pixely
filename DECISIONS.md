@@ -2,6 +2,14 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-01: Peach and Orange are two architectures, and Pixely.Observations ships beside Pixely.Messages
+
+The Peach architecture, its Fitness rules and Pixely.Observations come back, after the Orange architecture and Pixely.Messages replaced them on 2026-10-30. A game follows one architecture. Peach uses Pixely.Observations, and Orange uses Pixely.Messages.
+
+- Peach is kept for the games it suits until the owner decides otherwise. No criterion for which games suit which is settled, so each document names the other without one.
+
+Cost: the package ships two message libraries, and Pixely.Fitness references both.
+
 ## 2026-11-01: Orange settles actors, hidden information and view models of state outside the world
 
 `docs/orange-architecture.md` gains three sections. Actors: an AI system writes intents like an input system and does not apply them; a continuous intent is a component on its actor, and a one-shot intent is a message that names its actor. Hidden information: a perception system writes what each participant perceives, and AI, rendering, audio and view models read that instead of the true state. UI outside the world: an updatable writes a view model of state outside the world, under the rules for a system that writes one, and `Orange ViewModelsHaveOneWriter` counts updatables as writers.

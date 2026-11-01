@@ -12,6 +12,7 @@
         <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
         <ProjectReference Include="..\Pixely.Ecs\Pixely.Ecs.csproj" />
         <ProjectReference Include="..\Pixely.Messages\Pixely.Messages.csproj" />
+        <ProjectReference Include="..\Pixely.Observations\Pixely.Observations.csproj" />
         <ProjectReference Include="..\Pixely.Ui\Pixely.Ui.csproj" />
     </ItemGroup>
 

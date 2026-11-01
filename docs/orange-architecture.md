@@ -1,5 +1,6 @@
 # Orange Architecture
 
+- Pixely has two architectures, [Peach](peach-architecture.md) and Orange. A game follows one
 - Architecture for any genre, built on `Pixely.Ecs`, see `docs/ecs.md`
 - The framework is Pixely. This document adds only what a game does with it
 - MUST, SHOULD and MAY are RFC 2119
