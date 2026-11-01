@@ -1,12 +1,15 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using Pixely.DependencyInjection;
 using ArchEntity = Arch.Core.Entity;
 using ArchWorld = Arch.Core.World;
 
 namespace Pixely.Ecs.Benchmarks;
 
-// Reads one component of every entity in a shuffled order, which defeats the prefetcher as lookups by entity do in a game.
+// Reads one or two components of every entity in a shuffled order, which defeats the prefetcher as lookups by entity do in a game. Each category
+// has its own Arch baseline, so a case reading two components is compared with Arch reading the same two.
 [Config(typeof(BenchmarkConfiguration))]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class RandomAccessBenchmarks
 {
     internal sealed class LookupSystem(Entity[] entities, ReadOnlyComponentLookup<Position> positions) : ISystem
@@ -105,7 +108,7 @@ public class RandomAccessBenchmarks
         ArchWorld.Destroy(_arch);
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark(Baseline = true), BenchmarkCategory("One")]
     public float Arch()
     {
         float sum = 0;
@@ -118,7 +121,7 @@ public class RandomAccessBenchmarks
     }
 
     // Reads through the lookup of code outside systems, the checked path.
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("One")]
     public float Pixely()
     {
         float sum = 0;
@@ -131,7 +134,7 @@ public class RandomAccessBenchmarks
     }
 
     // Skips the checks that Arch's Get skips too: bounds, version and the component's presence.
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("One")]
     public float PixelyUnsafe()
     {
         float sum = 0;
@@ -144,15 +147,28 @@ public class RandomAccessBenchmarks
     }
 
     // A system reads the positions through its ReadOnlyComponentLookup, which adds a null test of its world to each Get.
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("One")]
     public float PixelyLookup()
     {
         _lookupScheduler.Update();
         return _lookupSystem.Sum;
     }
 
+    // Reads each position and velocity with two Get calls, as the two Pixely cases below read both.
+    [Benchmark(Baseline = true), BenchmarkCategory("Two")]
+    public float ArchTwo()
+    {
+        float sum = 0;
+        foreach (ArchEntity entity in _archEntities)
+        {
+            sum += _arch.Get<Position>(entity).X + _arch.Get<Velocity>(entity).X;
+        }
+
+        return sum;
+    }
+
     // Reads each position and velocity through two lookups, which find the entity twice.
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("Two")]
     public float PixelyTwoLookups()
     {
         _twoLookupsScheduler.Update();
@@ -160,7 +176,7 @@ public class RandomAccessBenchmarks
     }
 
     // Reads each position and velocity through one lookup, which finds the entity once.
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("Two")]
     public float PixelyPairLookup()
     {
         _pairLookupScheduler.Update();
