@@ -84,21 +84,21 @@ public static class OrangeArchitecture
         static bool IsUnique(Type type) => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Unique<>);
     }
 
-    // With two writers, Changed is raised twice every frame and the view shows only the later system's values. A view model no system writes
-    // passes, because view models of state outside the world are not settled.
+    // With two writers, Changed is raised twice every frame and the view shows only the later writer's values. A writer is a system, or an
+    // updatable for a view model of state outside the world. A view model nothing writes passes, e.g. one whose writer is a plain service.
     // View models come from the declared classes, so a closed generic one such as ListViewModel<Item> is not counted, only its open definition,
     // which no constructor takes. Generic view models are rare enough to leave that gap.
     public static IReadOnlyList<string> ViewModelsHaveOneWriter(OrangeArchitectureOptions options)
     {
-        Type[] systems = Classes(options).Where(type => typeof(ISystem).IsAssignableFrom(type)).ToArray();
+        Type[] writers = Classes(options).Where(type => typeof(ISystem).IsAssignableFrom(type) || typeof(IUpdatable).IsAssignableFrom(type)).ToArray();
         List<string> violations = new List<string>();
         foreach (Type viewModel in Classes(options).Where(type => !type.IsGenericTypeDefinition && typeof(IUiViewModel).IsAssignableFrom(type)))
         {
-            Type[] writers = systems.Where(system => TypeGraph.Constructors(system).SelectMany(constructor => constructor.GetParameters())
+            Type[] viewModelWriters = writers.Where(writer => TypeGraph.Constructors(writer).SelectMany(constructor => constructor.GetParameters())
                 .Any(parameter => parameter.ParameterType != typeof(object) && parameter.ParameterType.IsAssignableFrom(viewModel))).ToArray();
-            if (writers.Length > 1)
+            if (viewModelWriters.Length > 1)
             {
-                violations.Add($"{viewModel.FullName}: {writers.Length} systems take it ({string.Join(", ", writers.Select(writer => writer.Name))}); one system writes each view model");
+                violations.Add($"{viewModel.FullName}: {viewModelWriters.Length} systems or updatables take it ({string.Join(", ", viewModelWriters.Select(writer => writer.Name))}); one of them writes each view model");
             }
         }
 

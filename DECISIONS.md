@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-01: Orange settles actors, hidden information and view models of state outside the world
+
+`docs/orange-architecture.md` gains three sections. Actors: an AI system writes intents like an input system and does not apply them; a continuous intent is a component on its actor, and a one-shot intent is a message that names its actor. Hidden information: a perception system writes what each participant perceives, and AI, rendering, audio and view models read that instead of the true state. UI outside the world: an updatable writes a view model of state outside the world, under the rules for a system that writes one, and `Orange ViewModelsHaveOneWriter` counts updatables as writers.
+
+- One system validates an intent whoever wrote it, so the player and an AI follow the same rules. Bevy's input crates do the same, with an `ActionState` component that the input or an AI fills on each actor.
+- A reader of messages is one system that handles every entity, so a reader per target would not filter anything. A message that names its actor needs no new type.
+- In ECS, perception is state like any other: Bevy filters what a camera draws by components such as `RenderLayers`, and AI reads what it has seen.
+- A main menu stage calls no `AddEcs`, so it has no systems, and settings in the root outlive every stage's systems. An updatable is what remains.
+
+Cost: nothing checks that AI, rendering and audio read perceived state; a query of the true state compiles anywhere. An updatable that writes a view model and also reads the world is not detected.
+
 ## 2026-11-01: State that is not one entity's is a unique of the world, with a read-only type
 
 `AddUnique<T, TReadOnly>(instance)` adds one instance of a class, such as terrain, to the world of the collection that called `AddEcs`. A system takes `Unique<T>` to write it or `ReadOnlyUnique<TReadOnly>` to read it, and code outside systems takes the `ReadOnlyUnique<TReadOnly>` that `AddUnique` registers. Neither `T` nor `TReadOnly` is registered as a service (`docs/ecs.md`).

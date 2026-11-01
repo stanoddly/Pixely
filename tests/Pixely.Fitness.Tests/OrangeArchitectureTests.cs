@@ -103,13 +103,20 @@ public sealed class OrangeArchitectureTests
     [Test]
     public void ViewModelTakenByTwoSystemsIsAViolation()
     {
-        Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(Model).FullName}: 2 systems take it (HealthSystem, SecondModelSystem); one system writes each view model"));
+        Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(Model).FullName}: 2 systems or updatables take it (HealthSystem, SecondModelSystem); one of them writes each view model"));
     }
 
     [Test]
     public void ViewModelTakenThroughAnInterfaceNotExtendingIUiViewModelIsCounted()
     {
-        Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(ShownModel).FullName}: 2 systems take it (ShownSystem, ShownModelSystem); one system writes each view model"));
+        Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(ShownModel).FullName}: 2 systems or updatables take it (ShownSystem, ShownModelSystem); one of them writes each view model"));
+    }
+
+    // A view model of state outside the world is written by an updatable, so an updatable counts as a writer.
+    [Test]
+    public void ViewModelTakenByASystemAndAnUpdatableIsAViolation()
+    {
+        Assert.That(OrangeArchitecture.ViewModelsHaveOneWriter(Options), Has.One.EqualTo($"{typeof(SharedModel).FullName}: 2 systems or updatables take it (SharedModelSystem, SharedModelUpdatable); one of them writes each view model"));
     }
 
     [Test]
@@ -119,6 +126,7 @@ public sealed class OrangeArchitectureTests
 
         Assert.That(violations, Has.None.Contains(typeof(OtherModel).FullName!));
         Assert.That(violations, Has.None.Contains(typeof(UnwrittenModel).FullName!));
+        Assert.That(violations, Has.None.Contains(typeof(SettingsModel).FullName!));
     }
 
     [Test]
@@ -209,6 +217,37 @@ public sealed class OrangeArchitectureTests
     private sealed class UnwrittenModel : IUiViewModel
     {
         public event Action? Changed { add { } remove { } }
+    }
+
+    private sealed class SharedModel : IUiViewModel
+    {
+        public event Action? Changed { add { } remove { } }
+    }
+
+    private sealed class SettingsModel : IUiViewModel
+    {
+        public event Action? Changed { add { } remove { } }
+    }
+
+    private sealed class SharedModelSystem(SharedModel viewModel) : ISystem
+    {
+        public void Update()
+        {
+        }
+    }
+
+    private sealed class SharedModelUpdatable(SharedModel viewModel) : IUpdatable
+    {
+        public void Update()
+        {
+        }
+    }
+
+    private sealed class SettingsUpdatable(SettingsModel viewModel) : IUpdatable
+    {
+        public void Update()
+        {
+        }
     }
 
     private interface IShown;

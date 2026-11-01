@@ -106,7 +106,7 @@ Parts of what this document builds on are not final:
   until `UpdateOrders.Maintenance` of the next frame
 - Any code on the main thread MAY write a message, except a view's UI event handler, see UI
 - Messages are not saved. A save captures the world at `UpdateOrders.Maintenance`, so state that
-  must outlive a frame MUST be a component, e.g. a queued order
+  must outlive a frame MUST be a component or a unique, e.g. a queued order
 - Code MUST NOT save directly. It writes an intent, and the saver reads it at
   `UpdateOrders.Maintenance`
 
@@ -120,12 +120,40 @@ Parts of what this document builds on are not final:
 - Pixely dispatches input at the start of the frame, before any updatable runs, so the intents of
   that frame are in place before the first system
 
+## Actors
+
+- An actor is an entity that acts, e.g. the player's character, a non-player participant, or an
+  entity a scripted scenario drives
+- An AI system writes intents like an input system, and MUST NOT apply them. The system that handles
+  an intent validates it whoever wrote it, so the player and an AI follow the same rules
+- A continuous intent is a component on its actor, e.g. `Steering` on the entity that steers. The
+  input system writes it for the player's entity, and an AI system for the others
+- A one-shot intent is a message that names its actor, e.g. `ToggleFlashlight(Entity Actor)`. Its
+  reader reads every message and skips one whose actor is dead or lacks what the intent needs, which
+  a lookup's `Has` tells
+- A scripted scenario is systems. Its progress, e.g. the current step and its timers, MUST be
+  components or a unique, because messages are not saved
+
+## Hidden information
+
+- What a participant perceives is state, which a perception system writes from the true state:
+  components on the observer, e.g. `LastSeen` on a guard, tags on what is perceived, e.g.
+  `Revealed`, or a unique for a grid, e.g. the tiles each participant has explored
+- An AI system MUST read what its actor perceives, not the true state, e.g. the guard's `LastSeen`
+  instead of the player's `Position`
+- Rendering, audio and view models of a participant MUST read what that participant perceives, e.g.
+  a query with `IWith<Revealed>` that draws only revealed enemies
+- With several participants, the perceived state names its participant, e.g. a component that holds
+  which participants have revealed an entity
+- Nothing checks these rules. A query of the true state compiles anywhere, and Pixely.Fitness cannot
+  tell a perceived component from a true one
+
 ## UI
 
 - `Pixely.Ui` keeps its retained element tree and its events. Layout, focus, the caret and an edit in
   progress are UI state, not game state
 - The rules below cover view models that show game state. View models of state outside the world
-  are not settled yet, see the last section
+  follow them too, with an updatable in place of the system, see UI outside the world
 - A view takes exactly one view model. `Pixely ViewsTakeOneViewModel`, a Pixely conventions rule in
   Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
   observe several models, see `docs/ui.md`
@@ -203,6 +231,18 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 - An intent that more than one system reads is a message. The system that writes the view model
   forwards it as one
 
+## UI outside the world
+
+- A view model of state outside the world, e.g. settings, an FPS counter, or a main menu before a
+  world exists, is written by an `IUpdatable`, because no system can write it: a stage without a
+  world has no systems, and state in the root outlives every stage's systems
+- The updatable lives where its state lives: settings in the root, a main menu in its stage
+- It follows the rules of a system that writes a view model: exactly one updatable writes each view
+  model, handles every intent the view model holds, validates it and clears it in the same `Update`,
+  and writes every value its view shows
+- A view model that shows any game state is written by a system. An updatable MUST NOT write a view
+  model that a system writes, and MUST NOT read the world for one it writes
+
 ## Rendering and audio
 
 - Rendering and audio take read-only queries, lookups and uniques in their constructors, registered
@@ -214,13 +254,9 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 
 ## Not settled yet
 
-- Autonomous actors, e.g. a non player participant or a scripted scenario
-- Hidden information and what each participant perceives
 - References between entities, and finding the children of an entity without scanning every entity
 - Iteration order, and the tie-breaks a rule needs where order matters
 - Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
   cleared
 - Whether two views may share one view model, which would run both views' `Sync` on each change and
   merge their intents
-- View models of state outside the world, e.g. settings, an FPS counter, or a main menu before a
-  world exists, and what writes them
