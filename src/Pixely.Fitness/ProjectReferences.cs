@@ -3,7 +3,9 @@ using System.Xml.Linq;
 namespace Pixely.Fitness;
 
 /// <summary>
-/// The project files carry exactly the arrows of the document. Each project sits at src/Foo.{Part}/Foo.{Part}.csproj.
+/// The project files carry the arrows of the document. Each project sits at src/Foo.{Part}/Foo.{Part}.csproj.
+/// Each part references exactly its arrows. Executable composes, so it references at least its arrows and MAY reference
+/// other projects, as AssemblyReferencesMatchTheGraph lets it pull in any package.
 /// </summary>
 internal static class ProjectReferences
 {
@@ -17,17 +19,17 @@ internal static class ProjectReferences
         string[] outputs = new[] { rendering, audio }.OfType<string>().ToArray();
         string[] actors = new[] { ai, scenario }.OfType<string>().ToArray();
         List<string> violations = new List<string>();
-        Check(game);
+        Check(game, exact: true);
         foreach (string part in outputs.Concat(actors))
         {
-            Check(part, game);
+            Check(part, exact: true, game);
         }
 
-        Check("Frontend", outputs.Prepend(game).ToArray());
-        Check("Executable", outputs.Concat(actors).Concat([game, "Frontend"]).ToArray());
+        Check("Frontend", exact: true, outputs.Prepend(game).ToArray());
+        Check("Executable", exact: false, outputs.Concat(actors).Concat([game, "Frontend"]).ToArray());
         return violations;
 
-        void Check(string part, params string[] expectedParts)
+        void Check(string part, bool exact, params string[] expectedParts)
         {
             string path = Path.Combine(repositoryRoot, "src", $"{options.GamePrefix}.{part}", $"{options.GamePrefix}.{part}.csproj");
             string directory = Path.GetDirectoryName(path)!;
@@ -40,9 +42,9 @@ internal static class ProjectReferences
                 .Select(expectedPart => Path.Combine("src", $"{options.GamePrefix}.{expectedPart}", $"{options.GamePrefix}.{expectedPart}.csproj"))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
-            if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
+            if (exact ? !actual.SequenceEqual(expected, StringComparer.Ordinal) : expected.Except(actual, StringComparer.Ordinal).Any())
             {
-                violations.Add($"{options.GamePrefix}.{part}: references [{string.Join(", ", actual)}], expected [{string.Join(", ", expected)}]");
+                violations.Add($"{options.GamePrefix}.{part}: references [{string.Join(", ", actual)}], expected {(exact ? "" : "at least ")}[{string.Join(", ", expected)}]");
             }
         }
     }
