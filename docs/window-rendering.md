@@ -18,6 +18,8 @@ builder
 
 Omitting `UseDefaultRendering` creates no window; `AddWindow` alone creates one without rendering (see below).
 
+`new WindowConfig(Utility: true)` creates the window with `SDL_WINDOW_UTILITY`, which SDL describes as a utility window that does not show in the task bar and window list.
+
 Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
 
 ```csharp
@@ -98,7 +100,7 @@ newer Mesa still needs the wait. The diagnostics' `GPU device:` line says whethe
 
 ## The browser
 
-In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and `AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
+In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless`, `AlwaysOnTop` and `Utility`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
 
 A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync` calls `IPixelyApp.RunFrame()` once per animation frame instead of `Run()`, which loops over it until it returns false. The generated entry point awaits it for `browser-wasm` (see [Hosting](hosting.md)).
 
