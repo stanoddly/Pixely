@@ -18,7 +18,7 @@ builder
 
 Omitting `UseDefaultRendering` creates no window; `AddWindow` alone creates one without rendering (see below).
 
-`new WindowConfig(Utility: true)` creates the window with `SDL_WINDOW_UTILITY`, which SDL describes as a utility window that does not show in the task bar and window list.
+`new WindowConfig(Utility: true)` creates the window with `SDL_WINDOW_UTILITY`, which SDL describes as a utility window that does not show in the task bar and window list. SDL applies the flag only on Windows and X11. On Wayland and macOS the window stays an ordinary window.
 
 Window renderers use the ordinary `IRenderer<BasicRenderContext>` contract:
 
