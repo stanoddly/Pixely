@@ -24,7 +24,10 @@ public sealed class ProjectReferencesTests
         WriteProject("Peachy.Frontend", "Peachy.Game");
         WriteProject("Peachy.Executable", "Peachy.Game", "Peachy.Frontend");
 
-        Assert.That(ProjectReferences.Violations(_root, new PeachArchitectureOptions("Peachy")), Is.Empty);
+        FitnessReport report = Evaluate();
+
+        Assert.That(report["GameResolvesFromPrefix"].IsFit, Is.True, report.ToString());
+        Assert.That(report["ProjectReferencesMatchTheGraph"].IsFit, Is.True, report.ToString());
     }
 
     [Test]
@@ -35,7 +38,9 @@ public sealed class ProjectReferencesTests
         WriteProject("Peachy.Executable", "Peachy.Game", "Peachy.Frontend", "DesktopOverlay");
         WriteProject("DesktopOverlay");
 
-        Assert.That(ProjectReferences.Violations(_root, new PeachArchitectureOptions("Peachy")), Is.Empty);
+        FitnessReport report = Evaluate();
+
+        Assert.That(report["ProjectReferencesMatchTheGraph"].IsFit, Is.True, report.ToString());
     }
 
     [Test]
@@ -46,7 +51,7 @@ public sealed class ProjectReferencesTests
         WriteProject("Peachy.Executable", "Peachy.Game", "DesktopOverlay");
         WriteProject("DesktopOverlay");
 
-        IReadOnlyList<string> violations = ProjectReferences.Violations(_root, new PeachArchitectureOptions("Peachy"));
+        IReadOnlyList<string> violations = Evaluate()["ProjectReferencesMatchTheGraph"].Violations;
 
         Assert.That(violations, Has.Count.EqualTo(1));
         Assert.That(violations[0], Does.StartWith("Peachy.Executable:").And.Contains("expected at least"));
@@ -60,10 +65,39 @@ public sealed class ProjectReferencesTests
         WriteProject("Peachy.Executable", "Peachy.Game", "Peachy.Frontend");
         WriteProject("DesktopOverlay");
 
-        IReadOnlyList<string> violations = ProjectReferences.Violations(_root, new PeachArchitectureOptions("Peachy"));
+        IReadOnlyList<string> violations = Evaluate()["ProjectReferencesMatchTheGraph"].Violations;
 
         Assert.That(violations, Has.Count.EqualTo(1));
         Assert.That(violations[0], Does.StartWith("Peachy.Frontend:"));
+    }
+
+    [Test]
+    public void RepositoryRootWithoutTheGameProjectIsAViolation()
+    {
+        FitnessReport report = Evaluate();
+
+        Assert.That(report["GameResolvesFromPrefix"].Violations, Is.EqualTo(new[] { $"repository root has no src/Peachy.Game/Peachy.Game.csproj: {_root}" }));
+        Assert.That(report["ProjectReferencesMatchTheGraph"].IsFit, Is.True, report.ToString());
+    }
+
+    [Test]
+    public void CopyWithAnotherRepositoryRootResolvesAgain()
+    {
+        WriteProject("Peachy.Game");
+        WriteProject("Peachy.Frontend", "Peachy.Game", "DesktopOverlay");
+        WriteProject("Peachy.Executable", "Peachy.Game", "Peachy.Frontend");
+        WriteProject("DesktopOverlay");
+        PeachArchitectureOptions options = new PeachArchitectureOptions("Peachy");
+        PeachArchitecture.Evaluate(options);
+
+        FitnessReport report = PeachArchitecture.Evaluate(options with { RepositoryRoot = _root });
+
+        Assert.That(report["ProjectReferencesMatchTheGraph"].IsFit, Is.False, report.ToString());
+    }
+
+    private FitnessReport Evaluate()
+    {
+        return PeachArchitecture.Evaluate(new PeachArchitectureOptions("Peachy") { RepositoryRoot = _root });
     }
 
     private void WriteProject(string name, params string[] references)
