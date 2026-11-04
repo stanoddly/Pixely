@@ -14,6 +14,8 @@ namespace Pixely.Messages;
 /// </remarks>
 public sealed class Messages<TMessage> : IUpdatable
 {
+    // Two frames, as in Bevy, instead of a log trimmed behind its slowest reader. Every updatable runs once per frame and a reader reads at the same
+    // point in every frame, so none falls behind, and a reader needs no registration, name or Dispose.
     private List<TMessage> _previous = new List<TMessage>();
     private List<TMessage> _current = new List<TMessage>();
 

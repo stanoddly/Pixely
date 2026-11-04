@@ -7,8 +7,7 @@ using Pixely.Ui;
 namespace Pixely.Fitness;
 
 /// <summary>
-/// The fitness functions of the Orange architecture, see docs/orange-architecture.md. They check types and constructors only, because the
-/// architecture has not settled a project layout.
+/// The fitness functions of the Orange architecture, see docs/orange-architecture.md. They check types and constructors only.
 /// </summary>
 public static class OrangeArchitecture
 {

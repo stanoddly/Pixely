@@ -4,6 +4,7 @@ namespace Pixely.Ecs;
 
 // The world's unique T for a system, which reads and writes it only during its Update. T is a class, so a system that keeps Value past Update can still
 // write it, which nothing checks.
+// Named after Shipyard's uniques, because Singleton is the DI lifetime and Resource a GPU binding in Pixely.
 public sealed class Unique<T> : IUpdateScoped where T : class
 {
     private readonly T _value;

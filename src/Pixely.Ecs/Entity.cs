@@ -1,5 +1,7 @@
 namespace Pixely.Ecs;
 
+// An index and a version, 8 bytes, without a world id: one made Entity 12 bytes and cost 2 to 8% on creation and structural changes. So an entity of
+// another world is not detected, and when this world has an entity with the same index and version, a call acts on that entity.
 public readonly struct Entity : IEquatable<Entity>
 {
     internal Entity(int index, int version)

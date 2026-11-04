@@ -5,6 +5,8 @@ namespace Pixely.Ecs;
 // Updates its systems in the order their IAfter<...> and IBefore<...> declare, and otherwise in the order of their order numbers, which follow the AddSystem
 // and Add calls. It applies their structural changes at sync points.
 // A sync point runs before a system that names a component an earlier system changed since the last one, and after the last system.
+// This follows Flecs. Bevy places one after every system with writers that a later system is ordered after, whether or not the later one reads what
+// they change.
 public sealed class SystemScheduler : IUpdatable
 {
     private sealed class SystemEntry

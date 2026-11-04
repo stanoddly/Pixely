@@ -80,6 +80,8 @@ internal sealed class SpawnerDescription : IFilterDescription
 
 // Creates entities with the components of its type arguments and the tags of its IWith<...> at the next sync point, directly in their archetype.
 // A system takes a spawner in its constructor, and the SystemBuilder creates one for the system, so a spawner class needs a public parameterless constructor.
+// A class on Spawner<...>, like a query, instead of a [Blueprint] struct: the generic base knows its component types, so a spawner needs no partial and
+// no generated code, and a game's factory methods live on its spawner class.
 public abstract class Spawner : IRecordedCommands, IRoomRequest
 {
     private readonly ChunkedList<Entity> _entities = new ChunkedList<Entity>();

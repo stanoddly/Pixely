@@ -331,8 +331,8 @@ internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 Writers record their changes, and the scheduler applies them at sync points:
 
 - After the last system of every update.
-- Before a system whose queries name a component that an earlier system changed since the last sync point. A query names the components of its spans, optional ones included, `IWith<...>` and `IWithout<...>`. A spawner changes every component it spawns, tags included.
-- Before any system with a query, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component.
+- Before a system whose queries or lookups name a component that an earlier system changed since the last sync point. A query names the components of its spans, optional ones included, `IWith<...>` and `IWithout<...>`. A lookup names the components of its type arguments. A spawner changes every component it spawns, tags included.
+- Before any system with a query or a lookup, after a system with an `EntityDestroyer` ran since the last sync point, because a destroy changes every component.
 
 At a sync point, the changes apply in system order, and within a system in the order they were recorded. A change to an entity that is no longer alive is skipped, because an earlier change may have destroyed it. `ComponentAdder<T>` replaces `T` when the entity has it by then, and `ComponentRemover<T>` skips an entity without `T`.
 

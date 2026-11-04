@@ -84,7 +84,7 @@ public class SystemGenerator : IIncrementalGenerator
     // is always called.
     private static bool IsMethodGroupCandidate(SyntaxNode node)
     {
-        if (node.Parent is MemberBindingExpressionSyntax || (node.Parent is MemberAccessExpressionSyntax { Name: var accessedName } && accessedName == node))
+        if (node.Parent is MemberBindingExpressionSyntax || (node.Parent is MemberAccessExpressionSyntax { Name: SimpleNameSyntax accessedName } && accessedName == node))
         {
             return false;
         }

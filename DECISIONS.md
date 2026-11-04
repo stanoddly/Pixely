@@ -2,57 +2,6 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-11-01: Peach and Orange are two architectures, and Pixely.Observations ships beside Pixely.Messages
-
-The Peach architecture, its Fitness rules and Pixely.Observations come back, after the Orange architecture and Pixely.Messages replaced them on 2026-10-30. A game follows one architecture. Peach uses Pixely.Observations, and Orange uses Pixely.Messages.
-
-- Peach is kept for the games it suits until the owner decides otherwise. No criterion for which games suit which is settled, so each document names the other without one.
-
-Cost: the package ships two message libraries, and Pixely.Fitness references both.
-
-## 2026-11-01: Orange settles actors, hidden information and view models of state outside the world
-
-`docs/orange-architecture.md` gains three sections. Actors: an AI system writes intents like an input system and does not apply them; a continuous intent is a component on its actor, and a one-shot intent is a message that names its actor. Hidden information: a perception system writes what each participant perceives, and AI, rendering, audio and view models read that instead of the true state. UI outside the world: an updatable writes a view model of state outside the world, under the rules for a system that writes one, and `Orange ViewModelsHaveOneWriter` counts updatables as writers.
-
-- One system validates an intent whoever wrote it, so the player and an AI follow the same rules. Bevy's input crates do the same, with an `ActionState` component that the input or an AI fills on each actor.
-- A reader of messages is one system that handles every entity, so a reader per target would not filter anything. A message that names its actor needs no new type.
-- In ECS, perception is state like any other: Bevy filters what a camera draws by components such as `RenderLayers`, and AI reads what it has seen.
-- A main menu stage calls no `AddEcs`, so it has no systems, and settings in the root outlive every stage's systems. An updatable is what remains.
-
-Cost: nothing checks that AI, rendering and audio read perceived state; a query of the true state compiles anywhere. An updatable that writes a view model and also reads the world is not detected.
-
-## 2026-11-01: State that is not one entity's is a unique of the world, with a read-only type
-
-`AddUnique<T, TReadOnly>(instance)` adds one instance of a class, such as terrain, to the world of the collection that called `AddEcs`. A system takes `Unique<T>` to write it or `ReadOnlyUnique<TReadOnly>` to read it, and code outside systems takes the `ReadOnlyUnique<TReadOnly>` that `AddUnique` registers. Neither `T` nor `TReadOnly` is registered as a service (`docs/ecs.md`).
-
-- Terrain is not entities. Minecraft Bedrock, as its save format and EnTT's list of users show, keeps its mobs in EnTT and its blocks in palette-compressed subchunks: neighbors are read by coordinate, and every tile has the same schema, so archetypes add nothing and an 8-byte entity handle costs more than the tile.
-- Keeping it in the world keeps the world the one state root, so a future save captures it with the entities, and the stage's lifetime covers it.
-- A unique holds references, which `Orange ComponentsHoldNoReferences` forbids in components. Bevy's `Res<T>` is read-only all the way down through Rust's borrow checker, while C# has none, so the read-only side is a type the game writes, such as `IReadOnlyTerrain`. `AddUnique` refuses the class as its own read-only type.
-- The name follows Shipyard's uniques. `Singleton` is the DI lifetime, `Resource` means a GPU binding in Pixely's shader docs, and `Context` is taken by render contexts.
-
-Cost: the read-only type guards only what its members expose, and nothing checks that they return no array or list. A system that keeps `Value` past `Update` can still write it. A unique places no sync point, and the world does not dispose it. Without dependency injection a world has no uniques.
-
-## 2026-10-31: An Orange game is one project, and one internal AddGame registers its stage
-
-An Orange game is one project, `src/Foo/Foo.csproj`, with the namespaces `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels`, `Foo.Systems`, `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Types are internal, except `Program` and `Configure`, which tests call. One internal `AddGame` registers the stage the game is played in, views and renderers included. Peach had seven projects, from `Game` to `Executable`, and split `Game` from `Frontend`.
-
-- Peach needed projects to keep code outside `Game` from writing State. In Pixely.Ecs only a system's writers, spawners and lookups write the world, so a project boundary adds nothing there.
-- Systems are internal, and `IAfter<...>` and `IBefore<...>` name system types. Across projects a system could not name an internal system of another, so every system lives in one assembly.
-- A test builds the whole app with `TestApp.CreateBuilder()` and the game's `Configure`, on the stub GPU device and synthetic input, so nothing needs the game composed without its views and renderers.
-- The constructor rules keep the game apart from how it is shown: a view reads only its view model, and code outside systems reads the world through read-only queries and lookups.
-
-Cost: nothing stops a system from naming a view or a renderer. Salvagery, on the Peach layout, merges four projects into one to follow this.
-
-## 2026-10-31: A stage that calls AddEcs owns its World, and a child of a collection with a world cannot call AddEcs
-
-`AddEcs` registers a new `World` and `SystemScheduler` in the collection it is called on. They live as long as that collection's provider, so unloading or reloading a stage drops its entities. Calling `AddEcs` on a child of a collection that already has a world throws. Before, a child that called `AddEcs` kept its parent's world, so the entities of a stage outlived it.
-
-- `StageManager` already disposes the whole stage provider on every load and reload, so the world only had to be registered in the stage.
-- Reloading a stage, such as loading a save, starts from an empty world, and the messages registered in the stage are dropped with it.
-- Throwing instead of giving the child a second world keeps one world per provider chain. With two, code registered with `AddQuery` in the root would read the root's world while the stage's systems wrote the stage's.
-
-Cost: a game whose world lives in a stage has no systems in the root, so its input systems are added by the stage too. State that must survive a stage transition has to be passed outside the world. A child collection that adds systems without calling `AddEcs` still adds them to its parent's world, and the entities they spawn outlive it.
-
 ## 2026-10-30: A game's tests build the game's app from a test builder
 
 `TestApp.CreateBuilder()` in `Pixely.Testing` returns a `PixelyAppBuilder` with the test environment registered, and a test passes it to the game's own `Configure`, which the game makes public (`docs/testing.md`). The app runs on the stub GPU device and SDL's dummy video and audio drivers, is isolated from the machine's gamepads and theme, steps game time by 1/30 s per frame, and takes synthetic input through `TestInput`.
@@ -76,17 +25,6 @@ Headless mode moved from Pixely into `Pixely.Headless`: the synthetic input, its
 
 Cost: a hosted app's Release build and an app with its own `Main` that does not call `AddHeadlessSupport()` ignore `PIXELY_HEADLESS`. `Pixely.Headless` is built for the desktop and copied into the browser folder of the package, where it cannot load; the browser's generated `Main` does not call it, and the assembly is marked unsupported in the browser.
 
-## 2026-10-30: Pixely.Messages keeps two frames of messages, as Bevy does, instead of a log trimmed behind its slowest reader
-
-`Pixely.Observations` becomes `Pixely.Messages`. `Messages<T>` holds the messages of the current and the previous frame and drops the older ones on each update. A `MessageReader<T>` is a transient service whose position is a count of messages, so each consumer that takes one reads on its own. This replaces `ObservationLog<T>` with its named readers, maximum capacity, stall detection and `ObservationSnapshot<T>`.
-
-- Pixely runs every updatable once per frame, and in the Orange architecture systems and updatables read at the same point in every frame, so none falls behind. The log's support for readers several frames behind had no user.
-- The names follow Bevy 0.17, which split its events into messages that systems read later and events that observers receive at once. "Observation" would suggest Bevy's observers.
-- A save captures the world at `UpdateOrders.Maintenance`, and state that must outlive a frame is a component, so messages need no snapshot.
-- A reader no longer registers with the storage, so it needs no name and no `Dispose`.
-
-Cost: a reader that misses messages loses them. That happens when it skips a frame, when it moves its read across Maintenance, or when it reads in a renderer, which Pixely skips while a window is minimized. Its next read throws instead of the writer, and the exception names the message type but not the reader. Messages written in the frame of a save, after one of their readers ran, are not saved. Nothing clears `Messages<T>` on a load.
-
 ## 2026-10-29: The GPU types are abstract, and a stub device backs a game's renderer tests
 
 `GpuDevice`, `CommandBuffer`, `RenderPass`, `ComputePass` and the internal `CopyPass` are abstract. Their public methods stay non-virtual and keep the validation; each calls an internal abstract core. `SdlGpuDevice`, `SdlCommandBuffer`, `SdlRenderPass`, `SdlComputePass` and `SdlCopyPass` hold the SDL GPU calls. `StubGpuDevice` and its command buffer and passes in the new `Pixely.Testing` record what reaches them instead, for a game's tests (`docs/testing.md`).
@@ -101,58 +39,6 @@ Cost: a reader that misses messages loses them. That happens when it skips a fra
 - `UseGpu` keeps its rule that a registered device means the block is present; the stub is registered before it, with the same services, through the internal `GpuExtensions.AddGpuServices`. SDL's dummy video driver is picked through the internal `PixelyConfig.SdlVideoDriver`, which the factory sets just before `SDL_Init` and `SDL_Quit` clears, so the choice lasts as long as the app.
 
 Cost: each GPU call goes through one virtual call, which the JIT's dynamic PGO turns into a guarded direct call where only the SDL subclass is seen; Mono AOT keeps the virtual call. Code outside the SDL subclasses that needs an SDL object, the swapchain window and window creation, casts to the SDL type. `SDL_BeginGPURenderPass` and `SDL_BeginGPUComputePass` returning no pass now throw instead of handing out a pass that throws `ObjectDisposedException` on first use, so `RenderPass.IsDefault()`, which reported such a pass, is removed. The stub runs no shader and has no SDL validation, so GPU behavior still has no automated tests. `Pixely.Testing` is built for the desktop and copied into the browser folder of the package, where it cannot load; the assembly is marked unsupported in the browser.
-
-## 2026-10-25: Pixely.Ecs spawners are classes on Spawner<...>, like queries, instead of [Blueprint] structs
-
-A spawner derives from `Spawner<T1, ..., T8>`, or is written inline as one, like a query on `Query<...>`. `Spawn` takes one value for each type argument, and the tags of the class's `IWith<...>` come without values. A system takes the spawner in its constructor. This supersedes the `[Blueprint]` structs and `Spawner<TBlueprint>` of the 2026-10-23 entry.
-
-- A blueprint needed `partial` and a generator, because C# implements an interface only inside the type. The generic base already knows its component types, so spawners need no generated code, and the blueprint generator and its diagnostics are gone.
-- Games create entities through factory methods, as Bevy does with functions that return a bundle. A spawner class holds its factory methods, which call `Spawn`.
-- Tags go in `IWith<...>`, as in queries, because a generic `Spawn` cannot drop the parameter of a tag.
-
-Cost: `Spawn` takes up to 8 positional arguments, told apart only by their types. A spawner spawns at least one component with data, so an entity with only tags is created with `Create` and `Add`.
-
-## 2026-10-25: Pixely.Ecs archetypes store each component in one array that doubles, with capacity hints for a known size
-
-Each archetype stores each component that is not a tag in one array, which doubles when full, instead of in chunks of 16 KB. A query reads one span per archetype. `World.EnsureCapacity<TSpawner>` grows a spawner's archetype to a known size, and a spawner's `EnsureRoomFor` makes room for a known number of spawns. This supersedes the chunk storage of the 2026-10-23 entry and the chunk arrays of the table in the 2026-10-24 entry, which now holds each column's array.
-
-- Chunks only help while a column grows: it never copies its rows, and its arrays stay off the large object heap. Their costs apply to every frame. Against chunks, flat columns made `Get` 26 to 27% faster, `UnsafeGet` 30 to 32%, adding and removing a component 21 to 24%, and iteration 3 to 6%.
-- Unity's chunks live in native memory, so its reasons do not carry over to the .NET garbage collector. Flecs and Bevy store flat columns.
-- Growing one archetype to 1,000,000 entities in frames of 2,000 kept the slowest frame of chunks, about 1.5 ms, and cut the total GC pause from about 2.4 ms to 0.3 ms. It allocated 1.6 times as much, with two background gen 2 collections. With `EnsureCapacity`, the slowest frame was about 0.1 ms and the allocation matched chunks.
-- A strategy chosen per world would cost a branch in `Get` or a generic `World<TStorage>` throughout the API. A capacity hint gets the one benefit of chunks without either.
-
-Cost: growing without a hint copies the rows and leaves the old arrays as garbage, and arrays over 85 KB go on the large object heap, so growth from nothing to 100,000 entities triggers gen 2 collections. A column can be up to half empty after doubling, and keeps its size when entities leave. A query can no longer split one archetype into chunks for parallel work; it would split the span instead.
-
-## 2026-10-24: Pixely.Ecs lookups favor speed: an Entity has no world id, and archetypes index column chunks by component id
-
-An `Entity` is an index and a version, 8 bytes. Each archetype keeps the chunk array of each column in a table indexed by component id, which `World.Get<T>` and `UnsafeGet<T>` read through. `UnsafeGet<T>` skips every check of `Get<T>`.
-
-- A world id made `Entity` 12 bytes and cost 2 to 8% on creation and structural changes. Arch 2.1.0 carries one, but its `Get` and `IsAlive` ignore it. `AddEcs` creates one world per app, and child collections reuse it, so only worlds created by hand can mix entities.
-- The table replaces the path through the column index, the `Column<T>` object and its chunk shift. Random access by entity went from 1.06 to 0.79–0.88 of Arch's `Get`, which checks neither the version nor the component, and `UnsafeGet` to 0.72–0.81.
-- An index whose version reaches `int.MaxValue` is retired, because wrapping the version would revive the oldest handles.
-
-Cost: an entity of another world is not detected: when the world has an entity with the same index and version, the call acts on that entity. The table takes 8 bytes per component id, up to the archetype's highest, in every archetype, and the archetype refreshes it whenever it adds a chunk, because a column replaces its chunk array when it grows. A retired index keeps its record forever. Misusing `UnsafeGet` is undefined behavior.
-
-## 2026-10-23: Pixely.Ecs owns its archetype storage, and the queries and writers a system's constructor takes are its contract
-
-`Pixely.Ecs` is an experimental ECS with its own archetype storage on `Pixely.Collections`, not a wrapper over Arch or another ECS library. Queries are classes that derive from `Query<...>`, whose `Span<T>` and `ReadOnlySpan<T>` type arguments `foreach` deconstructs per chunk, filtered by `IWith<...>` and `IWithout<...>`. A system implements `ISystem`. Its constructor takes its contract, which is queries, `ComponentAdder<T>`, `ComponentRemover<T>`, `EntityDestroyer` and `Spawner<TBlueprint>`, and any services. A `SystemScheduler` runs the systems in registration order and applies their structural changes at sync points.
-
-- A wrapper exposes the library's internals: the Meteorics experiment over Arch 1.2.8 depended on `Chunk.Entities`, `GetArray` and the arrays of `QueryDescription`, so it was tied to one Arch version.
-- `ReadOnlySpan<T>` makes read access a compile-time rule, and `foreach` deconstruction names the spans instead of positional members such as `GetColumn1`. The type arguments are the BCL spans themselves, not wrappers such as `Read<T>` and `Write<T>`, so they pass to `TensorPrimitives` unchanged, and indexing them depends on no inlined wrapper, which Mono AOT inlines less readily than RyuJIT.
-- The library cannot get `T` from a span type argument without reflection, so the generator registers every span it sees in a `Query<...>` through a module initializer. A system needs the generator anyway, and the query class needs no `partial`, unlike the `[Query]` structs this replaced.
-- `IWith<...>` and `IWithout<...>` describe their filters through default members that are `internal`, so only Pixely.Ecs implements them and the library reads them without reflection.
-- The contract in the constructor states what a system reads and which structural changes it makes, for reviews and for a parallel scheduler later. Typed writers make the changes as exact as the reads; Bevy's `Commands` can make any change.
-- Queries and writers reach the system through its constructor, like services. A writer records only while the scheduler runs its system's `Update`, so one used in the constructor or kept for an event handler throws. Passing them to `Update` instead protected nothing more, because a system could still keep them, and every contract type was written twice, in `ISystem<...>` and in `Update`.
-- Pixely's DI resolves each parameter by its exact type and has no open-generic registration, so the generator intercepts `AddSystem<T>()` and creates the queries and writers itself instead of registering every closed type. `SystemScheduler.Add` takes a function that creates the system through a `SystemBuilder`, so it needs no generated code.
-- Systems have no `UpdateOrder`: their order is their registration order, so the order of their changes at a sync point is the order they run in, without a writer knowing its system.
-- Sync points follow Flecs: one after the last system, and one before a system that names a component changed since the last sync point. Bevy inserts one between explicitly ordered systems, and with every system ordered by registration that would be a sync point after every system with a writer.
-- Structural changes on the world throw while a query runs, so spans never point at moved rows. `Create` stays allowed, because every query requires a component and a new entity has none.
-
-Archetypes store rows in chunks of a power of two of rows, at least 64, so a full chunk is a whole number of SIMD vectors and an archetype grows without copying or reaching the large object heap.
-
-Tags implement `ITag` and get no column. Spotting empty structs instead needs reflection on each component type, which Native AOT may strip unless every generic component parameter is annotated, and a wrong answer would drop component data silently. `default(T) is ITag` needs no reflection, and PXECS013 rejects a tag that holds data.
-
-Cost: an archetype with one entity still has a whole chunk of up to 16 KB. A tag must opt in with `ITag`; an empty struct without it takes one byte per row. An `EntityDestroyer` forces a sync point before every later system with a query. A system that needs `Get<T>` injects `World`, which its contract does not show. The constructor mixes the contract with services, which only their types tell apart. A query is a class that renderers share, so a system can enumerate it in its constructor or keep it past `Update`; only writers and lookups are checked. Each span of a chunk comes from a registered delegate, one call per span per chunk. A query of one span has no deconstruction in C#, and code that only counts rows names the whole `Columns<...>` type. Pixely.Fitness and the Peach architecture still expect Systems to be `IUpdatable`. It was not packaged at first, so games referenced the projects from source; it ships in the Pixely package since 2026-10-30.
 
 ## 2026-10-20: Color is sRGB in images and windows and linear in shaders, with no opt-in
 
