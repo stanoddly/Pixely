@@ -1,3 +1,5 @@
+using SDL;
+
 namespace Pixely.Tests;
 
 public sealed class WindowConfigTests
@@ -25,6 +27,19 @@ public sealed class WindowConfigTests
         {
             Assert.That(config.InitiallyVisible, Is.False);
             Assert.That(config.CloseBehavior, Is.EqualTo(WindowCloseBehavior.HideWindow));
+        });
+    }
+
+    [Test]
+    public void Utility_SetsTheSdlFlagOnlyWhenRequested()
+    {
+        (uint _, uint _, SDL_WindowFlags defaultFlags) = PixelyFactory.GetWindowCreationParameters(new WindowConfig());
+        (uint _, uint _, SDL_WindowFlags utilityFlags) = PixelyFactory.GetWindowCreationParameters(new WindowConfig(Utility: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(defaultFlags & SDL_WindowFlags.SDL_WINDOW_UTILITY, Is.EqualTo((SDL_WindowFlags)0));
+            Assert.That(utilityFlags & SDL_WindowFlags.SDL_WINDOW_UTILITY, Is.EqualTo(SDL_WindowFlags.SDL_WINDOW_UTILITY));
         });
     }
 }

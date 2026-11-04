@@ -118,6 +118,11 @@ public partial class PixelyFactory
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
         }
 
+        if (config.Utility)
+        {
+            windowFlags |= SDL_WindowFlags.SDL_WINDOW_UTILITY;
+        }
+
         return (width, height, windowFlags);
     }
 }
