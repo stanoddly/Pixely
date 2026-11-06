@@ -4,6 +4,8 @@
 nothing is called back. A reader holds its own position, reads when it suits its own point in the frame, and
 the log drops an entry once every reader has passed it.
 
+The [Peach architecture](peach-architecture.md) uses `Pixely.Observations`. The [Orange architecture](orange-architecture.md) uses [`Pixely.Messages`](messages.md).
+
 Use it for a transition that two reads of game state one frame apart cannot derive: a unit that walked a path
 and arrived, one that appeared and was gone again, an action that resolved and was reversed inside the same
 frame. State answers what is true now, and a rule can resolve many transitions between two reads, so any

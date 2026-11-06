@@ -44,7 +44,7 @@ public static class PixelyConventions
 
     public static IReadOnlyList<string> RenderersTakeNoBuilders(PixelyConventionsOptions options)
     {
-        return Classes(options).Where(type => Implements(type, typeof(IRenderer<>)))
+        return Classes(options).Where(type => TypeGraph.Implements(type, typeof(IRenderer<>)))
             .SelectMany(TypeGraph.Constructors)
             .SelectMany(constructor => constructor.GetParameters().Where(parameter => BuilderTypes.Contains(parameter.ParameterType))
                 .Select(parameter => $"{TypeGraph.Describe(constructor.DeclaringType!)}: constructor takes {parameter.ParameterType.Name}; build in Create and pass the result"))
@@ -155,7 +155,7 @@ public static class PixelyConventions
             .SelectMany(registration => new[] { registration.ServiceType, registration.ConcreteType }.OfType<Type>())
             .ToHashSet();
         violations.AddRange(Classes(options)
-            .Where(type => !type.IsGenericTypeDefinition && FrameParticipantTypes.Any(participant => Implements(type, participant)) && !registered.Contains(type))
+            .Where(type => !type.IsGenericTypeDefinition && FrameParticipantTypes.Any(participant => TypeGraph.Implements(type, participant)) && !registered.Contains(type))
             .Select(type => $"{type.FullName}: no registrar registers it; register it in an Add* or Use* registrar, or drop the interface"));
         return violations;
     }
@@ -163,11 +163,6 @@ public static class PixelyConventions
     private static IEnumerable<Type> Classes(PixelyConventionsOptions options)
     {
         return options.Assemblies.SelectMany(TypeGraph.DeclaredTypes).Where(type => type.IsClass && !type.IsAbstract);
-    }
-
-    private static bool Implements(Type type, Type interfaceType)
-    {
-        return type.GetInterfaces().Any(candidate => candidate == interfaceType || candidate.IsGenericType && candidate.GetGenericTypeDefinition() == interfaceType);
     }
 
     private static bool IsOwnedGpuType(Type type)

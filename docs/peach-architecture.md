@@ -1,5 +1,6 @@
 # Peach Architecture
 
+- Pixely has two architectures, Peach and [Orange](orange-architecture.md). A game follows one
 - Architecture for any genre, e.g. RTS, 4X, turn based, Vampire Survivors
 - The framework is Pixely. What Pixely provides is listed below, this document adds only what a game
   does with it
@@ -85,7 +86,8 @@ Executable          ──> everything above
 - There MUST be one state root per stage. It is the one `State` class no other `State` type holds.
   It SHOULD be handed to its readers through the constructor. The stage registers the root and no
   other `State` type
-- Storage MAY be ECS or not, depends on the game needs
+- Storage MAY be ECS or not, depends on the game needs. Systems MUST be `IUpdatable`, and a
+  `Pixely.Ecs` system cannot be one, so Pixely.Ecs systems do not fit `Foo.Game.Systems`
 - Mutation MUST be `internal`, so nothing outside `Game` writes State. `Mechanics` and `Systems`
   write it. A public property MUST NOT have a setter, a public collection MUST be an
   `IReadOnlyList<T>`, an `IReadOnlyDictionary<TKey, TValue>` or a `ReadOnlySpan<T>`

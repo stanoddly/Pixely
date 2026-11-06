@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Pixely.Ecs.Benchmarks/Pixely.Ecs.Benchmarks.csproj" />
     <Project Path="benchmarks/Pixely.PathFinding.Benchmarks/Pixely.PathFinding.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/packaging/">
@@ -11,6 +12,7 @@
     <Project Path="src/Pixely.Audio/Pixely.Audio.csproj" />
     <Project Path="src/Pixely.Collections/Pixely.Collections.csproj" />
     <Project Path="src/Pixely.Core/Pixely.Core.csproj" />
+    <Project Path="src/Pixely.Messages/Pixely.Messages.csproj" />
     <Project Path="src/Pixely.Observations/Pixely.Observations.csproj" />
     <Project Path="src/Pixely.SdlangCompiler/Pixely.SdlangCompiler.csproj" />
     <Project Path="src/Pixely.ShaderCommon/Pixely.ShaderCommon.csproj" />
@@ -21,6 +23,8 @@
     <Project Path="src/Pixely/Pixely.csproj" />
     <Project Path="src/Pixely.Logging/Pixely.Logging.csproj" />
     <Project Path="src/Pixely.Models/Pixely.Models.csproj" />
+    <Project Path="src/Pixely.Ecs/Pixely.Ecs.csproj" />
+    <Project Path="src/Pixely.Ecs.Generator/Pixely.Ecs.Generator.csproj" />
     <Project Path="src/Pixely.Headless/Pixely.Headless.csproj" />
     <Project Path="src/Pixely.Testing/Pixely.Testing.csproj" />
   </Folder>
@@ -28,6 +32,7 @@
     <Project Path="tests/Pixely.Fitness.Tests/Pixely.Fitness.Tests.csproj" />
     <Project Path="tests/Pixely.PathFinding.Tests/Pixely.PathFinding.Tests.csproj" />
     <Project Path="tests/Pixely.Collections.Tests/Pixely.Collections.Tests.csproj" />
+    <Project Path="tests/Pixely.Messages.Tests/Pixely.Messages.Tests.csproj" />
     <Project Path="tests/Pixely.Observations.Tests/Pixely.Observations.Tests.csproj" />
     <Project Path="tests/Pixely.Content.Tests/Pixely.Content.Tests.csproj" />
     <Project Path="tests/Pixely.SdlangBuildIntegration.Tests/Pixely.SdlangBuildIntegration.Tests.csproj" />
@@ -40,6 +45,8 @@
     <Project Path="tests/Pixely.Package.Tests/Pixely.Package.Tests.csproj" />
     <Project Path="tests/Pixely.Testing.Tests/Pixely.Testing.Tests.csproj" />
     <Project Path="tests/Pixely.Tests/Pixely.Tests.csproj" />
+    <Project Path="tests/Pixely.Ecs.Tests/Pixely.Ecs.Tests.csproj" />
+    <Project Path="tests/Pixely.Ecs.Generator.Tests/Pixely.Ecs.Generator.Tests.csproj" />
   </Folder>
   <Folder Name="/tutorials/">
     <Project Path="tutorials/Pixely.Tutorials.TaskbarIcon/Pixely.Tutorials.TaskbarIcon.csproj" />

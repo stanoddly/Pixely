@@ -1,0 +1,71 @@
+using System.Diagnostics.CodeAnalysis;
+
+namespace Pixely.Ecs;
+
+// Reads and writes T of a given entity. Structural changes wait for the sync point, so a reference stays valid until the system's Update returns.
+public sealed class ComponentLookup<T> : IUpdateScoped where T : struct
+{
+    // Set only while the system's Update runs, so the check that it runs is a null test of the world each access loads anyway.
+    private World? _world;
+
+    internal ComponentLookup(CommandBuffer commands)
+    {
+        commands.AddUpdateScoped(this);
+    }
+
+    // False for an entity that is not alive, unlike World.Has, so it guards the indexer for an entity that may have been destroyed.
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).IsAliveWith<T>(entity);
+
+    // Throws for an entity that is not alive, such as one spawned in this update, or one without T. For a tag it is one value that all entities share.
+    public ref T this[Entity entity] => ref (_world ?? Lookup.ThrowOutsideUpdate()).Get<T>(entity);
+
+    // The indexer without its checks, for lookups in hot loops, with the undefined behavior of World.UnsafeGet. Outside Update it throws NullReferenceException.
+    public ref T UnsafeGet(Entity entity) => ref _world!.UnsafeGet<T>(entity);
+
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
+}
+
+// Reads T of a given entity. A system's lookup reads only during its Update, while structural changes wait for the sync point, so a reference stays
+// valid until Update returns. One that AddReadOnlyComponentLookup registers for code outside systems reads at any time, and a reference stays valid
+// until the systems next update.
+public sealed class ReadOnlyComponentLookup<T> : IUpdateScoped where T : struct
+{
+    // A system's lookup has it only while the system's Update runs, so the check that it runs is a null test of the world each access loads anyway.
+    private World? _world;
+
+    internal ReadOnlyComponentLookup(CommandBuffer commands)
+    {
+        commands.AddUpdateScoped(this);
+    }
+
+    internal ReadOnlyComponentLookup(World world)
+    {
+        _world = world;
+    }
+
+    // False for an entity that is not alive, unlike World.Has, so it guards the indexer for an entity that may have been destroyed.
+    public bool Has(Entity entity) => (_world ?? Lookup.ThrowOutsideUpdate()).IsAliveWith<T>(entity);
+
+    // Throws for an entity that is not alive, such as one spawned in this update, or one without T. For a tag it is one value that all entities share.
+    public ref readonly T this[Entity entity] => ref (_world ?? Lookup.ThrowOutsideUpdate()).Get<T>(entity);
+
+    // The indexer without its checks, for lookups in hot loops, with the undefined behavior of World.UnsafeGet. A system's lookup outside its Update throws
+    // NullReferenceException.
+    public ref readonly T UnsafeGet(Entity entity) => ref _world!.UnsafeGet<T>(entity);
+
+    void IUpdateScoped.SetWorld(World? world) => _world = world;
+}
+
+// A system's lookup or unique gets its world when its system's Update starts and loses it when Update ends, so one kept past Update throws.
+internal interface IUpdateScoped
+{
+    void SetWorld(World? world);
+}
+
+internal static class Lookup
+{
+    public static bool Has<T>(Archetype archetype) where T : struct => archetype.GetColumnIndex(ComponentType<T>.Id) != Archetype.Absent;
+
+    [DoesNotReturn]
+    public static World ThrowOutsideUpdate() => throw new InvalidOperationException("A lookup reads components only during its system's Update.");
+}

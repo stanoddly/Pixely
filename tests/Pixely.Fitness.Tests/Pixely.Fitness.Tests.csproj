@@ -17,7 +17,8 @@
 
     <ItemGroup>
         <Using Include="NUnit.Framework"/>
-        <Compile Remove="Fixture\**\*.cs" />
+        <!-- The Peachy fixture is three projects of its own; the Orangey fixture compiles into this one. -->
+        <Compile Remove="Fixture\Peachy.*\**\*.cs" />
     </ItemGroup>
 
     <ItemGroup>
