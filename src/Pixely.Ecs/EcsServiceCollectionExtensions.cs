@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Pixely.DependencyInjection;
 
@@ -35,7 +36,7 @@ public static partial class EcsServiceCollectionExtensions
 
     // Registers the world's TQuery for code outside systems, such as a renderer or a view, which takes it in its constructor. A query that writes through a
     // Span<T> throws when the provider creates it, which for a singleton is when the provider is built, because only systems write the world.
-    public static void AddQuery<TQuery>(this ServiceCollection services) where TQuery : Query, new()
+    public static void AddQuery<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TQuery>(this ServiceCollection services) where TQuery : Query, new()
     {
         services.AddSingleton<TQuery>(static provider =>
         {
