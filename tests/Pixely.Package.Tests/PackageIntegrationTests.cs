@@ -57,6 +57,7 @@ public class PackageIntegrationTests
         "BrowserLoopConsumer",
         "BrowserContentConsumer",
         "BrowserContentLibrary",
+        "BrowserEcsConsumer",
         "MultiTargetConsumer"
     ];
 
@@ -645,6 +646,35 @@ public class PackageIntegrationTests
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(wwwroot, environment: null), "Frame 3 of 3.", "Loop ended after 3 frames with 0.", "RESULT exit code 40");
         AssertBrowserLoopOutcome(await RunBrowserBundleAsync(wwwroot, environment: new() { ["BROWSER_LOOP_THROWS"] = "1" }), "Frame 2 of 3.", "Caught InvalidOperationException: Frame 3 failed on purpose.", "RESULT exit code 1");
+    }
+
+    // Pixely.Ecs uses generic type arguments that allow ref structs, which Mono runs in its interpreter or through AOT, so both run the fixture.
+    // The AOT case needs the wasm-tools workload, so it skips on the lanes without it.
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BrowserPublishRunsEcsSystems(bool aot)
+    {
+        RequireNode();
+        string consumerDirectory = GetConsumerDirectory("BrowserEcsConsumer");
+        DeleteConsumerOutputs("BrowserEcsConsumer");
+        if (aot)
+        {
+            await RequireWasmToolsAsync(consumerDirectory);
+        }
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: [aot ? "RunAOTCompilation=true" : "RunAOTCompilation=false"]);
+        string result = await RunBrowserBundleAsync(GetPublishedWwwroot(consumerDirectory), environment: null);
+        Assert.Multiple(() =>
+        {
+            // The AOT compiler leaves bitcode of each assembly it compiled, so this tells the two cases apart: the interpreter would run the same lines.
+            Assert.That(File.Exists(Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "wasm", "for-publish", "Pixely.Ecs.dll.bc")), Is.EqualTo(aot));
+            Assert.That(result, Does.Contain("RESULT update 1 kills 0: position 7 health 3 moving True frozen False, position 9 health 1 moving False frozen False"));
+            Assert.That(result, Does.Contain("RESULT update 2 kills 1: position 9 health 3 moving False frozen False"));
+            Assert.That(result, Does.Contain("RESULT update 3 kills 1: position 8 health 2 moving False frozen False"));
+            Assert.That(result, Does.Contain("RESULT update 4 kills 1: position 7 health 1 moving False frozen True"));
+            Assert.That(result, Does.Contain("RESULT update 5 kills 1: position 7 health 1 moving False frozen True"));
+            Assert.That(result, Does.Contain("RESULT exit code 0"));
+        });
     }
 
     // A native reference relinks the runtime (wasm-tools workload) and its file name is the P/Invoke module DllImport binds to.
