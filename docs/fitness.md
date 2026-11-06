@@ -50,13 +50,14 @@ PeachArchitectureOptions options = new PeachArchitectureOptions("Foo")
 
 - `ExtraGameNamespaces` lists namespaces the game adds to `Foo.Game` beyond the ones the document names, each with a justification.
 - `MechanicsTakeStateRootThroughConstructor` is an `init` property that switches off the hardened SHOULD rule. It defaults to true.
+- `RepositoryRoot` is an `init` property for a game whose test output sits outside its repository. It is the directory holding `src/Foo.Game/Foo.Game.csproj`.
 
 From the prefix, `GameResolvesFromPrefix` derives the rest and reports what it could not derive:
 
 - The assemblies, loaded by name: `Foo.Game`, `Foo.Frontend`, `Foo.Frontend.Rendering`, `Foo.Frontend.Audio`, `Foo.Ai`, `Foo.Scenario`, and `Foo.Executable` or `Foo`. The test project must reference the executable project so they sit in its output directory. The optional four are absent when the game has no such project; a missing `Game`, `Frontend` or executable stops the evaluation at `GameResolvesFromPrefix`.
 - The state root: the one class in `Foo.Game.State` no other `State` type holds in a field.
 - The two containers: every registrar in the production assemblies, a public static `Add*` extension method on `PixelyAppBuilder` or `ServiceCollection` in the project's root namespace, is invoked with default arguments on one `PixelyAppBuilder` and one `ServiceCollection`. A registrar that throws on defaults is a violation.
-- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory. With it, `ProjectReferencesMatchTheGraph` checks the `ProjectReference` items of each project and `GameResolvesFromPrefix` reports a loaded part with no `src/Foo.{Part}` directory. Without it, e.g. when the tests run from a package, both checks are skipped.
+- The repository root: the directory above `src/Foo.Game/Foo.Game.csproj`, found by walking up from the test output directory unless `RepositoryRoot` gives it. With it, `ProjectReferencesMatchTheGraph` checks the `ProjectReference` items of each project and `GameResolvesFromPrefix` reports a loaded part with no `src/Foo.{Part}` directory. Each part references exactly its arrows, except the executable: it references at least its arrows and may reference other projects, e.g. a game-agnostic library under `src/`. Without it, e.g. when the tests run from a package, both checks are skipped. A root given by `RepositoryRoot` without `src/Foo.Game/Foo.Game.csproj` is a violation of `GameResolvesFromPrefix`. Both checks are then skipped.
 
 A Peach game takes the assemblies for the Pixely conventions from its resolved options:
 

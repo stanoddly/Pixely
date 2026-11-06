@@ -8,7 +8,7 @@ namespace Pixely.Fitness;
 /// <summary>
 /// What the document lets the rules derive from the prefix alone: the assemblies by their fixed names,
 /// the state root as the one State class nothing else in State holds, the two containers composed by
-/// invoking every registrar with default arguments, and the repository root by the Game project file.
+/// invoking every registrar with default arguments, and the repository root by the Game project file unless the options give it.
 /// What could not be derived is a violation of GameResolvesFromPrefix, and a rule that needs the missing piece skips.
 /// </summary>
 internal sealed class PeachGame
@@ -28,7 +28,19 @@ internal sealed class PeachGame
             violations.Add($"assembly not found: {options.ExecutableNamespace} or {options.GamePrefix}");
         }
 
-        RepositoryRoot = FindRepositoryRoot(options);
+        if (options.RepositoryRoot == null)
+        {
+            RepositoryRoot = FindRepositoryRoot(options);
+        }
+        else if (HoldsGameProject(options, options.RepositoryRoot))
+        {
+            RepositoryRoot = Path.GetFullPath(options.RepositoryRoot);
+        }
+        else
+        {
+            violations.Add($"repository root has no src/{options.GameNamespace}/{options.GameNamespace}.csproj: {options.RepositoryRoot}");
+        }
+
         if (Game != null && Frontend != null && Executable != null)
         {
             StateRoot = FindStateRoot(options, violations);
@@ -172,12 +184,17 @@ internal sealed class PeachGame
     {
         for (DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "src", options.GameNamespace, $"{options.GameNamespace}.csproj")))
+            if (HoldsGameProject(options, directory.FullName))
             {
                 return directory.FullName;
             }
         }
 
         return null;
+    }
+
+    private static bool HoldsGameProject(PeachArchitectureOptions options, string directory)
+    {
+        return File.Exists(Path.Combine(directory, "src", options.GameNamespace, $"{options.GameNamespace}.csproj"));
     }
 }

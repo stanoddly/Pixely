@@ -395,8 +395,8 @@ with its message only. A project that wants another message replaces `main.js`.
 A browser handler can skip it, because the page shows the failure.
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so
-`WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless` and
-`AlwaysOnTop`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as
+`WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless`,
+`AlwaysOnTop` and `Utility`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as
 on the desktop. `UseDefaultContent()` loads `Content.pk3` from the browser's file system when the
 project adds it as a `PixelyBrowserVfsFile` (see [Content distribution](content-distribution.md#browser)).
 File logging is not supported in the browser yet.

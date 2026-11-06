@@ -15,4 +15,5 @@ public sealed record WindowConfig(
     bool Borderless = false,
     bool AlwaysOnTop = false,
     bool InitiallyVisible = true,
-    WindowCloseBehavior CloseBehavior = WindowCloseBehavior.QuitApplication);
+    WindowCloseBehavior CloseBehavior = WindowCloseBehavior.QuitApplication,
+    bool Utility = false);

@@ -56,7 +56,7 @@ public partial class PixelyFactory
 
     private Window CreateWindow(ViewScope viewScope, SdlGpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
-        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowShape(config);
+        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowCreationParameters(config);
         (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
 
         return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
@@ -84,7 +84,7 @@ public partial class PixelyFactory
     }
 
     // The size and flags of a window created as its config says.
-    internal static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowShape(WindowConfig config)
+    internal static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowCreationParameters(WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -116,6 +116,11 @@ public partial class PixelyFactory
         if (!config.InitiallyVisible)
         {
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
+        }
+
+        if (config.Utility)
+        {
+            windowFlags |= SDL_WindowFlags.SDL_WINDOW_UTILITY;
         }
 
         return (width, height, windowFlags);
