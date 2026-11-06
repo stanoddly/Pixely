@@ -126,6 +126,8 @@ A system implements `ISystem`, whose `Update` the scheduler calls once per updat
 | `ComponentLookup<T1, ...>` | Reads and writes the components of its 1 to 8 type arguments of a given entity. |
 | `ReadOnlyComponentLookup<T1, ...>` | Reads the components of its 1 to 8 type arguments of a given entity. |
 | A spawner class or `Spawner<...>` | Creates entities with the components of its type arguments and the tags of its `IWith<...>`. |
+| `Unique<T>` | Reads and writes the world's unique `T`, see [Uniques](#uniques). |
+| `ReadOnlyUnique<TReadOnly>` | Reads a unique of the world through its read-only type, see [Uniques](#uniques). |
 
 Any other constructor parameter is a service from the service provider.
 
