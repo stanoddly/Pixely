@@ -24,6 +24,6 @@ public class TestFrameClock : FrameClock
         TimeDelta64 = (ElapsedNanoseconds - previousElapsedNanoseconds) / 1_000_000_000.0;
         TimeDelta = (float)TimeDelta64;
 
-        FrameNumber = +1;
+        FrameNumber += 1;
     }
 }

@@ -1,6 +1,6 @@
 # Testing a game, its renderers, input and text without devices
 
-`Pixely.Testing` runs a game's own app in its tests ([The game's app](#the-games-app)), and gives them a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. Under [orange-architecture.md](orange-architecture.md) a test of a system alone needs none of this; it is for the renderers, the views and the game's app as a whole. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+`Pixely.Testing` runs a game's own app in its tests ([The game's app](#the-games-app)), and gives them a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. Under [orange-architecture.md](orange-architecture.md) a test of a system alone needs none of this ([Testing a system](#testing-a-system)); it is for the renderers, the views and the game's app as a whole. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ## The game's app
 
@@ -138,3 +138,70 @@ UiRoot root = new() { Style = new UiStyle(font) };
 
 Its sizes are not a real font's. Real glyphs differ in width. SDL_ttf measures a trailing `\n` differently, and in text of several lines it leaves out a `\r` before `\n` and the spaces and tabs at the end of each line.
 
+
+## Testing a system
+
+Under [orange-architecture.md](orange-architecture.md) a test of one system builds a world in a `ServiceCollection`, with no app and none of the stubs above. For a game's `MoveSystem(Movers movers, FrameClock clock)`, which moves each body by its `Velocity` times `TimeDelta`:
+
+```csharp
+// Spawns what the test asks for in its next Update. It sets up state and applies no rule of the game.
+internal sealed class BodySetup(Spawner<Position, Velocity> spawner) : ISystem, IBefore<MoveSystem>
+{
+    private readonly List<(Position, Velocity)> _pending = [];
+
+    public void Add(Position position, Velocity velocity) => _pending.Add((position, velocity));
+
+    public void Update()
+    {
+        foreach ((Position position, Velocity velocity) in _pending)
+        {
+            spawner.Spawn(position, velocity);
+        }
+        _pending.Clear();
+    }
+}
+
+internal sealed class Positions : Query<ReadOnlySpan<Position>>;
+
+internal sealed class MoveSystemTests
+{
+    [Test]
+    public void BodyMovesByItsVelocityOverTheStep()
+    {
+        TestFrameClock clock = new TestFrameClock();
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddSingleton<FrameClock>(clock);
+        services.AddQuery<Positions>();
+        services.AddSystem<BodySetup>();
+        services.AddSystem<MoveSystem>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<BodySetup>().Add(new Position(0), new Velocity(2));
+        clock.StartTestFrame(500);
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        List<float> positions = [];
+        foreach (Columns<ReadOnlySpan<Position>> columns in provider.GetRequiredService<Positions>())
+        {
+            foreach (Position position in columns.Item1)
+            {
+                positions.Add(position.Value);
+            }
+        }
+        Assert.That(positions, Is.EqualTo(new[] { 1f }));
+    }
+}
+```
+
+- The test project is on the Pixely SDK like the game ([sdk.md](sdk.md)), so `AddSystem<T>` and the test's queries get the generator. It reaches the game's internal types through `InternalsVisibleTo`.
+- The test registers what `AddGame` would for this system: `AddEcs`, the uniques, the messages and the services it takes, and the system. Each `SystemScheduler.Update` is one update.
+- A test cannot write components itself. `Unique<T>` has an internal constructor. A writer, a lookup and `Unique<T>.Value` work only during their system's `Update`. A query created with `new` throws when enumerated. So a test sets up state in one of two ways:
+  - A test-only system such as `BodySetup` writes what the test asked for. `IBefore<MoveSystem>` runs it first, and since both name `Position`, a sync point between them gives `MoveSystem` the new entity in the same update. Where the game has a spawner class, the test-only system takes it, so the entity gets the tags the system's query asks for. An entity the query skips lets a test that expects no change pass whatever the system does.
+  - The instance a test passes to `AddUnique<T, TReadOnly>` is the world's unique, so the test keeps it and changes it between updates.
+- A test reads the world between updates through `AddQuery` and `AddReadOnlyComponentLookup`, which read at any time, unlike a system's lookup. `AddQuery` throws for a query with a `Span<T>`, so the test declares its own read-only one, such as `Positions`.
+- A test writes the intents a system reads through `MessageWriter<T>` from the provider, before `Update`. It reads observations through a `MessageReader<T>` taken from the provider before the first `Update`, because a reader starts after the last message written ([messages.md](messages.md)). A reader taken after `Update` finds nothing.
+- `TestFrameClock` is a `FrameClock` that the test advances. `StartTestFrame(500)` sets game time to 500 ms since the start, and `TimeDelta` to the time since the previous call. The test registers it as `FrameClock`, the type a system takes.
+- A helper is a static function ([orange-architecture.md](orange-architecture.md)). A test calls one that takes values or spans directly, for example `Movement.Next(new Position(1), new Velocity(2), 0.5f)`, or on arrays for spans. One that takes a query or a lookup is tested through its system.
+- The fixture is `internal`, because a public test method cannot take an internal type of the game as a parameter, for example from `[TestCaseSource]`. NUnit runs internal fixtures.
+- Test-only code sets up state and reads it, and never applies a rule of the game. A helper that moves bodies itself and asserts where they end up tests its own copy of the rule, so the test passes whatever `MoveSystem` does. Expected values are literals, such as `1f`, and never the result of the game's rule or a copy of it.
