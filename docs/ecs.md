@@ -73,7 +73,7 @@ foreach ((ReadOnlySpan<Entity> entities, Span<Position> positions, ReadOnlySpan<
 
 - A query of one span has no deconstruction in C#. Enumerate `Columns<T>` and read its `Item1`. `Columns<...>.Count` is the number of entities in the archetype.
 - A query without filters needs no class of its own: `Query<ReadOnlySpan<Velocity>>` works wherever a query class does.
-- `Query<...>` takes 1 to 8 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
+- `Query<...>` takes 1 to 16 spans, and `IWith<...>` and `IWithout<...>` take 1 to 8 components. A query implements at most one `IWith<...>` and one `IWithout<...>`; two of a kind give the compiler error CS8705.
 - A query filters on a tag with `IWith<T>` or `IWithout<T>`. A span of a tag is an error, because there is no data to read.
 - The order of archetypes and of entities within them is unspecified. It is the same for the same sequence of changes to the world, so the same inputs yield the same order.
 
@@ -211,6 +211,40 @@ services.AddSystem<MovementSystem>();
 - A system has no `UpdateOrder`, and it must not also implement `IUpdatable`, or it would run twice. PXECS014 reports one that does.
 - A child collection that adds systems without calling `AddEcs` adds them to its parent's world. They leave the scheduler when the child's provider is disposed, but the entities they spawned stay in the parent's world.
 
+### The first entities
+
+A writer works only during `Update`, so a stage cannot spawn its first entities when it builds. A seeding system spawns them in its first `Update` and removes itself from the scheduler:
+
+```csharp
+internal sealed class Players : Query<ReadOnlySpan<Entity>>, IWith<Player>;
+
+internal sealed class PlayerSpawner : Spawner<Position, Health>, IWith<Player>;
+
+internal sealed class SeedingSystem(Players players, PlayerSpawner spawner, SystemScheduler scheduler) : ISystem
+{
+    public void Update()
+    {
+        int count = 0;
+        foreach (Columns<ReadOnlySpan<Entity>> columns in players)
+        {
+            count += columns.Count;
+        }
+
+        if (count == 0)
+        {
+            spawner.Spawn(new Position(0, 0), new Health(100));
+        }
+
+        scheduler.Remove(this);
+    }
+}
+```
+
+- A system removed during `Update` still finishes that update, and its spawns apply at the sync point like any system's. It runs in no later update, so the world is checked once, not in every frame.
+- The entities are alive at the end of the first update, so the first frame renders them.
+- The check keeps a world that already has the entities from getting a second set. How a game loads a saved world is not settled, see [orange-architecture.md](orange-architecture.md).
+- A system that must see them in the first update declares `IAfter<SeedingSystem>`. It then runs later, and the scheduler places a sync point before it.
+
 ### Code outside systems
 
 Code outside systems, such as a renderer or audio, reads the world and never writes it. Under the Orange architecture a UI view reads the world only through its view model, see [orange-architecture.md](orange-architecture.md). Other code outside systems takes the queries and lookups it reads in its constructor, like a system, once the service collection registers them:
@@ -234,7 +268,7 @@ internal sealed class BodyRenderer(Bodies bodies, ReadOnlyComponentLookup<Positi
 
 ### Uniques
 
-A unique is one instance per type in a world, such as terrain, for state that is not one entity's: dense, uniform data that code reads by coordinate. It is the world's, so it lives as long as the world. Its class implements a read-only type, and the provider gives the class to no one:
+A unique is one instance per type in a world, such as terrain, for state that is not one entity's: dense, uniform data that code reads by coordinate. It is the world's, so it lives as long as the world. Its class usually implements a read-only type, and the provider gives the class to no one:
 
 ```csharp
 internal interface IReadOnlyTerrain
@@ -264,13 +298,14 @@ internal sealed class TerrainRenderer(ReadOnlyUnique<IReadOnlyTerrain> terrain)
 ```
 
 - `AddUnique<T, TReadOnly>(unique)` adds the instance to the world of the collection that called `AddEcs`, and registers `ReadOnlyUnique<TReadOnly>` for code outside systems. It does not register `T` or `TReadOnly`, so the provider gives the class that writes to no one.
+- `AddUnique<T>(unique)` adds a unique without a read-only type, which only systems reach through `Unique<T>`. It suits a unique that every system using it writes, such as a random number generator, where drawing a number changes it. It registers nothing, so code outside systems cannot reach it. `services.AddUnique(terrain)` binds to it too, so a forgotten read-only type compiles, and a system that takes `ReadOnlyUnique<IReadOnlyTerrain>` then throws with a message that names the call. Code outside systems that takes it gets the container's resolution error instead.
 - A system takes `Unique<T>` to write, or `ReadOnlyUnique<TReadOnly>` to read, in its constructor. `Value` works only during its system's `Update`, like a lookup, and throws `InvalidOperationException` otherwise. `ReadOnlyUnique<TReadOnly>` from the provider reads at any time.
 - `ReadOnlyUnique<T>` finds a unique only by its read-only type, and `Unique<T>` only by its class, so `ReadOnlyUnique<Terrain>` throws when the system is added.
 - A write to a unique applies at once and is not structural, so a unique places no sync point. Order the systems that write and read it with `IAfter<...>` and `IBefore<...>`.
 - The read-only type keeps out only what its members expose. A member that returns an array, a `List<T>` or the class itself gives code outside systems the means to write. C# has no deep immutability, so return `ReadOnlySpan<T>`, values and other read-only types.
 - `Value` is a class, so a system that keeps it past `Update` can still write it, which nothing checks. Code that casts the read-only type back to the class can write it too, because the cast reaches the same instance.
 - A unique is keyed by the type `AddUnique` names, as a service is, so one class added under two types is two uniques.
-- `AddUnique` throws `ArgumentException` when `T` and `TReadOnly` are the same type, and `InvalidOperationException` for a second unique of the class or of the read-only type, and in a collection that did not call `AddEcs`, such as a child of one that did, because the child's unique would outlive the child.
+- `AddUnique<T, TReadOnly>` throws `ArgumentException` when `T` and `TReadOnly` are the same type. Both overloads throw `InvalidOperationException` for a second unique of the class or of the read-only type, and in a collection that did not call `AddEcs`, such as a child of one that did, because the child's unique would outlive the child.
 - The world does not dispose a unique.
 
 ### Order
@@ -321,6 +356,7 @@ internal sealed class WeaponSystem(Shooters shooters, Bullets bullets) : ISystem
 ```
 
 - The type arguments are components with data. A tag goes in `IWith<...>`, and `IWith<...>` names only tags. A spawner has no `IWithout<...>`.
+- A spawner takes 1 to 16 components. An entity with more gets the rest through `ComponentAdder<T>` in the same `Update`, which moves it to another archetype at the sync point once for each added component.
 - A spawner spawns at least one component with data, so every entity starts with one.
 - The `SystemBuilder` creates one spawner for each system that takes it, so a spawner class needs a public parameterless constructor. Its type arguments and `IWith<...>` are read once, when the first spawner of its type is created in a world.
 - A spawned entity goes directly into the archetype of its components, without moving through an archetype for each component. `Spawn` returns the entity at once. It is not alive until the sync point, but the system's other writers can already target it.

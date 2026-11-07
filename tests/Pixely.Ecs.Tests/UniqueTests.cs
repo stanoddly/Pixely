@@ -171,4 +171,69 @@ public class UniqueTests
     {
         public int Height(int x) => 0;
     }
+
+    // Every system that uses it writes it, because a roll changes what the next roll gives.
+    public sealed class Dice
+    {
+        private int _next;
+
+        public int Roll() => ++_next;
+    }
+
+    [Test]
+    public void SystemWritesAUniqueWithoutAReadOnlyType()
+    {
+        Dice dice = new Dice();
+        using TestWorld world = new TestWorld(services => services.AddUnique(dice));
+
+        int rolled = world.Scheduler.RunOnce(builder => builder.Unique<Dice>(), unique => unique.Value.Roll());
+
+        Assert.That(rolled, Is.EqualTo(1));
+        Assert.That(dice.Roll(), Is.EqualTo(2));
+    }
+
+    // Nothing outside systems reaches a unique without a read-only type.
+    [Test]
+    public void AddUniqueWithoutAReadOnlyTypeRegistersNothing()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddUnique(new Dice());
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetService<Dice>(), Is.Null);
+        Assert.That(provider.GetService<Unique<Dice>>(), Is.Null);
+        Assert.That(provider.GetService<ReadOnlyUnique<Dice>>(), Is.Null);
+    }
+
+    [Test]
+    public void SecondUniqueOfAClassWithoutAReadOnlyTypeThrows()
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddEcs();
+        services.AddUnique(new Dice());
+        services.AddUnique<Terrain, IReadOnlyTerrain>(new Terrain());
+
+        Assert.Throws<InvalidOperationException>(() => services.AddUnique(new Dice()));
+        Assert.Throws<InvalidOperationException>(() => services.AddUnique(new Terrain()));
+    }
+
+    // AddUnique(terrain) compiles without the read-only type, so the message names the call to fix.
+    [Test]
+    public void ReadOnlyUniqueOfAUniqueAddedWithoutAReadOnlyTypeNamesTheCall()
+    {
+        using TestWorld world = new TestWorld(services => services.AddUnique(new Terrain()));
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => world.Scheduler.Add(builder => ActionSystem.Of(builder.ReadOnlyUnique<IReadOnlyTerrain>(), _ => { })));
+
+        Assert.That(exception.Message, Does.Contain($"Add it with AddUnique<{nameof(Terrain)}, {nameof(IReadOnlyTerrain)}> instead."));
+    }
+
+    [Test]
+    public void AddUniqueWithoutAReadOnlyTypeInACollectionWithoutAddEcsThrows()
+    {
+        ServiceCollection services = new ServiceCollection();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddUnique(new Dice()));
+    }
 }

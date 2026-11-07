@@ -120,6 +120,9 @@ Parts of what this document builds on are not final:
   writers and spawners, and services, such as message readers and writers and the view model it
   writes
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
+- A stage's first entities SHOULD come from a seeding system that spawns them in its first `Update`
+  and removes itself from the `SystemScheduler`, because a writer works only during `Update`, see
+  `docs/ecs.md`
 - A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
   only breaks ties
 - Two systems MUST be ordered when one writes a component or unique that the other reads or
@@ -277,6 +280,12 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
   that applies it through a structural change loses it if a system throws before the next sync point
 - An intent that more than one system reads is a message. The system that writes the view model
   forwards it as one
+- The system that writes a view model runs after the systems whose changes it shows, so the
+  systems before it see the effect of an intent one update later. E.g. a button requests a mode
+  switch during input. The system that writes the view model applies it in update N, so a rule that
+  runs before that system acts on the new mode from update N+1. This is expected
+- Forwarding an intent as a message does not make it arrive earlier. The message is written at the
+  same point in the frame, so a system before the forwarding system reads it in the next update
 
 ## UI outside the world
 

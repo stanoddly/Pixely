@@ -395,3 +395,779 @@ public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8> : Spawner
         _components8.Clear();
     }
 }
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+    where T12 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+    private readonly ChunkedList<T12> _components12 = new ChunkedList<T12>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11, in T12 component12)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        _components12.Add(component12);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+        description.Argument<T12>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+        CopyRuns(_components12, first, GetRows<T12>(11, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+        _components12.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+    where T12 : struct
+    where T13 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+    private readonly ChunkedList<T12> _components12 = new ChunkedList<T12>();
+    private readonly ChunkedList<T13> _components13 = new ChunkedList<T13>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11, in T12 component12, in T13 component13)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        _components12.Add(component12);
+        _components13.Add(component13);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+        description.Argument<T12>();
+        description.Argument<T13>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+        CopyRuns(_components12, first, GetRows<T12>(11, firstRow, count));
+        CopyRuns(_components13, first, GetRows<T13>(12, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+        _components12.Clear();
+        _components13.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+    where T12 : struct
+    where T13 : struct
+    where T14 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+    private readonly ChunkedList<T12> _components12 = new ChunkedList<T12>();
+    private readonly ChunkedList<T13> _components13 = new ChunkedList<T13>();
+    private readonly ChunkedList<T14> _components14 = new ChunkedList<T14>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11, in T12 component12, in T13 component13, in T14 component14)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        _components12.Add(component12);
+        _components13.Add(component13);
+        _components14.Add(component14);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+        description.Argument<T12>();
+        description.Argument<T13>();
+        description.Argument<T14>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+        CopyRuns(_components12, first, GetRows<T12>(11, firstRow, count));
+        CopyRuns(_components13, first, GetRows<T13>(12, firstRow, count));
+        CopyRuns(_components14, first, GetRows<T14>(13, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+        _components12.Clear();
+        _components13.Clear();
+        _components14.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+    where T12 : struct
+    where T13 : struct
+    where T14 : struct
+    where T15 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+    private readonly ChunkedList<T12> _components12 = new ChunkedList<T12>();
+    private readonly ChunkedList<T13> _components13 = new ChunkedList<T13>();
+    private readonly ChunkedList<T14> _components14 = new ChunkedList<T14>();
+    private readonly ChunkedList<T15> _components15 = new ChunkedList<T15>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11, in T12 component12, in T13 component13, in T14 component14, in T15 component15)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        _components12.Add(component12);
+        _components13.Add(component13);
+        _components14.Add(component14);
+        _components15.Add(component15);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+        description.Argument<T12>();
+        description.Argument<T13>();
+        description.Argument<T14>();
+        description.Argument<T15>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+        CopyRuns(_components12, first, GetRows<T12>(11, firstRow, count));
+        CopyRuns(_components13, first, GetRows<T13>(12, firstRow, count));
+        CopyRuns(_components14, first, GetRows<T14>(13, firstRow, count));
+        CopyRuns(_components15, first, GetRows<T15>(14, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+        _components12.Clear();
+        _components13.Clear();
+        _components14.Clear();
+        _components15.Clear();
+    }
+}
+
+public class Spawner<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> : Spawner
+    where T1 : struct
+    where T2 : struct
+    where T3 : struct
+    where T4 : struct
+    where T5 : struct
+    where T6 : struct
+    where T7 : struct
+    where T8 : struct
+    where T9 : struct
+    where T10 : struct
+    where T11 : struct
+    where T12 : struct
+    where T13 : struct
+    where T14 : struct
+    where T15 : struct
+    where T16 : struct
+{
+    private readonly ChunkedList<T1> _components1 = new ChunkedList<T1>();
+    private readonly ChunkedList<T2> _components2 = new ChunkedList<T2>();
+    private readonly ChunkedList<T3> _components3 = new ChunkedList<T3>();
+    private readonly ChunkedList<T4> _components4 = new ChunkedList<T4>();
+    private readonly ChunkedList<T5> _components5 = new ChunkedList<T5>();
+    private readonly ChunkedList<T6> _components6 = new ChunkedList<T6>();
+    private readonly ChunkedList<T7> _components7 = new ChunkedList<T7>();
+    private readonly ChunkedList<T8> _components8 = new ChunkedList<T8>();
+    private readonly ChunkedList<T9> _components9 = new ChunkedList<T9>();
+    private readonly ChunkedList<T10> _components10 = new ChunkedList<T10>();
+    private readonly ChunkedList<T11> _components11 = new ChunkedList<T11>();
+    private readonly ChunkedList<T12> _components12 = new ChunkedList<T12>();
+    private readonly ChunkedList<T13> _components13 = new ChunkedList<T13>();
+    private readonly ChunkedList<T14> _components14 = new ChunkedList<T14>();
+    private readonly ChunkedList<T15> _components15 = new ChunkedList<T15>();
+    private readonly ChunkedList<T16> _components16 = new ChunkedList<T16>();
+
+    public Entity Spawn(in T1 component1, in T2 component2, in T3 component3, in T4 component4, in T5 component5, in T6 component6, in T7 component7, in T8 component8, in T9 component9, in T10 component10, in T11 component11, in T12 component12, in T13 component13, in T14 component14, in T15 component15, in T16 component16)
+    {
+        Entity entity = RecordSpawn();
+        _components1.Add(component1);
+        _components2.Add(component2);
+        _components3.Add(component3);
+        _components4.Add(component4);
+        _components5.Add(component5);
+        _components6.Add(component6);
+        _components7.Add(component7);
+        _components8.Add(component8);
+        _components9.Add(component9);
+        _components10.Add(component10);
+        _components11.Add(component11);
+        _components12.Add(component12);
+        _components13.Add(component13);
+        _components14.Add(component14);
+        _components15.Add(component15);
+        _components16.Add(component16);
+        return entity;
+    }
+
+    private protected override void DescribeArguments(SpawnerDescription description)
+    {
+        description.Argument<T1>();
+        description.Argument<T2>();
+        description.Argument<T3>();
+        description.Argument<T4>();
+        description.Argument<T5>();
+        description.Argument<T6>();
+        description.Argument<T7>();
+        description.Argument<T8>();
+        description.Argument<T9>();
+        description.Argument<T10>();
+        description.Argument<T11>();
+        description.Argument<T12>();
+        description.Argument<T13>();
+        description.Argument<T14>();
+        description.Argument<T15>();
+        description.Argument<T16>();
+    }
+
+    private protected override void WriteComponents(int first, int firstRow, int count)
+    {
+        CopyRuns(_components1, first, GetRows<T1>(0, firstRow, count));
+        CopyRuns(_components2, first, GetRows<T2>(1, firstRow, count));
+        CopyRuns(_components3, first, GetRows<T3>(2, firstRow, count));
+        CopyRuns(_components4, first, GetRows<T4>(3, firstRow, count));
+        CopyRuns(_components5, first, GetRows<T5>(4, firstRow, count));
+        CopyRuns(_components6, first, GetRows<T6>(5, firstRow, count));
+        CopyRuns(_components7, first, GetRows<T7>(6, firstRow, count));
+        CopyRuns(_components8, first, GetRows<T8>(7, firstRow, count));
+        CopyRuns(_components9, first, GetRows<T9>(8, firstRow, count));
+        CopyRuns(_components10, first, GetRows<T10>(9, firstRow, count));
+        CopyRuns(_components11, first, GetRows<T11>(10, firstRow, count));
+        CopyRuns(_components12, first, GetRows<T12>(11, firstRow, count));
+        CopyRuns(_components13, first, GetRows<T13>(12, firstRow, count));
+        CopyRuns(_components14, first, GetRows<T14>(13, firstRow, count));
+        CopyRuns(_components15, first, GetRows<T15>(14, firstRow, count));
+        CopyRuns(_components16, first, GetRows<T16>(15, firstRow, count));
+    }
+
+    private protected override void ClearComponents()
+    {
+        _components1.Clear();
+        _components2.Clear();
+        _components3.Clear();
+        _components4.Clear();
+        _components5.Clear();
+        _components6.Clear();
+        _components7.Clear();
+        _components8.Clear();
+        _components9.Clear();
+        _components10.Clear();
+        _components11.Clear();
+        _components12.Clear();
+        _components13.Clear();
+        _components14.Clear();
+        _components15.Clear();
+        _components16.Clear();
+    }
+}

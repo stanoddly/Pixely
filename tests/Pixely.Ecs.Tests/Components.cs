@@ -54,3 +54,41 @@ public abstract class ComponentQuery<T> : Query<ReadOnlySpan<T>> where T : struc
 public sealed class Masses : ComponentQuery<Mass>;
 
 public sealed class Writable<T> : Query<Span<T>> where T : struct;
+
+// Sixteen components, the most a spawner or a query takes.
+public record struct W1(int Value);
+
+public record struct W2(int Value);
+
+public record struct W3(int Value);
+
+public record struct W4(int Value);
+
+public record struct W5(int Value);
+
+public record struct W6(int Value);
+
+public record struct W7(int Value);
+
+public record struct W8(int Value);
+
+public record struct W9(int Value);
+
+public record struct W10(int Value);
+
+public record struct W11(int Value);
+
+public record struct W12(int Value);
+
+public record struct W13(int Value);
+
+public record struct W14(int Value);
+
+public record struct W15(int Value);
+
+public record struct W16(int Value);
+
+public sealed class WideSpawner : Spawner<W1, W2, W3, W4, W5, W6, W7, W8, W9, W10, W11, W12, W13, W14, W15, W16>;
+
+public sealed class Wide : Query<ReadOnlySpan<W1>, ReadOnlySpan<W2>, ReadOnlySpan<W3>, ReadOnlySpan<W4>, ReadOnlySpan<W5>, ReadOnlySpan<W6>, ReadOnlySpan<W7>, ReadOnlySpan<W8>,
+    ReadOnlySpan<W9>, ReadOnlySpan<W10>, ReadOnlySpan<W11>, ReadOnlySpan<W12>, ReadOnlySpan<W13>, ReadOnlySpan<W14>, ReadOnlySpan<W15>, ReadOnlySpan<W16>>;

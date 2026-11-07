@@ -53,6 +53,41 @@ public class SystemRegistrationTests
         }
     }
 
+    // Spawns the first entities in its first Update, unless the world has them, and leaves the scheduler.
+    public sealed class Seeding(MovingEntities moving, MovingSpawner spawner, SystemScheduler scheduler, UpdateLog log) : ISystem
+    {
+        public void Update()
+        {
+            log.Entries.Add(nameof(Seeding));
+            if (CountMoving(moving) == 0)
+            {
+                spawner.Spawn(default, default);
+            }
+
+            scheduler.Remove(this);
+        }
+    }
+
+    public sealed class SeededCounter(MovingEntities moving, UpdateLog log) : ISystem, IAfter<Seeding>
+    {
+        public void Update() => log.Entries.Add(nameof(SeededCounter) + CountMoving(moving));
+    }
+
+    // Spawns before Seeding, as a world that already has its entities.
+    public sealed class Preloading(MovingSpawner spawner) : ISystem, IBefore<Seeding>
+    {
+        private bool _spawned;
+
+        public void Update()
+        {
+            if (!_spawned)
+            {
+                spawner.Spawn(default, default);
+                _spawned = true;
+            }
+        }
+    }
+
     // Explicit, so the scheduler calls Update through the interface.
     public sealed class ExplicitMover(Movement movement) : ISystem
     {
@@ -138,6 +173,45 @@ public class SystemRegistrationTests
         provider.GetRequiredService<SystemScheduler>().Update();
 
         Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Spawning) + 1 }));
+        Assert.That(CountMoving(provider.GetRequiredService<MovingEntities>()), Is.EqualTo(1));
+    }
+
+    // Its spawns apply although it removed itself during the update, and a system after it sees them in the same update.
+    [Test]
+    public void SystemThatRemovesItselfRunsOnceAndItsSpawnsApply()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<SeededCounter>();
+        services.AddSystem<Seeding>();
+        services.AddQuery<MovingEntities>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+        SystemScheduler scheduler = provider.GetRequiredService<SystemScheduler>();
+
+        scheduler.Update();
+        scheduler.Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Seeding), nameof(SeededCounter) + 1, nameof(SeededCounter) + 1 }));
+        Assert.That(CountMoving(provider.GetRequiredService<MovingEntities>()), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SeedingSkipsAWorldThatHasItsEntities()
+    {
+        UpdateLog log = new UpdateLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddEcs();
+        services.AddSystem<Seeding>();
+        services.AddSystem<Preloading>();
+        services.AddQuery<MovingEntities>();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<SystemScheduler>().Update();
+
+        Assert.That(log.Entries, Is.EqualTo(new[] { nameof(Seeding) }));
         Assert.That(CountMoving(provider.GetRequiredService<MovingEntities>()), Is.EqualTo(1));
     }
 

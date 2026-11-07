@@ -323,17 +323,23 @@ public sealed class World
         return layout;
     }
 
+    internal void AddUnique<T>(T unique) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(unique);
+        if (_uniques.ContainsKey(typeof(T)))
+        {
+            throw new InvalidOperationException($"The world already has a unique {typeof(T).Name}.");
+        }
+
+        _uniques.Add(typeof(T), unique);
+    }
+
     internal void AddUnique<T, TReadOnly>(T unique) where T : class, TReadOnly where TReadOnly : class
     {
         ArgumentNullException.ThrowIfNull(unique);
         if (typeof(T) == typeof(TReadOnly))
         {
-            throw new ArgumentException($"The read-only type of the unique {typeof(T).Name} is {typeof(T).Name} itself, so code outside systems could write it. Give it a read-only interface, as in AddUnique<{typeof(T).Name}, IReadOnly{typeof(T).Name}>.");
-        }
-
-        if (_uniques.ContainsKey(typeof(T)))
-        {
-            throw new InvalidOperationException($"The world already has a unique {typeof(T).Name}.");
+            throw new ArgumentException($"The read-only type of the unique {typeof(T).Name} is {typeof(T).Name} itself, so code outside systems could write it. Give it a read-only interface, as in AddUnique<{typeof(T).Name}, IReadOnly{typeof(T).Name}>, or add it with AddUnique<{typeof(T).Name}> when only systems use it.");
         }
 
         if (_readOnlyUniques.ContainsKey(typeof(TReadOnly)))
@@ -341,17 +347,31 @@ public sealed class World
             throw new InvalidOperationException($"The world already has a unique whose read-only type is {typeof(TReadOnly).Name}.");
         }
 
-        _uniques.Add(typeof(T), unique);
+        AddUnique(unique);
         _readOnlyUniques.Add(typeof(TReadOnly), unique);
     }
 
     internal T GetUnique<T>() where T : class => _uniques.TryGetValue(typeof(T), out object? unique)
         ? (T)unique
-        : throw new InvalidOperationException($"The world has no unique {typeof(T).Name}. Add it with AddUnique<{typeof(T).Name}, ...> on the collection that called AddEcs.");
+        : throw new InvalidOperationException($"The world has no unique {typeof(T).Name}. Add it with AddUnique<{typeof(T).Name}> or AddUnique<{typeof(T).Name}, ...> on the collection that called AddEcs.");
 
-    internal T GetReadOnlyUnique<T>() where T : class => _readOnlyUniques.TryGetValue(typeof(T), out object? unique)
-        ? (T)unique
-        : throw new InvalidOperationException($"The world has no unique whose read-only type is {typeof(T).Name}. Add it with AddUnique<..., {typeof(T).Name}> on the collection that called AddEcs.");
+    internal T GetReadOnlyUnique<T>() where T : class
+    {
+        if (_readOnlyUniques.TryGetValue(typeof(T), out object? unique))
+        {
+            return (T)unique;
+        }
+
+        // AddUnique(instance) binds to AddUnique<T> when the read-only type is forgotten, so the message names that call. A unique is keyed by the type
+        // AddUnique names, which the suggested AddUnique<Key, T> keeps, and only a key that implements T, and is not T, satisfies its constraints.
+        if (_uniques.FirstOrDefault(pair => pair.Key != typeof(T) && typeof(T).IsAssignableFrom(pair.Key) && !_readOnlyUniques.ContainsValue(pair.Value)).Key is { } withoutReadOnlyType)
+        {
+            string name = withoutReadOnlyType.Name;
+            throw new InvalidOperationException($"The world has no unique whose read-only type is {typeof(T).Name}. {name} was added with AddUnique<{name}>, without a read-only type. Add it with AddUnique<{name}, {typeof(T).Name}> instead.");
+        }
+
+        throw new InvalidOperationException($"The world has no unique whose read-only type is {typeof(T).Name}. Add it with AddUnique<..., {typeof(T).Name}> on the collection that called AddEcs.");
+    }
 
     internal long BeginQuery()
     {

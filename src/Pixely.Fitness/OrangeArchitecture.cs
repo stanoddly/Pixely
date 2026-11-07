@@ -215,7 +215,7 @@ public static class OrangeArchitecture
             QueryArguments(type).FirstOrDefault(IsWritingTerm) is { } term ? $"it writes through {Name(term)}; code outside systems reads the world, so take a ReadOnlySpan" : null);
     }
 
-    // AddUnique registers only ReadOnlyUnique<TReadOnly>, so the provider cannot give code outside systems a Unique<T>. A game that also registers the
+    // AddUnique registers at most ReadOnlyUnique<TReadOnly>, so the provider cannot give code outside systems a Unique<T>. A game that also registers the
     // unique's class as a service can, which this finds by the classes systems take as Unique<T>. A view taking Unique<T> is reported by
     // ViewsReadOnlyTheirViewModel, so only the class is checked for views.
     // Classes are matched exactly, not by assignability: the class implements its read-only type, so assignability would flag IReadOnlyTerrain too.
