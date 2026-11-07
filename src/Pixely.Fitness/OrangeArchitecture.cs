@@ -52,8 +52,8 @@ public static class OrangeArchitecture
                 : null);
     }
 
-    // AddQuery already throws for a writing query, but only when the provider is built. A helper a system builds and hands its query is not
-    // checked, because it runs inside the system.
+    // AddQuery already throws for a writing query, but only when the provider is built. A helper is a static function a system passes its query to,
+    // so it has no constructor to check.
     public static IReadOnlyList<string> OutsideSystemsTakeNoWritingQueries(OrangeArchitectureOptions options)
     {
         IEnumerable<Type> outsideSystems = Classes(options).Where(type => !typeof(ISystem).IsAssignableFrom(type) && OutsideSystemTypes.Any(participant => TypeGraph.Implements(type, participant)));

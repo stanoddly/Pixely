@@ -29,8 +29,8 @@ Parts of what this document builds on are not final:
 
 - A game is one project, `src/Foo/Foo.csproj`, that sets `PixelyHosting`, see `docs/hosting.md`
 - Its namespaces are the root namespace `Foo`, `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`,
-  `Foo.Forms`, `Foo.Systems`, `Foo.Rules`, `Foo.Rendering`, `Foo.Audio` and `Foo.Saving`. Input systems
-  are systems too. Folders match namespaces
+  `Foo.WorldAccess`, `Foo.Forms`, `Foo.Systems`, `Foo.Rules`, `Foo.Rendering`, `Foo.Audio` and
+  `Foo.Saving`. Input systems are systems too. Folders match namespaces
 - The root namespace holds `Program`, `AddGame`, the registration of any other stage, e.g. a main
   menu, and the objects they take, e.g. `GameStart`
 - `Foo.Forms` holds the views and their view models, and `Foo.Saving` holds the saver
@@ -41,13 +41,20 @@ Parts of what this document builds on are not final:
 - A game MAY add a namespace, with the reason the named ones did not do, e.g. for a settings class
   that is neither a view model nor game state
 - A unique and its read-only type live in `Foo.Components`
+- A query or spawner class lives beside its one user. With more users it lives in `Foo.WorldAccess`
 - A helper that a system calls, e.g. a steering function, lives beside that system when it has no
   other caller. With more callers it lives in `Foo.Rules`, whoever they are
 - A helper that a system calls is a static function with no static state and runs inside that
   system's `Update`, so a system stays the only code that changes game state. The system passes it
   what it needs of the world, e.g. spans, a query or a lookup. It is static because the scheduler
   places sync points from what the system's constructor takes, so a class with its own query could
-  read the world one frame late, and the container has no writers
+  read the world one frame late, and the container has nothing that writes the world
+- A system also calls members of objects, which are not helpers, e.g. a spawner's factory method, a
+  unique's members, a service, or a struct it builds in `Update`, such as a path finding graph
+- A game's own service or struct of this kind lives beside its one caller. With more callers it lives
+  in `Foo.Rules`
+- A service that a system takes MUST NOT take a query or a lookup, for the same reason as a helper.
+  Nothing checks this
 - A helper that code outside systems also calls takes only what cannot write, e.g. values, read-only
   spans or a unique's read-only type, and writes nothing. Nothing checks this
 - Types SHOULD be internal, except `Program` and its `Configure`, which a test calls, see
@@ -106,7 +113,7 @@ Parts of what this document builds on are not final:
 
 ## Systems
 
-- Every rule lives in a system or a helper it calls, so a system is the only code that changes game
+- Every rule lives in a system or in code it calls, so a system is the only code that changes game
   state
 - A system implements `ISystem`. Its constructor takes its contract, which is queries, lookups,
   writers and spawners, and services, such as message readers and writers and the view model it
