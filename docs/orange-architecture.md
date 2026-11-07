@@ -38,8 +38,9 @@ Parts of what this document builds on are not final:
   view model, and one that keeps what a renderer draws in `Foo.Rendering` with that renderer
 - Each of these namespaces except the root MAY have sub-namespaces, one per group, e.g.
   `Foo.Systems.Flight` or `Foo.Forms.Settings`
-- A game MAY add a namespace, with the reason the named ones did not do, e.g. for a settings class
-  that is neither a view model nor game state
+- A game MAY add a namespace, listed with the reason the named ones did not do in `ExtraNamespaces`,
+  see `docs/fitness.md`, e.g. for a settings class that is neither a view model nor game state. A
+  sub-namespace of an added namespace is listed on its own
 - A unique and its read-only type live in `Foo.Components`
 - A query or spawner class lives beside its one user. With more users it lives in `Foo.WorldAccess`
 - A helper that a system calls, e.g. a steering function, lives beside that system when it has no
@@ -121,6 +122,14 @@ Parts of what this document builds on are not final:
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
 - A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
   only breaks ties
+- Two systems MUST be ordered when one writes a component or unique that the other reads or
+  writes, or adds, removes or spawns a component that the other filters on, so a reordered
+  `AddGame` cannot change what the game does. Two systems that cannot reach the same entity with that
+  component need no order. `Orange SharedComponentsHaveADeclaredOrder` checks this, see
+  `docs/fitness.md`
+- A reader that need not see a structural change in the same update SHOULD run before its writer,
+  declared with `IBefore<...>`. The writer's changes then place no sync point between them, so a
+  parallel scheduler could run them together. Pixely.Ecs runs systems one after another today
 - A system that handles an intent MUST validate what can be wrong with it: its value, and whether
   the world allows it now, e.g. a toggle is refused when no living player has a flashlight
 - An intent needs no check when no state of the game can refuse it and its one writer, e.g. a view

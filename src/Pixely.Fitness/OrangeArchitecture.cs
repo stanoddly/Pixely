@@ -28,8 +28,162 @@ public static class OrangeArchitecture
             new FitnessResult("Orange OutsideSystemsTakeNoWritableUniques", OutsideSystemsTakeNoWritableUniques(options)),
             new FitnessResult("Orange ViewModelsHaveOneWriter", ViewModelsHaveOneWriter(options)),
             new FitnessResult("Orange VocabularyHoldsOnlyPrimitives", VocabularyHoldsOnlyPrimitives(options)),
-            new FitnessResult("Orange ComponentsHoldNoReferences", ComponentsHoldNoReferences(options))
+            new FitnessResult("Orange ComponentsHoldNoReferences", ComponentsHoldNoReferences(options)),
+            new FitnessResult("Orange TypesAreInNamedNamespaces", TypesAreInNamedNamespaces(options)),
+            new FitnessResult("Orange SharedComponentsHaveADeclaredOrder", SharedComponentsHaveADeclaredOrder(options))
         ]);
+    }
+
+    // A namespace is reported once, not once per type. An added namespace is allowed as it is, without sub-namespaces, since only the document's
+    // namespaces have them. A game that lacks a named namespace passes, because a game without messages or audio is a game too. An auxiliary
+    // library's namespace is not the game's, so its assembly is not passed.
+    public static IReadOnlyList<string> TypesAreInNamedNamespaces(OrangeArchitectureOptions options)
+    {
+        HashSet<string> extra = options.ExtraNamespaces.Select(added => added.Namespace).ToHashSet(StringComparer.Ordinal);
+        HashSet<string> populated = options.Assemblies.SelectMany(TypeGraph.DeclaredTypes).Select(type => type.Namespace ?? string.Empty).ToHashSet(StringComparer.Ordinal);
+        List<string> violations = populated.Where(ns => !options.IsNamed(ns) && !extra.Contains(ns)).Order(StringComparer.Ordinal)
+            .Select(ns => $"{(ns.Length == 0 ? "(global)" : ns)}: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with the reason the named ones did not do")
+            .ToList();
+        violations.AddRange(options.ExtraNamespaces.Where(added => string.IsNullOrWhiteSpace(added.Justification)).Select(added => $"{added.Namespace}: listed in ExtraNamespaces without a reason"));
+        violations.AddRange(options.ExtraNamespaces.Where(added => !populated.Contains(added.Namespace)).Select(added => $"{added.Namespace}: listed in ExtraNamespaces but holds no types"));
+        return violations;
+    }
+
+    // Two systems that name the same component or unique, one of them writing it, run in the order of the AddSystem calls unless IAfter or IBefore
+    // orders them, directly or through other systems, so a reordered AddGame would change what the game does without a sign. Two accesses that
+    // cannot reach the same entity, e.g. one with IWith<Player> and one with IWithout<Player>, do not count. A declared order costs no parallelism:
+    // a write through a span or a unique applies at once, so such a pair could never run in parallel, and a reader that runs before a structural
+    // writer still could. A message read before its writer arrives one update late, so it does not count. EntityDestroyer does not count either,
+    // although a reader before it still sees the entities it destroys: it changes every component, so counting it would pair it with every system
+    // that has a query or a lookup.
+    // The rule cannot see which systems a stage adds. It reports two systems of different stages that share a component, which an order the
+    // scheduler ignores then settles, and it counts an order through a system the stage does not add, which the scheduler drops. A generic system
+    // is skipped, because only the AddSystem<T> call closes its type arguments.
+    public static IReadOnlyList<string> SharedComponentsHaveADeclaredOrder(OrangeArchitectureOptions options)
+    {
+        Type[] systems = Classes(options).Where(type => typeof(ISystem).IsAssignableFrom(type) && !type.IsGenericTypeDefinition).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+        Dictionary<Type, Access[]> accesses = systems.ToDictionary(system => system, system => TypeGraph.Constructors(system)
+            .SelectMany(constructor => constructor.GetParameters()).SelectMany(parameter => TypeGraph.Expand(parameter.ParameterType)).SelectMany(Accesses).ToArray());
+        Dictionary<Type, HashSet<Type>> later = Later(systems);
+        List<string> violations = new List<string>();
+        for (int i = 0; i < systems.Length; i++)
+        {
+            for (int j = i + 1; j < systems.Length; j++)
+            {
+                Type first = systems[i];
+                Type second = systems[j];
+                string[] shared = accesses[first].SelectMany(one => accesses[second].Where(other => Meet(one, other)).Select(other => Name(one.Kind is AccessKind.Write or AccessKind.StructuralWrite ? one.State : other.State)))
+                    .Distinct().Order(StringComparer.Ordinal).ToArray();
+                if (shared.Length > 0 && !later[first].Contains(second) && !later[second].Contains(first))
+                {
+                    violations.Add($"{first.FullName} and {second.FullName}: share {string.Join(", ", shared)}, which at least one of them writes, and neither is ordered after the other with IAfter or IBefore, so the order of AddSystem calls decides");
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    // A filter reads only whether an entity has a component. A structural write adds or removes one, or spawns an entity with it.
+    private enum AccessKind { Read, Filter, Write, StructuralWrite }
+
+    // A component or a unique a constructor parameter names, how it uses it, and the components an entity it reaches must have or lack. A unique
+    // reaches no entity, and neither does a lookup, an adder or a remover, which reach any. Spawned holds every component a spawned entity has.
+    private readonly record struct Access(Type State, bool IsUnique, AccessKind Kind, Type[] Required, Type[] Excluded, Type[]? Spawned);
+
+    private static IEnumerable<Access> Accesses(Type type)
+    {
+        if (type.IsClass && type != typeof(Query) && BaseTypes(type).Contains(typeof(Query)))
+        {
+            Type[] terms = QueryArguments(type);
+            Type[] with = FilterArguments(type, typeof(IWith));
+            Type[] without = FilterArguments(type, typeof(IWithout));
+            Type[] required = terms.Where(term => !IsOptional(term)).Select(Unwrap).Where(component => component != typeof(Entity)).Concat(with).ToArray();
+            return terms.Select(term => (Component: Unwrap(term), Kind: IsWritingTerm(term) ? AccessKind.Write : AccessKind.Read)).Where(term => term.Component != typeof(Entity))
+                .Concat(with.Concat(without).Select(filter => (Component: filter, Kind: AccessKind.Filter)))
+                .Select(term => new Access(term.Component, false, term.Kind, required, without, null));
+        }
+
+        // A spawned entity has the spawner's components and the tags of its IWith<...>.
+        if (BaseTypes(type).FirstOrDefault(candidate => candidate.IsGenericType && candidate.BaseType == typeof(Spawner)) is { } spawner)
+        {
+            Type[] spawned = spawner.GetGenericArguments().Concat(FilterArguments(type, typeof(IWith))).ToArray();
+            return spawned.Select(component => new Access(component, false, AccessKind.StructuralWrite, spawned, [], spawned));
+        }
+
+        if (!type.IsGenericType || type.Assembly != EcsAssembly)
+        {
+            return [];
+        }
+
+        Type definition = type.GetGenericTypeDefinition();
+        Type[] arguments = type.GetGenericArguments();
+        AccessKind? kind = definition == typeof(ComponentAdder<>) || definition == typeof(ComponentRemover<>) ? AccessKind.StructuralWrite
+            : definition == typeof(Unique<>) || definition.Name.StartsWith("ComponentLookup`", StringComparison.Ordinal) ? AccessKind.Write
+            : definition == typeof(ReadOnlyUnique<>) || definition.Name.StartsWith("ReadOnlyComponentLookup`", StringComparison.Ordinal) ? AccessKind.Read
+            : null;
+        if (kind is not { } known)
+        {
+            return [];
+        }
+
+        bool isUnique = definition == typeof(Unique<>) || definition == typeof(ReadOnlyUnique<>);
+        return arguments.Select(argument => new Access(argument, isUnique, known, [], [], null));
+    }
+
+    // A unique is written through its class and read through its read-only type, which the class implements. A write of a component's values
+    // does not change which entities a filter on it reaches. A spawned entity has only its spawner's components, so a query that requires
+    // another one cannot reach it when it is spawned, and a system that adds that component meets the query on its own.
+    private static bool Meet(Access one, Access other)
+    {
+        bool same = one.IsUnique ? one.IsUnique == other.IsUnique && (one.State.IsAssignableFrom(other.State) || other.State.IsAssignableFrom(one.State)) : !other.IsUnique && one.State == other.State;
+        bool disjoint = one.Required.Intersect(other.Excluded).Any() || other.Required.Intersect(one.Excluded).Any()
+            || (one.Spawned is { } spawned && other.Required.Except(spawned).Any()) || (other.Spawned is { } otherSpawned && one.Required.Except(otherSpawned).Any());
+        return same && (Affects(one, other) || Affects(other, one)) && !disjoint;
+
+        static bool Affects(Access writer, Access reader) => writer.Kind == AccessKind.StructuralWrite || writer.Kind == AccessKind.Write && reader.Kind != AccessKind.Filter;
+    }
+
+    // The systems that run after each system, following IAfter<...> and IBefore<...> through any number of systems. The scheduler orders a system
+    // against every added system that is an instance of the type argument, so a base class orders each system derived from it.
+    private static Dictionary<Type, HashSet<Type>> Later(Type[] systems)
+    {
+        Dictionary<Type, Type[]> next = systems.ToDictionary(system => system, system => systems.Where(other => other != system
+            && (FilterArguments(system, typeof(IBefore)).Any(target => target.IsAssignableFrom(other)) || FilterArguments(other, typeof(IAfter)).Any(target => target.IsAssignableFrom(system)))).ToArray());
+        return systems.ToDictionary(system => system, system =>
+        {
+            HashSet<Type> reached = new HashSet<Type>();
+            Stack<Type> pending = new Stack<Type>([system]);
+            while (pending.TryPop(out Type? current))
+            {
+                foreach (Type successor in next[current])
+                {
+                    if (reached.Add(successor))
+                    {
+                        pending.Push(successor);
+                    }
+                }
+            }
+
+            return reached;
+        });
+    }
+
+    // The type arguments of the IWith<...>, IWithout<...>, IAfter<...> or IBefore<...> interfaces a type implements, by their non-generic base.
+    private static Type[] FilterArguments(Type type, Type kind)
+    {
+        return type.GetInterfaces().Where(candidate => candidate.IsGenericType && kind.IsAssignableFrom(candidate)).SelectMany(candidate => candidate.GetGenericArguments()).Distinct().ToArray();
+    }
+
+    private static bool IsOptional(Type term)
+    {
+        return term.IsGenericType && term.GetGenericTypeDefinition() == typeof(Optional<>);
+    }
+
+    private static Type Unwrap(Type type)
+    {
+        bool wrapped = type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(Span<>) || type.GetGenericTypeDefinition() == typeof(ReadOnlySpan<>) || type.GetGenericTypeDefinition() == typeof(Optional<>));
+        return wrapped ? Unwrap(type.GetGenericArguments()[0]) : type;
     }
 
     // A view shows its view model and passes intents to it, so the system that writes the view model is the one that reads the world and messages.
@@ -106,7 +260,7 @@ public static class OrangeArchitecture
 
     public static IReadOnlyList<string> VocabularyHoldsOnlyPrimitives(OrangeArchitectureOptions options)
     {
-        return options.Assemblies.SelectMany(assembly => TypeGraph.TypesIn(assembly, options.VocabularyNamespace))
+        return options.Assemblies.SelectMany(TypeGraph.DeclaredTypes).Where(type => OrangeArchitectureOptions.IsWithin(type.Namespace ?? string.Empty, options.VocabularyNamespace))
             .Where(type => !type.IsEnum && !TypeGraph.IsReadOnlyRecordStruct(type) && !IsConstants(type))
             .Select(type => $"{type.FullName}: {options.VocabularyNamespace} holds only enums, read-only record structs and static classes of constant values; move it to the namespace that names it")
             .ToArray();
@@ -138,12 +292,6 @@ public static class OrangeArchitecture
             .SelectMany(type => type.GetGenericArguments()).Select(Unwrap)
             .Where(type => type.IsValueType && !type.IsByRefLike && !type.IsGenericParameter && type != typeof(Entity))
             .Distinct();
-
-        static Type Unwrap(Type type)
-        {
-            bool wrapped = type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(Span<>) || type.GetGenericTypeDefinition() == typeof(ReadOnlySpan<>) || type.GetGenericTypeDefinition() == typeof(Optional<>));
-            return wrapped ? Unwrap(type.GetGenericArguments()[0]) : type;
-        }
     }
 
     // A field of a struct type is followed into, so a struct inside a component holding a list is found too.

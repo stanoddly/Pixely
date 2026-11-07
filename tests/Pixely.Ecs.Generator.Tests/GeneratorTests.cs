@@ -200,6 +200,18 @@ public class GeneratorTests
         }));
     }
 
+    // Pixely.Fitness skips compiler-generated types, so the registration does not count as a type of the game.
+    [Test]
+    public void RegistrationIsMarkedCompilerGenerated()
+    {
+        (ImmutableArray<Diagnostic> generatorDiagnostics, Compilation output) = Run(Components + "sealed class Positions : Query<ReadOnlySpan<Position>>;");
+
+        Assert.That(generatorDiagnostics, Is.Empty);
+        INamedTypeSymbol? registration = output.GetTypeByMetadataName("Pixely.Ecs.Generated.QueryTermRegistration");
+        Assert.That(registration, Is.Not.Null);
+        Assert.That(registration!.GetAttributes().Select(attribute => attribute.AttributeClass?.ToDisplayString()), Has.Member("System.Runtime.CompilerServices.CompilerGeneratedAttribute"));
+    }
+
     [Test]
     public void ValidSpawnersAndSystemsCompile()
     {

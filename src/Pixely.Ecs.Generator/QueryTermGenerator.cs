@@ -241,6 +241,8 @@ public class QueryTermGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("namespace Pixely.Ecs.Generated");
         sb.AppendLine("{");
+        // Marked so that tools reading a game's own types, such as Pixely.Fitness, skip it.
+        sb.AppendLine("    [global::System.Runtime.CompilerServices.CompilerGenerated]");
         sb.AppendLine("    internal static class QueryTermRegistration");
         sb.AppendLine("    {");
         sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");

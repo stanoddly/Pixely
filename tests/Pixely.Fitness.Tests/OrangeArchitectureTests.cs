@@ -146,6 +146,97 @@ public sealed class OrangeArchitectureTests
     }
 
     [Test]
+    public void VocabularySubNamespaceIsCheckedToo()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.VocabularyHoldsOnlyPrimitives(Options);
+
+        Assert.That(violations, Has.One.StartsWith($"{typeof(Orangey.Vocabulary.Units.Converter).FullName}: Orangey.Vocabulary holds only"));
+        Assert.That(violations, Has.None.Contains(typeof(Orangey.Vocabulary.Units.Meters).FullName!));
+    }
+
+    [Test]
+    public void TypesInNamedNamespacesAndTheirSubNamespacesAreFit()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.TypesAreInNamedNamespaces(Options);
+
+        Assert.That(violations, Has.None.StartsWith("Orangey.Systems:"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.Systems.Flight:"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.WorldAccess:"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.Components:"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.Vocabulary.Units:"));
+    }
+
+    [Test]
+    public void TypesInAnUnnamedNamespaceAreAViolationOncePerNamespace()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.TypesAreInNamedNamespaces(Options);
+
+        Assert.That(violations, Has.One.EqualTo("Orangey.Misc: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with the reason the named ones did not do"));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Systems2: "));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Tools: "));
+        Assert.That(violations, Has.One.StartsWith("Pixely.Fitness.Tests: "));
+    }
+
+    [Test]
+    public void AddedNamespaceIsFitOnlyWithAReasonAndTypes()
+    {
+        OrangeArchitectureOptions options = Options with
+        {
+            ExtraNamespaces = [new ExtraNamespace("Orangey.Tools", "cheats are neither game state nor UI"), new ExtraNamespace("Orangey.Misc", " "), new ExtraNamespace("Orangey.Empty", "reserved")]
+        };
+
+        IReadOnlyList<string> violations = OrangeArchitecture.TypesAreInNamedNamespaces(options);
+
+        Assert.That(violations, Has.None.StartsWith("Orangey.Tools"));
+        Assert.That(violations, Has.One.EqualTo("Orangey.Misc: listed in ExtraNamespaces without a reason"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.Misc: not a namespace"));
+        Assert.That(violations, Has.One.EqualTo("Orangey.Empty: listed in ExtraNamespaces but holds no types"));
+    }
+
+    [Test]
+    public void SystemsSharingAComponentWithoutADeclaredOrderAreAViolation()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.SharedComponentsHaveADeclaredOrder(Options);
+
+        Assert.That(violations, Has.One.EqualTo("Orangey.Systems.Minimap and Orangey.Systems.Movement: share Position, which at least one of them writes, and neither is ordered after the other with IAfter or IBefore, so the order of AddSystem calls decides"));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Systems.EnemyFuel and Orangey.Systems.Refueling: share Fuel, "));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Systems.Emitter and Orangey.Systems.Glowing: share Heat, Spark, "));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Systems.Erosion and Orangey.Systems.Terraform: share Ground, "));
+        Assert.That(violations, Has.One.StartsWith("Orangey.Systems.Drying and Orangey.Systems.Soaking: share Wet, "));
+    }
+
+    [Test]
+    public void SystemsOrderedDirectlyOrThroughOthersAreFit()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.SharedComponentsHaveADeclaredOrder(Options);
+
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Camera"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Radar"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Trail"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.PlayerFuel"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Survey"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Engines"));
+    }
+
+    [Test]
+    public void SystemsThatCannotReachTheSameEntityAreFit()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.SharedComponentsHaveADeclaredOrder(Options);
+
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Cooling"));
+        Assert.That(violations, Has.None.StartsWith("Orangey.Systems.EnemyFuel and Orangey.Systems.PlayerFuel"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Trading"));
+    }
+
+    [Test]
+    public void FilterMeetsOnlyAStructuralWriter()
+    {
+        IReadOnlyList<string> violations = OrangeArchitecture.SharedComponentsHaveADeclaredOrder(Options);
+
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Weighing"));
+    }
+
+    [Test]
     public void ComponentHoldingAReferenceIsAViolation()
     {
         IReadOnlyList<string> violations = OrangeArchitecture.ComponentsHoldNoReferences(Options);
@@ -169,7 +260,7 @@ public sealed class OrangeArchitectureTests
     public void EvaluateRunsEveryRule()
     {
         Assert.That(OrangeArchitecture.Evaluate(Options)["Orange ComponentsHoldNoReferences"].Violations, Is.EqualTo(OrangeArchitecture.ComponentsHoldNoReferences(Options)));
-        Assert.That(OrangeArchitecture.Evaluate(Options).Results, Has.Count.EqualTo(7));
+        Assert.That(OrangeArchitecture.Evaluate(Options).Results, Has.Count.EqualTo(9));
     }
 
     private readonly record struct Health(int Value);

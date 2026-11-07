@@ -4,12 +4,6 @@ using System.Runtime.CompilerServices;
 namespace Pixely.Fitness;
 
 /// <summary>
-/// A namespace a game adds to Foo.Game beyond the ones the document names, and why the document's
-/// namespaces did not do.
-/// </summary>
-public sealed record ExtraNamespace(string Namespace, string Justification);
-
-/// <summary>
 /// What a game tells the generic rules: its prefix, the namespaces it adds beyond the document's,
 /// whether it switches the hardened SHOULD off, and optionally its repository root. Everything else is
 /// derived from the prefix, see <see cref="PeachGame"/>.
