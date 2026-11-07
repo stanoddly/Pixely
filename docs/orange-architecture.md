@@ -28,13 +28,37 @@ Parts of what this document builds on are not final:
 ## Project
 
 - A game is one project, `src/Foo/Foo.csproj`, that sets `PixelyHosting`, see `docs/hosting.md`
-- Its namespaces are `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`, `Foo.ViewModels`,
-  `Foo.Systems`, `Foo.Views`, `Foo.Rendering` and `Foo.Audio`. Input systems are systems too
+- Its namespaces are the root namespace `Foo`, `Foo.Vocabulary`, `Foo.Components`, `Foo.Messages`,
+  `Foo.Forms`, `Foo.Systems`, `Foo.Rules`, `Foo.Rendering`, `Foo.Audio` and `Foo.Saving`. Input systems
+  are systems too. Folders match namespaces
+- The root namespace holds `Program`, `AddGame`, the registration of any other stage, e.g. a main
+  menu, and the objects they take, e.g. `GameStart`
+- `Foo.Forms` holds the views and their view models, and `Foo.Saving` holds the saver
+- An updatable lives beside what it serves, e.g. one that writes a view model in `Foo.Forms` with that
+  view model, and one that keeps what a renderer draws in `Foo.Rendering` with that renderer
+- Each of these namespaces except the root MAY have sub-namespaces, one per group, e.g.
+  `Foo.Systems.Flight` or `Foo.Forms.Settings`
+- A game MAY add a namespace, with the reason the named ones did not do, e.g. for a settings class
+  that is neither a view model nor game state
+- A unique and its read-only type live in `Foo.Components`
+- A helper that a system calls, e.g. a steering function, lives beside that system when it has no
+  other caller. With more callers it lives in `Foo.Rules`, whoever they are
+- A helper that a system calls is a static function with no static state and runs inside that
+  system's `Update`, so a system stays the only code that changes game state. The system passes it
+  what it needs of the world, e.g. spans, a query or a lookup. It is static because the scheduler
+  places sync points from what the system's constructor takes, so a class with its own query could
+  read the world one frame late, and the container has no writers
+- A helper that code outside systems also calls takes only what cannot write, e.g. values, read-only
+  spans or a unique's read-only type, and writes nothing. Nothing checks this
 - Types SHOULD be internal, except `Program` and its `Configure`, which a test calls, see
   `docs/testing.md`. Tests reach the rest through `InternalsVisibleTo`. Pixely.Ecs, not a project
   boundary, keeps code outside systems from writing the world
 - Every system is in the project, so a system orders itself after or before any other with
   `IAfter<...>` and `IBefore<...>`
+- An auxiliary library is its own project with its own namespace, which is not one of the game's
+  namespaces above, e.g. `src/Foo.Platform/Foo.Platform.csproj` for platform code that needs
+  `AllowUnsafeBlocks` and its own package reference. It MUST NOT hold game state or rules, and MUST NOT
+  reference the game. The game references it, so the types the game uses from it are public
 
 ## Composition
 
@@ -42,8 +66,8 @@ Parts of what this document builds on are not final:
   targets and content. An `OnBuilt` callback loads the first stage through `IStageManager.Load`
 - `AddGame`, an internal extension method on `ServiceCollection` in the root namespace `Foo`,
   registers the stage the game is played in. It calls `AddEcs` and registers the uniques, the
-  messages, the systems, the view models, the views, the renderers, audio, and the queries and lookups
-  that code outside systems reads
+  messages, the systems, the view models, the views, the renderers, audio, the saver, the updatables
+  of the stage's state, and the queries and lookups that code outside systems reads
 - It registers the same types whatever its arguments. Arguments configure values
 - A stage owns its world, see World. State that the next stage needs is passed to its `AddGame` as an
   object, e.g. `AddGame(new GameStart(Seed: 42))` with `GameStart` a sealed record class, which it
@@ -55,7 +79,7 @@ Parts of what this document builds on are not final:
 
 - Primitives shared all over: enums, ids, read-only record structures, e.g. `TileCoordinate`,
   and static classes of `const` fields and `static readonly` fields of value types or strings
-- A type only one namespace names lives with it, not here
+- A type that only one namespace and its sub-namespaces name lives with it, not here
 - An id is its own type
 
 ## World
@@ -82,7 +106,8 @@ Parts of what this document builds on are not final:
 
 ## Systems
 
-- Every rule lives in a system, so a system is the only code that changes game state
+- Every rule lives in a system or a helper it calls, so a system is the only code that changes game
+  state
 - A system implements `ISystem`. Its constructor takes its contract, which is queries, lookups,
   writers and spawners, and services, such as message readers and writers and the view model it
   writes
@@ -237,7 +262,7 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 - A view model of state outside the world, e.g. settings, an FPS counter, or a main menu before a
   world exists, is written by an `IUpdatable`, because no system can write it: a stage without a
   world has no systems, and state in the root outlives every stage's systems
-- The updatable lives where its state lives: settings in the root, a main menu in its stage
+- The updatable is registered where its state lives: settings in the root, a main menu in its stage
 - It follows the rules of a system that writes a view model: exactly one updatable writes each view
   model, handles every intent the view model holds, validates it and clears it in the same `Update`,
   and writes every value its view shows
