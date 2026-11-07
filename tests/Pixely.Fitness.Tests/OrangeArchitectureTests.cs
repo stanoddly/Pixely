@@ -171,7 +171,7 @@ public sealed class OrangeArchitectureTests
     {
         IReadOnlyList<string> violations = OrangeArchitecture.TypesAreInNamedNamespaces(Options);
 
-        Assert.That(violations, Has.One.EqualTo("Orangey.Misc: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with the reason the named ones did not do"));
+        Assert.That(violations, Has.One.EqualTo("Orangey.Misc: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with why none of the named ones fits"));
         Assert.That(violations, Has.One.StartsWith("Orangey.Systems2: "));
         Assert.That(violations, Has.One.StartsWith("Orangey.Tools: "));
         Assert.That(violations, Has.One.StartsWith("Pixely.Fitness.Tests: "));
@@ -226,6 +226,8 @@ public sealed class OrangeArchitectureTests
         Assert.That(violations, Has.None.Contains("Orangey.Systems.Cooling"));
         Assert.That(violations, Has.None.StartsWith("Orangey.Systems.EnemyFuel and Orangey.Systems.PlayerFuel"));
         Assert.That(violations, Has.None.Contains("Orangey.Systems.Trading"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Lightning"));
+        Assert.That(violations, Has.None.Contains("Orangey.Systems.Forecast"));
     }
 
     [Test]

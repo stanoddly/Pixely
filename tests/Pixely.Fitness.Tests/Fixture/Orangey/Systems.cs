@@ -31,6 +31,10 @@ namespace Orangey.Components
     public interface IReadOnlyGround;
 
     public sealed class Ground : IReadOnlyGround;
+
+    public class Climate;
+
+    public sealed class Storm : Climate;
 }
 
 namespace Orangey.WorldAccess
@@ -222,6 +226,29 @@ namespace Orangey.Systems
     }
 
     public sealed class Trading(Cargo cargo) : ISystem
+    {
+        public void Update()
+        {
+        }
+    }
+
+    // Writes another unique than Lightning, because the world keys uniques by their exact class.
+    public sealed class Weather(Unique<Climate> climate) : ISystem
+    {
+        public void Update()
+        {
+        }
+    }
+
+    public sealed class Lightning(Unique<Storm> storm) : ISystem
+    {
+        public void Update()
+        {
+        }
+    }
+
+    // Climate does not implement Storm, so Weather writes no unique this reads.
+    public sealed class Forecast(ReadOnlyUnique<Storm> storm) : ISystem, IAfter<Lightning>
     {
         public void Update()
         {

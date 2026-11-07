@@ -38,7 +38,7 @@ Parts of what this document builds on are not final:
   view model, and one that keeps what a renderer draws in `Foo.Rendering` with that renderer
 - Each of these namespaces except the root MAY have sub-namespaces, one per group, e.g.
   `Foo.Systems.Flight` or `Foo.Forms.Settings`
-- A game MAY add a namespace, listed with the reason the named ones did not do in `ExtraNamespaces`,
+- A game MAY add a namespace, listed in `ExtraNamespaces` with why none of the named ones fits,
   see `docs/fitness.md`, e.g. for a settings class that is neither a view model nor game state. A
   sub-namespace of an added namespace is listed on its own
 - A unique and its read-only type live in `Foo.Components`

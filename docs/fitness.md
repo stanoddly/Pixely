@@ -67,7 +67,7 @@ FitnessReport report = FitnessReport.Merge(PeachArchitecture.Evaluate(options), 
 
 ## Orange architecture
 
-`OrangeArchitecture.Evaluate(options)` checks the rules of the [Orange architecture](orange-architecture.md) that constructors and types show. `OrangeArchitectureOptions` takes the game's name, which names its namespaces, and the assemblies to scan: the game's own, not an auxiliary library's, whose namespace is not the game's. `ExtraNamespaces` lists the namespaces a game adds, each with the reason the named ones did not do. No rule checks projects. Merge the report with the Pixely conventions for one assertion:
+`OrangeArchitecture.Evaluate(options)` checks the rules of the [Orange architecture](orange-architecture.md) that constructors and types show. `OrangeArchitectureOptions` takes the game's name, which names its namespaces, and the assemblies to scan: the game's own, not an auxiliary library's, whose namespace is not the game's. `ExtraNamespaces` lists the namespaces a game adds, each with why none of the named ones fits. No rule checks projects. Merge the report with the Pixely conventions for one assertion:
 
 ```csharp
 FitnessReport report = FitnessReport.Merge(PixelyConventions.Evaluate(new PixelyConventionsOptions(gameAssembly)), OrangeArchitecture.Evaluate(new OrangeArchitectureOptions("Ashfall", gameAssembly)));

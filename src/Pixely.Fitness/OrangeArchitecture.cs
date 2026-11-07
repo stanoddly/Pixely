@@ -42,7 +42,7 @@ public static class OrangeArchitecture
         HashSet<string> extra = options.ExtraNamespaces.Select(added => added.Namespace).ToHashSet(StringComparer.Ordinal);
         HashSet<string> populated = options.Assemblies.SelectMany(TypeGraph.DeclaredTypes).Select(type => type.Namespace ?? string.Empty).ToHashSet(StringComparer.Ordinal);
         List<string> violations = populated.Where(ns => !options.IsNamed(ns) && !extra.Contains(ns)).Order(StringComparer.Ordinal)
-            .Select(ns => $"{(ns.Length == 0 ? "(global)" : ns)}: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with the reason the named ones did not do")
+            .Select(ns => $"{(ns.Length == 0 ? "(global)" : ns)}: not a namespace orange-architecture.md names; move its types, or list it in ExtraNamespaces with why none of the named ones fits")
             .ToList();
         violations.AddRange(options.ExtraNamespaces.Where(added => string.IsNullOrWhiteSpace(added.Justification)).Select(added => $"{added.Namespace}: listed in ExtraNamespaces without a reason"));
         violations.AddRange(options.ExtraNamespaces.Where(added => !populated.Contains(added.Namespace)).Select(added => $"{added.Namespace}: listed in ExtraNamespaces but holds no types"));
@@ -131,12 +131,14 @@ public static class OrangeArchitecture
         return arguments.Select(argument => new Access(argument, isUnique, known, [], [], null));
     }
 
-    // A unique is written through its class and read through its read-only type, which the class implements. A write of a component's values
+    // A unique is written through its class and read through its read-only type, which the class implements, so Unique<T> meets ReadOnlyUnique<R>
+    // only when T implements R. The world keys the classes exactly, so Unique<Base> and Unique<Derived> are two uniques. A write of a component's values
     // does not change which entities a filter on it reaches. A spawned entity has only its spawner's components, so a query that requires
     // another one cannot reach it when it is spawned, and a system that adds that component meets the query on its own.
     private static bool Meet(Access one, Access other)
     {
-        bool same = one.IsUnique ? one.IsUnique == other.IsUnique && (one.State.IsAssignableFrom(other.State) || other.State.IsAssignableFrom(one.State)) : !other.IsUnique && one.State == other.State;
+        bool same = one.IsUnique == other.IsUnique && (!one.IsUnique || one.Kind == other.Kind ? one.State == other.State
+            : one.Kind == AccessKind.Write ? other.State.IsAssignableFrom(one.State) : one.State.IsAssignableFrom(other.State));
         bool disjoint = one.Required.Intersect(other.Excluded).Any() || other.Required.Intersect(one.Excluded).Any()
             || (one.Spawned is { } spawned && other.Required.Except(spawned).Any()) || (other.Spawned is { } otherSpawned && one.Required.Except(otherSpawned).Any());
         return same && (Affects(one, other) || Affects(other, one)) && !disjoint;
