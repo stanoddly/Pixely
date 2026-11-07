@@ -121,8 +121,13 @@ Parts of what this document builds on are not final:
 - A system MUST NOT implement `IUpdatable`, PXECS014 reports one that does
 - A system SHOULD declare every system it depends on with `IAfter<...>` and `IBefore<...>`, see `docs/ecs.md`. The order of `AddSystem` calls
   only breaks ties
-- A system that handles an intent MUST validate it. A rejected intent becomes an observation
-  message
+- A system that handles an intent MUST validate what can be wrong with it: its value, and whether
+  the world allows it now, e.g. a toggle is refused when no living player has a flashlight
+- An intent needs no check when no state of the game can refuse it and its one writer, e.g. a view
+  or an input system, always writes a valid named value of an enum, e.g. a selected language. The one
+  writer matters because a cast can put any number in an enum
+- A rejected intent becomes an observation message when other code or a test reads it, e.g. the
+  system that writes a toast's view model. Otherwise the system writes no message
 
 ## Messages
 
@@ -162,8 +167,8 @@ Parts of what this document builds on are not final:
 - A continuous intent is a component on its actor, e.g. `Steering` on the entity that steers. The
   input system writes it for the player's entity, and an AI system for the others
 - A one-shot intent is a message that names its actor, e.g. `ToggleFlashlight(Entity Actor)`. Its
-  reader reads every message and skips one whose actor is dead or lacks what the intent needs, which
-  a lookup's `Has` tells
+  reader reads every message and refuses one whose actor is dead or lacks what the intent needs, which
+  a lookup's `Has` tells, see Systems
 - A scripted scenario is systems. Its progress, e.g. the current step and its timers, MUST be
   components or a unique, because messages are not saved
 
@@ -230,7 +235,7 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
         }
         if (viewModel.ToggleRequested && !found)
         {
-            // no living player has a flashlight
+            // no living player has a flashlight, and the system that writes the toast reads this
             rejections.Write(new FlashlightRejected());
         }
         viewModel.ToggleRequested = false;
@@ -248,8 +253,8 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
   `viewModel.Dead` from a query or lookup that names `Dead`
 - A write through a span or a lookup applies at once, so reading it back is reading the world, as
   `lights[i].On` above
-- A rejected intent becomes an observation message, see Systems. The system MAY also show the
-  rejection in the view model
+- Systems says when a rejected intent becomes an observation message. Either way, the system MAY
+  show the rejection in the view model
 - A system that writes a view model SHOULD declare `IAfter<...>` for the systems that change the
   components its queries and lookups name, including those in `IWithout<...>`. The scheduler then
   applies their structural changes at a sync point before it
@@ -271,7 +276,8 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
   world has no systems, and state in the root outlives every stage's systems
 - The updatable is registered where its state lives: settings in the root, a main menu in its stage
 - It follows the rules of a system that writes a view model: exactly one updatable writes each view
-  model, handles every intent the view model holds, validates it and clears it in the same `Update`,
+  model, handles every intent the view model holds, validates it like any intent, with its state in
+  place of the world, and clears it in the same `Update`,
   and writes every value its view shows
 - A view model that shows any game state is written by a system. An updatable MUST NOT write a view
   model that a system writes, and MUST NOT read the world for one it writes
