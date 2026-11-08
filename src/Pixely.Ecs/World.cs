@@ -326,12 +326,10 @@ public sealed class World
     internal void AddUnique<T>(T unique) where T : class
     {
         ArgumentNullException.ThrowIfNull(unique);
-        if (_uniques.ContainsKey(typeof(T)))
+        if (!_uniques.TryAdd(typeof(T), unique))
         {
             throw new InvalidOperationException($"The world already has a unique {typeof(T).Name}.");
         }
-
-        _uniques.Add(typeof(T), unique);
     }
 
     internal void AddUnique<T, TReadOnly>(T unique) where T : class, TReadOnly where TReadOnly : class
@@ -342,6 +340,7 @@ public sealed class World
             throw new ArgumentException($"The read-only type of the unique {typeof(T).Name} is {typeof(T).Name} itself, so code outside systems could write it. Give it a read-only interface, as in AddUnique<{typeof(T).Name}, IReadOnly{typeof(T).Name}>, or add it with AddUnique<{typeof(T).Name}> when only systems use it.");
         }
 
+        // Checked before AddUnique writes _uniques, so a taken read-only type leaves both dictionaries unchanged.
         if (_readOnlyUniques.ContainsKey(typeof(TReadOnly)))
         {
             throw new InvalidOperationException($"The world already has a unique whose read-only type is {typeof(TReadOnly).Name}.");
