@@ -429,14 +429,6 @@ PXECS002 and PXECS003 are checked wherever `Query<...>` is written, with closed 
 
 `AddSystem<T>` requires `T` to be a class that implements `ISystem`, which the compiler checks.
 
-## Browser
-
-Pixely.Ecs uses generic type arguments that allow ref structs, such as `Query<Span<T>>`, and it runs with them under Mono, the browser's default runtime.
-
-- A package integration test publishes a small set of systems for `browser-wasm` and runs them under Node, in Mono's interpreter and with Mono AOT. It covers `Span<T>`, `ReadOnlySpan<T>`, `ReadOnlySpan<Entity>` and `Optional<ReadOnlySpan<T>>` in queries, `IWith`, `IWithout`, a spawner with a tag, `ComponentLookup`, `ComponentAdder`, `ComponentRemover`, `EntityDestroyer`, `Unique<T>`, `ReadOnlyUnique<T>`, `AddQuery`, `AddReadOnlyComponentLookup`, `IAfter` and `IBefore`. The AOT run needs the `wasm-tools` workload, so it skips on a CI lane without it.
-- Only runs by hand have used a real browser: Pixely 0.0.159 with Mono AOT in headless Firefox 157. A spike of those features except `IBefore`, and with messages, gave the same results as under NativeAOT, and a game of 19 systems with 8 components per entity ran on the WebGPU page, where a click went through a system and changed what the UI showed.
-- No test runs Pixely.Ecs on CoreCLR in the browser.
-
 ## Not supported yet
 
 - Running systems in parallel. The contracts carry what a scheduler would need, but systems run one after another.
