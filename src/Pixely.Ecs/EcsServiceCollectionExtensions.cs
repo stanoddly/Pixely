@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Pixely.DependencyInjection;
 
@@ -35,7 +36,7 @@ public static partial class EcsServiceCollectionExtensions
 
     // Registers the world's TQuery for code outside systems, such as a renderer or a view, which takes it in its constructor. A query that writes through a
     // Span<T> throws when the provider creates it, which for a singleton is when the provider is built, because only systems write the world.
-    public static void AddQuery<TQuery>(this ServiceCollection services) where TQuery : Query, new()
+    public static void AddQuery<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TQuery>(this ServiceCollection services) where TQuery : Query, new()
     {
         services.AddSingleton<TQuery>(static provider =>
         {
@@ -54,14 +55,18 @@ public static partial class EcsServiceCollectionExtensions
     // Only the collection that called AddEcs adds to its world, because a child's unique would outlive the child.
     public static void AddUnique<T, TReadOnly>(this ServiceCollection services, T unique) where T : class, TReadOnly where TReadOnly : class
     {
-        if (!Worlds.TryGetValue(services, out World? world))
-        {
-            throw new InvalidOperationException($"AddUnique<{typeof(T).Name}, {typeof(TReadOnly).Name}> adds to the world of its collection, and this collection did not call AddEcs. Call it on the collection that did, such as the stage that plays the game.");
-        }
-
+        World world = WorldForUnique(services, $"{typeof(T).Name}, {typeof(TReadOnly).Name}");
         world.AddUnique<T, TReadOnly>(unique);
         services.AddSingleton(new ReadOnlyUnique<TReadOnly>(world));
     }
+
+    // Adds unique to the world of this collection for systems only, which take it as Unique<T>. It suits a unique that every system using it writes,
+    // such as a random number generator, whose read-only type would have no members. It registers nothing, so code outside systems cannot reach it.
+    public static void AddUnique<T>(this ServiceCollection services, T unique) where T : class => WorldForUnique(services, typeof(T).Name).AddUnique(unique);
+
+    private static World WorldForUnique(ServiceCollection services, string typeArguments) => Worlds.TryGetValue(services, out World? world)
+        ? world
+        : throw new InvalidOperationException($"AddUnique<{typeArguments}> adds to the world of its collection, and this collection did not call AddEcs. Call it on the collection that did, such as the stage that plays the game.");
 
     // Registers a lookup of T for code outside systems, which takes it in its constructor. It reads at any time, unlike a system's lookup.
     public static void AddReadOnlyComponentLookup<T>(this ServiceCollection services) where T : struct =>

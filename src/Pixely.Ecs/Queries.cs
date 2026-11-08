@@ -149,6 +149,278 @@ public class Query<T1, T2, T3, T4, T5, T6, T7, T8> : Query
     }
 }
 
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+        DescribeTerm<T12>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+        DescribeTerm<T12>(description);
+        DescribeTerm<T13>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+        DescribeTerm<T12>(description);
+        DescribeTerm<T13>(description);
+        DescribeTerm<T14>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+    where T15 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+        DescribeTerm<T12>(description);
+        DescribeTerm<T13>(description);
+        DescribeTerm<T14>(description);
+        DescribeTerm<T15>(description);
+    }
+}
+
+public class Query<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> : Query
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+    where T15 : allows ref struct
+    where T16 : allows ref struct
+{
+    public ColumnsEnumerator<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>> GetEnumerator() => Enumerate<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>>();
+
+    private protected override void DescribeTerms(QueryDescription description)
+    {
+        DescribeTerm<T1>(description);
+        DescribeTerm<T2>(description);
+        DescribeTerm<T3>(description);
+        DescribeTerm<T4>(description);
+        DescribeTerm<T5>(description);
+        DescribeTerm<T6>(description);
+        DescribeTerm<T7>(description);
+        DescribeTerm<T8>(description);
+        DescribeTerm<T9>(description);
+        DescribeTerm<T10>(description);
+        DescribeTerm<T11>(description);
+        DescribeTerm<T12>(description);
+        DescribeTerm<T13>(description);
+        DescribeTerm<T14>(description);
+        DescribeTerm<T15>(description);
+        DescribeTerm<T16>(description);
+    }
+}
+
 // The spans of one matching archetype, in the order of the query's type arguments. foreach deconstructs them into named variables.
 // The query checked that each type argument is registered when it was created.
 public readonly ref struct Columns<T1> : IColumns<Columns<T1>>
@@ -432,4 +704,548 @@ public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8> : IColumns<Co
     }
 
     static Columns<T1, T2, T3, T4, T5, T6, T7, T8> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public T12 Item12 => QueryTerm<T12>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+        item12 = QueryTerm<T12>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public T12 Item12 => QueryTerm<T12>.Instance!.Create(_archetype);
+
+    public T13 Item13 => QueryTerm<T13>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+        item12 = QueryTerm<T12>.Instance!.Create(_archetype);
+        item13 = QueryTerm<T13>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public T12 Item12 => QueryTerm<T12>.Instance!.Create(_archetype);
+
+    public T13 Item13 => QueryTerm<T13>.Instance!.Create(_archetype);
+
+    public T14 Item14 => QueryTerm<T14>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13, out T14 item14)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+        item12 = QueryTerm<T12>.Instance!.Create(_archetype);
+        item13 = QueryTerm<T13>.Instance!.Create(_archetype);
+        item14 = QueryTerm<T14>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+    where T15 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public T12 Item12 => QueryTerm<T12>.Instance!.Create(_archetype);
+
+    public T13 Item13 => QueryTerm<T13>.Instance!.Create(_archetype);
+
+    public T14 Item14 => QueryTerm<T14>.Instance!.Create(_archetype);
+
+    public T15 Item15 => QueryTerm<T15>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13, out T14 item14, out T15 item15)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+        item12 = QueryTerm<T12>.Instance!.Create(_archetype);
+        item13 = QueryTerm<T13>.Instance!.Create(_archetype);
+        item14 = QueryTerm<T14>.Instance!.Create(_archetype);
+        item15 = QueryTerm<T15>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(archetype);
+}
+
+public readonly ref struct Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> : IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>>
+    where T1 : allows ref struct
+    where T2 : allows ref struct
+    where T3 : allows ref struct
+    where T4 : allows ref struct
+    where T5 : allows ref struct
+    where T6 : allows ref struct
+    where T7 : allows ref struct
+    where T8 : allows ref struct
+    where T9 : allows ref struct
+    where T10 : allows ref struct
+    where T11 : allows ref struct
+    where T12 : allows ref struct
+    where T13 : allows ref struct
+    where T14 : allows ref struct
+    where T15 : allows ref struct
+    where T16 : allows ref struct
+{
+    private readonly Archetype _archetype;
+
+    private Columns(Archetype archetype)
+    {
+        _archetype = archetype;
+    }
+
+    public int Count => _archetype.Count;
+
+    public T1 Item1 => QueryTerm<T1>.Instance!.Create(_archetype);
+
+    public T2 Item2 => QueryTerm<T2>.Instance!.Create(_archetype);
+
+    public T3 Item3 => QueryTerm<T3>.Instance!.Create(_archetype);
+
+    public T4 Item4 => QueryTerm<T4>.Instance!.Create(_archetype);
+
+    public T5 Item5 => QueryTerm<T5>.Instance!.Create(_archetype);
+
+    public T6 Item6 => QueryTerm<T6>.Instance!.Create(_archetype);
+
+    public T7 Item7 => QueryTerm<T7>.Instance!.Create(_archetype);
+
+    public T8 Item8 => QueryTerm<T8>.Instance!.Create(_archetype);
+
+    public T9 Item9 => QueryTerm<T9>.Instance!.Create(_archetype);
+
+    public T10 Item10 => QueryTerm<T10>.Instance!.Create(_archetype);
+
+    public T11 Item11 => QueryTerm<T11>.Instance!.Create(_archetype);
+
+    public T12 Item12 => QueryTerm<T12>.Instance!.Create(_archetype);
+
+    public T13 Item13 => QueryTerm<T13>.Instance!.Create(_archetype);
+
+    public T14 Item14 => QueryTerm<T14>.Instance!.Create(_archetype);
+
+    public T15 Item15 => QueryTerm<T15>.Instance!.Create(_archetype);
+
+    public T16 Item16 => QueryTerm<T16>.Instance!.Create(_archetype);
+
+    public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13, out T14 item14, out T15 item15, out T16 item16)
+    {
+        item1 = QueryTerm<T1>.Instance!.Create(_archetype);
+        item2 = QueryTerm<T2>.Instance!.Create(_archetype);
+        item3 = QueryTerm<T3>.Instance!.Create(_archetype);
+        item4 = QueryTerm<T4>.Instance!.Create(_archetype);
+        item5 = QueryTerm<T5>.Instance!.Create(_archetype);
+        item6 = QueryTerm<T6>.Instance!.Create(_archetype);
+        item7 = QueryTerm<T7>.Instance!.Create(_archetype);
+        item8 = QueryTerm<T8>.Instance!.Create(_archetype);
+        item9 = QueryTerm<T9>.Instance!.Create(_archetype);
+        item10 = QueryTerm<T10>.Instance!.Create(_archetype);
+        item11 = QueryTerm<T11>.Instance!.Create(_archetype);
+        item12 = QueryTerm<T12>.Instance!.Create(_archetype);
+        item13 = QueryTerm<T13>.Instance!.Create(_archetype);
+        item14 = QueryTerm<T14>.Instance!.Create(_archetype);
+        item15 = QueryTerm<T15>.Instance!.Create(_archetype);
+        item16 = QueryTerm<T16>.Instance!.Create(_archetype);
+    }
+
+    static Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> IColumns<Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>>.Create(Archetype archetype) => new Columns<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(archetype);
 }

@@ -4,6 +4,8 @@
         <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- Games publish this with NativeAOT, where a trim warning fails a build under TreatWarningsAsErrors. This reports it when Pixely.Ecs compiles. -->
+        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     </PropertyGroup>
 
     <ItemGroup>

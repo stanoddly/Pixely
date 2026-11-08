@@ -12,10 +12,6 @@
       groupName: 'NuGet packages',
     },
     {
-      matchDepNames: ['dotnet-sdk'],
-      enabled: false,
-    },
-    {
       // Source generators must not reference a newer Roslyn version than the compiler loading them, so each stays within its current major.
       matchPackageNames: ['Microsoft.CodeAnalysis.Analyzers', 'Microsoft.CodeAnalysis.CSharp'],
       allowedVersions: '(,{{add major 1}}.0)',

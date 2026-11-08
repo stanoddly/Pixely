@@ -170,6 +170,25 @@ public class SystemSchedulerTests
     }
 
     [Test]
+    public void SpawnerAndQueryTakeSixteenComponents()
+    {
+        using TestWorld world = new TestWorld(services => services.AddQuery<Wide>());
+
+        world.Scheduler.RunOnce(builder => builder.Spawner<WideSpawner>(), spawner => spawner.Spawn(new W1(1), new W2(2), new W3(3), new W4(4), new W5(5), new W6(6), new W7(7), new W8(8),
+            new W9(9), new W10(10), new W11(11), new W12(12), new W13(13), new W14(14), new W15(15), new W16(16)));
+
+        List<int> values = new List<int>();
+        foreach ((ReadOnlySpan<W1> w1, ReadOnlySpan<W2> w2, ReadOnlySpan<W3> w3, ReadOnlySpan<W4> w4, ReadOnlySpan<W5> w5, ReadOnlySpan<W6> w6, ReadOnlySpan<W7> w7, ReadOnlySpan<W8> w8,
+            ReadOnlySpan<W9> w9, ReadOnlySpan<W10> w10, ReadOnlySpan<W11> w11, ReadOnlySpan<W12> w12, ReadOnlySpan<W13> w13, ReadOnlySpan<W14> w14, ReadOnlySpan<W15> w15, ReadOnlySpan<W16> w16) in world.Get<Wide>())
+        {
+            values.AddRange([w1[0].Value, w2[0].Value, w3[0].Value, w4[0].Value, w5[0].Value, w6[0].Value, w7[0].Value, w8[0].Value,
+                w9[0].Value, w10[0].Value, w11[0].Value, w12[0].Value, w13[0].Value, w14[0].Value, w15[0].Value, w16[0].Value]);
+        }
+
+        Assert.That(values, Is.EqualTo(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }));
+    }
+
+    [Test]
     public void CommandsOnAnEntityDestroyedEarlierAreSkipped()
     {
         using TestWorld world = new TestWorld();

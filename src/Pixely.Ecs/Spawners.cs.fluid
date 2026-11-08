@@ -4,7 +4,7 @@ namespace Pixely.Ecs;
 
 // Spawns entities with the components of its type arguments, whose values Spawn takes. A system takes it in its constructor as it is, or derive a class
 // from it to give the entities the tags of IWith<...> or to add factory methods that call Spawn.
-{%- for n in (1..8) %}
+{%- for n in (1..16) %}
 {%- unless forloop.first %}
 {% endunless %}
 public class Spawner<{% for i in (1..n) %}{% unless forloop.first %}, {% endunless %}T{{ i }}{% endfor %}> : Spawner
