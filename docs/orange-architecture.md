@@ -196,8 +196,9 @@
 - A view takes exactly one view model. `Pixely ViewsTakeOneViewModel`, a Pixely conventions rule in
   Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
   observe several models, see `docs/ui.md`
-- Exactly one view MUST take each view model, so the system that handles its intents knows which view
-  requested them
+- Exactly one view MUST take each view model, also one without intents. With two views, a request
+  from either sets the same intent, e.g. `ToggleRequested`, so two requests in one frame apply once
+  and a rejection the system shows appears in both views
 - A view reads the world only through its view model. It MUST NOT take queries, lookups or uniques
 - A view MUST NOT take a message reader or writer
 - A view model holds what its view shows and the intents its view requested. It is UI state, not
