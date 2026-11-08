@@ -4,8 +4,7 @@
 - Architecture for any genre, built on `Pixely.Ecs`, see `docs/ecs.md`
 - The framework is Pixely. This document adds only what a game does with it
 - MUST, SHOULD and MAY are RFC 2119
-- `Foo` is a placeholder for the game's name, the rest of every name is literal. A game named
-  Ashfall has `Ashfall.Vocabulary`
+- `Foo` is a placeholder for the game's name, the rest of every name is literal
 
 ## What orange means here
 
@@ -17,13 +16,6 @@
 - Code divides into the world, the systems and the code outside systems. Systems write the world.
   Code outside systems reads it and passes intents to systems through view models or messages
 - Speed is a side benefit. Components are stored by type in contiguous arrays
-
-## Status
-
-Parts of what this document builds on are not final:
-
-- `Pixely.Ecs` is experimental
-- `Pixely.Fitness` checks only the rules that constructors and types show, see `docs/fitness.md`
 
 ## Project
 
@@ -54,10 +46,9 @@ Parts of what this document builds on are not final:
   unique's members, a service, or a struct it builds in `Update`, such as a path finding graph
 - A game's own service or struct of this kind lives beside its one caller. With more callers it lives
   in `Foo.Rules`
-- A service that a system takes MUST NOT take a query or a lookup, for the same reason as a helper.
-  Nothing checks this
+- A service that a system takes MUST NOT take a query or a lookup, for the same reason as a helper
 - A helper that code outside systems also calls takes only what cannot write, e.g. values, read-only
-  spans or a unique's read-only type, and writes nothing. Nothing checks this
+  spans or a unique's read-only type, and writes nothing
 - Types SHOULD be internal, except `Program` and its `Configure`, which a test calls, see
   `docs/testing.md`. Tests reach the rest through `InternalsVisibleTo`. Pixely.Ecs, not a project
   boundary, keeps code outside systems from writing the world
@@ -195,8 +186,6 @@ Parts of what this document builds on are not final:
   a query with `IWith<Revealed>` that draws only revealed enemies
 - With several participants, the perceived state names its participant, e.g. a component that holds
   which participants have revealed an entity
-- Nothing checks these rules. A query of the true state compiles anywhere, and Pixely.Fitness cannot
-  tell a perceived component from a true one
 
 ## UI
 
@@ -207,6 +196,8 @@ Parts of what this document builds on are not final:
 - A view takes exactly one view model. `Pixely ViewsTakeOneViewModel`, a Pixely conventions rule in
   Pixely.Fitness, checks its constructor. This is stricter than `Pixely.Ui`, which lets a view
   observe several models, see `docs/ui.md`
+- Exactly one view MUST take each view model, so the system that handles its intents knows which view
+  requested them
 - A view reads the world only through its view model. It MUST NOT take queries, lookups or uniques
 - A view MUST NOT take a message reader or writer
 - A view model holds what its view shows and the intents its view requested. It is UI state, not
@@ -314,5 +305,3 @@ internal sealed class FlashlightSystem(PlayerFlashlights flashlights, Flashlight
 - References between entities, and finding the children of an entity without scanning every entity
 - Loading a save, and what it does with messages written before it, since `Messages<T>` cannot be
   cleared
-- Whether two views may share one view model, which would run both views' `Sync` on each change and
-  merge their intents

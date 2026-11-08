@@ -5,8 +5,7 @@
 - The framework is Pixely. What Pixely provides is listed below, this document adds only what a game
   does with it
 - MUST, SHOULD and MAY are RFC 2119. A rule stated for a project holds for every namespace in it
-- `Foo` is a placeholder for the game's name, the rest of every name is literal. A game named
-  Ashfall has `Ashfall.Game`
+- `Foo` is a placeholder for the game's name, the rest of every name is literal
 - A participant is a side the rules treat as one. This document says participant, a game says its own
   word, e.g. faction
 - Each project MUST register what it offers through public extension methods, one per container it
