@@ -1,6 +1,6 @@
 # Browser harness
 
-Runs a published browser build in Chromium with WebGPU on, echoes the page's console, screenshots the canvas, presses Escape to quit the app and fails on any page error or a non-zero exit code. It is not part of `dotnet test`: it needs a browser publish, which links XDL with the `wasm-tools` workload and a writable `WasmCachePath` (docs/hosting.md, XDL in the browser), and a Chromium with a hardware adapter.
+Runs a published browser build in Chromium with WebGPU on, echoes the page's console, screenshots the canvas, presses Escape to quit the app and fails on any page error or a non-zero exit code. It is not part of `dotnet test`: it needs a browser publish, which links XDL with the `wasm-tools` workload (docs/hosting.md, XDL in the browser), and a Chromium with a hardware adapter.
 
 ```shell
 cd tests/Pixely.Browser.Harness
