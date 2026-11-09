@@ -1,7 +1,8 @@
 using System.Collections.Immutable;
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 

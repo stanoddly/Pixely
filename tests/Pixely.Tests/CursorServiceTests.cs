@@ -3,7 +3,8 @@ using Pixely.Content;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -18,7 +19,7 @@ public class CursorServiceTests
     [SetUp]
     public void SetUp()
     {
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
         _app = new PixelyAppBuilder().Build();
         _cursorService = ((PixelyApp)_app).ServiceProvider.GetRequiredService<ICursorService>();
     }

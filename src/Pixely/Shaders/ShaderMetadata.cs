@@ -1,6 +1,7 @@
 using System.Runtime.Serialization;
 using Pixely.ShaderCommon;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Shaders;
 
@@ -24,9 +25,8 @@ public enum ShaderFormat: uint
     [EnumMember(Value = "metallib")]
     MetalLib = SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_METALLIB,
 
-    // SDL_GPU_SHADERFORMAT_WGSL from SDL's WebGPU backend, which ppy.SDL3-CS does not expose yet
     [EnumMember(Value = "wgsl")]
-    Wgsl = 1u << 6
+    Wgsl = SDL_GPUShaderFormat.XDL_GPU_SHADERFORMAT_WGSL
 }
 
 public readonly struct ShaderFormats

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -13,7 +14,7 @@ public abstract class GpuVertexBuffer: IDisposable, IGpuMemorySized
     public int Size { get; internal set; }
     public long SizeInBytes { get; }
 
-    protected GpuVertexBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUBuffer> sdlVertexBuffer, int size, long sizeInBytes)
+    private protected GpuVertexBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUBuffer> sdlVertexBuffer, int size, long sizeInBytes)
     {
         GpuDevice = gpuDevice;
         SdlVertexBuffer = sdlVertexBuffer;

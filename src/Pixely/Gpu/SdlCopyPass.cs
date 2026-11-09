@@ -1,5 +1,6 @@
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -29,7 +30,7 @@ internal sealed class SdlCopyPass : CopyPass
     {
         unsafe
         {
-            SDL3.SDL_EndGPUCopyPass(_sdlCopyPass);
+            SDL_EndGPUCopyPass(_sdlCopyPass);
         }
     }
 
@@ -57,7 +58,7 @@ internal sealed class SdlCopyPass : CopyPass
             {
                 Pointer<SDL_GPUTransferBuffer> temporary = CreateFilledTransferBuffer(data);
                 SDL_GPUTransferBufferLocation temporarySource = new SDL_GPUTransferBufferLocation { transfer_buffer = temporary, offset = 0 };
-                SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, cycle);
+                SDL_UploadToGPUBuffer(_sdlCopyPass, &temporarySource, &destination, cycle);
                 _gpuDevice.ReleaseTransferBufferCore(temporary);
             }
             else
@@ -75,7 +76,7 @@ internal sealed class SdlCopyPass : CopyPass
                 _transferBufferOffset = offset + sizeBytes;
 
                 SDL_GPUTransferBufferLocation source = new SDL_GPUTransferBufferLocation { transfer_buffer = _transferBuffer.SdlTransferBuffer, offset = offset };
-                SdlBoolInterop.SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, cycle);
+                SDL_UploadToGPUBuffer(_sdlCopyPass, &source, &destination, cycle);
             }
         }
     }
@@ -90,7 +91,7 @@ internal sealed class SdlCopyPass : CopyPass
         {
             SDL_GPUTextureTransferInfo source = new SDL_GPUTextureTransferInfo { transfer_buffer = temporary, offset = 0 };
             SDL_GPUTextureRegion destination = new SDL_GPUTextureRegion { texture = texture, layer = layer, w = width, h = height, d = 1 };
-            SdlBoolInterop.SDL_UploadToGPUTexture(_sdlCopyPass, &source, &destination, false);
+            SDL_UploadToGPUTexture(_sdlCopyPass, &source, &destination, false);
         }
 
         _gpuDevice.ReleaseTransferBufferCore(temporary);
@@ -116,10 +117,10 @@ internal sealed class SdlCopyPass : CopyPass
     {
         unsafe
         {
-            byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer, cycle);
+            byte* mapped = (byte*)SDL_MapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer, cycle);
             SdlError.ThrowOnNull(mapped);
             data.CopyTo(new Span<byte>(mapped + offset, data.Length));
-            SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
+            SDL_UnmapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
         }
     }
 

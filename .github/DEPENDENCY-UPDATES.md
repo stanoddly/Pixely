@@ -1,6 +1,6 @@
 # Dependency updates
 
-The **Renovate** workflow runs self-hosted Renovate daily and on demand. It reads `.github/renovate.json5` and opens one grouped pull request for NuGet package updates, including the `SlangDxcBundle.Toolchain` project SDK version in `src/Pixely.SdlangCompiler/build/Pixely.SdlangCompiler.props`.
+The **Renovate** workflow runs self-hosted Renovate daily and on demand. It reads `.github/renovate.json5` and opens one grouped pull request for NuGet package updates, including the `SlangDxcBundle.Toolchain` project SDK version in `src/Pixely.SdlangCompiler/build/Pixely.SdlangCompiler.props` and the `PixelyXdlSharpVersion` property in `Directory.Packages.props`, which pins both the XdlSharp bindings and the native package the SDK picks per RID.
 
 ## Token
 

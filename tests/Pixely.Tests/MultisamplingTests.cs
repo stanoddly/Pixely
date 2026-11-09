@@ -1,7 +1,6 @@
 using Pixely.Gpu;
 using Pixely.Testing;
 using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Tests;
 
@@ -9,102 +8,107 @@ public class MultisamplingTests
 {
     private static readonly ShortSize _size = new ShortSize(64, 32);
 
+    private GpuDevice _gpuDevice = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _gpuDevice = StubGpuDevice.Create();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _gpuDevice.Dispose();
+    }
+
     [Test]
-    public void ValidateSampleCounts_WithMatchingAttachments_ReturnsTheirCount()
+    public void CreateRenderPass_WithMatchingAttachments_TakesTheirSampleCount()
     {
         Texture[] colorTargets = [CreateTexture(SampleCount.Count4), CreateTexture(SampleCount.Count4)];
 
-        SampleCount sampleCount = CommandBuffer.ValidateSampleCounts(colorTargets, CreateTexture(SampleCount.Count4, TextureFormat.D16Unorm, usage: TextureUsage.DepthStencilTarget));
-
-        Assert.That(sampleCount, Is.EqualTo(SampleCount.Count4));
+        Assert.That(GetSampleCount(colorTargets, CreateDepthBuffer(SampleCount.Count4)), Is.EqualTo(SampleCount.Count4));
     }
 
     [Test]
-    public void ValidateSampleCounts_WithDepthBufferOnly_ReturnsItsCount()
+    public void CreateRenderPass_WithDepthBufferOnly_TakesItsSampleCount()
     {
-        SampleCount sampleCount = CommandBuffer.ValidateSampleCounts([], CreateTexture(SampleCount.Count2, TextureFormat.D16Unorm, usage: TextureUsage.DepthStencilTarget));
-
-        Assert.That(sampleCount, Is.EqualTo(SampleCount.Count2));
+        Assert.That(GetSampleCount([], CreateDepthBuffer(SampleCount.Count2)), Is.EqualTo(SampleCount.Count2));
     }
 
     [Test]
-    public void ValidateSampleCounts_WithMismatchedColorTargets_Throws()
+    public void CreateRenderPass_WithMismatchedColorTargets_Throws()
     {
         Texture[] colorTargets = [CreateTexture(SampleCount.Count4), CreateTexture(SampleCount.Count1)];
 
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateSampleCounts(colorTargets, null));
+        Assert.Throws<InvalidOperationException>(() => GetSampleCount(colorTargets, null));
     }
 
     [Test]
-    public void ValidateSampleCounts_WithMismatchedDepthBuffer_Throws()
+    public void CreateRenderPass_WithMismatchedDepthBuffer_Throws()
     {
-        Texture[] colorTargets = [CreateTexture(SampleCount.Count4)];
-
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateSampleCounts(colorTargets, CreateTexture(SampleCount.Count1, TextureFormat.D16Unorm, usage: TextureUsage.DepthStencilTarget)));
+        Assert.Throws<InvalidOperationException>(() => GetSampleCount([CreateTexture(SampleCount.Count4)], CreateDepthBuffer(SampleCount.Count1)));
     }
 
-    [Test]
-    public void ValidateResolve_WithMatchingResolveTexture_Succeeds()
+    [TestCase(StoreOperation.Resolve)]
+    [TestCase(StoreOperation.ResolveAndStore)]
+    public void CreateRenderPass_WithMatchingResolveTexture_Succeeds(StoreOperation storeOperation)
     {
-        Assert.Multiple(() =>
-        {
-            Assert.DoesNotThrow(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, CreateTexture(SampleCount.Count1)));
-            Assert.DoesNotThrow(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.ResolveAndStore, CreateTexture(SampleCount.Count1)));
-        });
+        Assert.DoesNotThrow(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), storeOperation, CreateTexture(SampleCount.Count1)));
     }
 
     [Test]
-    public void ValidateResolve_WithoutResolveTextureOrResolve_Succeeds()
+    public void CreateRenderPass_WithoutResolveTextureOrResolve_Succeeds()
     {
-        Assert.DoesNotThrow(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Store, null));
+        Assert.DoesNotThrow(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Store, null));
     }
 
     [Test]
-    public void ValidateResolve_WithResolveStoreOperationAndNoResolveTexture_Throws()
+    public void CreateRenderPass_WithResolveStoreOperationAndNoResolveTexture_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, null));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Resolve, null));
     }
 
     [Test]
-    public void ValidateResolve_WithResolveTextureAndStoreOperationStore_Throws()
+    public void CreateRenderPass_WithResolveTextureAndStoreOperationStore_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Store, CreateTexture(SampleCount.Count1)));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Store, CreateTexture(SampleCount.Count1)));
     }
 
     [Test]
-    public void ValidateResolve_WithSingleSampleColorTarget_Throws()
+    public void CreateRenderPass_ResolvingASingleSampleColorTarget_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count1), StoreOperation.Resolve, CreateTexture(SampleCount.Count1)));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count1), StoreOperation.Resolve, CreateTexture(SampleCount.Count1)));
     }
 
     [Test]
-    public void ValidateResolve_WithMultisampledResolveTexture_Throws()
+    public void CreateRenderPass_WithMultisampledResolveTexture_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, CreateTexture(SampleCount.Count4)));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Resolve, CreateTexture(SampleCount.Count4)));
     }
 
     [Test]
-    public void ValidateResolve_WithDifferentFormat_Throws()
+    public void CreateRenderPass_WithResolveTextureOfDifferentFormat_Throws()
     {
         Texture resolveTexture = CreateTexture(SampleCount.Count1, TextureFormat.R8G8B8A8Unorm);
 
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
     }
 
     [Test]
-    public void ValidateResolve_WithDifferentSize_Throws()
+    public void CreateRenderPass_WithResolveTextureOfDifferentSize_Throws()
     {
         Texture resolveTexture = CreateTexture(SampleCount.Count1, TextureFormat.B8G8R8A8Unorm, new ShortSize(32, 32));
 
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
     }
 
     [Test]
-    public void ValidateResolve_WithResolveTextureWithoutColorTargetUsage_Throws()
+    public void CreateRenderPass_WithResolveTextureWithoutColorTargetUsage_Throws()
     {
         Texture resolveTexture = CreateTexture(SampleCount.Count1, usage: TextureUsage.Sampler);
 
-        Assert.Throws<InvalidOperationException>(() => CommandBuffer.ValidateResolve(0, CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
+        Assert.Throws<InvalidOperationException>(() => CreateResolvingRenderPass(CreateTexture(SampleCount.Count4), StoreOperation.Resolve, resolveTexture));
     }
 
     [TestCase(StoreOperation.Store, StoreOperation.Store)]
@@ -137,34 +141,39 @@ public class MultisamplingTests
     }
 
     [Test]
-    public void UserTexture_SizeInBytes_CountsEverySample()
+    public void CreateTexture_SizeInBytes_CountsEverySample()
     {
-        using GpuDevice gpuDevice = StubGpuDevice.Create();
         long singleSampleBytes = TextureFormat.B8G8R8A8Unorm.CalculateSizeInBytes(_size.Width, _size.Height);
 
         Assert.Multiple(() =>
         {
-            Assert.That(new UserTexture(gpuDevice, default, _size, TextureFormat.B8G8R8A8Unorm, TextureUsage.ColorTarget).SizeInBytes, Is.EqualTo(singleSampleBytes));
-            Assert.That(new UserTexture(gpuDevice, default, _size, TextureFormat.B8G8R8A8Unorm, TextureUsage.ColorTarget, SampleCount.Count4).SizeInBytes, Is.EqualTo(singleSampleBytes * 4));
-            Assert.That(new UserTexture(gpuDevice, default, _size, TextureFormat.B8G8R8A8Unorm, TextureUsage.ColorTarget, SampleCount.Count8).SizeInBytes, Is.EqualTo(singleSampleBytes * 8));
+            Assert.That(CreateTexture(SampleCount.Count1).SizeInBytes, Is.EqualTo(singleSampleBytes));
+            Assert.That(CreateTexture(SampleCount.Count4).SizeInBytes, Is.EqualTo(singleSampleBytes * 4));
+            Assert.That(CreateTexture(SampleCount.Count8).SizeInBytes, Is.EqualTo(singleSampleBytes * 8));
         });
     }
 
-    private static Texture CreateTexture(
-        SampleCount sampleCount, TextureFormat format = TextureFormat.B8G8R8A8Unorm, ShortSize? size = null, TextureUsage usage = TextureUsage.ColorTarget)
+    private SampleCount GetSampleCount(Texture[] colorTargets, Texture? depthBuffer)
     {
-        return new TestTexture(size ?? _size, format, usage, sampleCount);
+        ColorTargetSettings[] colorTargetSettings = colorTargets.Select(_ => ColorTargetSettings.Clear).ToArray();
+        using CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+        using RenderPass renderPass = commandBuffer.CreateRenderPass(colorTargets, colorTargetSettings, depthBuffer, new DepthBufferSettings());
+        return renderPass.SampleCount;
     }
 
-    private sealed class TestTexture : Texture
+    private void CreateResolvingRenderPass(Texture colorTarget, StoreOperation storeOperation, Texture? resolveTexture)
     {
-        internal TestTexture(ShortSize size, TextureFormat format, TextureUsage usage, SampleCount sampleCount)
-            : base(Pointer<SDL_GPUTexture>.Null, size, format, 0, usage, sampleCount)
-        {
-        }
+        using CommandBuffer commandBuffer = _gpuDevice.AcquireCommandBuffer();
+        using RenderPass renderPass = commandBuffer.CreateRenderPass([colorTarget], [new ColorTargetSettings { StoreOperation = storeOperation }], null, new DepthBufferSettings(), [resolveTexture]);
+    }
 
-        public override void Dispose()
-        {
-        }
+    private Texture CreateDepthBuffer(SampleCount sampleCount)
+    {
+        return _gpuDevice.CreateTexture(_size, TextureFormat.D16Unorm, TextureUsage.DepthStencilTarget, sampleCount);
+    }
+
+    private Texture CreateTexture(SampleCount sampleCount, TextureFormat format = TextureFormat.B8G8R8A8Unorm, ShortSize? size = null, TextureUsage usage = TextureUsage.ColorTarget)
+    {
+        return _gpuDevice.CreateTexture(size ?? _size, format, usage, sampleCount);
     }
 }

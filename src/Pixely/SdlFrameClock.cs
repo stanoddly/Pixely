@@ -1,4 +1,5 @@
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -19,7 +20,7 @@ internal sealed class SdlFrameClock : PixelyFrameClock
         }
 
         ulong previousElapsedNanoseconds = ElapsedNanoseconds;
-        ulong elapsedNanoseconds = SDL3.SDL_GetTicksNS() - _pausedNanoseconds;
+        ulong elapsedNanoseconds = SDL_GetTicksNS() - _pausedNanoseconds;
 
         // There could have been some loading, so the very first StartFrame would calculate several seconds! 😅
         double timeDelta = previousElapsedNanoseconds != 0 ? Math.Min((elapsedNanoseconds - previousElapsedNanoseconds) / 1_000_000_000.0, MaxDeltaTime) : TimeDelta64;
@@ -34,7 +35,7 @@ internal sealed class SdlFrameClock : PixelyFrameClock
             throw new InvalidOperationException("Frame clock is already paused.");
         }
 
-        _pauseStartNanoseconds = SDL3.SDL_GetTicksNS();
+        _pauseStartNanoseconds = SDL_GetTicksNS();
         _paused = true;
     }
 
@@ -45,7 +46,7 @@ internal sealed class SdlFrameClock : PixelyFrameClock
             throw new InvalidOperationException("Frame clock is not paused.");
         }
 
-        ulong pauseEndNanoseconds = SDL3.SDL_GetTicksNS();
+        ulong pauseEndNanoseconds = SDL_GetTicksNS();
         _pausedNanoseconds += pauseEndNanoseconds - _pauseStartNanoseconds;
         _pauseStartNanoseconds = 0;
         _paused = false;

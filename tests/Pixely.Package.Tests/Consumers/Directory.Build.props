@@ -1,7 +1,5 @@
 <Project>
 
-    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
-
     <!--
       The Pixely SDK compiles browser publishes with Mono AOT by default, which needs the wasm-tools workload from the first
       evaluation on. Most CI lanes run the fixtures without it, and AOT would add minutes to every browser publish, so the fixtures
@@ -12,11 +10,13 @@
     </PropertyGroup>
 
     <!--
-      The browser fixtures never call SDL and most lanes cannot relink the runtime, so they skip PIXELY0013. The test of the error
-      sets the property to false on the command line.
+      The fixtures take the XDL runtime from the packed SDK only, not from tests/Directory.Build.targets. The browser fixtures never
+      call SDL and most lanes cannot relink the runtime with XDL's archives, so they skip the browser native package; the tests of
+      the native package set the property to false on the command line.
     -->
     <PropertyGroup>
-        <_PixelySkipBrowserSdlCheck Condition="'$(_PixelySkipBrowserSdlCheck)' == ''">true</_PixelySkipBrowserSdlCheck>
+        <_PixelyRepositoryNativeTargets>false</_PixelyRepositoryNativeTargets>
+        <_PixelySkipNativePackage Condition="'$(_PixelySkipNativePackage)' == '' and '$(RuntimeIdentifier)' == 'browser-wasm'">true</_PixelySkipNativePackage>
     </PropertyGroup>
 
 </Project>

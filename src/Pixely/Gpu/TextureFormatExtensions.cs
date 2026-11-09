@@ -1,3 +1,6 @@
+using XdlSharp;
+using static XdlSharp.Xdl;
+
 namespace Pixely.Gpu;
 
 public static class TextureFormatExtensions
@@ -25,7 +28,7 @@ public static class TextureFormatExtensions
     /// </summary>
     public static PixelFormat ToPixelFormat(this TextureFormat format)
     {
-        PixelFormat pixelFormat = (PixelFormat)SDL.SDL3.SDL_GetPixelFormatFromGPUTextureFormat((SDL.SDL_GPUTextureFormat)format);
+        PixelFormat pixelFormat = (PixelFormat)SDL_GetPixelFormatFromGPUTextureFormat((SDL_GPUTextureFormat)format);
         if (pixelFormat == PixelFormat.Unknown)
         {
             throw new NotSupportedException($"Texture format '{format}' has no CPU pixel format.");

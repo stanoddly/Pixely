@@ -1,5 +1,6 @@
 #if BROWSER
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -11,7 +12,7 @@ public sealed partial class SwapchainWindow
     // the suspended region. The page paces frames from requestAnimationFrame anyway, so a frame with no texture ready is skipped.
     private unsafe bool AcquireSwapchainTexture(SDL_GPUCommandBuffer* commandBuffer, SDL_GPUTexture** texture, uint* width, uint* height)
     {
-        return SDL3.SDL_AcquireGPUSwapchainTexture(commandBuffer, SdlWindow, texture, width, height);
+        return SDL_AcquireGPUSwapchainTexture(commandBuffer, SdlWindow, (Pointer<SDL_GPUTexture>*)texture, width, height);
     }
 }
 #endif

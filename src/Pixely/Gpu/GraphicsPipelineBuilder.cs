@@ -2,7 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pixely.Shaders;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 

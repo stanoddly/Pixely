@@ -1,3 +1,5 @@
+using XdlSharp;
+
 namespace Pixely.Gpu;
 
 /// <summary>
@@ -8,15 +10,15 @@ public enum LoadOperation
     /// <summary>
     /// Load the existing contents of the resource.
     /// </summary>
-    Load = SDL.SDL_GPULoadOp.SDL_GPU_LOADOP_LOAD,
+    Load = SDL_GPULoadOp.SDL_GPU_LOADOP_LOAD,
     
     /// <summary>
     /// Clear the resource at the start of the render pass.
     /// </summary>
-    Clear = SDL.SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
+    Clear = SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
     
     /// <summary>
     /// The contents of the resource will be undefined at the start of the render pass.
     /// </summary>
-    DontCare = SDL.SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE
+    DontCare = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE
 }

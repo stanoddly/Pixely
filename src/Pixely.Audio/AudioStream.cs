@@ -1,7 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
@@ -33,8 +34,8 @@ public unsafe sealed class AudioStream : AudioClip
         }
 
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_SetTrackIOStream(source.SdlTrack, GetOrCreateIoStream(), false),
-            nameof(SDL3_mixer.MIX_SetTrackIOStream));
+            MIX_SetTrackIOStream(source.SdlTrack, GetOrCreateIoStream(), false),
+            nameof(MIX_SetTrackIOStream));
         _source = source;
     }
 
@@ -46,8 +47,8 @@ public unsafe sealed class AudioStream : AudioClip
         }
 
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_SetTrackIOStream(source.SdlTrack, Pointer<SDL_IOStream>.Null, false),
-            nameof(SDL3_mixer.MIX_SetTrackIOStream));
+            MIX_SetTrackIOStream(source.SdlTrack, Pointer<SDL_IOStream>.Null, false),
+            nameof(MIX_SetTrackIOStream));
         _source = null;
     }
 
@@ -101,7 +102,8 @@ public unsafe sealed class AudioStream : AudioClip
 
     private Pointer<SDL_IOStream> CreateIoStream()
     {
-        SDL3.SDL_INIT_INTERFACE(out SDL_IOStreamInterface ioInterface);
+        SDL_IOStreamInterface ioInterface;
+        SDL_INIT_INTERFACE(&ioInterface);
         ioInterface.size = &Size;
         ioInterface.seek = &Seek;
         ioInterface.read = &Read;
@@ -110,11 +112,11 @@ public unsafe sealed class AudioStream : AudioClip
         ioInterface.close = &Close;
 
         _selfHandle = GCHandle.Alloc(this);
-        Pointer<SDL_IOStream> ioStream = SDL3.SDL_OpenIO(&ioInterface, GCHandle.ToIntPtr(_selfHandle));
+        Pointer<SDL_IOStream> ioStream = SDL_OpenIO(&ioInterface, GCHandle.ToIntPtr(_selfHandle));
         if (ioStream.IsNull)
         {
             _selfHandle.Free();
-            SdlError.ThrowOnNull(ioStream, nameof(SDL3.SDL_OpenIO));
+            SdlError.ThrowOnNull(ioStream, nameof(SDL_OpenIO));
         }
 
         return ioStream;
@@ -129,7 +131,7 @@ public unsafe sealed class AudioStream : AudioClip
         }
 
         _sdlIoStream = Pointer<SDL_IOStream>.Null;
-        SDL3.SDL_CloseIO(ioStream);
+        SDL_CloseIO(ioStream);
     }
 
     private void CloseStream()
@@ -254,23 +256,23 @@ public unsafe sealed class AudioStream : AudioClip
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static SDLBool Flush(nint userdata, SDL_IOStatus* status)
+    private static byte Flush(nint userdata, SDL_IOStatus* status)
     {
         SetStatus(status, SDL_IOStatus.SDL_IO_STATUS_READY);
-        return true;
+        return 1;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static SDLBool Close(nint userdata)
+    private static byte Close(nint userdata)
     {
         try
         {
             GetStream(userdata)?.CloseFromSdl();
-            return true;
+            return 1;
         }
         catch
         {
-            return false;
+            return 0;
         }
     }
 

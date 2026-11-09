@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-09: Pixely binds XDL through XdlSharp, and the SDK picks XDL's native package by RID
+
+Pixely calls [XDL](https://github.com/stanoddly/XDL), a patched SDL 3.4, through the [XdlSharp](https://github.com/stanoddly/XDLSharp) bindings instead of ppy.SDL3-CS. The bindings are one package; XDL's runtime is one `XdlSharp.Native.<rid>` package per platform, and the SDK references the one for `RuntimeIdentifier`, or for the build host's portable RID when none is set (`docs/sdk.md`).
+
+- XDL carries the fixes Pixely needs and SDL does not take: transparent GPU windows, window shapes and mouse events that pass through, a Vulkan defragmentation fix, and the WebGPU backend in its own browser archive. The browser no longer needs an SDL archive built by hand, a WebGPU archive linked ahead of it, or the `PixelyBrowserWebGpu` opt-in, and PIXELY0005 and PIXELY0013 are gone.
+- XdlSharp passes `bool` and function pointers as integers, which Mono's wasm interpreter needs, so Pixely's own declarations for boolean arguments are gone. It mirrors the C API: strings go in as null-terminated UTF-8 spans and come back as pointers, which Pixely encodes and decodes itself.
+- A local run or debugging session downloads one platform's libraries instead of every platform's, and the repository's projects no longer pin a RID to keep `bin/` small. The package is referenced by every project on the SDK, libraries included, because the restore of a test project does not yet see the `OutputType` that `Microsoft.NET.Test.Sdk` sets; `PrivateAssets` keeps it out of a library's nuspec.
+- `Pointer<T>` is XdlSharp's, and Pixely's public API no longer exposes it.
+
+Cost: a RID without an XDL package, such as musl, fails with PIXELY0014. A restore that missed the RID of a later `--no-restore` build fails with PIXELY0015 instead of shipping without XDL. XDL's satellites decode fewer formats: no animated PNG, TIFF, WebP or AVIF, and no Opus, WavPack, tracker, MIDI or GME audio. Every browser app build needs the `wasm-tools` workload and a writable `WasmCachePath`, because XDL's archives relink the runtime and the WebGPU port is built at link time; the SDK sets `WasmBuildNative` so that a missing workload fails the build. XdlSharp's own CI does not run Mono AOT in the browser.
+
 ## 2026-10-30: A game's tests build the game's app from a test builder
 
 `TestApp.CreateBuilder()` in `Pixely.Testing` returns a `PixelyAppBuilder` with the test environment registered, and a test passes it to the game's own `Configure`, which the game makes public (`docs/testing.md`). The app runs on the stub GPU device and SDL's dummy video and audio drivers, is isolated from the machine's gamepads and theme, steps game time by 1/30 s per frame, and takes synthetic input through `TestInput`.

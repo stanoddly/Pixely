@@ -1,4 +1,5 @@
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -33,9 +34,9 @@ public static class MessageBox
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(message);
 
-        SdlError.ThrowOnFalse(
-            SDL3.SDL_ShowSimpleMessageBox(ToFlags(severity), title, message, window),
-            nameof(SDL3.SDL_ShowSimpleMessageBox));
+        using NullTerminatedUtf8 utf8Title = new NullTerminatedUtf8(title);
+        using NullTerminatedUtf8 utf8Message = new NullTerminatedUtf8(message);
+        SdlError.ThrowOnFalse(SDL_ShowSimpleMessageBox(ToFlags(severity), utf8Title.Span, utf8Message.Span, window), nameof(SDL_ShowSimpleMessageBox));
     }
 
     private static SDL_MessageBoxFlags ToFlags(MessageBoxSeverity severity)

@@ -1,7 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -15,12 +16,12 @@ internal static class SdlLogOutput
     internal static unsafe void Install(ILogger? logger)
     {
         _logger = logger;
-        SDL3.SDL_SetLogOutputFunction(&OnMessage, IntPtr.Zero);
+        SDL_SetLogOutputFunction(&OnMessage, IntPtr.Zero);
     }
 
     internal static unsafe void Uninstall()
     {
-        SDL3.SDL_SetLogOutputFunction(SDL3.SDL_GetDefaultLogOutputFunction(), IntPtr.Zero);
+        SDL_SetLogOutputFunction(SDL_GetDefaultLogOutputFunction(), IntPtr.Zero);
         _logger = null;
     }
 

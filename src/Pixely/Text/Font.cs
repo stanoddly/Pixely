@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Text;
 

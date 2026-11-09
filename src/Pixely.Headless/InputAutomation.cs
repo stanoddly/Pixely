@@ -1,6 +1,7 @@
 using System.Numerics;
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Headless;
 
@@ -175,7 +176,7 @@ internal sealed class InputAutomation
 
     private static VirtualKey GetVirtualKey(Scancode scancode)
     {
-        SDL_Keycode keycode = SdlBoolInterop.SDL_GetKeyFromScancode((SDL_Scancode)scancode, SDL_Keymod.SDL_KMOD_NONE, true);
+        SDL_Keycode keycode = SDL_GetKeyFromScancode((SDL_Scancode)scancode, SDL_Keymod.SDL_KMOD_NONE, true);
         return (VirtualKey)keycode;
     }
 

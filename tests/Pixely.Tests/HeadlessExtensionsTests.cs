@@ -2,7 +2,8 @@ using Pixely.App;
 using Pixely.Content;
 using Pixely.Headless;
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -16,7 +17,7 @@ public class HeadlessExtensionsTests
     public void SetUp()
     {
         // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
     }
 
     [TestCase(null)]

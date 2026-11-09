@@ -1,6 +1,7 @@
 using System.Numerics;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
@@ -78,8 +79,8 @@ public unsafe sealed class AudioSource : IDisposable
             ThrowIfDisposed();
             AudioSystem.ThrowIfNegative(value, nameof(value));
             SdlError.ThrowOnFalse(
-                SDL3_mixer.MIX_SetTrackGain(SdlTrack, value),
-                nameof(SDL3_mixer.MIX_SetTrackGain));
+                MIX_SetTrackGain(SdlTrack, value),
+                nameof(MIX_SetTrackGain));
             _gain = value;
         }
     }
@@ -120,12 +121,12 @@ public unsafe sealed class AudioSource : IDisposable
         get
         {
             ThrowIfDisposed();
-            if (SDL3_mixer.MIX_TrackPaused(SdlTrack))
+            if (MIX_TrackPaused(SdlTrack))
             {
                 return AudioSourceState.Paused;
             }
 
-            if (SDL3_mixer.MIX_TrackPlaying(SdlTrack))
+            if (MIX_TrackPlaying(SdlTrack))
             {
                 return AudioSourceState.Playing;
             }
@@ -147,32 +148,32 @@ public unsafe sealed class AudioSource : IDisposable
         ApplyLooping();
         ApplyPosition();
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_PlayTrack(SdlTrack, 0),
-            nameof(SDL3_mixer.MIX_PlayTrack));
+            MIX_PlayTrack(SdlTrack, 0),
+            nameof(MIX_PlayTrack));
     }
 
     public void Pause()
     {
         ThrowIfDisposed();
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_PauseTrack(SdlTrack),
-            nameof(SDL3_mixer.MIX_PauseTrack));
+            MIX_PauseTrack(SdlTrack),
+            nameof(MIX_PauseTrack));
     }
 
     public void Resume()
     {
         ThrowIfDisposed();
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_ResumeTrack(SdlTrack),
-            nameof(SDL3_mixer.MIX_ResumeTrack));
+            MIX_ResumeTrack(SdlTrack),
+            nameof(MIX_ResumeTrack));
     }
 
     public void Stop()
     {
         ThrowIfDisposed();
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_StopTrack(SdlTrack, 0),
-            nameof(SDL3_mixer.MIX_StopTrack));
+            MIX_StopTrack(SdlTrack, 0),
+            nameof(MIX_StopTrack));
     }
 
     public void Dispose()
@@ -192,8 +193,8 @@ public unsafe sealed class AudioSource : IDisposable
         };
 
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_SetTrack3DPosition(SdlTrack, &point),
-            nameof(SDL3_mixer.MIX_SetTrack3DPosition));
+            MIX_SetTrack3DPosition(SdlTrack, &point),
+            nameof(MIX_SetTrack3DPosition));
     }
 
     internal void ThrowIfDisposed()
@@ -209,7 +210,7 @@ public unsafe sealed class AudioSource : IDisposable
         ThrowIfDisposed();
         int loopCount = _looping ? -1 : 0;
         SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_SetTrackLoops(SdlTrack, loopCount),
-            nameof(SDL3_mixer.MIX_SetTrackLoops));
+            MIX_SetTrackLoops(SdlTrack, loopCount),
+            nameof(MIX_SetTrackLoops));
     }
 }

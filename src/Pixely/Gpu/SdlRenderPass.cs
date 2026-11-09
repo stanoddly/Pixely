@@ -1,5 +1,6 @@
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -22,7 +23,7 @@ internal sealed class SdlRenderPass : RenderPass
     {
         unsafe
         {
-            SDL3.SDL_BindGPUGraphicsPipeline(_nativePointer, graphicsPipeline.Pointer);
+            SDL_BindGPUGraphicsPipeline(_nativePointer, graphicsPipeline.Pointer);
         }
     }
 
@@ -31,7 +32,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlVertexBuffer, offset = 0 };
-            SDL3.SDL_BindGPUVertexBuffers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
+            SDL_BindGPUVertexBuffers(_nativePointer, slot, &sdlGpuBufferBinding, 1);
         }
     }
 
@@ -40,7 +41,7 @@ internal sealed class SdlRenderPass : RenderPass
         unsafe
         {
             SDL_GPUBufferBinding sdlGpuBufferBinding = new SDL_GPUBufferBinding { buffer = buffer.SdlBuffer, offset = 0 };
-            SDL3.SDL_BindGPUIndexBuffer(_nativePointer, &sdlGpuBufferBinding, GetSdlIndexElementSize(buffer.ElementSize));
+            SDL_BindGPUIndexBuffer(_nativePointer, &sdlGpuBufferBinding, GetSdlIndexElementSize(buffer.ElementSize));
         }
     }
 
@@ -50,7 +51,7 @@ internal sealed class SdlRenderPass : RenderPass
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
             SdlBindings.FillSamplerBindings(bindings, textures, sampler);
-            SDL3.SDL_BindGPUVertexSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
+            SDL_BindGPUVertexSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
 
@@ -60,7 +61,7 @@ internal sealed class SdlRenderPass : RenderPass
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
             SdlBindings.FillSamplerBindings(bindings, textures, sampler);
-            SDL3.SDL_BindGPUFragmentSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
+            SDL_BindGPUFragmentSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
 
@@ -70,7 +71,7 @@ internal sealed class SdlRenderPass : RenderPass
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
             SdlBindings.FillBuffers(sdlBuffers, buffers);
-            SDL3.SDL_BindGPUVertexStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL_BindGPUVertexStorageBuffers(_nativePointer, slot, (Pointer<SDL_GPUBuffer>*)sdlBuffers, (uint)buffers.Length);
         }
     }
 
@@ -80,7 +81,7 @@ internal sealed class SdlRenderPass : RenderPass
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
             SdlBindings.FillBuffers(sdlBuffers, buffers);
-            SDL3.SDL_BindGPUFragmentStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL_BindGPUFragmentStorageBuffers(_nativePointer, slot, (Pointer<SDL_GPUBuffer>*)sdlBuffers, (uint)buffers.Length);
         }
     }
 
@@ -88,7 +89,7 @@ internal sealed class SdlRenderPass : RenderPass
     {
         unsafe
         {
-            SDL3.SDL_SetGPUStencilReference(_nativePointer, reference);
+            SDL_SetGPUStencilReference(_nativePointer, reference);
         }
     }
 
@@ -104,7 +105,7 @@ internal sealed class SdlRenderPass : RenderPass
                 h = scissor.Height
             };
 
-            SDL3.SDL_SetGPUScissor(_nativePointer, &sdlScissor);
+            SDL_SetGPUScissor(_nativePointer, &sdlScissor);
         }
     }
 
@@ -112,7 +113,7 @@ internal sealed class SdlRenderPass : RenderPass
     {
         unsafe
         {
-            SDL3.SDL_DrawGPUPrimitives(_nativePointer, vertexCount, instanceCount, 0, 0);
+            SDL_DrawGPUPrimitives(_nativePointer, vertexCount, instanceCount, 0, 0);
         }
     }
 
@@ -120,7 +121,7 @@ internal sealed class SdlRenderPass : RenderPass
     {
         unsafe
         {
-            SDL3.SDL_DrawGPUIndexedPrimitives(_nativePointer, indexCount, instanceCount, firstIndex, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(_nativePointer, indexCount, instanceCount, firstIndex, 0, 0);
         }
     }
 
@@ -128,7 +129,7 @@ internal sealed class SdlRenderPass : RenderPass
     {
         unsafe
         {
-            SDL3.SDL_EndGPURenderPass(_nativePointer);
+            SDL_EndGPURenderPass(_nativePointer);
         }
 
         _nativePointer = Pointer<SDL_GPURenderPass>.Null;

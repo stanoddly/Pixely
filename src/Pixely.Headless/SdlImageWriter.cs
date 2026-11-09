@@ -1,6 +1,7 @@
 using Pixely.Content;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Headless;
 
@@ -24,22 +25,23 @@ internal class SdlImageWriter : IImageWriter
 
         fixed (byte* pixelsPointer = pixels)
         {
-            Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurfaceFrom(width, height, format, (IntPtr)pixelsPointer, pitch);
+            Pointer<SDL_Surface> surface = SDL_CreateSurfaceFrom(width, height, format, (IntPtr)pixelsPointer, pitch);
             if (surface.IsNull)
             {
-                throw new InvalidOperationException($"SDL_CreateSurfaceFrom failed: {SDL3.SDL_GetError()}");
+                throw new InvalidOperationException($"SDL_CreateSurfaceFrom failed: {SdlError.GetError()}");
             }
 
             try
             {
-                if (!SDL3_image.IMG_SavePNG(surface, path))
+                using NullTerminatedUtf8 utf8Path = new NullTerminatedUtf8(path);
+                if (!IMG_SavePNG(surface, utf8Path.Span))
                 {
-                    throw new IOException($"IMG_SavePNG failed for '{path}': {SDL3.SDL_GetError()}");
+                    throw new IOException($"IMG_SavePNG failed for '{path}': {SdlError.GetError()}");
                 }
             }
             finally
             {
-                SDL3.SDL_DestroySurface(surface);
+                SDL_DestroySurface(surface);
             }
         }
     }

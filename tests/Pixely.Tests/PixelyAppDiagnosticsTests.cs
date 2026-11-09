@@ -2,7 +2,8 @@ using Microsoft.Extensions.Logging;
 using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Gpu;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -126,7 +127,7 @@ public class PixelyAppDiagnosticsTests
 
     private static PixelyAppBuilder CreateBuilder(PixelyConfig config)
     {
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
         PixelyAppBuilder builder = new();
         builder.AddSingleton(config);
         return builder;

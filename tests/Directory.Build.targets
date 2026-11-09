@@ -1,0 +1,10 @@
+<Project>
+
+    <!--
+      Tests reference Pixely as a project, so the Pixely SDK is not imported, and they take the XDL runtime of the platform they
+      run on from the same file. The package fixtures under Pixely.Package.Tests build here too; they must get it from the packed
+      SDK alone, so that a packed SDK that failed to import it fails their tests, and their Directory.Build.props opts out.
+    -->
+    <Import Project="$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Native.targets" Condition="'$(_PixelyRepositoryNativeTargets)' != 'false'" />
+
+</Project>

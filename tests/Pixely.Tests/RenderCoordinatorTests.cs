@@ -6,7 +6,6 @@ using Pixely.Gpu;
 using Pixely.RenderOrchestration;
 using Pixely.Testing;
 using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Tests;
 
@@ -487,6 +486,9 @@ public class RenderCoordinatorTests
     // constructor to compile.
     private sealed class TestWindow : Window
     {
+        // Static, because the window is created uninitialised and its instance initialisers never run.
+        private static readonly StubGpuDevice _swapchainDevice = StubGpuDevice.Create();
+
         private TestWindow()
             : base(default, default, 0, null!, null!, default)
         {
@@ -507,7 +509,7 @@ public class RenderCoordinatorTests
         public override bool TryWaitAndAcquireSwapchainTexture(CommandBuffer commandBuffer, out SwapchainTexture swapchainTexture)
         {
             Acquiring?.Invoke();
-            swapchainTexture = new SwapchainTexture(Pointer<SDL_GPUTexture>.Null, new ShortSize(640, 480), TextureFormat.B8G8R8A8Unorm);
+            swapchainTexture = _swapchainDevice.CreateSwapchainTexture(new ShortSize(640, 480), TextureFormat.B8G8R8A8Unorm);
             return HasTexture;
         }
     }

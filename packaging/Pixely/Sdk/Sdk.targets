@@ -25,6 +25,9 @@
         <Error Code="PIXELY0003" File="$(MSBuildProjectFullPath)" Text="The Pixely SDK must follow Microsoft.NET.Sdk: put &lt;Sdk Name=&quot;Pixely&quot; /&gt; inside &lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;, or write Sdk=&quot;Microsoft.NET.Sdk;Pixely/$(PixelyVersion)&quot;." />
     </Target>
 
+    <!-- The XDL runtime of the platform the app is built for (Pixely.Native.targets). -->
+    <Import Project="$(MSBuildThisFileDirectory)Pixely.Native.targets" />
+
     <!--
       Additive SDK targets are imported after Microsoft.NET.Sdk.targets, which alone sets TargetFrameworkIdentifier
       (it is also empty in the outer build of a multi-targeting project, which compiles nothing).

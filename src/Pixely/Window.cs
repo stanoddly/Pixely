@@ -3,7 +3,8 @@ using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -65,7 +66,7 @@ public abstract class Window : IDisposable
             int width, height;
             unsafe
             {
-                SDL3.SDL_GetWindowSizeInPixels(SdlWindow, &width, &height);
+                SDL_GetWindowSizeInPixels(SdlWindow, &width, &height);
             }
 
             return new ShortSize((ushort)width, (ushort)height);
@@ -79,7 +80,7 @@ public abstract class Window : IDisposable
             int width, height;
             unsafe
             {
-                SDL3.SDL_GetWindowSize(SdlWindow, &width, &height);
+                SDL_GetWindowSize(SdlWindow, &width, &height);
             }
             return new Size<uint>((uint)width, (uint)height);
         }
@@ -87,7 +88,7 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                SDL3.SDL_SetWindowSize(SdlWindow, (int)value.Width, (int)value.Height);
+                SDL_SetWindowSize(SdlWindow, (int)value.Width, (int)value.Height);
             }
         }
     }
@@ -100,14 +101,14 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                return SDL3.SDL_GetWindowMouseGrab(SdlWindow);
+                return SDL_GetWindowMouseGrab(SdlWindow);
             }
         }
         set
         {
             unsafe
             {
-                SdlBoolInterop.SDL_SetWindowMouseGrab(SdlWindow, value);
+                SDL_SetWindowMouseGrab(SdlWindow, value);
             }
         }
     }
@@ -118,14 +119,14 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                return SDL3.SDL_GetWindowRelativeMouseMode(SdlWindow);
+                return SDL_GetWindowRelativeMouseMode(SdlWindow);
             }
         }
         set
         {
             unsafe
             {
-                SdlBoolInterop.SDL_SetWindowRelativeMouseMode(SdlWindow, value);
+                SDL_SetWindowRelativeMouseMode(SdlWindow, value);
             }
         }
     }
@@ -160,16 +161,16 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                return (SDL3.SDL_GetWindowFlags(SdlWindow) & SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP) != 0;
+                return (SDL_GetWindowFlags(SdlWindow) & SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP) != 0;
             }
         }
         set
         {
             unsafe
             {
-                if (SdlBoolInterop.SDL_SetWindowAlwaysOnTop(SdlWindow, value) == false)
+                if (SDL_SetWindowAlwaysOnTop(SdlWindow, value) == false)
                 {
-                    throw new PixelyException($"SDL_SetWindowAlwaysOnTop failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_SetWindowAlwaysOnTop failed: {SdlError.GetError()}");
                 }
             }
         }
@@ -182,7 +183,7 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                return (SDL3.SDL_GetWindowFlags(SdlWindow) & SDL_WindowFlags.SDL_WINDOW_HIDDEN) == 0;
+                return (SDL_GetWindowFlags(SdlWindow) & SDL_WindowFlags.SDL_WINDOW_HIDDEN) == 0;
             }
         }
     }
@@ -201,7 +202,7 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                return (SDL3.SDL_GetWindowFlags(SdlWindow) & (SDL_WindowFlags.SDL_WINDOW_HIDDEN | SDL_WindowFlags.SDL_WINDOW_MINIMIZED)) == 0;
+                return (SDL_GetWindowFlags(SdlWindow) & (SDL_WindowFlags.SDL_WINDOW_HIDDEN | SDL_WindowFlags.SDL_WINDOW_MINIMIZED)) == 0;
             }
         }
     }
@@ -210,7 +211,7 @@ public abstract class Window : IDisposable
     {
         unsafe
         {
-            return SDL3.SDL_ShowWindow(SdlWindow);
+            return SDL_ShowWindow(SdlWindow);
         }
     }
 
@@ -218,7 +219,7 @@ public abstract class Window : IDisposable
     {
         unsafe
         {
-            return SDL3.SDL_HideWindow(SdlWindow);
+            return SDL_HideWindow(SdlWindow);
         }
     }
 
@@ -226,7 +227,7 @@ public abstract class Window : IDisposable
     {
         unsafe
         {
-            return SDL3.SDL_RaiseWindow(SdlWindow);
+            return SDL_RaiseWindow(SdlWindow);
         }
     }
 
@@ -243,16 +244,16 @@ public abstract class Window : IDisposable
             {
                 if (value)
                 {
-                    if (!SDL3.SDL_SetWindowHitTest(SdlWindow, &HitTestDraggable, IntPtr.Zero))
+                    if (!SDL_SetWindowHitTest(SdlWindow, &HitTestDraggable, IntPtr.Zero))
                     {
-                        throw new PixelyException($"SDL_SetWindowHitTest failed: {SDL3.SDL_GetError()}");
+                        throw new PixelyException($"SDL_SetWindowHitTest failed: {SdlError.GetError()}");
                     }
                 }
                 else
                 {
-                    if (!SDL3.SDL_SetWindowHitTest(SdlWindow, null, IntPtr.Zero))
+                    if (!SDL_SetWindowHitTest(SdlWindow, null, IntPtr.Zero))
                     {
-                        throw new PixelyException($"SDL_SetWindowHitTest failed: {SDL3.SDL_GetError()}");
+                        throw new PixelyException($"SDL_SetWindowHitTest failed: {SdlError.GetError()}");
                     }
                 }
             }
@@ -267,9 +268,9 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                if (!SDL3.SDL_SetWindowHitTest(SdlWindow, null, IntPtr.Zero))
+                if (!SDL_SetWindowHitTest(SdlWindow, null, IntPtr.Zero))
                 {
-                    throw new PixelyException($"SDL_SetWindowHitTest failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_SetWindowHitTest failed: {SdlError.GetError()}");
                 }
             }
             ClearHitTestCallback();
@@ -284,9 +285,9 @@ public abstract class Window : IDisposable
         }
         unsafe
         {
-            if (!SDL3.SDL_SetWindowHitTest(SdlWindow, &HitTestCallback, GCHandle.ToIntPtr(_hitTestHandle)))
+            if (!SDL_SetWindowHitTest(SdlWindow, &HitTestCallback, GCHandle.ToIntPtr(_hitTestHandle)))
             {
-                throw new PixelyException($"SDL_SetWindowHitTest failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_SetWindowHitTest failed: {SdlError.GetError()}");
             }
         }
         _draggable = false;
@@ -303,9 +304,9 @@ public abstract class Window : IDisposable
         {
             if (shape == null)
             {
-                if (!SDL3.SDL_SetWindowShape(SdlWindow, null))
+                if (!SDL_SetWindowShape(SdlWindow, null))
                 {
-                    throw new PixelyException($"SDL_SetWindowShape failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_SetWindowShape failed: {SdlError.GetError()}");
                 }
                 return;
             }
@@ -318,10 +319,10 @@ public abstract class Window : IDisposable
 
             int width = checked((int)size.Width);
             int height = checked((int)size.Height);
-            Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurface(width, height, SDL_PixelFormat.SDL_PIXELFORMAT_ARGB8888);
+            Pointer<SDL_Surface> surface = SDL_CreateSurface(width, height, SDL_PixelFormat.SDL_PIXELFORMAT_ARGB8888);
             if (surface.IsNull)
             {
-                throw new PixelyException($"SDL_CreateSurface failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_CreateSurface failed: {SdlError.GetError()}");
             }
 
             try
@@ -338,14 +339,14 @@ public abstract class Window : IDisposable
                     }
                 }
 
-                if (!SDL3.SDL_SetWindowShape(SdlWindow, surface))
+                if (!SDL_SetWindowShape(SdlWindow, surface))
                 {
-                    throw new PixelyException($"SDL_SetWindowShape failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_SetWindowShape failed: {SdlError.GetError()}");
                 }
             }
             finally
             {
-                SDL3.SDL_DestroySurface(surface);
+                SDL_DestroySurface(surface);
             }
         }
     }
@@ -382,7 +383,7 @@ public abstract class Window : IDisposable
             int x, y;
             unsafe
             {
-                SDL3.SDL_GetWindowPosition(SdlWindow, &x, &y);
+                SDL_GetWindowPosition(SdlWindow, &x, &y);
             }
             return new Vector2Int(x, y);
         }
@@ -390,7 +391,7 @@ public abstract class Window : IDisposable
         {
             unsafe
             {
-                SDL3.SDL_SetWindowPosition(SdlWindow, value.X, value.Y);
+                SDL_SetWindowPosition(SdlWindow, value.X, value.Y);
             }
         }
     }
@@ -401,7 +402,7 @@ public abstract class Window : IDisposable
     {
         unsafe
         {
-            SdlBoolInterop.SDL_SetWindowFullscreen(SdlWindow, fullscreen);
+            SDL_SetWindowFullscreen(SdlWindow, fullscreen);
         }
     }
 
@@ -416,7 +417,7 @@ public abstract class Window : IDisposable
         {
             fixed (byte* pixels = pixelData)
             {
-                Pointer<SDL_Surface> surface = SDL3.SDL_CreateSurfaceFrom(
+                Pointer<SDL_Surface> surface = SDL_CreateSurfaceFrom(
                     width,
                     height,
                     (SDL_PixelFormat)icon.PixelFormat,
@@ -430,11 +431,11 @@ public abstract class Window : IDisposable
 
                 try
                 {
-                    return SDL3.SDL_SetWindowIcon(SdlWindow, surface);
+                    return SDL_SetWindowIcon(SdlWindow, surface);
                 }
                 finally
                 {
-                    SDL3.SDL_DestroySurface(surface);
+                    SDL_DestroySurface(surface);
                 }
             }
         }
@@ -487,7 +488,7 @@ public abstract class Window : IDisposable
     {
         ArgumentNullException.ThrowIfNull(filters);
 
-        if (!SDL3.SDL_IsMainThread())
+        if (!SDL_IsMainThread())
         {
             throw new PixelyException("File dialogs must be shown from the main thread.");
         }
@@ -496,9 +497,7 @@ public abstract class Window : IDisposable
         GCHandle stateHandle = GCHandle.Alloc(state);
         IntPtr userdata = GCHandle.ToIntPtr(stateHandle);
         NativeFileDialogFilters nativeFilters = new(filters);
-        IntPtr defaultLocationPointer = defaultLocation == null
-            ? IntPtr.Zero
-            : Marshal.StringToCoTaskMemUTF8(defaultLocation);
+        using NullTerminatedUtf8 utf8DefaultLocation = new NullTerminatedUtf8(defaultLocation);
 
         try
         {
@@ -508,30 +507,30 @@ public abstract class Window : IDisposable
 
                 if (kind == FileDialogKind.Open)
                 {
-                    SdlBoolInterop.SDL_ShowOpenFileDialog(
+                    SDL_ShowOpenFileDialog(
                         &OnFileDialogCompleted,
                         userdata,
                         SdlWindow,
                         actualFiltersPointer,
                         nativeFilters.Filters.Length,
-                        (byte*)defaultLocationPointer,
+                        utf8DefaultLocation.Span,
                         allowMany);
                 }
                 else
                 {
-                    SDL3.SDL_ShowSaveFileDialog(
+                    SDL_ShowSaveFileDialog(
                         &OnFileDialogCompleted,
                         userdata,
                         SdlWindow,
                         actualFiltersPointer,
                         nativeFilters.Filters.Length,
-                        (byte*)defaultLocationPointer);
+                        utf8DefaultLocation.Span);
                 }
 
                 while (!state.IsCompleted)
                 {
-                    SDL3.SDL_PumpEvents();
-                    SDL3.SDL_Delay(10);
+                    SDL_PumpEvents();
+                    SDL_Delay(10);
                 }
             }
 
@@ -541,11 +540,6 @@ public abstract class Window : IDisposable
         {
             stateHandle.Free();
             nativeFilters.Dispose();
-
-            if (defaultLocationPointer != IntPtr.Zero)
-            {
-                Marshal.FreeCoTaskMem(defaultLocationPointer);
-            }
         }
     }
 
@@ -561,7 +555,7 @@ public abstract class Window : IDisposable
     {
         if (fileList == null)
         {
-            string? error = SDL3.SDL_GetError();
+            string? error = SdlError.GetError();
             return FileDialogResult.Failed(string.IsNullOrWhiteSpace(error) ? "File dialog failed." : error);
         }
 
@@ -593,7 +587,7 @@ public abstract class Window : IDisposable
         ClearHitTestCallback();
         unsafe
         {
-            SDL3.SDL_DestroyWindow(SdlWindow);
+            SDL_DestroyWindow(SdlWindow);
             SdlWindow = null;
         }
     }

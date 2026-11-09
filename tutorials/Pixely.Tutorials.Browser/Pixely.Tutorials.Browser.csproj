@@ -11,21 +11,6 @@
         <ContentSourceDirectory>$(MSBuildProjectDirectory)/Content</ContentSourceDirectory>
     </PropertyGroup>
 
-    <!--
-      The browser needs SDL3 linked into the runtime (docs/hosting.md): point BrowserNativeLibraryDirectory at a directory
-      of Emscripten static libraries named after their P/Invoke modules (SDL3.a at least) when publishing for browser-wasm.
-      Passed with -p it is a global property, which a project cannot reassign, so the normalized value lives in its own property.
-      The triangle needs SDL's WebGPU backend, so that SDL3.a is built from stanoddly/SDL_wgpu and the publish opts into the
-      WebGPU binding with PixelyBrowserWebGpu=true and a writable WasmCachePath (docs/hosting.md, WebGPU in the browser).
-    -->
-    <PropertyGroup Condition="'$(BrowserNativeLibraryDirectory)' != ''">
-        <_BrowserNativeLibraryDirectory>$([MSBuild]::EnsureTrailingSlash('$(BrowserNativeLibraryDirectory)'))</_BrowserNativeLibraryDirectory>
-    </PropertyGroup>
-
-    <ItemGroup Condition="'$(_BrowserNativeLibraryDirectory)' != ''">
-        <NativeFileReference Include="$(_BrowserNativeLibraryDirectory)*.a" />
-    </ItemGroup>
-
     <ItemGroup>
         <ProjectReference Include="..\..\src\Pixely\Pixely.csproj" />
         <ProjectReference Include="..\..\src\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />

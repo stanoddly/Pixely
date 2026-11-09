@@ -1,6 +1,7 @@
 using Pixely.App;
 using Pixely.DependencyInjection;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -15,13 +16,13 @@ public class PlatformSettingsTests
     [SetUp]
     public void SetUp()
     {
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
     }
 
     [TearDown]
     public void TearDown()
     {
-        SDL3.SDL_ResetHint(SDL3.SDL_HINT_PREFERRED_LOCALES);
+        SDL_ResetHint(SDL_HINT_PREFERRED_LOCALES);
         _app?.Dispose();
     }
 
@@ -30,7 +31,7 @@ public class PlatformSettingsTests
     {
         IPlatformSettings settings = Build(new PixelyConfig()).GetRequiredService<IPlatformSettings>();
 
-        Assert.That(settings.Theme, Is.EqualTo((SystemTheme)SDL3.SDL_GetSystemTheme()));
+        Assert.That(settings.Theme, Is.EqualTo((SystemTheme)SDL_GetSystemTheme()));
     }
 
     [Test]
@@ -156,7 +157,8 @@ public class PlatformSettingsTests
 
     private static void SetPreferredLocales(string locales)
     {
-        bool set = SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_PREFERRED_LOCALES, locales, SDL_HintPriority.SDL_HINT_OVERRIDE);
+        using NullTerminatedUtf8 utf8Locales = new NullTerminatedUtf8(locales);
+        bool set = SDL_SetHintWithPriority(SDL_HINT_PREFERRED_LOCALES, utf8Locales.Span, SDL_HintPriority.SDL_HINT_OVERRIDE);
         Assert.That(set, Is.True);
     }
 
@@ -167,9 +169,9 @@ public class PlatformSettingsTests
         bool pushed;
         unsafe
         {
-            pushed = SDL3.SDL_PushEvent(&evt);
+            pushed = SDL_PushEvent(&evt);
         }
 
-        Assert.That(pushed, Is.True, () => SDL3.SDL_GetError() ?? string.Empty);
+        Assert.That(pushed, Is.True, () => SdlError.GetError() ?? string.Empty);
     }
 }

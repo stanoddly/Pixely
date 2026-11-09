@@ -49,10 +49,10 @@ static partial class Program
         {
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(exception);
         }
-        // A handler that fails while handling, as one that shows a message box without SDL does.
+        // A handler that fails while handling, as one that shows a message box without XDL does.
         if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_THROWS") == "1")
         {
-            throw new DllNotFoundException("SDL3");
+            throw new DllNotFoundException("XDL3");
         }
         // A handler that replaces the failure on purpose, keeping it as the inner exception.
         if (Environment.GetEnvironmentVariable("HOSTED_CONSUMER_HANDLER_WRAPS") == "1")

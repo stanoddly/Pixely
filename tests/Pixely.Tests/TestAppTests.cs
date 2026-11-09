@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Pixely.App;
 using Pixely.Audio;
 using Pixely.Gpu;
@@ -6,7 +7,8 @@ using Pixely.Headless;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Testing;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -93,15 +95,15 @@ public class TestAppTests
         string? audio;
         using (IPixelyApp app = builder.Build())
         {
-            video = SDL3.SDL_GetHint(SDL3.SDL_HINT_VIDEO_DRIVER);
-            audio = SDL3.SDL_GetCurrentAudioDriver();
+            video = Marshal.PtrToStringUTF8((nint)SDL_GetHint(SDL_HINT_VIDEO_DRIVER));
+            audio = Marshal.PtrToStringUTF8((nint)SDL_GetCurrentAudioDriver());
         }
 
         Assert.Multiple(() =>
         {
             Assert.That(video, Is.EqualTo(videoEnvironment ?? "dummy"));
             Assert.That(audio, Is.EqualTo(audioEnvironment ?? "dummy"));
-            Assert.That(SDL3.SDL_GetHint(SDL3.SDL_HINT_AUDIO_DRIVER), Is.EqualTo(audioEnvironment));
+            Assert.That(Marshal.PtrToStringUTF8((nint)SDL_GetHint(SDL_HINT_AUDIO_DRIVER)), Is.EqualTo(audioEnvironment));
         });
     }
 

@@ -5,9 +5,9 @@ sky-blue rectangle in the centre. Clicks on the rectangle are received by the
 app; clicks in the surrounding transparent border pass through to the window
 behind.
 
-Requires a patched SDL3 build — see
-`tutorials/Pixely.Tutorials.TransparentWindow/README.md` for setup
-instructions.
+It needs transparent GPU windows and window shapes that pass input through, which
+[XDL](https://github.com/stanoddly/XDL), the patched SDL that Pixely binds, provides
+(see `tutorials/Pixely.Tutorials.TransparentWindow/README.md`).
 
 Platform support for window shapes:
 
@@ -16,4 +16,4 @@ Platform support for window shapes:
 | Windows | Yes |
 | macOS | Yes |
 | X11 | Yes |
-| Wayland | No — SDL does not apply window shapes |
+| Wayland | Yes — XDL's `0004-window-shape-passthrough` makes the shape the surface's input region, from the next present |

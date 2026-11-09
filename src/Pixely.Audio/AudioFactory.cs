@@ -1,6 +1,7 @@
 using Pixely.Content;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
@@ -22,17 +23,17 @@ internal unsafe sealed class AudioFactory
         try
         {
             SdlError.ThrowOnFalse(
-                SDL3.SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO),
-                nameof(SDL3.SDL_InitSubSystem));
+                SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO),
+                nameof(SDL_InitSubSystem));
             sdlAudioInitialized = true;
 
             SdlError.ThrowOnFalse(
-                SDL3_mixer.MIX_Init(),
-                nameof(SDL3_mixer.MIX_Init));
+                MIX_Init(),
+                nameof(MIX_Init));
             mixerInitialized = true;
 
-            mixer = SDL3_mixer.MIX_CreateMixerDevice(SDL3.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
-            SdlError.ThrowOnNull(mixer, nameof(SDL3_mixer.MIX_CreateMixerDevice));
+            mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
+            SdlError.ThrowOnNull(mixer, nameof(MIX_CreateMixerDevice));
 
             return new AudioSystem(_sdlLifetime, contentSource, mixer, sdlAudioInitialized, mixerInitialized);
         }
@@ -40,17 +41,17 @@ internal unsafe sealed class AudioFactory
         {
             if (!mixer.IsNull)
             {
-                SDL3_mixer.MIX_DestroyMixer(mixer);
+                MIX_DestroyMixer(mixer);
             }
 
             if (mixerInitialized)
             {
-                SDL3_mixer.MIX_Quit();
+                MIX_Quit();
             }
 
             if (sdlAudioInitialized)
             {
-                SDL3.SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
+                SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
             }
 
             throw;

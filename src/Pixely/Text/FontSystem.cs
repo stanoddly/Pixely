@@ -2,7 +2,8 @@ using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Text;
 
@@ -26,12 +27,11 @@ internal class FontSystem: IFontSystem, IUpdatable
         _contentSource = contentSource;
     }
 
-    // TTF_Init is the first SDL_ttf call, so SDL3 must be loaded before it.
-    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, ContentSource contentSource, SdlLibrary sdlLibrary)
+    public static FontSystem Create(GpuMemorySystem gpuMemorySystem, ContentSource contentSource)
     {
-        if (!SDL3_ttf.TTF_Init())
+        if (!TTF_Init())
         {
-            SdlError.Throw(nameof(SDL3_ttf.TTF_Init));
+            SdlError.Throw(nameof(TTF_Init));
         }
 
         return new FontSystem(gpuMemorySystem, contentSource);
@@ -64,27 +64,27 @@ internal class FontSystem: IFontSystem, IUpdatable
             {
                 stream.ReadExactly(new Span<byte>(nativeFontData, fontDataLength));
 
-                Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)nativeFontData, (UIntPtr)fontDataLength);
-                SdlError.ThrowOnNull(sdlStream, nameof(SDL3.SDL_IOFromConstMem));
+                Pointer<SDL_IOStream> sdlStream = SDL_IOFromConstMem((IntPtr)nativeFontData, (UIntPtr)fontDataLength);
+                SdlError.ThrowOnNull(sdlStream, nameof(SDL_IOFromConstMem));
 
-                ttfFont = SdlBoolInterop.TTF_OpenFontIO(sdlStream, true, size);
-                SdlError.ThrowOnNull(ttfFont, nameof(SDL3_ttf.TTF_OpenFontIO));
+                ttfFont = TTF_OpenFontIO(sdlStream, true, size);
+                SdlError.ThrowOnNull(ttfFont, nameof(TTF_OpenFontIO));
 
                 ReadOnlySpan<byte> fontData = new(nativeFontData, fontDataLength);
-                if (!SDL3_ttf.TTF_FontIsScalable(ttfFont))
+                if (!TTF_FontIsScalable(ttfFont))
                 {
                     SelectBitmapStrike(ttfFont, fontData, path, size);
                 }
 
-                SDL3_ttf.TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
+                TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
                 // FontStyle mirrors the values of TTF_FontStyleFlags.
-                SDL3_ttf.TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
+                TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
             }
             catch
             {
                 if (!ttfFont.IsNull)
                 {
-                    SDL3_ttf.TTF_CloseFont(ttfFont);
+                    TTF_CloseFont(ttfFont);
                 }
 
                 NativeMemory.Free(nativeFontData);
@@ -137,7 +137,7 @@ internal class FontSystem: IFontSystem, IUpdatable
         {
             unsafe
             {
-                SDL3.SDL_DestroySurface(surface);
+                SDL_DestroySurface(surface);
             }
         }
     }
@@ -146,9 +146,10 @@ internal class FontSystem: IFontSystem, IUpdatable
     {
         int width = 0;
         int height = 0;
+        using NullTerminatedUtf8 utf8Text = new NullTerminatedUtf8(text);
         unsafe
         {
-            SDL3_ttf.TTF_GetStringSizeWrapped(font.TtfFont, text, 0, 0, &width, &height);
+            TTF_GetStringSizeWrapped(font.TtfFont, utf8Text.Span, 0, 0, &width, &height);
         }
 
         return new ShortSize((ushort)width, (ushort)height);
@@ -157,6 +158,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     private Pointer<SDL_Surface> RenderTextToSurface(string text, Font font)
     {
         SrgbColor usedColor = SrgbColors.White;
+        using NullTerminatedUtf8 utf8Text = new NullTerminatedUtf8(text);
         unsafe
         {
             SDL_Color white = (SDL_Color)usedColor;
@@ -164,15 +166,15 @@ internal class FontSystem: IFontSystem, IUpdatable
             // TODO: allow changing wrap_width
             Pointer<SDL_Surface> surface = font.RasterizationMode switch
             {
-                FontRasterizationMode.Solid => SDL3_ttf.TTF_RenderText_Solid_Wrapped(font.TtfFont, text, 0, white, 0),
-                FontRasterizationMode.Lcd => SDL3_ttf.TTF_RenderText_LCD_Wrapped(font.TtfFont, text, 0, white, default, 0),
-                _ => SDL3_ttf.TTF_RenderText_Blended_Wrapped(font.TtfFont, text, 0, white, 0)
+                FontRasterizationMode.Solid => TTF_RenderText_Solid_Wrapped(font.TtfFont, utf8Text.Span, 0, white, 0),
+                FontRasterizationMode.Lcd => TTF_RenderText_LCD_Wrapped(font.TtfFont, utf8Text.Span, 0, white, default, 0),
+                _ => TTF_RenderText_Blended_Wrapped(font.TtfFont, utf8Text.Span, 0, white, 0)
             };
             string renderFunctionName = font.RasterizationMode switch
             {
-                FontRasterizationMode.Solid => nameof(SDL3_ttf.TTF_RenderText_Solid_Wrapped),
-                FontRasterizationMode.Lcd => nameof(SDL3_ttf.TTF_RenderText_LCD_Wrapped),
-                _ => nameof(SDL3_ttf.TTF_RenderText_Blended_Wrapped)
+                FontRasterizationMode.Solid => nameof(TTF_RenderText_Solid_Wrapped),
+                FontRasterizationMode.Lcd => nameof(TTF_RenderText_LCD_Wrapped),
+                _ => nameof(TTF_RenderText_Blended_Wrapped)
             };
             SdlError.ThrowOnNull(surface, renderFunctionName);
 
@@ -207,7 +209,7 @@ internal class FontSystem: IFontSystem, IUpdatable
             throw new PixelyException($"Font '{path}' is a bitmap font without a {size} px strike. Available sizes: {string.Join(", ", strikePixelSizes)}.");
         }
 
-        SdlError.ThrowOnFalse(SDL3_ttf.TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(SDL3_ttf.TTF_SetFontSize));
+        SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(TTF_SetFontSize));
     }
 
     private static TTF_HintingFlags ToSdlHintingMode(FontHintingMode hintingMode)
@@ -226,8 +228,8 @@ internal class FontSystem: IFontSystem, IUpdatable
     {
         unsafe
         {
-            Pointer<SDL_Surface> convertedSurface = SDL3.SDL_ConvertSurface(surface, SDL_PixelFormat.SDL_PIXELFORMAT_ABGR8888);
-            SdlError.ThrowOnNull(convertedSurface, nameof(SDL3.SDL_ConvertSurface));
+            Pointer<SDL_Surface> convertedSurface = SDL_ConvertSurface(surface, SDL_PixelFormat.SDL_PIXELFORMAT_ABGR8888);
+            SdlError.ThrowOnNull(convertedSurface, nameof(SDL_ConvertSurface));
 
             try
             {
@@ -257,7 +259,7 @@ internal class FontSystem: IFontSystem, IUpdatable
             }
             finally
             {
-                SDL3.SDL_DestroySurface(convertedSurface);
+                SDL_DestroySurface(convertedSurface);
             }
         }
     }
@@ -298,7 +300,7 @@ internal class FontSystem: IFontSystem, IUpdatable
 
         unsafe
         {
-            SDL3_ttf.TTF_CloseFont(font.TtfFont);
+            TTF_CloseFont(font.TtfFont);
         }
 
         font.FreeFontData();
@@ -322,6 +324,6 @@ internal class FontSystem: IFontSystem, IUpdatable
             ReleaseFont(font);
         }
 
-        SDL3_ttf.TTF_Quit();
+        TTF_Quit();
     }
 }

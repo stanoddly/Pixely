@@ -1,5 +1,6 @@
-using Pixely.Utilities;
-using SDL;
+using System.Runtime.InteropServices;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -20,18 +21,18 @@ public class PixelyException : Exception
     }
 }
 
-public static class SdlError
+internal static class SdlError
 {
     private static readonly string[] IgnoredErrors = ["No HID devices found in the system.", "No HID devices with requested VID/PID found in the system.", "Parameter 'table' is invalid"];
 
     public static void Clear()
     {
-        SDL3.SDL_ClearError();
+        SDL_ClearError();
     }
     
     public static void ThrowOnFalse(bool value)
     {
-        if (!value) throw new PixelyException(SDL3.SDL_GetError());
+        if (!value) throw new PixelyException(GetError());
     }
 
     public static void ThrowOnFalse(bool value, string context)
@@ -54,17 +55,17 @@ public static class SdlError
     
     public static void ThrowOnNull<T>(Pointer<T> pointer) where T : unmanaged
     {
-        if (pointer.IsNull) throw new PixelyException(SDL3.SDL_GetError());
+        if (pointer.IsNull) throw new PixelyException(GetError());
     }
     
     public static unsafe void ThrowOnNull<T>(T* pointer) where T : unmanaged
     {
-        if (pointer == null) throw new PixelyException(SDL3.SDL_GetError());
+        if (pointer == null) throw new PixelyException(GetError());
     }
     
     public static void ThrowOnError()
     {
-        string? error = SDL3.SDL_GetError();
+        string? error = GetError();
         if (string.IsNullOrEmpty(error))
         {
             return;
@@ -86,7 +87,7 @@ public static class SdlError
 
     public static void Throw(string context)
     {
-        string? error = SDL3.SDL_GetError();
+        string? error = GetError();
         if (string.IsNullOrEmpty(error))
         {
             error = $"Error happened in {context}, SDL_GetError is empty";
@@ -98,4 +99,6 @@ public static class SdlError
 
         throw new PixelyException(error);
     }
+
+    internal static string? GetError() => Marshal.PtrToStringUTF8((nint)SDL_GetError());
 }
