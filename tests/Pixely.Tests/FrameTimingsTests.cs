@@ -2,8 +2,8 @@ using System.Runtime.CompilerServices;
 using Pixely.App;
 using Pixely.Gpu;
 using Pixely.Headless;
+using Pixely.Testing;
 using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Tests;
 
@@ -161,9 +161,11 @@ public class FrameTimingsTests
         timings.EndFrame();
     }
 
+    // A stub device's swapchain texture: the timings read only its size and format.
     internal static SwapchainTexture Swapchain(ushort width, ushort height)
     {
-        return new SwapchainTexture(Pointer<SDL_GPUTexture>.Null, new ShortSize(width, height), TextureFormat.B8G8R8A8Unorm);
+        using StubGpuDevice gpuDevice = StubGpuDevice.Create();
+        return gpuDevice.CreateSwapchainTexture(new ShortSize(width, height), TextureFormat.B8G8R8A8Unorm);
     }
 
     // Created uninitialised, so it never reaches SDL; its view scope is the default.

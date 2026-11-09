@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
@@ -11,22 +12,28 @@ public class ClipboardService : IClipboardService
         {
             unsafe
             {
-                return SDL3.SDL_HasClipboardText();
+                return SDL_HasClipboardText();
             }
         }
     }
 
     public string? GetText()
     {
-        unsafe
+        // SDL allocates the text, never returns NULL and needs it freed; an empty string means no text or a failure.
+        Pointer<byte> text = SDL_GetClipboardText();
+        try
         {
-            byte* ptr = SDL3.Unsafe_SDL_GetClipboardText();
-            return Marshal.PtrToStringUTF8((IntPtr)ptr);
+            return Marshal.PtrToStringUTF8((nint)text);
+        }
+        finally
+        {
+            SDL_free((nint)text);
         }
     }
 
     public void SetText(string text)
     {
-        SDL3.SDL_SetClipboardText(text);
+        using NullTerminatedUtf8 utf8Text = new NullTerminatedUtf8(text);
+        SDL_SetClipboardText(utf8Text.Span);
     }
 }

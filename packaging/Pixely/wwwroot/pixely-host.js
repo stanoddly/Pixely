@@ -21,7 +21,7 @@ export async function createGpuDevice() {
     const Module = runtimeModule();
     const webgpu = Module.WebGPU;
     if (!webgpu || !Module._wgpuCreateInstance) {
-        throw new Error('The runtime was linked without the WebGPU binding; publish with PixelyBrowserWebGpu=true (docs/hosting.md)');
+        throw new Error('The runtime was linked without the WebGPU binding; publish with the wasm-tools workload and XDL\'s native package (docs/hosting.md)');
     }
     // Browsers hide navigator.gpu outside a secure context, as on plain http from anywhere but localhost, so no browser setting the
     // player could change would help there.

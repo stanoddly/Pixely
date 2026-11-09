@@ -4,7 +4,8 @@ using Pixely.App;
 using Pixely.DependencyInjection;
 using Pixely.Headless;
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -111,7 +112,7 @@ public sealed class AutomationCommandConsoleTests
     public void Build_RegistersTheConsoleOnlyWhenEnabledOutsideHeadlessMode(bool enableCommandConsole, bool headless, bool expected)
     {
         // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
-        SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
         PixelyAppBuilder builder = new();
         builder.AddSingleton(new PixelyConfig(EnableCommandConsole: enableCommandConsole));
         builder.AddHeadlessSupport(name => headless && name == HeadlessExtensions.HeadlessVariable ? "1" : null);

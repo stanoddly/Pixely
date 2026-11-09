@@ -1,4 +1,5 @@
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
@@ -30,7 +31,7 @@ public class TextInputService : ITextInputService
         Window window = _windowRegistry.GetWindow(viewScope);
         unsafe
         {
-            return SDL3.SDL_TextInputActive(window.SdlWindow);
+            return SDL_TextInputActive(window.SdlWindow);
         }
     }
 
@@ -71,7 +72,7 @@ public class TextInputService : ITextInputService
         Window window = _windowRegistry.GetWindow(viewScope);
         unsafe
         {
-            SDL3.SDL_StartTextInput(window.SdlWindow);
+            SDL_StartTextInput(window.SdlWindow);
         }
     }
 
@@ -80,7 +81,7 @@ public class TextInputService : ITextInputService
         Window window = _windowRegistry.GetWindow(viewScope);
         unsafe
         {
-            SDL3.SDL_StopTextInput(window.SdlWindow);
+            SDL_StopTextInput(window.SdlWindow);
         }
     }
 

@@ -1,5 +1,6 @@
 #if !BROWSER
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -10,7 +11,7 @@ public sealed partial class SwapchainWindow
     // Waits for a swapchain texture, which paces the frame loop to the display.
     private unsafe bool AcquireSwapchainTexture(SDL_GPUCommandBuffer* commandBuffer, SDL_GPUTexture** texture, uint* width, uint* height)
     {
-        return SDL3.SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, SdlWindow, texture, width, height);
+        return SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, SdlWindow, (Pointer<SDL_GPUTexture>*)texture, width, height);
     }
 }
 #endif

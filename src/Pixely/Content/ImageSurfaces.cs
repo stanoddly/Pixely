@@ -1,5 +1,6 @@
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Content;
 
@@ -9,9 +10,9 @@ internal static class ImageSurfaces
     {
         (ushort width, ushort height) = image.Size;
         SDL_PixelFormat format = (SDL_PixelFormat)image.PixelFormat;
-        int pitch = width * SDL3.SDL_BYTESPERPIXEL(format);
+        int pitch = width * SDL_BYTESPERPIXEL(format);
         // An indexed image would need a palette, which Image does not carry, and a FourCC image has planes the pitch does not describe.
-        if (pitch == 0 || SDL3.SDL_ISPIXELFORMAT_INDEXED(format) || SDL3.SDL_ISPIXELFORMAT_FOURCC(format) || image.Data.Length != (long)pitch * height)
+        if (pitch == 0 || SDL_ISPIXELFORMAT_INDEXED(format) || SDL_ISPIXELFORMAT_FOURCC(format) || image.Data.Length != (long)pitch * height)
         {
             throw new NotSupportedException($"Only tightly packed images in a non-planar, non-indexed pixel format are supported, not {image.PixelFormat} with {image.Data.Length} bytes for {width}x{height}.");
         }
@@ -28,25 +29,25 @@ internal static class ImageSurfaces
 
         fixed (byte* pixels = image.Data)
         {
-            Pointer<SDL_Surface> borrowed = SDL3.SDL_CreateSurfaceFrom(width, height, (SDL_PixelFormat)image.PixelFormat, (IntPtr)pixels, pitch);
+            Pointer<SDL_Surface> borrowed = SDL_CreateSurfaceFrom(width, height, (SDL_PixelFormat)image.PixelFormat, (IntPtr)pixels, pitch);
             if (borrowed.IsNull)
             {
-                throw new PixelyException($"SDL_CreateSurfaceFrom failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_CreateSurfaceFrom failed: {SdlError.GetError()}");
             }
 
             try
             {
-                Pointer<SDL_Surface> copy = SDL3.SDL_ConvertSurface(borrowed, format);
+                Pointer<SDL_Surface> copy = SDL_ConvertSurface(borrowed, format);
                 if (copy.IsNull)
                 {
-                    throw new PixelyException($"SDL_ConvertSurface failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_ConvertSurface failed: {SdlError.GetError()}");
                 }
 
                 return copy;
             }
             finally
             {
-                SDL3.SDL_DestroySurface(borrowed);
+                SDL_DestroySurface(borrowed);
             }
         }
     }

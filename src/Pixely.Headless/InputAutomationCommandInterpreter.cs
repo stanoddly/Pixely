@@ -4,7 +4,8 @@ using System.Numerics;
 using Pixely.App;
 using Pixely.Content;
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Headless;
 

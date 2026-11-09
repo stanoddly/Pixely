@@ -1,5 +1,6 @@
 using Pixely.App;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 using Pixely.Logging;
 using Microsoft.Extensions.Logging;
 using ZLogger;
@@ -17,7 +18,7 @@ public class PixelyAppLoggingTests
         try
         {
             // Building initializes SDL video; the dummy driver needs no display, and an environment override still wins.
-            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HintPriority.SDL_HINT_DEFAULT);
+            SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy"u8, SDL_HintPriority.SDL_HINT_DEFAULT);
             PixelyAppBuilder builder = new();
             builder.AddSingleton(new PixelyConfig { IsIsolated = true });
             builder.AddZLogger(logging =>

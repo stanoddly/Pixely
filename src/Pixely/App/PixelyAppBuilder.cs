@@ -66,7 +66,6 @@ public class PixelyAppBuilder : ServiceCollection
             AddSingleton(new PixelyConfig());
         }
         AddSingleton<PixelyFactory>();
-        AddSingleton<SdlLibrary>(SdlLibrary.Load);
 
         AddSingleton<PlatformInfo, PixelyFactory>();
 

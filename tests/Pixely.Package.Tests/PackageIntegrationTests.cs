@@ -280,6 +280,9 @@ public class PackageIntegrationTests
             Assert.That(dependencyGroups.Values, Has.All.EqualTo(expectedDependencies.Order(StringComparer.Ordinal)));
             Assert.That(dependencies.Any(dependency => dependency.StartsWith("Pixely", StringComparison.Ordinal)), Is.False);
             Assert.That(dependencies.Any(dependency => dependency.StartsWith("SlangDxcBundle.Toolchain", StringComparison.Ordinal)), Is.False);
+            // The SDK adds the XDL runtime of the app's RID; the package carries only the bindings, pinned exactly.
+            Assert.That(dependencies.Any(dependency => dependency.StartsWith("XdlSharp:[", StringComparison.Ordinal)), Is.True);
+            Assert.That(dependencies.Any(dependency => dependency.StartsWith("XdlSharp.Native.", StringComparison.Ordinal) || dependency.StartsWith("ppy.", StringComparison.Ordinal)), Is.False);
             Assert.That(nuspecContents, Does.Not.Contain("Package Description"));
             Assert.That(nuspecContents, Does.Not.Contain("_._"));
         });
@@ -1207,41 +1210,6 @@ public class PackageIntegrationTests
         Assert.That(output, Does.Contain("error PIXELY0004").And.Contain("pass -r browser-wasm on the command line"));
     }
 
-    // Every browser app calls SDL, so a browser build without an SDL3 archive fails before it compiles. A lib-prefixed archive or one
-    // named in another case registers another module and does not count. A native reference turns on the relink, whose targets need
-    // the wasm-tools workload.
-    [TestCase(null, false)]
-    [TestCase("wasm/libSDL3.a", true)]
-    [TestCase("wasm/sdl3.a", false)]
-    public async Task BrowserBuildWithoutAnSdlArchiveFailsWithPixely0013(string? nativeFileReference, bool libPrefixed)
-    {
-        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
-        DeleteConsumerOutputs("HostedConsumer");
-        if (nativeFileReference is not null)
-        {
-            await RequireWasmToolsAsync(consumerDirectory);
-        }
-
-        string[] properties = nativeFileReference is null ? ["_PixelySkipBrowserSdlCheck=false"] : ["_PixelySkipBrowserSdlCheck=false", $"HostedConsumerNativeFileReference={nativeFileReference}"];
-        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: properties);
-        Assert.Multiple(() =>
-        {
-            Assert.That(output, Does.Contain("error PIXELY0013"));
-            Assert.That(output.Contains("PIXELY0005", StringComparison.Ordinal), Is.EqualTo(libPrefixed));
-        });
-    }
-
-    // The check reads only the file name, so the archive need not exist for the target to pass.
-    [Test]
-    public async Task BrowserBuildWithAnSdlArchivePassesTheSdlCheck()
-    {
-        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
-        DeleteConsumerOutputs("HostedConsumer");
-        await RequireWasmToolsAsync(consumerDirectory);
-
-        await RunBrowserConsumerTargetAsync(consumerDirectory, "_PixelyRequireBrowserSdlArchive", "_PixelySkipBrowserSdlCheck=false", "HostedConsumerNativeFileReference=wasm/SDL3.a");
-    }
-
     // A project that lists net11.0-browser itself is not switched: its browser inner build is selected with -f, and its desktop
     // build stays a desktop build. The framework may carry its platform version; the SDK recognises both spellings as browser 1.0.
     [TestCase("net11.0-browser")]
@@ -1279,8 +1247,7 @@ public class PackageIntegrationTests
 
     // Without -f every inner build gets the browser RID, and one that is not net11.0-browser cannot be a browser app; a list without
     // the browser framework has no inner build that could be. Built rather than published: publish refuses a multi-targeting
-    // project without -f on its own (NETSDK1129). The SDL check runs too: it leaves an inner build of another framework to the
-    // framework message, and only the net11.0-browser inner build of the default list fails it.
+    // project without -f on its own (NETSDK1129).
     [TestCase(null)]
     [TestCase("net11.0")]
     public async Task MultiTargetingConsumerWithoutTheBrowserFrameworkSelectedFailsWithTheFrameworkMessage(string? frameworks)
@@ -1288,13 +1255,114 @@ public class PackageIntegrationTests
         string consumerDirectory = GetConsumerDirectory("MultiTargetConsumer");
         DeleteConsumerOutputs("MultiTargetConsumer");
 
-        string[] properties = frameworks is null ? ["_PixelySkipBrowserSdlCheck=false"] : ["_PixelySkipBrowserSdlCheck=false", $"MultiTargetConsumerFrameworks={frameworks}"];
+        string[] properties = frameworks is null ? [] : [$"MultiTargetConsumerFrameworks={frameworks}"];
         string output = await BuildConsumerAsync(consumerDirectory, "browser-wasm", expectSuccess: false, properties: properties);
+        Assert.That(output, Does.Contain("error PIXELY0007").And.Contain("dotnet publish -f net11.0-browser -r browser-wasm"));
+    }
+
+    // The SDK adds the XDL runtime of the platform the app is built for: the build host's for a RID-less restore, such as a local run.
+    [Test]
+    public async Task RestoreWithoutARuntimeIdentifierTakesTheHostNativePackageOnly()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        string hostRuntimeIdentifier = await GetConsumerPropertyAsync(consumerDirectory, "NETCoreSdkPortableRuntimeIdentifier");
+
+        await RestoreConsumerAsync(consumerDirectory);
+
+        Assert.That(ReadRestoredNativePackages(consumerDirectory), Is.EqualTo(new[] { $"XdlSharp.Native.{hostRuntimeIdentifier}" }));
+    }
+
+    [Test]
+    public async Task RestoreWithARuntimeIdentifierTakesItsNativePackage()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        string targetRuntime = OperatingSystem.IsWindows() ? "linux-x64" : "win-x64";
+
+        await RestoreConsumerAsync(consumerDirectory, $"RuntimeIdentifier={targetRuntime}");
+
+        Assert.That(ReadRestoredNativePackages(consumerDirectory), Is.EqualTo(new[] { $"XdlSharp.Native.{targetRuntime}" }));
+    }
+
+    // Restore needs no workload with WasmBuildNative off; the fixtures skip the browser package unless a test asks for it.
+    [Test]
+    public async Task BrowserRestoreTakesTheBrowserNativePackage()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await RestoreConsumerAsync(consumerDirectory, "RuntimeIdentifier=browser-wasm", "_PixelySkipNativePackage=false", "WasmBuildNative=false");
+
+        Assert.That(ReadRestoredNativePackages(consumerDirectory), Is.EqualTo(new[] { "XdlSharp.Native.browser-wasm" }));
+    }
+
+    // A library restored with an app's -r takes that RID's package, and its RID-agnostic reference build has no RID for PIXELY0015.
+    [Test]
+    public async Task LibraryRestoredWithARuntimeIdentifierBuildsWithoutOne()
+    {
+        string consumerDirectory = GetConsumerDirectory("LibraryConsumer");
+        DeleteConsumerOutputs("LibraryConsumer");
+        await RestoreConsumerAsync(consumerDirectory, "RuntimeIdentifier=win-x64");
+
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, "build", projectPath, "--no-restore", "--nologo",
+            $"--property:PixelyPackageVersion={_packageVersion}");
+
         Assert.Multiple(() =>
         {
-            Assert.That(output, Does.Contain("error PIXELY0007").And.Contain("dotnet publish -f net11.0-browser -r browser-wasm"));
-            Assert.That(output.Contains("PIXELY0013", StringComparison.Ordinal), Is.EqualTo(frameworks is null));
+            Assert.That(ReadRestoredNativePackages(consumerDirectory), Is.EqualTo(new[] { "XdlSharp.Native.win-x64" }));
+            Assert.That(exitCode, Is.Zero, output);
         });
+    }
+
+    [Test]
+    public async Task RestoreForAnUnsupportedRuntimeIdentifierFailsWithPixely0014()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        string output = await RestoreConsumerAsync(consumerDirectory, expectSuccess: false, "RuntimeIdentifier=linux-musl-x64");
+
+        Assert.That(output, Does.Contain("error PIXELY0014").And.Contain("linux-musl-x64"));
+    }
+
+    // A restore with RuntimeIdentifiers writes a target for each listed RID but takes only the host's native package, so a build for
+    // another listed RID without a restore gets past NETSDK1047 and would ship without XDL.
+    [Test]
+    public async Task BuildForARuntimeIdentifierTheRestoreDidNotTakeFailsWithPixely0015()
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+        string hostRuntimeIdentifier = await GetConsumerPropertyAsync(consumerDirectory, "NETCoreSdkPortableRuntimeIdentifier");
+        string targetRuntime = hostRuntimeIdentifier == "win-x64" ? "linux-x64" : "win-x64";
+        string runtimeIdentifiers = $"HostedConsumerRuntimeIdentifiers={hostRuntimeIdentifier}+{targetRuntime}";
+        await RestoreConsumerAsync(consumerDirectory, runtimeIdentifiers);
+
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, "build", projectPath, "--no-restore", "--nologo",
+            $"--property:PixelyPackageVersion={_packageVersion}", $"--property:{runtimeIdentifiers}", $"--property:RuntimeIdentifier={targetRuntime}", "--property:UseAppHost=false");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitCode, Is.Not.EqualTo(0), output);
+            Assert.That(output, Does.Contain("error PIXELY0015").And.Contain($"XdlSharp.Native.{targetRuntime}"));
+        });
+    }
+
+    // The workload decision is made at evaluation, so the SDK sets WasmBuildNative there for a browser app that links XDL; the WebAssembly
+    // SDK sets it only in its targets, which -getProperty does not run.
+    [TestCase("HostedConsumer", "false", "true")]
+    [TestCase("HostedConsumer", "true", "")]
+    [TestCase("LibraryConsumer", "false", "")]
+    public async Task BrowserEvaluationRequiresTheWorkloadOnlyForAnAppThatLinksXdl(string consumer, string skipNativePackage, string expected)
+    {
+        string consumerDirectory = GetConsumerDirectory(consumer);
+        DeleteConsumerOutputs(consumer);
+
+        string wasmBuildNative = await GetConsumerPropertyAsync(consumerDirectory, "WasmBuildNative", "RuntimeIdentifier=browser-wasm", $"_PixelySkipNativePackage={skipNativePackage}");
+
+        Assert.That(wasmBuildNative, Is.EqualTo(expected));
     }
 
     [Test]
@@ -1438,6 +1506,45 @@ public class PackageIntegrationTests
         string configuration = "Release")
     {
         return RunConsumerBuildCommandAsync("build", consumerDirectory, runtimeIdentifier, defineConstants, expectSuccess, properties, noBuild: false, configuration);
+    }
+
+    private async Task<string> RestoreConsumerAsync(string consumerDirectory, params string[] properties)
+    {
+        return await RestoreConsumerAsync(consumerDirectory, expectSuccess: true, properties);
+    }
+
+    private async Task<string> RestoreConsumerAsync(string consumerDirectory, bool expectSuccess, params string[] properties)
+    {
+        WriteConsumerConfiguration(consumerDirectory);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        string[] arguments = ["restore", projectPath, "--nologo", $"--property:PixelyPackageVersion={_packageVersion}", .. properties.Select(property => $"--property:{property}")];
+        if (expectSuccess)
+        {
+            return await RunConsumerDotnetAsync(consumerDirectory, arguments);
+        }
+
+        (int exitCode, string output) = await RunDotnetExpectingExitCodeAsync(consumerDirectory, ConsumerEnvironment, arguments);
+        Assert.That(exitCode, Is.Not.EqualTo(0), output);
+        return output;
+    }
+
+    private async Task<string> GetConsumerPropertyAsync(string consumerDirectory, string property, params string[] properties)
+    {
+        WriteConsumerConfiguration(consumerDirectory);
+        string projectPath = Directory.GetFiles(consumerDirectory, "*.csproj").Single();
+        string output = await RunConsumerDotnetAsync(consumerDirectory, ["msbuild", projectPath, $"-getProperty:{property}", $"-p:PixelyPackageVersion={_packageVersion}", .. properties.Select(value => $"-p:{value}")]);
+        return output.Trim();
+    }
+
+    // The assets file lists every restored package under "libraries" as "<id>/<version>".
+    private static string[] ReadRestoredNativePackages(string consumerDirectory)
+    {
+        using JsonDocument assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(consumerDirectory, "obj", "project.assets.json")));
+        return assets.RootElement.GetProperty("libraries").EnumerateObject()
+            .Select(library => library.Name.Split('/')[0])
+            .Where(id => id.StartsWith("XdlSharp.Native.", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private Task<string> PublishConsumerAsync(string consumerDirectory, string runtimeIdentifier, string? defineConstants = null, string[]? properties = null, bool noBuild = false)
@@ -1810,7 +1917,13 @@ public class PackageIntegrationTests
     {
         List<string> dependencies = [];
         string centralPackageVersionsPath = Path.Combine(_repositoryDirectory, "Directory.Packages.props");
-        Dictionary<string, string> centralPackageVersions = XDocument.Load(centralPackageVersionsPath)
+        XDocument centralPackageVersionsDocument = XDocument.Load(centralPackageVersionsPath);
+        // A version may name a property of the file, such as [$(PixelyXdlSharpVersion)].
+        Dictionary<string, string> centralProperties = centralPackageVersionsDocument
+            .Descendants()
+            .Where(element => element.Parent?.Name.LocalName == "PropertyGroup")
+            .ToDictionary(element => element.Name.LocalName, element => element.Value, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> centralPackageVersions = centralPackageVersionsDocument
             .Descendants()
             .Where(element => element.Name.LocalName == "PackageVersion")
             .ToDictionary(
@@ -1819,6 +1932,10 @@ public class PackageIntegrationTests
                 element => (string?)element.Attribute("Version")
                     ?? element.Elements().SingleOrDefault(version => version.Name.LocalName == "Version")?.Value
                     ?? throw new InvalidOperationException($"{centralPackageVersionsPath} contains a PackageVersion without Version."),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                entry => entry.Key,
+                entry => centralProperties.Aggregate(entry.Value, (version, property) => version.Replace($"$({property.Key})", property.Value, StringComparison.OrdinalIgnoreCase)),
                 StringComparer.OrdinalIgnoreCase);
         string projectPath = Path.Combine(
             _repositoryDirectory,

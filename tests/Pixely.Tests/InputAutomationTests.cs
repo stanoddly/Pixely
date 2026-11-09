@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.Headless;
 using Pixely.Input;
+using XdlSharp;
 
 namespace Pixely.Tests;
 
@@ -214,7 +215,7 @@ public sealed class InputAutomationTests
         Assert.Multiple(() =>
         {
             Assert.That(() => automation.GamepadButtonPress(GamepadButton.South), Throws.InvalidOperationException);
-            Assert.That(() => automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 1), Throws.InvalidOperationException);
+            Assert.That(() => automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 1), Throws.InvalidOperationException);
             Assert.That(() => automation.GamepadDisconnect(), Throws.InvalidOperationException);
         });
     }
@@ -245,9 +246,9 @@ public sealed class InputAutomationTests
         gamepadService.SubscribeLeftTriggerMotion(0, eventArgs => triggers.Add(eventArgs.Value));
         automation.GamepadConnect();
 
-        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.1f);
-        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.5f);
-        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.1f);
+        automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.1f);
+        automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFTX, 0.5f);
+        automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.1f);
 
         Assert.Multiple(() =>
         {
@@ -262,8 +263,8 @@ public sealed class InputAutomationTests
         GamepadService gamepadService = new();
         (InputAutomation automation, _, _, _) = CreateAutomation(new WindowRegistry(), gamepadService);
         automation.GamepadConnect();
-        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, -1);
-        automation.GamepadAxisMotion(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0.5f);
+        automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHTY, -1);
+        automation.GamepadAxisMotion(SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0.5f);
         automation.GamepadButtonDown(GamepadButton.North);
         List<string> events = new();
         gamepadService.SubscribeLeftStickMotion(0, eventArgs => events.Add($"left stick {eventArgs.Value}"));

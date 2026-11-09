@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using Pixely.Shaders;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -15,11 +17,17 @@ internal sealed class SdlGpuDevice : GpuDevice
     internal override string? DriverVersion { get; }
 
     private SdlGpuDevice(Pointer<SDL_GPUDevice> pointer, string driver, SDL_PropertiesID properties)
-        : base(driver, SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, null))
+        : base(driver, GetStringProperty(properties, SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING))
     {
         Pointer = pointer;
-        DeviceName = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_NAME_STRING, null);
-        DriverVersion = SDL3.SDL_GetStringProperty(properties, SDL3.SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING, null);
+        DeviceName = GetStringProperty(properties, SDL_PROP_GPU_DEVICE_NAME_STRING);
+        DriverVersion = GetStringProperty(properties, SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING);
+    }
+
+    private static string? GetStringProperty(SDL_PropertiesID properties, ReadOnlySpan<byte> name)
+    {
+        ReadOnlySpan<byte> value = SDL_GetStringProperty(properties, name, default);
+        return value.IsEmpty ? null : Encoding.UTF8.GetString(value);
     }
 
     internal static SdlGpuDevice Create(Pointer<SDL_GPUDevice> pointer)
@@ -28,10 +36,9 @@ internal sealed class SdlGpuDevice : GpuDevice
         SDL_PropertiesID properties;
         unsafe
         {
-            byte* driverName = SDL3.Unsafe_SDL_GetGPUDeviceDriver(pointer);
-            driver = Marshal.PtrToStringUTF8((IntPtr)driverName) ??
+            driver = Marshal.PtrToStringUTF8((nint)SDL_GetGPUDeviceDriver(pointer)) ??
                      throw new PixelyInitializationException("SDL_GetGPUDeviceDriver returned null");
-            properties = SDL3.SDL_GetGPUDeviceProperties(pointer);
+            properties = SDL_GetGPUDeviceProperties(pointer);
         }
 
         return new SdlGpuDevice(pointer, driver, properties);
@@ -41,7 +48,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            return new ShaderFormats((uint)SDL3.SDL_GetGPUShaderFormats(Pointer));
+            return new ShaderFormats((uint)SDL_GetGPUShaderFormats(Pointer));
         }
     }
 
@@ -49,7 +56,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            return SDL3.SDL_GPUTextureSupportsFormat(
+            return SDL_GPUTextureSupportsFormat(
                 Pointer,
                 (SDL_GPUTextureFormat)format,
                 (SDL_GPUTextureType)type,
@@ -64,7 +71,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            return SDL3.SDL_GPUTextureSupportsSampleCount(Pointer, (SDL_GPUTextureFormat)format, (SDL_GPUSampleCount)sampleCount);
+            return SDL_GPUTextureSupportsSampleCount(Pointer, (SDL_GPUTextureFormat)format, (SDL_GPUSampleCount)sampleCount);
         }
     }
 
@@ -72,11 +79,11 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL3.SDL_AcquireGPUCommandBuffer(Pointer);
+            Pointer<SDL_GPUCommandBuffer> sdlGpuCommandBuffer = SDL_AcquireGPUCommandBuffer(Pointer);
 
             if (sdlGpuCommandBuffer.IsNull)
             {
-                throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"SDL_AcquireGPUCommandBuffer failed: {SdlError.GetError()}");
             }
 
             return new SdlCommandBuffer(this, sdlGpuCommandBuffer);
@@ -104,7 +111,7 @@ internal sealed class SdlGpuDevice : GpuDevice
 
         unsafe
         {
-            Pointer<SDL_GPUSampler> samplerPointer = SDL3.SDL_CreateGPUSampler(Pointer, &sdlGpuSamplerCreateInfo);
+            Pointer<SDL_GPUSampler> samplerPointer = SDL_CreateGPUSampler(Pointer, &sdlGpuSamplerCreateInfo);
             SdlError.ThrowOnNull(samplerPointer);
             return samplerPointer;
         }
@@ -128,7 +135,7 @@ internal sealed class SdlGpuDevice : GpuDevice
                 sample_count = (SDL_GPUSampleCount)sampleCount
             };
 
-            Pointer<SDL_GPUTexture> texture = SDL3.SDL_CreateGPUTexture(Pointer, &info);
+            Pointer<SDL_GPUTexture> texture = SDL_CreateGPUTexture(Pointer, &info);
             SdlError.ThrowOnNull(texture);
             return texture;
         }
@@ -144,7 +151,7 @@ internal sealed class SdlGpuDevice : GpuDevice
                 size = sizeInBytes
             };
 
-            Pointer<SDL_GPUBuffer> buffer = SDL3.SDL_CreateGPUBuffer(Pointer, &createInfo);
+            Pointer<SDL_GPUBuffer> buffer = SDL_CreateGPUBuffer(Pointer, &createInfo);
             SdlError.ThrowOnNull(buffer);
             return buffer;
         }
@@ -159,7 +166,7 @@ internal sealed class SdlGpuDevice : GpuDevice
                 usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
                 size = sizeInBytes
             };
-            Pointer<SDL_GPUTransferBuffer> transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(Pointer, &createInfo);
+            Pointer<SDL_GPUTransferBuffer> transferBuffer = SDL_CreateGPUTransferBuffer(Pointer, &createInfo);
             SdlError.ThrowOnNull(transferBuffer);
             return transferBuffer;
         }
@@ -171,11 +178,11 @@ internal sealed class SdlGpuDevice : GpuDevice
         {
             fixed (SDL_GPUShaderCreateInfo* createInfoPointer = &createInfo)
             {
-                SDL_GPUShader* shader = SDL3.SDL_CreateGPUShader(Pointer, createInfoPointer);
+                SDL_GPUShader* shader = SDL_CreateGPUShader(Pointer, createInfoPointer);
                 if (shader == null)
                 {
                     string stageName = createInfo.stage == SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX ? "vertex" : "fragment";
-                    throw new PixelyInitializationException($"SDL_CreateGPUShader failed for {stageName} stage: " + SDL3.SDL_GetError());
+                    throw new PixelyInitializationException($"SDL_CreateGPUShader failed for {stageName} stage: " + SdlError.GetError());
                 }
 
                 return shader;
@@ -189,10 +196,10 @@ internal sealed class SdlGpuDevice : GpuDevice
         {
             fixed (SDL_GPUGraphicsPipelineCreateInfo* createInfoPointer = &createInfo)
             {
-                SDL_GPUGraphicsPipeline* pipeline = SDL3.SDL_CreateGPUGraphicsPipeline(Pointer, createInfoPointer);
+                SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(Pointer, createInfoPointer);
                 if (pipeline == null)
                 {
-                    throw new PixelyInitializationException($"SDL_CreateGPUGraphicsPipeline failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyInitializationException($"SDL_CreateGPUGraphicsPipeline failed: {SdlError.GetError()}");
                 }
 
                 return pipeline;
@@ -206,10 +213,10 @@ internal sealed class SdlGpuDevice : GpuDevice
         {
             fixed (SDL_GPUComputePipelineCreateInfo* createInfoPointer = &createInfo)
             {
-                SDL_GPUComputePipeline* pipeline = SDL3.SDL_CreateGPUComputePipeline(Pointer, createInfoPointer);
+                SDL_GPUComputePipeline* pipeline = SDL_CreateGPUComputePipeline(Pointer, createInfoPointer);
                 if (pipeline == null)
                 {
-                    throw new PixelyInitializationException($"SDL_CreateGPUComputePipeline failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyInitializationException($"SDL_CreateGPUComputePipeline failed: {SdlError.GetError()}");
                 }
 
                 return pipeline;
@@ -221,7 +228,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUTexture(Pointer, texture);
+            SDL_ReleaseGPUTexture(Pointer, texture);
         }
     }
 
@@ -229,7 +236,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUBuffer(Pointer, buffer);
+            SDL_ReleaseGPUBuffer(Pointer, buffer);
         }
     }
 
@@ -242,7 +249,7 @@ internal sealed class SdlGpuDevice : GpuDevice
 
         unsafe
         {
-            SDL3.SDL_ReleaseGPUTransferBuffer(Pointer, transferBuffer);
+            SDL_ReleaseGPUTransferBuffer(Pointer, transferBuffer);
         }
     }
 
@@ -250,7 +257,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUSampler(Pointer, sampler);
+            SDL_ReleaseGPUSampler(Pointer, sampler);
         }
     }
 
@@ -258,7 +265,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUShader(Pointer, shader);
+            SDL_ReleaseGPUShader(Pointer, shader);
         }
     }
 
@@ -266,7 +273,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUGraphicsPipeline(Pointer, pipeline);
+            SDL_ReleaseGPUGraphicsPipeline(Pointer, pipeline);
         }
     }
 
@@ -274,7 +281,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUComputePipeline(Pointer, pipeline);
+            SDL_ReleaseGPUComputePipeline(Pointer, pipeline);
         }
     }
 
@@ -282,7 +289,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            return SDL3.SDL_QueryGPUFence(Pointer, fence);
+            return SDL_QueryGPUFence(Pointer, fence);
         }
     }
 
@@ -290,7 +297,7 @@ internal sealed class SdlGpuDevice : GpuDevice
     {
         unsafe
         {
-            SDL3.SDL_ReleaseGPUFence(Pointer, fence);
+            SDL_ReleaseGPUFence(Pointer, fence);
         }
     }
 
@@ -307,9 +314,9 @@ internal sealed class SdlGpuDevice : GpuDevice
         {
             fixed (Pointer<SDL_GPUFence>* fencePointersPtr = fencePointers)
             {
-                if (!SdlBoolInterop.SDL_WaitForGPUFences(Pointer, waitAll, (SDL_GPUFence**)fencePointersPtr, (uint)fences.Length))
+                if (!SDL_WaitForGPUFences(Pointer, waitAll, fencePointersPtr, (uint)fences.Length))
                 {
-                    throw new PixelyException($"SDL_WaitForGPUFences failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyException($"SDL_WaitForGPUFences failed: {SdlError.GetError()}");
                 }
             }
         }
@@ -323,7 +330,7 @@ internal sealed class SdlGpuDevice : GpuDevice
         // and a submission completes only after the page's event loop turns, which a synchronous Dispose cannot wait for.
         unsafe
         {
-            SDL3.SDL_DestroyGPUDevice(Pointer);
+            SDL_DestroyGPUDevice(Pointer);
             Pointer = null;
         }
 #endif

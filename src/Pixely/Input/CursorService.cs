@@ -1,6 +1,7 @@
 using Pixely.Content;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
@@ -20,14 +21,14 @@ public sealed class CursorService : ICursorService, IDisposable
         get
         {
             ThrowIfUnusable();
-            return SDL3.SDL_CursorVisible();
+            return SDL_CursorVisible();
         }
         set
         {
             ThrowIfUnusable();
-            if (value ? !SDL3.SDL_ShowCursor() : !SDL3.SDL_HideCursor())
+            if (value ? !SDL_ShowCursor() : !SDL_HideCursor())
             {
-                throw new PixelyException($"{(value ? "SDL_ShowCursor" : "SDL_HideCursor")} failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"{(value ? "SDL_ShowCursor" : "SDL_HideCursor")} failed: {SdlError.GetError()}");
             }
         }
     }
@@ -42,7 +43,7 @@ public sealed class CursorService : ICursorService, IDisposable
 
         unsafe
         {
-            return Track(SDL3.SDL_CreateSystemCursor((SDL_SystemCursor)shape), "SDL_CreateSystemCursor");
+            return Track(SDL_CreateSystemCursor((SDL_SystemCursor)shape), "SDL_CreateSystemCursor");
         }
     }
 
@@ -101,7 +102,7 @@ public sealed class CursorService : ICursorService, IDisposable
                 fixed (SDL_CursorFrameInfo* frameInfosPointer = frameInfos)
                 {
                     // SDL makes a static cursor out of one frame.
-                    return Track(SDL3.SDL_CreateAnimatedCursor(frameInfosPointer, frameInfos.Length, hotspot.X, hotspot.Y), "SDL_CreateAnimatedCursor");
+                    return Track(SDL_CreateAnimatedCursor(frameInfosPointer, frameInfos.Length, hotspot.X, hotspot.Y), "SDL_CreateAnimatedCursor");
                 }
             }
             finally
@@ -111,7 +112,7 @@ public sealed class CursorService : ICursorService, IDisposable
                 {
                     if (frameInfo.surface != null)
                     {
-                        SDL3.SDL_DestroySurface(frameInfo.surface);
+                        SDL_DestroySurface(frameInfo.surface);
                     }
                 }
             }
@@ -129,9 +130,9 @@ public sealed class CursorService : ICursorService, IDisposable
 
         unsafe
         {
-            if (!SDL3.SDL_SetCursor(cursor.Handle))
+            if (!SDL_SetCursor(cursor.Handle))
             {
-                throw new PixelyException($"SDL_SetCursor failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_SetCursor failed: {SdlError.GetError()}");
             }
         }
     }
@@ -141,15 +142,15 @@ public sealed class CursorService : ICursorService, IDisposable
         ThrowIfUnusable();
         unsafe
         {
-            Pointer<SDL_Cursor> defaultCursor = SDL3.SDL_GetDefaultCursor();
+            Pointer<SDL_Cursor> defaultCursor = SDL_GetDefaultCursor();
             if (defaultCursor.IsNull)
             {
-                throw new PixelyException($"SDL_GetDefaultCursor failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_GetDefaultCursor failed: {SdlError.GetError()}");
             }
 
-            if (!SDL3.SDL_SetCursor(defaultCursor))
+            if (!SDL_SetCursor(defaultCursor))
             {
-                throw new PixelyException($"SDL_SetCursor failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_SetCursor failed: {SdlError.GetError()}");
             }
         }
     }
@@ -176,7 +177,7 @@ public sealed class CursorService : ICursorService, IDisposable
         unsafe
         {
             // SDL falls back to the default cursor when the active one is destroyed.
-            SDL3.SDL_DestroyCursor(cursor.Handle);
+            SDL_DestroyCursor(cursor.Handle);
         }
         cursor.Invalidate();
         _cursors.Remove(cursor);
@@ -194,7 +195,7 @@ public sealed class CursorService : ICursorService, IDisposable
         {
             unsafe
             {
-                SDL3.SDL_DestroyCursor(cursor.Handle);
+                SDL_DestroyCursor(cursor.Handle);
             }
             cursor.Invalidate();
         }
@@ -206,7 +207,7 @@ public sealed class CursorService : ICursorService, IDisposable
     {
         if (handle.IsNull)
         {
-            throw new PixelyException($"{function} failed: {SDL3.SDL_GetError()}");
+            throw new PixelyException($"{function} failed: {SdlError.GetError()}");
         }
 
         Cursor cursor = new(this, handle);
@@ -222,7 +223,7 @@ public sealed class CursorService : ICursorService, IDisposable
 
     private static void ThrowIfNotMainThread()
     {
-        if (!SDL3.SDL_IsMainThread())
+        if (!SDL_IsMainThread())
         {
             throw new PixelyException("Cursors must be used from the main thread.");
         }

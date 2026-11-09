@@ -33,10 +33,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Logging" />
         <PackageReference Include="ZLogger" />
-        <PackageReference Include="ppy.SDL3-CS" />
-        <PackageReference Include="ppy.SDL3_image-CS" />
-        <PackageReference Include="ppy.SDL3_mixer-CS" />
-        <PackageReference Include="ppy.SDL3_ttf-CS" />
+        <PackageReference Include="XdlSharp" />
     </ItemGroup>
 
     <ItemGroup>
@@ -91,6 +88,7 @@
             <_PixelyVersionPropsLine Include="&lt;Project&gt;" />
             <_PixelyVersionPropsLine Include="%20%20%20%20&lt;PropertyGroup&gt;" />
             <_PixelyVersionPropsLine Include="%20%20%20%20%20%20%20%20&lt;PixelyVersion&gt;$(PackageVersion)&lt;/PixelyVersion&gt;" />
+            <_PixelyVersionPropsLine Include="%20%20%20%20%20%20%20%20&lt;PixelyXdlSharpVersion&gt;$(PixelyXdlSharpVersion)&lt;/PixelyXdlSharpVersion&gt;" />
             <_PixelyVersionPropsLine Include="%20%20%20%20&lt;/PropertyGroup&gt;" />
             <_PixelyVersionPropsLine Include="&lt;/Project&gt;" />
             <TfmSpecificPackageFile Include="$(_PixelyVersionPropsPath)" PackagePath="Sdk" />

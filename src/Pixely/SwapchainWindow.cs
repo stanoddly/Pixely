@@ -1,6 +1,7 @@
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -33,7 +34,7 @@ public sealed partial class SwapchainWindow : Window
             ThrowIfNoGpuDevice();
             unsafe
             {
-                return (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
+                return (TextureFormat)SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
             }
         }
     }
@@ -50,7 +51,7 @@ public sealed partial class SwapchainWindow : Window
             // A swapchain window is claimed only for the SDL device, so its command buffers are SDL ones.
             if (!AcquireSwapchainTexture(((SdlCommandBuffer)commandBuffer).Pointer, &swapchainTexturePointer, &width, &height))
             {
-                throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"{AcquireSwapchainTextureCall} failed: {SdlError.GetError()}");
             }
 
             if (swapchainTexturePointer == null)
@@ -58,7 +59,7 @@ public sealed partial class SwapchainWindow : Window
                 return false;
             }
 
-            TextureFormat textureFormat = (TextureFormat)SDL3.SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
+            TextureFormat textureFormat = (TextureFormat)SDL_GetGPUSwapchainTextureFormat(SdlGpuDevice, SdlWindow);
 
             swapchainTexture = new SwapchainTexture(swapchainTexturePointer, new ShortSize((ushort)width, (ushort)height), textureFormat);
         }
@@ -72,7 +73,7 @@ public sealed partial class SwapchainWindow : Window
         {
             if (!SdlGpuDevice.IsNull)
             {
-                SDL3.SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
+                SDL_ReleaseWindowFromGPUDevice(SdlGpuDevice, SdlWindow);
             }
         }
 

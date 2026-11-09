@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 

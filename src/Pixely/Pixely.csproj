@@ -11,8 +11,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Pixely.Tests" />
-        <!-- Painting text needs a text sprite, which needs a Texture, whose constructor is
-             internal. Laying a Label out needs neither. -->
+        <!-- The UI tests raise mouse wheel events and build windows through internal members. -->
         <InternalsVisibleTo Include="Pixely.Ui.Tests" />
         <!-- The model tests decode a texture embedded in a model with SdlImageDecoder. -->
         <InternalsVisibleTo Include="Pixely.Models.Tests" />
@@ -20,12 +19,12 @@
         <InternalsVisibleTo Include="Pixely.Testing" />
         <!-- Headless mode registers its services, windows and clock through the internal seams of the app. -->
         <InternalsVisibleTo Include="Pixely.Headless" />
+        <!-- Audio reports SDL errors through SdlError and passes strings to SDL_mixer through NullTerminatedUtf8. -->
+        <InternalsVisibleTo Include="Pixely.Audio" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="ppy.SDL3-CS" />
-      <PackageReference Include="ppy.SDL3_image-CS" />
-      <PackageReference Include="ppy.SDL3_ttf-CS" />
+      <PackageReference Include="XdlSharp" />
     </ItemGroup>
 
     <ItemGroup>

@@ -6,7 +6,8 @@ using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Input;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -33,23 +34,23 @@ public partial class PixelyFactory: IDisposable
             return;
         }
 
-        if (_config.ApplicationIdentifier != null &&
-            !SDL3.SDL_SetAppMetadataProperty(SDL3.SDL_PROP_APP_METADATA_IDENTIFIER_STRING, _config.ApplicationIdentifier))
+        using NullTerminatedUtf8 applicationIdentifier = new NullTerminatedUtf8(_config.ApplicationIdentifier);
+        if (_config.ApplicationIdentifier != null && !SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_IDENTIFIER_STRING, applicationIdentifier.Span))
         {
-            throw new PixelyInitializationException($"SDL_SetAppMetadataProperty failed for the application identifier: {SDL3.SDL_GetError()}");
+            throw new PixelyInitializationException($"SDL_SetAppMetadataProperty failed for the application identifier: {SdlError.GetError()}");
         }
 
-        //SDL3.SDL_SetHint(SDL3.SDL_HINT_EVENT_LOGGING, "2");
-        //SDL3.SDL_SetHint(SDL3.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+        //SDL_SetHint(SDL_HINT_EVENT_LOGGING, "2");
+        //SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
         if (_config.EnableSdlLogging)
         {
-            SDL3.SDL_SetHint(SDL3.SDL_HINT_LOGGING, "*=debug");
+            SDL_SetHint(SDL_HINT_LOGGING, "*=debug"u8);
         }
 
         // SDL swallows the mouse click that activates an unfocused window by default, which loses the first
         // click whenever the user switches windows, including between two windows of the same application.
-        SDL3.SDL_SetHint(SDL3.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1" : "0");
+        SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, _config.DeliverActivatingMouseClicks ? "1"u8 : "0"u8);
 
         // At default priority, so the environment overrides it. So would a driver hint the process sets at normal priority, but nothing
         // in Pixely sets one, and a test that does chose its driver. SDL_Quit clears it with every other hint, so it lasts as long as the app.
@@ -57,13 +58,15 @@ public partial class PixelyFactory: IDisposable
         // it, after a start that has already failed and been reported, so it is not cleared there.
         if (_config.SdlVideoDriver != null)
         {
-            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_VIDEO_DRIVER, _config.SdlVideoDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
+            using NullTerminatedUtf8 videoDriver = new NullTerminatedUtf8(_config.SdlVideoDriver);
+            SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, videoDriver.Span, SDL_HintPriority.SDL_HINT_DEFAULT);
         }
 
         // The same for audio, which Pixely.Audio initializes later, while the hint still holds.
         if (_config.SdlAudioDriver != null)
         {
-            SDL3.SDL_SetHintWithPriority(SDL3.SDL_HINT_AUDIO_DRIVER, _config.SdlAudioDriver, SDL_HintPriority.SDL_HINT_DEFAULT);
+            using NullTerminatedUtf8 audioDriver = new NullTerminatedUtf8(_config.SdlAudioDriver);
+            SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, audioDriver.Span, SDL_HintPriority.SDL_HINT_DEFAULT);
         }
 
         // Installed before SDL_Init, which logs its own startup messages; a failed init does not reach Dispose, so it uninstalls here.
@@ -75,20 +78,16 @@ public partial class PixelyFactory: IDisposable
             initFlags |= SDL_InitFlags.SDL_INIT_JOYSTICK | SDL_InitFlags.SDL_INIT_GAMEPAD;
         }
 
-        if (SDL3.SDL_Init(initFlags) == false)
+        if (SDL_Init(initFlags) == false)
         {
             SdlLogOutput.Uninstall();
-            throw new PixelyInitializationException($"SDL_Init failed: {SDL3.SDL_GetError()}");
+            throw new PixelyInitializationException($"SDL_Init failed: {SdlError.GetError()}");
         }
 
         _initialized = true;
     }
 
-    private static unsafe string? GetCurrentVideoDriver()
-    {
-        byte* videoDriver = SDL3.Unsafe_SDL_GetCurrentVideoDriver();
-        return Marshal.PtrToStringUTF8((IntPtr)videoDriver);
-    }
+    private static string? GetCurrentVideoDriver() => Marshal.PtrToStringUTF8((nint)SDL_GetCurrentVideoDriver());
 
     internal PlatformInfo CreatePlatformInfo()
     {
@@ -128,17 +127,12 @@ public partial class PixelyFactory: IDisposable
         EnsureSdlInitialized();
 
         // The entry assembly's name, which the browser has too, unlike a process name.
-        string windowTitle = title ?? AppDomain.CurrentDomain.FriendlyName;
-
-        Pointer<SDL_Window> sdlWindow;
-        unsafe
-        {
-            sdlWindow = SDL3.SDL_CreateWindow(windowTitle, (int)width, (int)height, windowFlags);
-        }
+        using NullTerminatedUtf8 windowTitle = new NullTerminatedUtf8(title ?? AppDomain.CurrentDomain.FriendlyName);
+        Pointer<SDL_Window> sdlWindow = SDL_CreateWindow(windowTitle.Span, (int)width, (int)height, windowFlags);
 
         if (sdlWindow.IsNull)
         {
-            throw new PixelyInitializationException($"SDL_CreateWindow failed: {SDL3.SDL_GetError()}");
+            throw new PixelyInitializationException($"SDL_CreateWindow failed: {SdlError.GetError()}");
         }
 
         // Nothing owns the SDL window until this returns, so every failure below releases the claim and destroys the window.
@@ -152,9 +146,9 @@ public partial class PixelyFactory: IDisposable
             {
                 unsafe
                 {
-                    if (SDL3.SDL_ClaimWindowForGPUDevice(gpuDevice.Pointer, sdlWindow) == false)
+                    if (SDL_ClaimWindowForGPUDevice(gpuDevice.Pointer, sdlWindow) == false)
                     {
-                        throw new PixelyInitializationException($"GPUClaimWindow failed: {SDL3.SDL_GetError()}");
+                        throw new PixelyInitializationException($"GPUClaimWindow failed: {SdlError.GetError()}");
                     }
                 }
 
@@ -165,11 +159,11 @@ public partial class PixelyFactory: IDisposable
             uint sdlWindowId;
             unsafe
             {
-                sdlWindowId = (uint)SDL3.SDL_GetWindowID(sdlWindow);
+                sdlWindowId = (uint)SDL_GetWindowID(sdlWindow);
 
                 if (sdlWindowId == 0)
                 {
-                    throw new PixelyInitializationException($"SDL_GetWindowID failed: {SDL3.SDL_GetError()}");
+                    throw new PixelyInitializationException($"SDL_GetWindowID failed: {SdlError.GetError()}");
                 }
             }
 
@@ -181,10 +175,10 @@ public partial class PixelyFactory: IDisposable
             {
                 if (claimed)
                 {
-                    SDL3.SDL_ReleaseWindowFromGPUDevice(gpuDevice!.Pointer, sdlWindow);
+                    SDL_ReleaseWindowFromGPUDevice(gpuDevice!.Pointer, sdlWindow);
                 }
 
-                SDL3.SDL_DestroyWindow(sdlWindow);
+                SDL_DestroyWindow(sdlWindow);
             }
 
             throw;
@@ -198,15 +192,15 @@ public partial class PixelyFactory: IDisposable
     {
         unsafe
         {
-            if (SDL3.SDL_WindowSupportsGPUSwapchainComposition(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) == false)
+            if (SDL_WindowSupportsGPUSwapchainComposition(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) == false)
             {
                 throw new PixelyInitializationException(
                     $"The GPU driver ({gpuDevice.Driver}, {gpuDevice.NativeDriverName ?? "native driver unknown"}) has no sRGB swapchain (SDR_LINEAR) for the window, which Pixely needs.");
             }
 
-            if (SDL3.SDL_SetGPUSwapchainParameters(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR, SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC) == false)
+            if (SDL_SetGPUSwapchainParameters(gpuDevice.Pointer, sdlWindow, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR, SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC) == false)
             {
-                throw new PixelyInitializationException($"SDL_SetGPUSwapchainParameters failed: {SDL3.SDL_GetError()}");
+                throw new PixelyInitializationException($"SDL_SetGPUSwapchainParameters failed: {SdlError.GetError()}");
             }
         }
     }
@@ -217,24 +211,24 @@ public partial class PixelyFactory: IDisposable
 
         EnsureSdlInitialized();
 
-        SDL_PropertiesID props = SDL3.SDL_CreateProperties();
+        SDL_PropertiesID props = SDL_CreateProperties();
         try
         {
-            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, _config.EnableGpuValidation);
-            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, _config.PreferLowPowerGpu);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, _config.EnableGpuValidation);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, _config.PreferLowPowerGpu);
 
-            string? driverName = gpuBackend switch
+            ReadOnlySpan<byte> driverName = gpuBackend switch
             {
-                GpuBackend.Automatic => null,
-                GpuBackend.Vulkan => "vulkan",
-                GpuBackend.Direct3D12 => "direct3d12",
-                GpuBackend.Metal => "metal",
-                GpuBackend.WebGpu => "webgpu",
+                GpuBackend.Automatic => default,
+                GpuBackend.Vulkan => "vulkan"u8,
+                GpuBackend.Direct3D12 => "direct3d12"u8,
+                GpuBackend.Metal => "metal"u8,
+                GpuBackend.WebGpu => "webgpu"u8,
                 _ => throw new ArgumentOutOfRangeException(nameof(_config.GpuBackend), gpuBackend, "Unknown GPU backend")
             };
-            if (driverName != null)
+            if (!driverName.IsEmpty)
             {
-                SDL3.SDL_SetStringProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, driverName);
+                SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, driverName);
             }
 
             // The shader formats and the backend-specific options are the host's: PixelyFactory.Desktop.cs and PixelyFactory.Browser.cs.
@@ -242,7 +236,7 @@ public partial class PixelyFactory: IDisposable
         }
         finally
         {
-            SDL3.SDL_DestroyProperties(props);
+            SDL_DestroyProperties(props);
         }
     }
 
@@ -263,10 +257,10 @@ public partial class PixelyFactory: IDisposable
 
     private static unsafe GpuDevice CreateGpuDeviceFromProperties(SDL_PropertiesID props)
     {
-        Pointer<SDL_GPUDevice> device = SDL3.SDL_CreateGPUDeviceWithProperties(props);
+        Pointer<SDL_GPUDevice> device = SDL_CreateGPUDeviceWithProperties(props);
         if (device.IsNull)
         {
-            throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SDL3.SDL_GetError()}");
+            throw new PixelyInitializationException($"SDL_CreateGPUDevice failed: {SdlError.GetError()}");
         }
 
         return SdlGpuDevice.Create(device);
@@ -367,7 +361,7 @@ public partial class PixelyFactory: IDisposable
 
 #if !BROWSER
         // In the browser SDL lives as long as the page, which frees it, as it does the GPU device.
-        SDL3.SDL_Quit();
+        SDL_Quit();
 #endif
         SdlLogOutput.Uninstall();
         _initialized = false;

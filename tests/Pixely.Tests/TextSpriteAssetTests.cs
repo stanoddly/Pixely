@@ -1,12 +1,38 @@
+using System.Collections.Frozen;
+using System.Collections.Immutable;
+using Pixely.Content;
 using Pixely.Gpu;
+using Pixely.Testing;
 using Pixely.Text;
-using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Tests;
 
 public sealed class TextSpriteAssetTests
 {
+    private const string FontPath = "fonts/GohuFont-Medium.ttf";
+
+    private GpuDevice _gpuDevice = null!;
+    private FontSystem _fontSystem = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        byte[] fontData = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.TestDirectory, "Fonts", "GohuFont-Medium.ttf"));
+        Dictionary<string, ImmutableArray<ContentFile>> files = new() { ["fonts"] = [new ByteContentFile(FontPath, fontData)] };
+        Dictionary<string, ImmutableArray<string>> directories = new() { [""] = ["fonts"] };
+        DictionaryContentSource contentSource = new(files.ToFrozenDictionary(), directories.ToFrozenDictionary());
+
+        _gpuDevice = StubGpuDevice.Create();
+        _fontSystem = FontSystem.Create(new GpuMemorySystem(_gpuDevice), contentSource);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _fontSystem.Dispose();
+        _gpuDevice.Dispose();
+    }
+
     [Test]
     public void Type_DoesNotExposeResourceOwnership()
     {
@@ -14,15 +40,13 @@ public sealed class TextSpriteAssetTests
     }
 
     [Test]
-    public unsafe void BorrowedTexture_DisposeDoesNotInvalidateSharedAssets()
+    public void TextureDispose_LeavesTheSharedTextSpritesValid()
     {
-        Pointer<SDL_GPUTexture> pointer = (SDL_GPUTexture*)1;
-        TestTexture backingTexture = new TestTexture(pointer);
-        BorrowedTexture borrowedTexture = new BorrowedTexture(backingTexture);
-        TextSpriteAsset first = new TextSpriteAsset(borrowedTexture, new ShortRectangle(0, 0, 16, 10));
-        TextSpriteAsset second = new TextSpriteAsset(borrowedTexture, new ShortRectangle(0, 0, 16, 10));
+        Font font = _fontSystem.Load(FontPath, 14);
+        TextSpriteAsset first = font.CreateTextSprite("Hello");
 
         first.Texture.Dispose();
+        TextSpriteAsset second = font.CreateTextSprite("Hello");
 
         Assert.Multiple(() =>
         {
@@ -32,32 +56,18 @@ public sealed class TextSpriteAssetTests
     }
 
     [Test]
-    public unsafe void Invalidate_InvalidatesAllSharedAssets()
+    public void FontSystemDispose_InvalidatesEveryTextSprite()
     {
-        Pointer<SDL_GPUTexture> pointer = (SDL_GPUTexture*)1;
-        TestTexture backingTexture = new TestTexture(pointer);
-        BorrowedTexture borrowedTexture = new BorrowedTexture(backingTexture);
-        TextSpriteAsset first = new TextSpriteAsset(borrowedTexture, new ShortRectangle(0, 0, 16, 10));
-        TextSpriteAsset second = new TextSpriteAsset(borrowedTexture, new ShortRectangle(0, 0, 16, 10));
+        Font font = _fontSystem.Load(FontPath, 14);
+        TextSpriteAsset hello = font.CreateTextSprite("Hello");
+        TextSpriteAsset world = font.CreateTextSprite("World");
 
-        borrowedTexture.Invalidate();
+        _fontSystem.Dispose();
 
         Assert.Multiple(() =>
         {
-            Assert.That(first.Texture.IsDisposed, Is.True);
-            Assert.That(second.Texture.IsDisposed, Is.True);
+            Assert.That(hello.Texture.IsDisposed, Is.True);
+            Assert.That(world.Texture.IsDisposed, Is.True);
         });
-    }
-
-    private sealed class TestTexture : Texture
-    {
-        internal TestTexture(Pointer<SDL_GPUTexture> pointer)
-            : base(pointer, new ShortSize(16, 10), TextureFormat.R8G8B8A8Unorm, 640, TextureUsage.Sampler)
-        {
-        }
-
-        public override void Dispose()
-        {
-        }
     }
 }

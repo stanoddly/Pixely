@@ -1,8 +1,5 @@
-// Requires a patched SDL3 build with the SDL_WINDOW_TRANSPARENT guard removed
-// from SDL_ClaimWindowForGPUDevice() in src/gpu/SDL_gpu.c.
-// The Vulkan backend supports transparent swapchains natively, but SDL3 blocks
-// it at the API level because D3D12 does not support it yet.
-// See: https://github.com/libsdl-org/SDL/issues/12410
+// Stock SDL refuses transparent GPU windows (https://github.com/libsdl-org/SDL/issues/12410); XDL, which Pixely binds,
+// removes that check (README.md).
 
 using Pixely.App;
 using Pixely.Gpu;

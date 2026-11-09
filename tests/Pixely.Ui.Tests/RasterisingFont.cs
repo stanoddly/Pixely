@@ -1,7 +1,7 @@
 using Pixely.Gpu;
+using Pixely.Testing;
 using Pixely.Text;
 using Pixely.Utilities;
-using SDL;
 
 namespace Pixely.Ui.Tests;
 
@@ -15,7 +15,8 @@ internal sealed class RasterisingFont : IFont
     public const int CharacterWidth = FixedWidthFont.CharacterWidth;
     public const int LineHeight = FixedWidthFont.LineHeight;
 
-    private readonly TestTexture _texture = new();
+    // A stub device's texture: a paint pass records it without dereferencing anything.
+    private readonly Texture _texture = StubGpuDevice.Create().CreateTexture(new ShortSize(256, 256), TextureFormat.R8G8B8A8Unorm, TextureUsage.Sampler);
 
     public int SpriteCount { get; private set; }
 
@@ -26,17 +27,5 @@ internal sealed class RasterisingFont : IFont
         SpriteCount++;
         ShortSize size = Measure(text);
         return new TextSpriteAsset(_texture, new ShortRectangle(0, 0, size.Width, size.Height));
-    }
-
-    /// <summary>A texture with no native handle: nothing in a paint pass dereferences it.</summary>
-    private sealed class TestTexture : Texture
-    {
-        internal TestTexture() : base(Pointer<SDL_GPUTexture>.Null, new ShortSize(256, 256), TextureFormat.R8G8B8A8Unorm, 0, TextureUsage.Sampler)
-        {
-        }
-
-        public override void Dispose()
-        {
-        }
     }
 }

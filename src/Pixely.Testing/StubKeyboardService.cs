@@ -1,5 +1,6 @@
 using Pixely.Input;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Testing;
 
@@ -94,7 +95,7 @@ public sealed class StubKeyboardService : IKeyboardService
     // Before SDL_Init, SDL maps scancodes with its default US layout.
     private static VirtualKey GetVirtualKey(Scancode scancode)
     {
-        return (VirtualKey)SdlBoolInterop.SDL_GetKeyFromScancode((SDL_Scancode)scancode, SDL_Keymod.SDL_KMOD_NONE, true);
+        return (VirtualKey)SDL_GetKeyFromScancode((SDL_Scancode)scancode, SDL_Keymod.SDL_KMOD_NONE, true);
     }
 
     // The enum has gaps where SDL defines no key, such as 1 to 3.

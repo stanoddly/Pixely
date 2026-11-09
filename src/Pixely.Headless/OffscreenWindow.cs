@@ -1,7 +1,8 @@
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Headless;
 

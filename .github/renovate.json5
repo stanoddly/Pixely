@@ -28,5 +28,14 @@
       // NuGet versioning reads a bare version as a minimum, and custom managers ignore rangeStrategy, so the version is matched exactly.
       versioningTemplate: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-(?<prerelease>.+))?$',
     },
+    {
+      // The XdlSharp bindings and the native package the SDK picks per RID share one property version.
+      customType: 'regex',
+      managerFilePatterns: ['/^Directory\\.Packages\\.props$/'],
+      matchStrings: ['<PixelyXdlSharpVersion>(?<currentValue>[^<]+)</PixelyXdlSharpVersion>'],
+      depNameTemplate: 'XdlSharp',
+      datasourceTemplate: 'nuget',
+      versioningTemplate: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-(?<prerelease>.+))?$',
+    },
   ],
 }

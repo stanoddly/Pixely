@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -33,7 +34,7 @@ public class SdlLogOutputTests
         {
             delegate* unmanaged[Cdecl]<IntPtr, int, SDL_LogPriority, byte*, void> callback;
             IntPtr userdata;
-            SDL3.SDL_GetLogOutputFunction(&callback, &userdata);
+            SDL_GetLogOutputFunction(&callback, &userdata);
             fixed (byte* message = "careful\0"u8)
             {
                 callback(userdata, (int)SDL_LogCategory.SDL_LOG_CATEGORY_APPLICATION, SDL_LogPriority.SDL_LOG_PRIORITY_WARN, message);

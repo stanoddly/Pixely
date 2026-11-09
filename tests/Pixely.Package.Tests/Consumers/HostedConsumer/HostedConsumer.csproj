@@ -12,11 +12,11 @@
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
         <!-- The mistake PIXELY0004 reports: a browser RID in the project body, where the SDK props evaluated before it cannot see it. -->
         <RuntimeIdentifier Condition="'$(HostedConsumerBodyRuntimeIdentifier)' == 'true'">browser-wasm</RuntimeIdentifier>
+        <!-- The PIXELY0015 test lists RIDs joined with +, since -p splits at a comma, and a semicolon escaped on the command line reaches NuGet's restore still escaped. -->
+        <RuntimeIdentifiers Condition="'$(HostedConsumerRuntimeIdentifiers)' != ''">$([MSBuild]::Unescape($(HostedConsumerRuntimeIdentifiers.Replace('+', '%3B'))))</RuntimeIdentifiers>
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- A native reference the PIXELY0013 tests name; the check runs before anything reads the file. -->
-        <NativeFileReference Include="$(HostedConsumerNativeFileReference)" Condition="'$(HostedConsumerNativeFileReference)' != ''" />
         <!-- A library on the SDK that a browser publish must leave a library. -->
         <ProjectReference Include="..\LibraryConsumer\LibraryConsumer.csproj" Condition="'$(HostedConsumerReferencesLibrary)' == 'true'" />
     </ItemGroup>

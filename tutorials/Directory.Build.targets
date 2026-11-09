@@ -10,6 +10,9 @@
         <AfterMicrosoftNETSdkTargets>$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)Pixely.Tutorials.AfterSdk.targets</AfterMicrosoftNETSdkTargets>
     </PropertyGroup>
 
+    <!-- The XDL runtime of the platform the tutorial is built for, which the Pixely SDK would add. -->
+    <Import Project="$(MSBuildThisFileDirectory)..\packaging\Pixely\Sdk\Pixely.Native.targets" />
+
     <!-- The generated Main of a hosted tutorial adds headless support on the desktop, which the Pixely package gives a consumer. -->
     <ItemGroup Condition="'$(PixelyHosting)' == 'true' and '$(_PixelyBrowser)' != 'true'">
         <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Pixely.Headless\Pixely.Headless.csproj" />

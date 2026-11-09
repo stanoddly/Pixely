@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -15,7 +16,7 @@ public abstract class GpuStorageBuffer : IDisposable, IGpuMemorySized
     public abstract int ElementSize { get; }
     public StorageBufferUsage Usage { get; }
 
-    protected GpuStorageBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUBuffer> sdlBuffer, int size, long sizeInBytes, StorageBufferUsage usage)
+    private protected GpuStorageBuffer(GpuDevice gpuDevice, Pointer<SDL_GPUBuffer> sdlBuffer, int size, long sizeInBytes, StorageBufferUsage usage)
     {
         GpuDevice = gpuDevice;
         SdlBuffer = sdlBuffer;

@@ -16,7 +16,7 @@ Model model = modelLoader.Load("models/CesiumMan.glb");
 
 `Load` throws `InvalidDataException` for a malformed file and `NotSupportedException` for a glTF feature it does not read (see [Unsupported](#unsupported)). Both name the object and its index, for example `meshes[0].primitives[1]: ...`. A load that throws releases everything it created on the GPU.
 
-Images inside the file are decoded by `IImageDecoder`, which `PixelyAppBuilder` registers as SDL3_image unless the app registers its own. In the browser, which formats decode depends on how the app's `SDL3_image.a` was built ([hosting.md](hosting.md)).
+Images inside the file are decoded by `IImageDecoder`, which `PixelyAppBuilder` registers as XDL's SDL_image unless the app registers its own. It decodes the same formats on every platform, without animated PNG, TIFF, WebP or AVIF ([hosting.md](hosting.md#xdl-in-the-browser)).
 
 ## The model
 

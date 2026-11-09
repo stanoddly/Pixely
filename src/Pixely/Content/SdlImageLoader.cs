@@ -1,6 +1,7 @@
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Content;
 
@@ -45,7 +46,7 @@ internal class SdlImage : Image
 
     public override unsafe void Dispose()
     {
-        SDL3.SDL_DestroySurface(_surface);
+        SDL_DestroySurface(_surface);
     }
 }
 
@@ -77,16 +78,16 @@ internal class SdlImageDecoder : IImageDecoder
     {
         fixed (byte* encodedImagePtr = encodedImage)
         {
-            Pointer<SDL_IOStream> sdlStream = SDL3.SDL_IOFromConstMem((IntPtr)encodedImagePtr, (UIntPtr)encodedImage.Length);
+            Pointer<SDL_IOStream> sdlStream = SDL_IOFromConstMem((IntPtr)encodedImagePtr, (UIntPtr)encodedImage.Length);
             if (sdlStream.IsNull)
             {
-                throw new InvalidOperationException($"SDL_IOFromConstMem failed: {SDL3.SDL_GetError()}");
+                throw new InvalidOperationException($"SDL_IOFromConstMem failed: {SdlError.GetError()}");
             }
 
-            Pointer<SDL_Surface> surface = SdlBoolInterop.IMG_Load_IO(sdlStream, true);
+            Pointer<SDL_Surface> surface = IMG_Load_IO(sdlStream, true);
             if (surface.IsNull)
             {
-                throw new InvalidDataException($"IMG_Load_IO failed: {SDL3.SDL_GetError()}");
+                throw new InvalidDataException($"IMG_Load_IO failed: {SdlError.GetError()}");
             }
 
             SdlImage image = ConvertToAbgr8888(surface);
@@ -138,12 +139,12 @@ internal class SdlImageDecoder : IImageDecoder
 
         // Convert to ABGR8888 - on little-endian systems this gives us
         // [R, G, B, A] byte order in memory, which matches RGBA8888 semantics
-        Pointer<SDL_Surface> convertedSurface = SDL3.SDL_ConvertSurface(surface, SDL_PixelFormat.SDL_PIXELFORMAT_ABGR8888);
-        SDL3.SDL_DestroySurface(surface);
+        Pointer<SDL_Surface> convertedSurface = SDL_ConvertSurface(surface, SDL_PixelFormat.SDL_PIXELFORMAT_ABGR8888);
+        SDL_DestroySurface(surface);
 
         if (convertedSurface.IsNull)
         {
-            throw new InvalidOperationException($"SDL_ConvertSurface failed for format {pixelFormat}: {SDL3.SDL_GetError()}");
+            throw new InvalidOperationException($"SDL_ConvertSurface failed for format {pixelFormat}: {SdlError.GetError()}");
         }
 
         return new SdlImage(convertedSurface);

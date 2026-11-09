@@ -2,7 +2,8 @@ using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Pixely.Gpu;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 

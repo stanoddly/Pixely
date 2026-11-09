@@ -1,6 +1,7 @@
 using Pixely.Content;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
@@ -47,8 +48,8 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
             ThrowIfDisposed();
             ThrowIfNegative(value, nameof(value));
             SdlError.ThrowOnFalse(
-                SDL3_mixer.MIX_SetMixerGain(_mixer, value),
-                nameof(SDL3_mixer.MIX_SetMixerGain));
+                MIX_SetMixerGain(_mixer, value),
+                nameof(MIX_SetMixerGain));
             _masterGain = value;
         }
     }
@@ -64,11 +65,11 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 
         fixed (byte* fileDataPointer = fileData)
         {
-            Pointer<SDL_IOStream> ioStream = SDL3.SDL_IOFromConstMem((IntPtr)fileDataPointer, (UIntPtr)fileData.Length);
-            SdlError.ThrowOnNull(ioStream, nameof(SDL3.SDL_IOFromConstMem));
+            Pointer<SDL_IOStream> ioStream = SDL_IOFromConstMem((IntPtr)fileDataPointer, (UIntPtr)fileData.Length);
+            SdlError.ThrowOnNull(ioStream, nameof(SDL_IOFromConstMem));
 
-            Pointer<MIX_Audio> sdlAudio = SDL3_mixer.MIX_LoadAudio_IO(_mixer, ioStream, true, true);
-            SdlError.ThrowOnNull(sdlAudio, nameof(SDL3_mixer.MIX_LoadAudio_IO));
+            Pointer<MIX_Audio> sdlAudio = MIX_LoadAudio_IO(_mixer, ioStream, true, true);
+            SdlError.ThrowOnNull(sdlAudio, nameof(MIX_LoadAudio_IO));
 
             AudioBuffer buffer = new(this, sdlAudio);
             _buffers.Add(buffer);
@@ -99,8 +100,8 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
     {
         ThrowIfDisposed();
 
-        Pointer<MIX_Track> track = SDL3_mixer.MIX_CreateTrack(_mixer);
-        SdlError.ThrowOnNull(track, nameof(SDL3_mixer.MIX_CreateTrack));
+        Pointer<MIX_Track> track = MIX_CreateTrack(_mixer);
+        SdlError.ThrowOnNull(track, nameof(MIX_CreateTrack));
 
         AudioSource source = new(this, track);
         _sources.Add(source);
@@ -150,19 +151,19 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 
         if (!_mixer.IsNull)
         {
-            SDL3_mixer.MIX_DestroyMixer(_mixer);
+            MIX_DestroyMixer(_mixer);
             _mixer = Pointer<MIX_Mixer>.Null;
         }
 
         if (_mixerInitialized)
         {
-            SDL3_mixer.MIX_Quit();
+            MIX_Quit();
             _mixerInitialized = false;
         }
 
         if (_sdlAudioInitialized)
         {
-            SDL3.SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
+            SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
             _sdlAudioInitialized = false;
         }
 
@@ -178,47 +179,43 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 
         if (oldGroup != null)
         {
-            SDL3_mixer.MIX_UntagTrack(source.SdlTrack, oldGroup.Name);
+            using NullTerminatedUtf8 oldTag = new NullTerminatedUtf8(oldGroup.Name);
+            MIX_UntagTrack(source.SdlTrack, oldTag.Span);
         }
 
         if (newGroup != null)
         {
-            SdlError.ThrowOnFalse(
-                SDL3_mixer.MIX_TagTrack(source.SdlTrack, newGroup.Name),
-                nameof(SDL3_mixer.MIX_TagTrack));
+            using NullTerminatedUtf8 newTag = new NullTerminatedUtf8(newGroup.Name);
+            SdlError.ThrowOnFalse(MIX_TagTrack(source.SdlTrack, newTag.Span), nameof(MIX_TagTrack));
         }
     }
 
     internal void SetGroupGain(AudioGroup group, float gain)
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_SetTagGain(_mixer, group.Name, gain),
-            nameof(SDL3_mixer.MIX_SetTagGain));
+        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
+        SdlError.ThrowOnFalse(MIX_SetTagGain(_mixer, tag.Span, gain), nameof(MIX_SetTagGain));
     }
 
     internal void PauseGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_PauseTag(_mixer, group.Name),
-            nameof(SDL3_mixer.MIX_PauseTag));
+        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
+        SdlError.ThrowOnFalse(MIX_PauseTag(_mixer, tag.Span), nameof(MIX_PauseTag));
     }
 
     internal void ResumeGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_ResumeTag(_mixer, group.Name),
-            nameof(SDL3_mixer.MIX_ResumeTag));
+        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
+        SdlError.ThrowOnFalse(MIX_ResumeTag(_mixer, tag.Span), nameof(MIX_ResumeTag));
     }
 
     internal void StopGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            SDL3_mixer.MIX_StopTag(_mixer, group.Name, 0),
-            nameof(SDL3_mixer.MIX_StopTag));
+        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
+        SdlError.ThrowOnFalse(MIX_StopTag(_mixer, tag.Span, 0), nameof(MIX_StopTag));
     }
 
     internal void UpdateSourcePositions()
@@ -239,7 +236,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
         }
 
         source.Clip = null;
-        SDL3_mixer.MIX_DestroyTrack(pointer);
+        MIX_DestroyTrack(pointer);
         source.Pointer = Pointer<MIX_Track>.Null;
     }
 
@@ -253,7 +250,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
         }
 
         buffer.DetachFromSources();
-        SDL3_mixer.MIX_DestroyAudio(pointer);
+        MIX_DestroyAudio(pointer);
         buffer.Pointer = Pointer<MIX_Audio>.Null;
     }
 

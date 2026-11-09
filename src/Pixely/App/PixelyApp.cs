@@ -1,7 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Pixely.DependencyInjection;
 using Pixely.RenderOrchestration;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.App;
 
@@ -93,7 +94,7 @@ public class PixelyApp : IPixelyApp
         {
             unsafe
             {
-                SDL3.SDL_WaitEventTimeout(null, UndrawnFrameWaitMilliseconds);
+                SDL_WaitEventTimeout(null, UndrawnFrameWaitMilliseconds);
             }
         }
 #endif

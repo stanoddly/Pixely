@@ -3,7 +3,8 @@ using System.Collections.Immutable;
 using Pixely.Content;
 using Pixely.Gpu;
 using Pixely.Text;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
@@ -23,7 +24,7 @@ public sealed class FontSystemTests
         DictionaryContentSource contentSource = new(files.ToFrozenDictionary(), directories.ToFrozenDictionary());
 
         // Loading and measuring never touch the device.
-        _fontSystem = FontSystem.Create(new GpuMemorySystem(null!), contentSource, SdlLibrary.Load());
+        _fontSystem = FontSystem.Create(new GpuMemorySystem(null!), contentSource);
     }
 
     [TearDown]
@@ -58,7 +59,7 @@ public sealed class FontSystemTests
 
         unsafe
         {
-            Assert.That(SDL3_ttf.TTF_GetFontStyle(font.TtfFont), Is.EqualTo(expected));
+            Assert.That(TTF_GetFontStyle(font.TtfFont), Is.EqualTo(expected));
         }
     }
 

@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Pixely.Collections;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
@@ -138,7 +139,7 @@ public class MouseService : IMouseService
 
         unsafe
         {
-            buttonFlags = SDL3.SDL_GetGlobalMouseState(&x, &y);
+            buttonFlags = SDL_GetGlobalMouseState(&x, &y);
         }
 
         return new MouseState(new Vector2(x, y), (int)buttonFlags);

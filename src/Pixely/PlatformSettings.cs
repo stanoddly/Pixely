@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -20,7 +21,7 @@ public sealed class PlatformSettings : IPlatformSettings
         get
         {
             ThrowIfNotMainThread();
-            return _isolated ? SystemTheme.Unknown : (SystemTheme)SDL3.SDL_GetSystemTheme();
+            return _isolated ? SystemTheme.Unknown : (SystemTheme)SDL_GetSystemTheme();
         }
     }
 
@@ -36,7 +37,7 @@ public sealed class PlatformSettings : IPlatformSettings
         unsafe
         {
             int count;
-            SDL_Locale** locales = SDL3.SDL_GetPreferredLocales(&count);
+            Pointer<SDL_Locale>* locales = SDL_GetPreferredLocales(&count);
             // SDL returns null both when the platform reports no locales and when it fails to allocate the list.
             if (locales == null)
             {
@@ -50,20 +51,20 @@ public sealed class PlatformSettings : IPlatformSettings
                 {
                     // SDL counts every comma-separated item, but an empty one such as in "en," or ",en" comes back as a null language or a
                     // null entry, which would crash the process on dereference.
-                    string? language = locales[i] == null ? null : Marshal.PtrToStringUTF8((IntPtr)locales[i]->language);
+                    string? language = locales[i].IsNull ? null : Marshal.PtrToStringUTF8((nint)locales[i].Value.language);
                     if (string.IsNullOrEmpty(language))
                     {
                         continue;
                     }
 
-                    result.Add(new Locale(language, Marshal.PtrToStringUTF8((IntPtr)locales[i]->country)));
+                    result.Add(new Locale(language, Marshal.PtrToStringUTF8((nint)locales[i].Value.country)));
                 }
 
                 return result;
             }
             finally
             {
-                SDL3.SDL_free(locales);
+                SDL_free((nint)locales);
             }
         }
     }
@@ -83,7 +84,7 @@ public sealed class PlatformSettings : IPlatformSettings
 
     private static void ThrowIfNotMainThread()
     {
-        if (!SDL3.SDL_IsMainThread())
+        if (!SDL_IsMainThread())
         {
             throw new PixelyException("Platform settings must be read from the main thread.");
         }

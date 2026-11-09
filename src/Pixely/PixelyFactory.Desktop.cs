@@ -1,7 +1,8 @@
 #if !BROWSER
 using Pixely.Gpu;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely;
 
@@ -20,17 +21,17 @@ public partial class PixelyFactory
 
         if (advertiseSpirV)
         {
-            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
         }
 
         if (advertiseDxil)
         {
-            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
         }
 
         if (advertiseMsl)
         {
-            SdlBoolInterop.SDL_SetBooleanProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
         }
 
         if (!advertiseSpirV)
@@ -47,7 +48,7 @@ public partial class PixelyFactory
             vulkanOptions.vulkan_api_version = (1 << 22) | (3 << 12) | 0;
 
             SDL_GPUVulkanOptions* vulkanOptionsPointer = &vulkanOptions;
-            SDL3.SDL_SetPointerProperty(props, SDL3.SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, (IntPtr)vulkanOptionsPointer);
+            SDL_SetPointerProperty(props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, (IntPtr)vulkanOptionsPointer);
 
             // The options live on this stack until the device exists.
             return CreateGpuDeviceFromProperties(props);
@@ -76,7 +77,7 @@ public partial class PixelyFactory
         {
             unsafe
             {
-                SDL3.SDL_DestroyWindow(sdlWindow);
+                SDL_DestroyWindow(sdlWindow);
             }
 
             throw;

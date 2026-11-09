@@ -1,6 +1,7 @@
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -18,7 +19,7 @@ internal sealed class SdlComputePass : ComputePass
     {
         unsafe
         {
-            SDL3.SDL_BindGPUComputePipeline(_nativePointer, pipeline.Pointer);
+            SDL_BindGPUComputePipeline(_nativePointer, pipeline.Pointer);
         }
     }
 
@@ -28,7 +29,7 @@ internal sealed class SdlComputePass : ComputePass
         {
             SDL_GPUTextureSamplerBinding* bindings = stackalloc SDL_GPUTextureSamplerBinding[textures.Length];
             SdlBindings.FillSamplerBindings(bindings, textures, sampler);
-            SDL3.SDL_BindGPUComputeSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
+            SDL_BindGPUComputeSamplers(_nativePointer, slot, bindings, (uint)textures.Length);
         }
     }
 
@@ -41,7 +42,7 @@ internal sealed class SdlComputePass : ComputePass
             {
                 sdlTextures[i] = textures[i].SdlGpuTexture;
             }
-            SDL3.SDL_BindGPUComputeStorageTextures(_nativePointer, slot, sdlTextures, (uint)textures.Length);
+            SDL_BindGPUComputeStorageTextures(_nativePointer, slot, (Pointer<SDL_GPUTexture>*)sdlTextures, (uint)textures.Length);
         }
     }
 
@@ -51,7 +52,7 @@ internal sealed class SdlComputePass : ComputePass
         {
             SDL_GPUBuffer** sdlBuffers = stackalloc SDL_GPUBuffer*[buffers.Length];
             SdlBindings.FillBuffers(sdlBuffers, buffers);
-            SDL3.SDL_BindGPUComputeStorageBuffers(_nativePointer, slot, sdlBuffers, (uint)buffers.Length);
+            SDL_BindGPUComputeStorageBuffers(_nativePointer, slot, (Pointer<SDL_GPUBuffer>*)sdlBuffers, (uint)buffers.Length);
         }
     }
 
@@ -59,7 +60,7 @@ internal sealed class SdlComputePass : ComputePass
     {
         unsafe
         {
-            SDL3.SDL_DispatchGPUCompute(_nativePointer, groupCountX, groupCountY, groupCountZ);
+            SDL_DispatchGPUCompute(_nativePointer, groupCountX, groupCountY, groupCountZ);
         }
     }
 
@@ -67,7 +68,7 @@ internal sealed class SdlComputePass : ComputePass
     {
         unsafe
         {
-            SDL3.SDL_DispatchGPUComputeIndirect(_nativePointer, buffer.SdlBuffer, offset);
+            SDL_DispatchGPUComputeIndirect(_nativePointer, buffer.SdlBuffer, offset);
         }
     }
 
@@ -75,7 +76,7 @@ internal sealed class SdlComputePass : ComputePass
     {
         unsafe
         {
-            SDL3.SDL_EndGPUComputePass(_nativePointer);
+            SDL_EndGPUComputePass(_nativePointer);
         }
 
         _nativePointer = Pointer<SDL_GPUComputePass>.Null;

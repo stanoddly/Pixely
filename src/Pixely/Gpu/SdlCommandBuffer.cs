@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using Pixely.ShaderCommon;
 using Pixely.Utilities;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Gpu;
 
@@ -25,7 +27,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
         Pointer = Pointer<SDL_GPUCommandBuffer>.Null;
         unsafe
         {
-            SdlError.ThrowOnFalse(SDL3.SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
+            SdlError.ThrowOnFalse(SDL_SubmitGPUCommandBuffer(sdlCommandBuffer), "SDL_SubmitGPUCommandBuffer");
         }
     }
 
@@ -33,12 +35,12 @@ internal sealed class SdlCommandBuffer : CommandBuffer
     {
         unsafe
         {
-            SDL_GPUFence* fence = SDL3.SDL_SubmitGPUCommandBufferAndAcquireFence(Pointer);
+            SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(Pointer);
             Pointer = Pointer<SDL_GPUCommandBuffer>.Null;
 
             if (fence == null)
             {
-                throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SDL3.SDL_GetError()}");
+                throw new PixelyException($"SDL_SubmitGPUCommandBufferAndAcquireFence failed: {SdlError.GetError()}");
             }
 
             return new GpuFence(_gpuDevice, fence);
@@ -55,11 +57,11 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 usage = SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
                 size = (uint)pixels.Length
             };
-            SDL_GPUTransferBuffer* transferBuffer = SDL3.SDL_CreateGPUTransferBuffer(_gpuDevice.Pointer, &transferBufferCreateInfo);
+            SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(_gpuDevice.Pointer, &transferBufferCreateInfo);
             if (transferBuffer == null)
             {
                 // The command buffer is already marked finished, so nothing else would cancel it.
-                string? error = SDL3.SDL_GetError();
+                string? error = SdlError.GetError();
                 CancelCore();
                 throw new PixelyException(error);
             }
@@ -69,23 +71,23 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 SDL_GPUTextureRegion source = new SDL_GPUTextureRegion { texture = texture.SdlGpuTexture, w = texture.Size.Width, h = texture.Size.Height, d = 1 };
                 SDL_GPUTextureTransferInfo destination = new SDL_GPUTextureTransferInfo { transfer_buffer = transferBuffer };
 
-                SDL_GPUCopyPass* copyPass = SDL3.SDL_BeginGPUCopyPass(Pointer);
-                SDL3.SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
-                SDL3.SDL_EndGPUCopyPass(copyPass);
+                SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(Pointer);
+                SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
+                SDL_EndGPUCopyPass(copyPass);
 
                 using (GpuFence fence = SubmitAndAcquireFenceCore())
                 {
                     _gpuDevice.WaitForFences([fence]);
                 }
 
-                byte* mapped = (byte*)SdlBoolInterop.SDL_MapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer, false);
+                byte* mapped = (byte*)SDL_MapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer, false);
                 SdlError.ThrowOnNull(mapped);
                 new ReadOnlySpan<byte>(mapped, pixels.Length).CopyTo(pixels);
-                SDL3.SDL_UnmapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
+                SDL_UnmapGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
             }
             finally
             {
-                SDL3.SDL_ReleaseGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
+                SDL_ReleaseGPUTransferBuffer(_gpuDevice.Pointer, transferBuffer);
             }
         }
     }
@@ -97,7 +99,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
         {
             fixed (byte* dataPointer = data)
             {
-                SDL3.SDL_PushGPUVertexUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
+                SDL_PushGPUVertexUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
             }
         }
     }
@@ -108,7 +110,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
         {
             fixed (byte* dataPointer = data)
             {
-                SDL3.SDL_PushGPUFragmentUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
+                SDL_PushGPUFragmentUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
             }
         }
     }
@@ -119,7 +121,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
         {
             fixed (byte* dataPointer = data)
             {
-                SDL3.SDL_PushGPUComputeUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
+                SDL_PushGPUComputeUniformData(Pointer, slot, (IntPtr)dataPointer, (uint)data.Length);
             }
         }
     }
@@ -151,7 +153,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
             {
                 if (targets.DepthBuffer == null)
                 {
-                    gpuRenderPass = SDL3.SDL_BeginGPURenderPass(
+                    gpuRenderPass = SDL_BeginGPURenderPass(
                         Pointer,
                         colorTargetInfosPtr,
                         (uint)colorTargetInfos.Length,
@@ -171,7 +173,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                         clear_stencil = depthBufferSettings.ClearStencilValue
                     };
 
-                    gpuRenderPass = SDL3.SDL_BeginGPURenderPass(
+                    gpuRenderPass = SDL_BeginGPURenderPass(
                         Pointer,
                         colorTargetInfosPtr,
                         (uint)colorTargetInfos.Length,
@@ -214,7 +216,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 };
             }
 
-            SDL_GPUComputePass* computePass = SDL3.SDL_BeginGPUComputePass(
+            SDL_GPUComputePass* computePass = SDL_BeginGPUComputePass(
                 Pointer,
                 textureBindings,
                 (uint)readWriteStorageTextures.Length,
@@ -231,7 +233,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
     {
         unsafe
         {
-            Pointer<SDL_GPUCopyPass> sdlCopyPass = SDL3.SDL_BeginGPUCopyPass(Pointer);
+            Pointer<SDL_GPUCopyPass> sdlCopyPass = SDL_BeginGPUCopyPass(Pointer);
             SdlError.ThrowOnNull(sdlCopyPass);
             return new SdlCopyPass(_gpuDevice, sdlCopyPass, transferBuffer);
         }
@@ -268,7 +270,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
                 filter = SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
             };
 
-            SDL3.SDL_BlitGPUTexture(Pointer, &blitInfo);
+            SDL_BlitGPUTexture(Pointer, &blitInfo);
         }
     }
 
@@ -276,7 +278,7 @@ internal sealed class SdlCommandBuffer : CommandBuffer
     {
         unsafe
         {
-            SDL3.SDL_CancelGPUCommandBuffer(Pointer);
+            SDL_CancelGPUCommandBuffer(Pointer);
         }
 
         Pointer = Pointer<SDL_GPUCommandBuffer>.Null;

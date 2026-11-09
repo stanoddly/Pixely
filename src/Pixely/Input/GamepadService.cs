@@ -1,5 +1,6 @@
 using System.Numerics;
-using SDL;
+using XdlSharp;
+using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
@@ -52,8 +53,8 @@ public class GamepadService : IGamepadService
 {
     private readonly Dictionary<SDL_JoystickID, Gamepad> _gamepads = new();
 
-    private const float JoystickMinDivisor = -1 * SDL3.SDL_JOYSTICK_AXIS_MIN;
-    private const float JoystickMaxDivisor = SDL3.SDL_JOYSTICK_AXIS_MAX;
+    private const float JoystickMinDivisor = -1 * SDL_JOYSTICK_AXIS_MIN;
+    private const float JoystickMaxDivisor = SDL_JOYSTICK_AXIS_MAX;
     private const float StickDeadZone = 0.2f;
 
     private static readonly SDL_GamepadAxis[] Axes =
@@ -147,11 +148,11 @@ public class GamepadService : IGamepadService
 
     internal void SetupGamepads()
     {
-        SdlBoolInterop.SDL_SetGamepadEventsEnabled(true);
+        SDL_SetGamepadEventsEnabled(true);
         unsafe
         {
             int count;
-            SDL_JoystickID* gamepads = SDL3.SDL_GetGamepads(&count);
+            SDL_JoystickID* gamepads = SDL_GetGamepads(&count);
 
             if (gamepads == null)
             {
@@ -160,7 +161,7 @@ public class GamepadService : IGamepadService
 
             for (int i = 0; i < count; i++)
             {
-                SDL_Gamepad* gamepad = SDL3.SDL_OpenGamepad(gamepads[i]);
+                SDL_Gamepad* gamepad = SDL_OpenGamepad(gamepads[i]);
 
                 if (gamepad == null)
                 {
@@ -170,7 +171,7 @@ public class GamepadService : IGamepadService
                 _gamepads.Add(gamepads[i], new Gamepad((uint)gamepads[i]));
             }
 
-            SDL3.SDL_free(gamepads);
+            SDL_free((nint)gamepads);
         }
     }
 
@@ -181,7 +182,7 @@ public class GamepadService : IGamepadService
             return;
         }
 
-        SDL_Gamepad* gamepad = SDL3.SDL_OpenGamepad(joystickId);
+        SDL_Gamepad* gamepad = SDL_OpenGamepad(joystickId);
 
         if (gamepad == null)
         {
@@ -233,12 +234,12 @@ public class GamepadService : IGamepadService
 
     internal void OnGamepadButtonPressed(SDL_GamepadButtonEvent gamepadButtonEvent)
     {
-        OnGamepadButtonEvent(gamepadButtonEvent.which, (GamepadButton)gamepadButtonEvent.Button, true, gamepadButtonEvent.timestamp);
+        OnGamepadButtonEvent(gamepadButtonEvent.which, (GamepadButton)gamepadButtonEvent.button, true, gamepadButtonEvent.timestamp);
     }
 
     internal void OnGamepadButtonReleased(SDL_GamepadButtonEvent gamepadButtonEvent)
     {
-        OnGamepadButtonEvent(gamepadButtonEvent.which, (GamepadButton)gamepadButtonEvent.Button, false, gamepadButtonEvent.timestamp);
+        OnGamepadButtonEvent(gamepadButtonEvent.which, (GamepadButton)gamepadButtonEvent.button, false, gamepadButtonEvent.timestamp);
     }
 
     internal void OnGamepadButtonEvent(SDL_JoystickID joystickId, GamepadButton button, bool pressed, ulong timestamp)
