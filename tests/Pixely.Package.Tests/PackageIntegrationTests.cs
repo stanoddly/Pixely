@@ -498,7 +498,7 @@ public class PackageIntegrationTests
     // The fixture's handler throws another exception when HOSTED_CONSUMER_HANDLER_THROWS is set, and both leave Main together; one that
     // wraps the failure as its inner exception, with HOSTED_CONSUMER_HANDLER_WRAPS, leaves Main as it is. The fixture exits with 3 from
     // AppDomain.UnhandledException, as the narrow handler variant does.
-    [TestCase("HOSTED_CONSUMER_HANDLER_THROWS", "Unhandled: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)")]
+    [TestCase("HOSTED_CONSUMER_HANDLER_THROWS", "Unhandled: OnException threw while handling an exception. (Configure failed on purpose.) (XDL3)")]
     [TestCase("HOSTED_CONSUMER_HANDLER_WRAPS", "Unhandled: OnException wrapped the failure.")]
     public async Task HostedConsumerWhoseOnExceptionThrowsKeepsTheFailure(string variable, string expected)
     {
@@ -629,8 +629,8 @@ public class PackageIntegrationTests
                 .And.Contain("RESULT reported System.InvalidOperationException: Configure failed on purpose."));
             Assert.That(rethrown, Does.Contain("Configure ran.").And.Contain("Configure failed on purpose.").And.Not.Contain("OnException ran").And.Contain("RESULT rejected")
                 .And.Contain("RESULT reported System.InvalidOperationException: Configure failed on purpose."));
-            Assert.That(handlerFailed, Does.Contain("RESULT rejected Error: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)")
-                .And.Contain("RESULT reported System.AggregateException: OnException threw while handling an exception. (Configure failed on purpose.) (SDL3)"));
+            Assert.That(handlerFailed, Does.Contain("RESULT rejected Error: OnException threw while handling an exception. (Configure failed on purpose.) (XDL3)")
+                .And.Contain("RESULT reported System.AggregateException: OnException threw while handling an exception. (Configure failed on purpose.) (XDL3)"));
             Assert.That(handlerWrapped, Does.Contain("RESULT rejected Error: OnException wrapped the failure.")
                 .And.Contain("RESULT reported System.InvalidOperationException: OnException wrapped the failure."));
         });

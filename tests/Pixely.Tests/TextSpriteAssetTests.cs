@@ -40,7 +40,7 @@ public sealed class TextSpriteAssetTests
     }
 
     [Test]
-    public void TextureDispose_LeavesTheSharedTextSpritesValid()
+    public void TextureDispose_LeavesTheCachedTextSpriteValid()
     {
         Font font = _fontSystem.Load(FontPath, 14);
         TextSpriteAsset first = font.CreateTextSprite("Hello");
@@ -50,8 +50,8 @@ public sealed class TextSpriteAssetTests
 
         Assert.Multiple(() =>
         {
+            Assert.That(second, Is.SameAs(first));
             Assert.That(first.Texture.IsDisposed, Is.False);
-            Assert.That(second.Texture.IsDisposed, Is.False);
         });
     }
 

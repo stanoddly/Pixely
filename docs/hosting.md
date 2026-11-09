@@ -144,7 +144,7 @@ reference of the browser app or published with the RID itself, so a solution-wid
 `dotnet publish -r browser-wasm` publishes the executables for the browser and the libraries as
 libraries. Prefer `-r` on the executable project all the same; a RID in `Directory.Build.props` makes
 every desktop build of the repository a browser build. The `wasm-tools` workload is required for
-every command with `-r browser-wasm`, `dotnet run -r browser-wasm` included, which serves the app
+every command that builds an app with `-r browser-wasm`, `dotnet run -r browser-wasm` included, which serves the app
 from a local host: XDL's archives relink the runtime (see below), and a publish compiles with Mono
 AOT by default.
 
@@ -192,7 +192,7 @@ interprets their IL, and a decompiler such as ILSpy turns it back into C#. So th
 compiles the methods into `dotnet.native.wasm`.
 
 - It applies to a publish; `dotnet build` and `dotnet run` interpret. It relinks the runtime, so
-  every command with `-r browser-wasm` needs the `wasm-tools` workload, as native references do.
+  every command that builds an app with `-r browser-wasm` needs the `wasm-tools` workload, as native references do.
 - The WebAssembly SDK sets `WasmStripILAfterAOT` to `true` with it, which empties the IL body of
   each method the compiler compiled. Set it to `false` to keep the IL.
 - Metadata stays: type and member names and signatures. Some methods keep their IL as well. In a
