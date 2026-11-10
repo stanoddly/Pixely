@@ -2,6 +2,18 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-10: A window that is not renderable gets no frame
+
+`RenderCoordinator` skips a window whose `Window.IsRenderable` is false on the desktop as it already did in the browser: it acquires no command buffer or swapchain texture, calls neither the provider nor the renderers, and submits only the pending uploads of `GpuMemorySystem` (`docs/window-rendering.md`). This supersedes the desktop acquire of a window that is not renderable in the 2026-09-30 entry, with its first three reasons, the #597 sentence of its fourth, and its costs for hidden windows and for apps without window rendering, and the Vulkan note of the 2026-09-29 entry. The rest of both entries stands. So does the 16 ms wait of `PixelyApp.RunFrame` when no window draws, which paces the loop.
+
+- Since XDL v3.4.20-7, SDL's Vulkan backend frees finished work on every submit, as Metal, D3D12 and the WebGPU fork already did. Each submit of the uploads frees the copies of earlier submissions that have finished, so a buffer updated every frame while its window is hidden is not cycled into a new copy each time. Measured on RADV with a hidden window and a 768 KiB vertex buffer updated every frame for 600 frames: with XDL v3.4.20-12, GTT grew by 1.3 MiB in the first 100 frames and then stayed flat, and VRAM did not grow. With XDL v3.4.20-4, GTT grew by about 1.1 MiB and VRAM by about 0.75 MiB per frame, one copy of the buffer.
+- On Metal and D3D12, a hidden or minimized window no longer presents an undrawn texture every frame. A minimized window no longer reaches the Vulkan acquire that waits for the device to go idle on a driver reporting a zero extent (#597).
+- An app without window rendering no longer has to wait on a `GpuFence` regularly. It still submits `GpuMemorySystem` itself.
+- The headless window stays unclaimed (2026-09-26), but its first reason there no longer holds. It stays unclaimed because it never presents, and because with no window claimed Vulkan can defragment memory and free empty allocations on any submit.
+- When no texture comes back for a renderable window, the desktop still submits the command buffer, because with a claimed window Vulkan defragments memory and frees empty allocations only on a submit that requested a swapchain texture.
+
+Cost: on Vulkan, while no window is renderable, nothing requests a swapchain texture, so memory is not defragmented and empty allocations are not freed until a window draws again. An app with a claimed window and no window rendering never gets either. A hidden window with no pending uploads submits nothing, and Vulkan destroys released resources only on a submit or a wait on the GPU, so a resource released while no window draws can stay until something submits. Pixely now needs XDL v3.4.20-7 or later on Vulkan. Metal and D3D12 were not measured for this change.
+
 ## 2026-11-10: Variations, OpenType features and letter spacing are settings of a font, from XDL's additions to SDL_ttf
 
 `IFontSystem.Load` takes a `float` size, `variations`, `features` and `letterSpacing`, and caches a font by all of them (`docs/fonts.md`). XDL patches SDL_ttf with `XDL_SetFontVariations`, `XDL_SetFontFeatures` and `XDL_SetFontCharSpacing`, which Pixely calls once when it opens the font.
