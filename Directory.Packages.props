@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         <!-- One version for the bindings and the native package the SDK picks per RID (Pixely.Native.targets); exact, so they never mix. -->
-        <PixelyXdlSharpVersion>3.4.20.2</PixelyXdlSharpVersion>
+        <PixelyXdlSharpVersion>3.4.20.4</PixelyXdlSharpVersion>
     </PropertyGroup>
 
     <ItemGroup>

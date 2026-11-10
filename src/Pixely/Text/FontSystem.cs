@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
@@ -15,10 +16,10 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly GpuMemorySystem _gpuMemorySystem;
     private readonly ContentSource _contentSource;
     private readonly List<Font> _fonts = new();
-    private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style), Font> _fontCache = new();
+    private readonly Dictionary<FontKey, Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
-    // Keyed by the loaded font they came from and their size in 64ths of a point, see Font.ToSizeIn64ths. Kept apart from _fonts
+    // Keyed by the loaded font they came from and their size in 64ths of a pixel, see Font.ToSizeIn64ths. Kept apart from _fonts
     // because each one is released with its loaded font, before the data they share is freed.
     private readonly Dictionary<(Font unscaled, int sizeIn64ths), Font> _scaledFonts = new();
 
@@ -41,15 +42,11 @@ internal class FontSystem: IFontSystem, IUpdatable
         return new FontSystem(gpuMemorySystem, contentSource);
     }
 
-    public Font Load(
-        string path,
-        ushort size,
-        FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended,
-        FontHintingMode hintingMode = FontHintingMode.Normal,
-        FontStyle style = FontStyle.Normal)
+    public Font Load(string path, float size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
+        FontStyle style = FontStyle.Normal, IReadOnlyList<FontVariation>? variations = null, IReadOnlyList<FontFeature>? features = null, float letterSpacing = 0)
     {
-        (string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style) cacheKey =
-            (path, size, rasterizationMode, hintingMode, style);
+        (FontKey cacheKey, ImmutableArray<FontVariation> normalizedVariations, ImmutableArray<FontFeature> normalizedFeatures) =
+            FontKey.Create(path, size, rasterizationMode, hintingMode, style, variations, features, letterSpacing);
         if (_fontCache.TryGetValue(cacheKey, out Font? cachedFont))
         {
             return cachedFont;
@@ -83,6 +80,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
                 // FontStyle mirrors the values of TTF_FontStyleFlags.
                 TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
+                ApplyTypography(ttfFont, cacheKey);
             }
             catch
             {
@@ -95,7 +93,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 throw;
             }
 
-            Font font = new Font(this, ttfFont, nativeFontData, path, size, rasterizationMode, hintingMode, style);
+            Font font = new Font(this, ttfFont, nativeFontData, cacheKey, normalizedVariations, normalizedFeatures);
             _fonts.Add(font);
             _fontCache[cacheKey] = font;
 
@@ -117,8 +115,19 @@ internal class FontSystem: IFontSystem, IUpdatable
             return font.GetScaled(factor);
         }
 
+        // A released font's SDL font is closed, so copying it would read freed memory.
+        if (!_fontCache.TryGetValue(font.Key, out Font? loadedFont) || !ReferenceEquals(loadedFont, font))
+        {
+            throw new ObjectDisposedException(nameof(Font), $"The font {font.Path} at {font.Size} was released.");
+        }
+
+        if (font.Size * (double)factor > FontKey.MaxSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, $"The scaled size must be at most {FontKey.MaxSize} pixels, as a loaded size must.");
+        }
+
         int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
-        if (sizeIn64ths == font.Size * 64)
+        if (sizeIn64ths == font.SizeIn64ths)
         {
             return font;
         }
@@ -143,6 +152,13 @@ internal class FontSystem: IFontSystem, IUpdatable
             SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, sizeIn64ths / 64f), nameof(TTF_SetFontSize));
             TTF_SetFontHinting(ttfFont, ToSdlHintingMode(font.HintingMode));
             TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)font.Style);
+            // A copy takes XDL's settings, but its spacing is in pixels of the scaled target.
+            if (font.LetterSpacing != 0)
+            {
+                // Clamped, so zooming a UI far in cannot push the spacing out of the range Load checked.
+                float letterSpacing = Math.Clamp(font.LetterSpacing * Font.ToScale(font.Size, sizeIn64ths), FontKey.MinLetterSpacing, FontKey.MaxLetterSpacing);
+                SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, letterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{font.Path}'");
+            }
         }
         catch
         {
@@ -153,7 +169,7 @@ internal class FontSystem: IFontSystem, IUpdatable
         Font scaledFont;
         unsafe
         {
-            scaledFont = new Font(this, ttfFont, null, font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style, font, sizeIn64ths / (64f * font.Size));
+            scaledFont = new Font(this, ttfFont, null, font.Key, font.Variations, font.Features, font, sizeIn64ths);
         }
 
         _scaledFonts[(font, sizeIn64ths)] = scaledFont;
@@ -247,7 +263,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     // requested size would silently land on some strike. Resolve the pixel size to the strike index from the font file instead.
     // Only TrueType and OpenType files carry a strike table Pixely can read; a bitmap PCF, BDF, FON or WOFF font is rejected rather than rendered at an unverified size.
     // SDL_ttf rejects a size of zero but truncates the index from a float, so index + 0.5 reaches every strike, including the first.
-    private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, ushort size)
+    private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, float size)
     {
         IReadOnlyList<int> strikePixelSizes = SfntBitmapStrikes.ReadPixelSizes(fontData);
         int strikeIndex = -1;
@@ -271,6 +287,27 @@ internal class FontSystem: IFontSystem, IUpdatable
         }
 
         SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(TTF_SetFontSize));
+    }
+
+    // XDL's additions to SDL_ttf. Each is called only when it changes the font's defaults.
+    private static void ApplyTypography(Pointer<TTF_Font> ttfFont, FontKey key)
+    {
+        if (key.VariationSettings.Length > 0)
+        {
+            using NullTerminatedUtf8 variations = new(key.VariationSettings);
+            SdlError.ThrowOnFalse(XDL_SetFontVariations(ttfFont, variations.Span), $"{nameof(XDL_SetFontVariations)} for font '{key.Path}'");
+        }
+
+        if (key.FeatureSettings.Length > 0)
+        {
+            using NullTerminatedUtf8 features = new(key.FeatureSettings);
+            SdlError.ThrowOnFalse(XDL_SetFontFeatures(ttfFont, features.Span), $"{nameof(XDL_SetFontFeatures)} for font '{key.Path}'");
+        }
+
+        if (key.LetterSpacing != 0)
+        {
+            SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, key.LetterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{key.Path}'");
+        }
     }
 
     private static TTF_HintingFlags ToSdlHintingMode(FontHintingMode hintingMode)
@@ -362,6 +399,12 @@ internal class FontSystem: IFontSystem, IUpdatable
             return;
         }
 
+        // Released already, so its SDL font is closed and its data freed, and the cache may hold a font loaded again since.
+        if (!_fonts.Remove(font))
+        {
+            return;
+        }
+
         // Before the loaded font, whose data they read.
         List<Font> scaledFonts = new();
         foreach (Font scaledFont in _scaledFonts.Values)
@@ -377,8 +420,7 @@ internal class FontSystem: IFontSystem, IUpdatable
             ReleaseScaledFont(scaledFont);
         }
 
-        _fonts.Remove(font);
-        _fontCache.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
+        _fontCache.Remove(font.Key);
 
         unsafe
         {
@@ -391,7 +433,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     // Only the font in the cache is closed, so disposing a scaled font twice, or after its loaded font, closes nothing twice.
     private void ReleaseScaledFont(Font font)
     {
-        (Font unscaled, int sizeIn64ths) key = (font.Unscaled!, Font.ToSizeIn64ths(font.Size, font.Scale));
+        (Font unscaled, int sizeIn64ths) key = (font.Unscaled!, font.SizeIn64ths);
         if (!_scaledFonts.TryGetValue(key, out Font? cached) || !ReferenceEquals(cached, font))
         {
             return;

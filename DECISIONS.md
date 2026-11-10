@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-10: Variations, OpenType features and letter spacing are settings of a font, from XDL's additions to SDL_ttf
+
+`IFontSystem.Load` takes a `float` size, `variations`, `features` and `letterSpacing`, and caches a font by all of them (`docs/fonts.md`). XDL patches SDL_ttf with `XDL_SetFontVariations`, `XDL_SetFontFeatures` and `XDL_SetFontCharSpacing`, which Pixely calls once when it opens the font.
+
+- SDL_ttf 3.2 keeps all such state on the `TTF_Font`, so a setting per label is a font per combination, which the label takes like any other font. A label property would need the same fonts behind it.
+- Stock SDL_ttf 3.2 passes HarfBuzz only `kern` and has no variation axes or spacing. Laying out digits in cells or glyphs one by one in Pixely would lose kerning and shaping; the patch keeps HarfBuzz shaping the whole run with the font's own tabular figures and its own interpolated weights.
+- A scaled font from `Font.GetScaled` is a `TTF_CopyFont`, which takes XDL's settings since XDL v3.4.20-12, so Pixely only sets the copy's letter spacing to the loaded font's times the scale.
+- The variations and features reach XDL in HarfBuzz's comma-separated syntax. `FontKey` keeps them in that form, so equal lists compare equal and Pixely's font system and `StubFontSystem` validate them the same way.
+
+Cost: each combination opens the font file again and keeps its own copy of the font data, so five weights of one variable font hold five copies. `Font.Size` is a `float` instead of a `ushort`. The settings need XDL v3.4.20-11 or later, and scaled fonts keep them from v3.4.20-12, the first whose `TTF_CopyFont` copies them.
+
 ## 2026-11-10: A UI scales pixelated or smooth, and smooth sampling averages the footprint instead of using mipmaps
 
 `UiRoot` takes a `UiScaleMode` at construction (`docs/ui.md`, Scale modes). `Pixelated`, the default, keeps painting the tree at its logical size and presenting it with nearest sampling. `Smooth` lays the tree out at its logical size and paints it at the target's: `PaintContext` takes logical pixels from every caller and rounds them to target pixels, text is measured and drawn in `IFont.GetScaled`, and sprites are sampled linearly unless `Image.Filter` or the `filter` of `SpriteDrawable` and `NinePatchDrawable` says otherwise.

@@ -21,7 +21,36 @@ public class StubFontSystemTests
             Assert.That(second, Is.SameAs(first));
             Assert.That(underlined, Is.Not.SameAs(first));
             Assert.That(larger, Is.Not.SameAs(first));
-            Assert.That((first.Path, first.Size, underlined.Style), Is.EqualTo(("fonts/a.ttf", (ushort)20, FontStyle.Underline)));
+            Assert.That((first.Path, first.Size, underlined.Style), Is.EqualTo(("fonts/a.ttf", 20f, FontStyle.Underline)));
+        });
+    }
+
+    [Test]
+    public void Load_DifferentTypography_ReturnsSeparateFontsThatMeasureTheSame()
+    {
+        using StubFontSystem fontSystem = new(glyphWidth: 6, lineHeight: 11);
+
+        Font plain = fontSystem.Load("fonts/a.ttf", 14.5f);
+        Font typeset = fontSystem.Load("fonts/a.ttf", 14.5f, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeset, Is.Not.SameAs(plain));
+            Assert.That(fontSystem.Load("fonts/a.ttf", 14.5f, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1), Is.SameAs(typeset));
+            Assert.That(typeset.Measure("Score"), Is.EqualTo(plain.Measure("Score")));
+        });
+    }
+
+    [Test]
+    public void Load_InvalidSettings_ThrowsAsPixelysFontSystemDoes()
+    {
+        using StubFontSystem fontSystem = new();
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => fontSystem.Load("fonts/a.ttf", 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => fontSystem.Load("fonts/a.ttf", 14, letterSpacing: float.NaN));
+            Assert.Throws<ArgumentException>(() => fontSystem.Load("fonts/a.ttf", 14, features: [new FontFeature("tnum,liga")]));
         });
     }
 
@@ -194,13 +223,13 @@ public class StubFontSystemTests
 
         Assert.Multiple(() =>
         {
-            Assert.That((scaled.Size, scaled.Scale), Is.EqualTo(((ushort)20, 1.5f)));
+            Assert.That((scaled.Size, scaled.Scale), Is.EqualTo((20f, 1.5f)));
             // 6 x 1.5 = 9 and 11 x 1.5 = 16.5, which rounds half away from zero to 17.
             Assert.That(scaled.Measure("abc"), Is.EqualTo(new ShortSize(27, 17)));
             Assert.That(scaled.CreateTextSprite("abc").Size, Is.EqualTo(new UShortVector2(27, 17)));
             Assert.That(font.GetScaled(1.5f), Is.SameAs(scaled));
             Assert.That(scaled.GetScaled(2f), Is.SameAs(font.GetScaled(3f)), "factors multiply");
-            Assert.That(font.GetScaled(1.5000001f), Is.SameAs(scaled), "a factor that lands on the same 64th of a point is the same font");
+            Assert.That(font.GetScaled(1.5000001f), Is.SameAs(scaled), "a factor that lands on the same 64th of a pixel is the same font");
         });
     }
 

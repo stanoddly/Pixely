@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <None Include="..\..\tutorials\Pixely.Tutorials.Hotbar\Content\fonts\GohuFont-Medium.ttf" Link="Fonts\GohuFont-Medium.ttf" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Fonts\Cantarell-VF.otf" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup>

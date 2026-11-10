@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using Pixely.Gpu;
 using Pixely.Text;
@@ -17,7 +18,7 @@ public sealed class StubFontSystem : IFontSystem
     private readonly ushort _lineHeight;
     private readonly StubGpuDevice _gpuDevice;
     private readonly bool _ownsGpuDevice;
-    private readonly Dictionary<(string Path, ushort Size, FontRasterizationMode RasterizationMode, FontHintingMode HintingMode, FontStyle Style), Font> _fonts = new();
+    private readonly Dictionary<FontKey, Font> _fonts = new();
     private readonly Dictionary<(string Text, Font Font), TextSprite> _textSprites = new();
     private readonly Dictionary<(Font Unscaled, int SizeIn64ths), Font> _scaledFonts = new();
     private readonly List<Font> _releasedFonts = new();
@@ -42,19 +43,19 @@ public sealed class StubFontSystem : IFontSystem
 
     /// <summary>
     /// Returns the font loaded before with the same path, size and settings, as Pixely's font system does, or a new one. The path
-    /// is never read.
+    /// is never read. The arguments are checked as there, but not against a font file, and none of them changes how text measures.
     /// </summary>
-    public Font Load(string path, ushort size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
-        FontStyle style = FontStyle.Normal)
+    public Font Load(string path, float size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
+        FontStyle style = FontStyle.Normal, IReadOnlyList<FontVariation>? variations = null, IReadOnlyList<FontFeature>? features = null, float letterSpacing = 0)
     {
-        ArgumentNullException.ThrowIfNull(path);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        (string, ushort, FontRasterizationMode, FontHintingMode, FontStyle) key = (path, size, rasterizationMode, hintingMode, style);
+        (FontKey key, ImmutableArray<FontVariation> normalizedVariations, ImmutableArray<FontFeature> normalizedFeatures) =
+            FontKey.Create(path, size, rasterizationMode, hintingMode, style, variations, features, letterSpacing);
         if (!_fonts.TryGetValue(key, out Font? font))
         {
             unsafe
             {
-                font = new Font(this, default, null, path, size, rasterizationMode, hintingMode, style);
+                font = new Font(this, default, null, key, normalizedVariations, normalizedFeatures);
             }
 
             _fonts[key] = font;
@@ -120,8 +121,13 @@ public sealed class StubFontSystem : IFontSystem
             return font.GetScaled(factor);
         }
 
+        if (font.Size * (double)factor > FontKey.MaxSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, $"The scaled size must be at most {FontKey.MaxSize} pixels, as a loaded size must.");
+        }
+
         int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
-        if (sizeIn64ths == font.Size * 64)
+        if (sizeIn64ths == font.SizeIn64ths)
         {
             return font;
         }
@@ -130,7 +136,7 @@ public sealed class StubFontSystem : IFontSystem
         {
             unsafe
             {
-                scaledFont = new Font(this, default, null, font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style, font, sizeIn64ths / (64f * font.Size));
+                scaledFont = new Font(this, default, null, font.Key, font.Variations, font.Features, font, sizeIn64ths);
             }
 
             _scaledFonts[(font, sizeIn64ths)] = scaledFont;
@@ -159,7 +165,7 @@ public sealed class StubFontSystem : IFontSystem
 
         if (font.Unscaled != null)
         {
-            _scaledFonts.Remove((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)));
+            _scaledFonts.Remove((font.Unscaled, font.SizeIn64ths));
             _releasedFonts.Add(font);
             return;
         }
@@ -169,7 +175,7 @@ public sealed class StubFontSystem : IFontSystem
             ReleaseFont(scaledFont);
         }
 
-        _fonts.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
+        _fonts.Remove(font.Key);
         _releasedFonts.Add(font);
     }
 
@@ -198,10 +204,10 @@ public sealed class StubFontSystem : IFontSystem
     {
         if (font.Unscaled != null)
         {
-            return _scaledFonts.TryGetValue((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)), out Font? scaled) && ReferenceEquals(scaled, font);
+            return _scaledFonts.TryGetValue((font.Unscaled, font.SizeIn64ths), out Font? scaled) && ReferenceEquals(scaled, font);
         }
 
-        return _fonts.TryGetValue((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style), out Font? loaded) && ReferenceEquals(loaded, font);
+        return _fonts.TryGetValue(font.Key, out Font? loaded) && ReferenceEquals(loaded, font);
     }
 
     // A released font's SDL font is closed in Pixely's font system, so using it there would crash the game.
