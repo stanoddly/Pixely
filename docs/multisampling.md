@@ -11,7 +11,7 @@ The tutorial `tutorials/Pixely.Tutorials.Multisampling` draws a triangle with fo
 | Backend | What SDL checks |
 |---|---|
 | Vulkan | The device limits `framebufferColorSampleCounts` for color formats and `framebufferDepthSampleCounts` for depth formats. Vulkan requires both to include 1 and 4. |
-| Direct3D 12 | `CheckFeatureSupport` with `D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS` for the format and count. The SDL that Pixely pins checks a depth format by its shader-view format, so it can report no multisampling for a depth format the GPU supports it for, such as `Depth24Stencil8` ([libsdl-org/SDL#16124](https://github.com/libsdl-org/SDL/issues/16124), fixed in a later SDL). |
+| Direct3D 12 | `CheckFeatureSupport` with `D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS` for the format and count. |
 | Metal | The device's `supportsTextureSampleCount`, whatever the format. |
 | WebGPU | Only the count: 2 and 8 are unsupported, 4 is reported as supported for every format. WebGPU itself allows 4 only for formats with the multisampling capability, so a format without it passes the check and fails when the texture is created ([stanoddly/XDL_wgpu#24](https://github.com/stanoddly/XDL_wgpu/issues/24)). |
 

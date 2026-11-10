@@ -24,9 +24,9 @@ The hotspot is the pixel of the image that counts as the click point. It must li
 
 `CursorFrame(Image Image, TimeSpan Duration)` is one frame of an animation. Frames play in order and the animation loops. A frame with a zero duration stops the animation on that frame, so a one-shot animation ends with one. Durations are whole milliseconds; a positive duration rounds up, so it never becomes the zero that stops the animation. All frames must have the same size.
 
-An image must be tightly packed in a non-planar, non-indexed pixel format, the same rule `IImageWriter` has. Pixely copies the pixels, so the images can be disposed once the cursor exists.
+An image must be tightly packed in a non-planar, non-indexed pixel format, the same rule `IImageWriter` has. The cursor keeps its own copy of the pixels, so the images can be disposed once the cursor exists.
 
-`SystemCursor` has the shapes of SDL 3.4. Browser archives are built from SDL 3.4, which rejects the shapes later SDL versions add.
+`SystemCursor` has the shapes of SDL 3.4, which XDL is built on.
 
 A method throws `PixelyException` when SDL fails, for example `CreateSystemCursor` with a video driver that has no system cursors, such as SDL's dummy driver.
 

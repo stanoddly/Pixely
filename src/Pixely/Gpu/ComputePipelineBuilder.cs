@@ -1,4 +1,3 @@
-using Pixely.Utilities;
 using XdlSharp;
 using static XdlSharp.Xdl;
 
@@ -26,7 +25,7 @@ public class ComputePipelineBuilder
                 SDL_GPUComputePipelineCreateInfo createInfo = new()
                 {
                     code = shaderCodePointer,
-                    code_size = (nuint)computeShader.CodeSize,
+                    code_size = (nuint)computeShader.Code.Length,
                     entrypoint = entryPointPointer,
                     format = (SDL_GPUShaderFormat)computeShader.Format,
                     num_samplers = (uint)bindingLayout.NumSamplers(),

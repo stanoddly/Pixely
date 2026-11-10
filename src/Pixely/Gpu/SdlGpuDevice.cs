@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Pixely.Shaders;
-using Pixely.Utilities;
 using XdlSharp;
 using static XdlSharp.Xdl;
 
@@ -64,9 +63,6 @@ internal sealed class SdlGpuDevice : GpuDevice
         }
     }
 
-    // On Direct3D 12 the SDL that Pixely pins checks a depth format by its shader-view format, so it can report no multisampling for a depth
-    // format the GPU supports it for, such as Depth24Stencil8. Texture creation and pipeline building then reject that count.
-    // libsdl-org/SDL#16124, fixed by libsdl-org/SDL#16230 in a later SDL.
     internal override bool IsSampleCountSupportedCore(TextureFormat format, SampleCount sampleCount)
     {
         unsafe
@@ -119,8 +115,6 @@ internal sealed class SdlGpuDevice : GpuDevice
 
     internal override Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount)
     {
-        SdlError.Clear();
-
         unsafe
         {
             SDL_GPUTextureCreateInfo info = new SDL_GPUTextureCreateInfo

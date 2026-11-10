@@ -1,4 +1,3 @@
-using Pixely.Utilities;
 using XdlSharp;
 using static XdlSharp.Xdl;
 
@@ -18,37 +17,5 @@ internal static class ImageSurfaces
         }
 
         return pitch;
-    }
-
-    // SDL_CreateSurfaceFrom only borrows the pixels, which stay pinned for the call alone, so a surface SDL keeps after the call,
-    // as an animated cursor on Windows does, must be a copy SDL owns.
-    internal static unsafe Pointer<SDL_Surface> CreateCopy(Image image, SDL_PixelFormat format)
-    {
-        int pitch = GetPackedPitch(image);
-        (ushort width, ushort height) = image.Size;
-
-        fixed (byte* pixels = image.Data)
-        {
-            Pointer<SDL_Surface> borrowed = SDL_CreateSurfaceFrom(width, height, (SDL_PixelFormat)image.PixelFormat, (IntPtr)pixels, pitch);
-            if (borrowed.IsNull)
-            {
-                throw new PixelyException($"SDL_CreateSurfaceFrom failed: {SdlError.GetError()}");
-            }
-
-            try
-            {
-                Pointer<SDL_Surface> copy = SDL_ConvertSurface(borrowed, format);
-                if (copy.IsNull)
-                {
-                    throw new PixelyException($"SDL_ConvertSurface failed: {SdlError.GetError()}");
-                }
-
-                return copy;
-            }
-            finally
-            {
-                SDL_DestroySurface(borrowed);
-            }
-        }
     }
 }

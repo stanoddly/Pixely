@@ -3,7 +3,6 @@ using static XdlSharp.Xdl;
 
 namespace Pixely.Input;
 
-// The shapes SDL 3.4 has. Browser archives are built from SDL 3.4, which rejects the shapes later SDL versions add.
 public enum SystemCursor
 {
     Default = SDL_SystemCursor.SDL_SYSTEM_CURSOR_DEFAULT,
