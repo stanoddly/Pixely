@@ -28,7 +28,8 @@ public abstract class GpuStorageBuffer : IDisposable, IGpuMemorySized
 
     public abstract void Dispose();
 
-    // SDL does not check a storage buffer's usage when it is bound, not even in debug mode.
+    // SDL checks a storage buffer's usage when the buffer is bound, but only in debug mode, which EnableGpuValidation turns on.
+    // This check always runs.
     internal void ValidateUsage(string binding, uint slot, StorageBufferUsage requiredUsage)
     {
         if ((Usage & requiredUsage) == 0)

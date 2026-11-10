@@ -280,16 +280,17 @@ adapter (see [The page](#the-page)); a page of its own can show its own. The dia
 device by the same name, with `(fallback adapter)` for a fallback adapter (see
 [Diagnostics](diagnostics.md)).
 
-SDL cannot install callbacks on an adopted device, so `pixely-host.js` observes `device.lost` and
-`uncapturederror` itself. An uncaptured error is logged. A lost device is terminal: every GPU
-resource went with it, SDL would keep recording against the dead device without noticing, and
-Pixely does not recreate the device or its resources. So the loss ends the frame loop, and
-`RunAsync` throws `GpuDeviceLostException`, whose `Reason` is the WebGPU `GPUDeviceLostReason`
-(`"unknown"` for a GPU reset, a driver update or an eviction by the browser, `"destroyed"` for a
-device the page destroyed). The generated `catch`, `OnException` and the `finally` that disposes
-the app run as for any other exception, and game state is still intact there, so `OnException` is
-where a game saves or shows a message of its own; the default page shows one either way (see
-[The page](#the-page)).
+WebGPU takes an uncaptured error callback only when it creates a device, so SDL logs no uncaptured
+error of an adopted device. `pixely-host.js` observes `uncapturederror` itself and logs the error.
+It also observes `device.lost`, because `GpuDeviceLostException` takes its reason and message from
+it. A lost device is terminal: every GPU resource went with it, and Pixely does not recreate the
+device or its resources. SDL fails every later command buffer acquire, but a frame that acquires
+none would keep running. So the loss ends the frame loop, and `RunAsync` throws
+`GpuDeviceLostException`, whose `Reason` is the WebGPU `GPUDeviceLostReason` (`"unknown"` for a GPU
+reset, a driver update or an eviction by the browser, `"destroyed"` for a device the page
+destroyed). The generated `catch`, `OnException` and the `finally` that disposes the app run as for
+any other exception, and game state is still intact there, so `OnException` is where a game saves
+or shows a message of its own; the default page shows one either way (see [The page](#the-page)).
 
 The app runs in a tab and ends with it, so the browser does the final cleanup. Disposing the app
 releases Pixely's own GPU resources and windows, but it calls neither `SDL_DestroyGPUDevice` nor

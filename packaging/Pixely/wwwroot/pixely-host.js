@@ -15,8 +15,10 @@ function runtimeModule() {
 
 // Requests an adapter and a device from the page, imports them into emdawnwebgpu beneath an instance of its own, and returns
 // the three pointers for SDL_CreateGPUDeviceWithProperties. The chain matters: emdawnwebgpu completes a future through the
-// object's parents, and SDL waits on its fences that way. SDL cannot install callbacks on an adopted device, so the loss and
-// error handlers live here. Nothing releases the device: it lives as long as the page, which is where the browser frees it.
+// object's parents, and SDL waits on its fences that way. WebGPU takes an uncaptured error callback only when it creates a device,
+// so SDL logs no uncaptured error of an adopted device. The error handler lives here. SDL notices the loss itself but does not log its
+// reason, so the loss handler stays here too. It logs the loss, ends the frame loop, and gives GpuDeviceLostException its reason
+// and message. Nothing releases the device: it lives as long as the page, which is where the browser frees it.
 export async function createGpuDevice() {
     const Module = runtimeModule();
     const webgpu = Module.WebGPU;
@@ -92,8 +94,9 @@ export function readException() {
 // and its proxy is disposed when the loop ends so the delegate and the app it targets stop being rooted by a GC handle.
 // Everything sits inside the try so the promise rejects instead of the error stopping at the browser console: an exception thrown
 // inside a requestAnimationFrame callback never reaches the awaiting managed Main by itself. A lost device ends the loop the
-// same way, since SDL keeps recording against a dead device without noticing. After the first frame it dispatches the
-// pixelyfirstframe event, which tells a page that the app has drawn and a loading indicator can go.
+// same way: after the loss SDL fails only command buffer acquires, so a frame that acquires none, such as one of a hidden window
+// with no pending uploads, would keep running. After the first frame it dispatches the pixelyfirstframe event, which tells a page
+// that the app has drawn and a loading indicator can go.
 export function runFrameLoop(runFrame) {
     return new Promise((resolve, reject) => {
         let firstFrame = true;
