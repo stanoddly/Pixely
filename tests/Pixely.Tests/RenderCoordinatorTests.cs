@@ -279,7 +279,7 @@ public class RenderCoordinatorTests
     }
 
     [Test]
-    public void Execute_WhenWindowIsNotRenderable_SubmitsFrameWithoutContext()
+    public void Execute_WhenWindowIsNotRenderable_SubmitsOnlyUploads()
     {
         List<string> calls = new();
         TestRenderContextSource renderContextSource = new();
@@ -291,7 +291,7 @@ public class RenderCoordinatorTests
         {
             Assert.That(drawn, Is.False);
             Assert.That(renderContextSource.LastWindow, Is.Null);
-            Assert.That(calls, Is.EqualTo(new[] { "acquire", "uploads", "submit" }));
+            Assert.That(calls, Is.EqualTo(new[] { "uploads" }));
         });
     }
 
@@ -353,6 +353,27 @@ public class RenderCoordinatorTests
         coordinator.Execute();
 
         Assert.That(timings.SwapchainChanges, Is.Empty);
+    }
+
+    [Test]
+    public void Execute_WithFrameTimingsWhenWindowIsNotRenderable_RecordsNoSwapchainWait()
+    {
+        long now = 0;
+        FrameTimings timings = new(() => now, 1);
+        RenderCoordinator<TestRenderContext> coordinator = CreateCoordinator(new List<string>(), new TestRenderContextSource(), renderable: false,
+            frameTimingRecorder: timings, acquiring: () => now += 4);
+
+        timings.BeginFrame();
+        timings.EndUpdate();
+        coordinator.Execute();
+        timings.EndRender();
+        timings.EndFrame();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(timings.SwapchainWaitTimes.ToArray(), Is.EqualTo(new[] { 0.0 }));
+            Assert.That(timings.SwapchainChanges, Is.Empty);
+        });
     }
 
     [Test]

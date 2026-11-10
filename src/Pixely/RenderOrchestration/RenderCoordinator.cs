@@ -49,29 +49,20 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 
     public bool Execute()
     {
-#if BROWSER
-        // The WebGPU fork frees finished work on every submit, not only on one that requested a swapchain texture as Vulkan
-        // does. So the coordinator acquires nothing for a window that is not renderable. Pending uploads are still submitted,
-        // so their buffers are not cycled on every update while hidden.
+        // A window that is not renderable gets no frame, so nothing presents an undrawn texture for a hidden or minimized
+        // window. Pending uploads are still submitted, so the buffers they update are not cycled into new copies on every
+        // update while it is hidden. This relies on every backend freeing finished work on any submit, which SDL's Vulkan
+        // backend does only since XDL v3.4.20-7. On Vulkan, defrag and the freeing of empty allocations still wait for a
+        // submit that requested a swapchain texture.
         if (!_window.IsRenderable)
         {
             _gpu.SubmitUploads();
             return false;
         }
-#endif
 
         // The coordinator, not the provider or the context, acquires and submits the command buffer and swapchain texture, so
         // no provider or context has to request the texture or submit; providers, contexts and renderers must not submit or
-        // cancel the command buffer. On the desktop they are acquired every frame, even for a window that is not renderable,
-        // and the command buffer is submitted even when no texture comes back. SDL's Vulkan backend frees finished GPU work
-        // only on a submit whose command buffer requested a swapchain texture, or on a fence wait. Without that request, every
-        // upload would keep its buffer in use, and every later update of the buffer would cycle it into a new full-size copy.
-        // Metal and D3D12 free finished work on every submit.
-        //
-        // Apple documents that CAMetalLayer.nextDrawable, which SDL's Metal acquire calls without checking the window's state,
-        // waits up to one second when no drawable is free. On 2026-09-30 the acquire was measured on GitHub's macOS 14.8 and
-        // 26.6 runners, on the Apple Paravirtual device, with SDL 3.4.14 and 3.4.16, for 300 frames each while the window was
-        // minimized and while it was hidden. It never blocked, it returned a texture every time, and memory stayed flat.
+        // cancel the command buffer.
         CommandBuffer commandBuffer = _gpu.AcquireCommandBuffer();
         bool hasTexture;
         SwapchainTexture swapchainTexture;
@@ -95,6 +86,8 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
             // drawn frame instead.
             _gpu.Cancel(commandBuffer);
 #else
+            // Submitted rather than cancelled, because on Vulkan only a submit that requested a swapchain texture can defragment
+            // memory and free empty allocations.
             SubmitUploadsAndFrame(commandBuffer);
 #endif
             return false;
@@ -102,24 +95,18 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
 
         _frameTimingRecorder.OnSwapchainAcquired(_window, swapchainTexture);
 
-        // A frame nobody sees, such as one of a hidden or minimized window on Metal or D3D12, is submitted without a context.
-        bool isRenderable = false;
         try
         {
-            isRenderable = _window.IsRenderable;
-            if (isRenderable)
-            {
-                Render(commandBuffer, swapchainTexture);
-            }
+            Render(commandBuffer, swapchainTexture);
         }
         finally
         {
-            // Even when the window, the provider or a renderer throws: a draw recorded before the throw may read a buffer whose
-            // update is still pending, and a command buffer with an acquired swapchain texture cannot be cancelled.
+            // Even when the provider or a renderer throws: a draw recorded before the throw may read a buffer whose update is
+            // still pending, and a command buffer with an acquired swapchain texture cannot be cancelled.
             SubmitUploadsAndFrame(commandBuffer);
         }
 
-        return isRenderable;
+        return true;
     }
 
     // Builds the frame's context, runs the window's renderers and disposes the context.

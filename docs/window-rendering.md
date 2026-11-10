@@ -68,14 +68,14 @@ the frame loop processes events and updates, and the window's `ColorTargetFormat
 `TryWaitAndAcquireSwapchainTexture` throw `InvalidOperationException`. Nothing then waits for vsync, so such an
 app spins the loop.
 
-With `UseGpu()` but without window rendering, as in a compute-only app, no render coordinator runs, and two things
-fall to the app:
+With `UseGpu()` but without window rendering, as in a compute-only app, no render coordinator runs. Only a render
+coordinator submits the uploads `GpuMemorySystem` records, so the app must call `GpuMemorySystem.Submit()` before the
+GPU work that reads them. Until then the uploads do not run, and on every backend each buffer update makes a new
+full-size copy of the buffer, because the unsubmitted uploads keep the earlier copies in use.
 
-- Only a render coordinator submits the uploads `GpuMemorySystem` records. The app must call `GpuMemorySystem.Submit()`
-  before the GPU work that reads them. Until then the uploads do not run, and on every backend each buffer update makes
-  a new full-size copy of the buffer, because the unsubmitted uploads keep the earlier copies in use.
-- `AddWindow` still claims the window for the device, but nothing requests its swapchain texture. SDL's Vulkan backend
-  then frees finished GPU work only on a fence wait, so the app must also wait on a `GpuFence` regularly.
+`AddWindow` still claims the window for the device, but nothing requests its swapchain texture. With a claimed window,
+SDL's Vulkan backend defragments GPU memory and frees empty allocations only on a submit that requested one, so on
+Vulkan neither happens in such an app.
 
 ## Waiting for uploads
 
@@ -258,7 +258,7 @@ public sealed class GameRenderContextProvider : RenderContextProvider<GameRender
 }
 ```
 
-`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. One provider can serve several windows, such as two that use `UseDefaultRendering`, so `FrameContext.Window` tells them apart. The coordinator disposes the context after the renderers and then submits the command buffer itself, so neither the context nor a renderer submits or cancels it. On the desktop the coordinator acquires a frame every frame, even for a window that is not renderable, but calls the provider and the renderers only while the window's `IsRenderable` is true; a frame nobody sees is submitted without a context. In the browser it skips a window that is not renderable and submits only its pending uploads: the WebGPU fork frees finished work on every submit, so the browser needs no swapchain request to free it. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: SDL's Vulkan backend frees finished GPU work only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire policy needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes in headless mode (`Pixely.Headless`), hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
+`RenderCoordinator`, not the provider, acquires each frame's command buffer and swapchain texture, and passes them to `CreateRenderContext` in a `FrameContext` together with the window. One provider can serve several windows, such as two that use `UseDefaultRendering`, so `FrameContext.Window` tells them apart. The coordinator disposes the context after the renderers and then submits the command buffer itself, so neither the context nor a renderer submits or cancels it. The coordinator skips a window whose `IsRenderable` is false: it acquires no frame for it, calls neither the provider nor the renderers, and submits only the pending uploads, so their buffers are not cycled into new copies on every update while the window is hidden. By default a hidden or minimized window is not renderable. When no swapchain texture comes back, the coordinator does not call the provider. On the desktop it submits the command buffer instead of cancelling it: with a claimed window, SDL's Vulkan backend defragments GPU memory and frees empty allocations only on a submit that requested a swapchain texture. In the browser it cancels the command buffer and leaves pending uploads for the next drawn frame: the WebGPU fork returns no texture while its submissions in flight reach the frame limit, so another submission would only hold a slot. A different acquire policy needs a custom `IRenderCoordinator`. `Window` is abstract, and `ColorTargetFormat` and `TryWaitAndAcquireSwapchainTexture` belong to the window that presents its frames. `SwapchainWindow`, the window of a normal run, hands out the swapchain image of a window claimed for the GPU device. `OffscreenWindow`, which every window becomes in headless mode (`Pixely.Headless`), hands out a texture instead while the SDL window stays hidden and unclaimed, so a custom provider written against `Window` works offscreen unchanged. See headless.md.
 
 ### Reporting the colour target size
 
@@ -375,7 +375,7 @@ bool hidden = inventoryWindow.Hide();
 `Show()`, `Raise()`, and `Hide()` return whether the native window operation succeeded. Raising a window requests input focus, subject to the operating system's window-management policy.
 
 Hidden and minimized windows remain registered and retain their renderer and GPU resources. Their render
-coordinators do not invoke renderers, and on the desktop they still request a swapchain texture every frame. When
+coordinators request no swapchain texture and do not invoke renderers. When
 no window draws a frame, the desktop frame loop waits up to 16 ms for an event, so the app does not spin; in the
 browser, `requestAnimationFrame` paces the frames. They are disposed with the
 service provider that owns them. `InitiallyVisible` controls initial visibility; it does not defer

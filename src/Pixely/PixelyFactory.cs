@@ -167,9 +167,9 @@ public partial class PixelyFactory: IDisposable
         bool claimed = false;
         try
         {
-            // A claimed window makes SDL's Vulkan backend free finished GPU work only on a submit that requested a swapchain texture,
-            // or on a fence wait. Without window rendering nothing requests one, so such an app must wait on a fence regularly, and
-            // must also submit GpuMemorySystem itself.
+            // Without window rendering no render coordinator submits GpuMemorySystem, so such an app must submit it itself. Nothing
+            // requests the claimed window's swapchain texture either, so SDL's Vulkan backend never defragments GPU memory or frees
+            // empty allocations, which with a claimed window wait for a submit that requested one.
             if (gpuDevice != null)
             {
                 unsafe

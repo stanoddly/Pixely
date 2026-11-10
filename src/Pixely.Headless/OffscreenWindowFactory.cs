@@ -28,8 +28,9 @@ internal sealed class OffscreenWindowFactory : IWindowFactory
         }
 
         // Only size and title matter: the SDL window is never shown, it just backs events and text input.
-        // It is not claimed for the GPU device: with a claimed window, SDL's Vulkan backend frees finished work only on a
-        // submit that requested a swapchain texture, which an offscreen window never does.
+        // It is not claimed for the GPU device, because it renders into a texture and never presents. With a claimed window,
+        // SDL's Vulkan backend would defragment memory and free empty allocations only on a submit that requested a swapchain
+        // texture, which an offscreen window never does.
         // Selected before the SDL window exists, so a device without either format leaves no window to clean up.
         TextureFormat colorTargetFormat = OffscreenWindow.SelectColorTargetFormat(
             format => gpuDevice.IsTextureFormatSupported(format, TextureType.TwoD, TextureUsage.ColorTarget | TextureUsage.Sampler));
