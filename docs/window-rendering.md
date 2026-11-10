@@ -98,9 +98,83 @@ copies every frame, and the copies no longer overlap with the work submitted bef
 `PIXELY_UPLOAD_WAIT` overrides it (see [headless.md](headless.md#environment-variables)), for example to check whether a
 newer Mesa still needs the wait. The diagnostics' `GPU device:` line says whether it is on (see [diagnostics.md](diagnostics.md)).
 
+## Pixel density and display scale
+
+Take a window created with `Size: (1280, 720)` on a display set to 200 %:
+
+| | macOS, Wayland, browser | macOS, Wayland, browser with `HighPixelDensity: false` | Windows, X11 |
+| --- | --- | --- | --- |
+| `Size` | 1280x720 | 1280x720 | 1280x720 |
+| `RenderSizeInPixels` | 2560x1440 | 1280x720 | 1280x720 |
+| `PixelDensity` | 2 | 1 | 1 |
+| `DisplayScale` | 2 | 1 | 2 |
+| Looks on screen | as big as 1280x720 at 100 %, sharp | as big as 1280x720 at 100 %, scaled up by the compositor | half as big as 1280x720 at 100 % |
+
+`WindowConfig.HighPixelDensity` is on by default. On macOS, Wayland and in the browser the window then gets a render pixel for every pixel of the screen, so a 16 px font loaded at `16 * window.PixelDensity` renders at 32 render pixels and stays sharp. Without it the window renders at its `Size` and the compositor stretches it to the screen. The compositor picks the filter, so the result is often soft. Windows and X11 always size windows in pixels, so the option changes nothing there.
+
+The rule: `Size`, `Position`, the mouse and the display bounds are in window coordinates. `RenderSizeInPixels` is in render pixels, the pixels of the colour target. `PixelDensity` is render pixels per window coordinate. `DisplayScale` is how many render pixels the user wants a unit of content to take: 2 at 200 % on every platform, except for a window without high pixel density on macOS, Wayland and in the browser, where the compositor does the scaling and it is 1.
+
+- A game that draws in render pixels, such as a pixel art game that scales its scene by an integer factor, reads `RenderSizeInPixels` as before and gets more pixels on a scaled display.
+- A game that wants its content as big on every display multiplies its sizes by `DisplayScale`. On Windows and X11 that includes the window size: `window.Size = new Size<uint>((uint)(1280 * window.DisplayScale), (uint)(720 * window.DisplayScale))` after the window exists.
+- The mouse reports window coordinates. A game that hit-tests it against something drawn in render pixels converts it first: `Vector2 renderPosition = mouseState.Position * window.PixelDensity;`.
+- `Pixely.Ui` maps the mouse from window coordinates to render pixels itself (see [ui.md](ui.md)). Its `scale` is render pixels per logical pixel, so `UseUi(scale: 2f)` makes it as big at 200 % as at 100 %, drawn as 2x2 blocks.
+
+`Window.ScaleChanged` is raised when `PixelDensity` or `DisplayScale` changes, such as when the user moves the window to a display with another scale or changes the scale in the settings. `ResolutionChanged` is raised as well when the render size changes with it.
+
+Headless mode ignores the option, so a screenshot has the window's `Size` in pixels on every platform, and its window's `DisplayScale` is always 1.
+
+## Displays
+
+`IDisplayService` reads the connected displays from the app's service provider, with or without a window:
+
+```csharp
+IDisplayService displayService = provider.GetRequiredService<IDisplayService>();
+Display primary = displayService.GetPrimaryDisplay();
+Rectangle bounds = primary.Bounds;
+Rectangle usableBounds = primary.UsableBounds;
+float scale = primary.Scale;
+IReadOnlyList<Display> displays = displayService.GetDisplays();
+Display current = window.Display;
+```
+
+- `Bounds` is the display's area in desktop coordinates, the ones `Window.Position` uses. `UsableBounds` leaves out what the desktop reserves, such as a taskbar, a dock or a menu bar. SDL cannot read what Wayland reserves, so there `UsableBounds` equals `Bounds`.
+- `Scale` is the scale the user set for the display: 2 at 200 % on every platform. It is the `DisplayScale` a window with high pixel density gets on the display. Platforms report it in one of two parts: macOS, Wayland and the browser as `PixelDensity`, Windows and X11 as `ContentScale`. `Scale` is their product. In the browser SDL reads `PixelDensity` once at startup, so after a page zoom or a move to another monitor only the window's `PixelDensity` and `DisplayScale` have the new value.
+- `Window.Display` is the display SDL says the window is on. That is usually the one holding the window's centre; on Wayland it is the last display the window entered.
+- A `Display` is a snapshot. Each call reads the displays again, because the user can connect, move or rescale a display while the app runs. `Display.Id` tells two snapshots of one display apart from another display's. SDL gives a reconnected display a new ID, so an ID lasts one run at most.
+- Displays are read on the main thread only. Another thread gets a `PixelyException`.
+
+A root window is created when the app is built, so its `WindowConfig` cannot come from `IDisplayService`. A window registered by a stage can, because the root's provider exists by then.
+
+## Window placement
+
+`WindowConfig.Position` says where a window opens. Without it the platform decides.
+
+```csharp
+// Centred on the primary display.
+new WindowConfig(Size: (1280, 720), Position: WindowPosition.Centered());
+
+// Centred on a given display.
+new WindowConfig(Size: (1280, 720), Position: WindowPosition.Centered(display));
+
+// Top-left corner at a point in desktop coordinates.
+new WindowConfig(Size: (1280, 720), Position: WindowPosition.At(new Vector2Int(100, 100)));
+```
+
+A centred window sits in the middle of the display's usable bounds, or of its full bounds when it is larger than the usable ones. A display disconnected since it was read centres the window on the primary display instead. A fullscreen window opens on the display its position names.
+
+Wayland does not let a window place itself, so it ignores `Position` and setting `Window.Position`; `Window.SupportsSetWindowPosition` is false there. Headless mode ignores the position too.
+
+X11 and Wayland can apply a new `Size` or `Position` later than the call that set it, so reading it right away can return the old value. `Window.Sync()` waits until the platform has applied the window's pending changes, and returns false when the wait timed out:
+
+```csharp
+window.Size = new Size<uint>(1600, 900);
+window.Sync();
+Size<uint> size = window.Size;
+```
+
 ## The browser
 
-In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Fullscreen`, `Resizable`, `Transparent`, `Borderless`, `AlwaysOnTop` and `Utility`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
+In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Position`, `Fullscreen`, `Resizable`, `Transparent`, `Borderless`, `AlwaysOnTop` and `Utility`. `HighPixelDensity` applies: the canvas then has the page's device pixels, its CSS size times `window.devicePixelRatio`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.
 
 A browser owns the frame loop, so `Pixely.App.BrowserHost.RunAsync` calls `IPixelyApp.RunFrame()` once per animation frame instead of `Run()`, which loops over it until it returns false. The generated entry point awaits it for `browser-wasm` (see [Hosting](hosting.md)).
 

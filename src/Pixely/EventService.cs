@@ -139,6 +139,14 @@ public class EventService
                     if (_windowRegistry.TryGetWindow((uint)evt.window.windowID, out Window pixelSizeWindow))
                     {
                         pixelSizeWindow.OnPixelSizeChanged(evt.window.timestamp);
+                        pixelSizeWindow.OnScaleChanged(evt.window.timestamp);
+                    }
+                }
+                else if (eventType == SDL_EventType.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED)
+                {
+                    if (_windowRegistry.TryGetWindow((uint)evt.window.windowID, out Window scaleWindow))
+                    {
+                        scaleWindow.OnScaleChanged(evt.window.timestamp);
                     }
                 }
                 else if (eventType == SDL_EventType.SDL_EVENT_WINDOW_CLOSE_REQUESTED)

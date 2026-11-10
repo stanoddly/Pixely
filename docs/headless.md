@@ -25,7 +25,7 @@ builder.AddHeadlessSupport();
 #endif
 ```
 
-A headless app is isolated from the machine it runs on: SDL's joystick and gamepad subsystems are not started, so only the synthetic gamepad exists, and `IPlatformSettings.Theme` is always `Unknown` (platform-settings.md). `PIXELY_COMMAND_CONSOLE` has no effect, because headless mode reads standard input with a console of its own.
+A headless app is isolated from the machine it runs on: SDL's joystick and gamepad subsystems are not started, so only the synthetic gamepad exists, and `IPlatformSettings.Theme` is always `Unknown` (platform-settings.md). A window's `DisplayScale` is always 1, but `IDisplayService` and `Window.Display` read the machine's real displays (window-rendering.md). `PIXELY_COMMAND_CONSOLE` has no effect, because headless mode reads standard input with a console of its own.
 
 ## Driving the app from standard input
 
