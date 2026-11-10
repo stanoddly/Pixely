@@ -57,17 +57,16 @@ public partial class PixelyFactory
 
     private Window CreateWindow(ViewScope viewScope, SdlGpuDevice? gpuDevice, PixelyFrameClock frameClock, PlatformInfo platformInfo, WindowConfig config)
     {
-        (uint width, uint height, SDL_WindowFlags windowFlags) = GetWindowCreationParameters(config);
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, config.Title, width, height, windowFlags);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(gpuDevice, GetWindowCreationParameters(config));
 
         return new SwapchainWindow(viewScope, sdlWindow, gpuDevice?.Pointer ?? Pointer<SDL_GPUDevice>.Null, sdlWindowId, frameClock, platformInfo, config.CloseBehavior);
     }
 
     // For an IWindowFactory: an SDL window that is not claimed for the GPU device, wrapped in a window of the factory's own type.
     // Nothing owns the SDL window until the wrapper exists, so a failure to create the wrapper destroys it.
-    internal Window CreateUnclaimedWindow(string? title, uint width, uint height, SDL_WindowFlags windowFlags, Func<Pointer<SDL_Window>, uint, Window> createWindow)
+    internal Window CreateUnclaimedWindow(SdlWindowParameters parameters, Func<Pointer<SDL_Window>, uint, Window> createWindow)
     {
-        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, title, width, height, windowFlags);
+        (Pointer<SDL_Window> sdlWindow, uint sdlWindowId) = CreateSdlWindow(null, parameters);
 
         try
         {
@@ -84,8 +83,8 @@ public partial class PixelyFactory
         }
     }
 
-    // The size and flags of a window created as its config says.
-    internal static (uint Width, uint Height, SDL_WindowFlags Flags) GetWindowCreationParameters(WindowConfig config)
+    // The SDL parameters of a window created as its config says.
+    internal static SdlWindowParameters GetWindowCreationParameters(WindowConfig config)
     {
         (uint width, uint height) = config.Fullscreen ? (0, 0) : config.Size ?? DefaultSize;
         SDL_WindowFlags windowFlags = 0;
@@ -124,7 +123,12 @@ public partial class PixelyFactory
             windowFlags |= SDL_WindowFlags.SDL_WINDOW_UTILITY;
         }
 
-        return (width, height, windowFlags);
+        if (config.HighPixelDensity)
+        {
+            windowFlags |= SDL_WindowFlags.SDL_WINDOW_HIGH_PIXEL_DENSITY;
+        }
+
+        return new SdlWindowParameters(config.Title, width, height, windowFlags, config.Position);
     }
 }
 #endif

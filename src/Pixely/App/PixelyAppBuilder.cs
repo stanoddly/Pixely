@@ -90,6 +90,9 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<PlatformSettings, PixelyFactory>();
         AddAlias<IPlatformSettings, PlatformSettings>();
 
+        AddSingleton<DisplayService, PixelyFactory>();
+        AddAlias<IDisplayService, DisplayService>();
+
         AddSingleton<EventService, PixelyFactory>();
 
 #if !BROWSER
