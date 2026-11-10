@@ -1,5 +1,4 @@
 using Pixely.Content;
-using Pixely.Utilities;
 using XdlSharp;
 using static XdlSharp.Xdl;
 
@@ -61,7 +60,7 @@ public sealed class CursorService : ICursorService, IDisposable
             throw new ArgumentException("A cursor needs at least one frame.", nameof(frames));
         }
 
-        uint[] durations = new uint[frames.Length];
+        SDL_CursorFrameInfo[] frameInfos = new SDL_CursorFrameInfo[frames.Length];
         ShortSize size = default;
         for (int i = 0; i < frames.Length; i++)
         {
@@ -80,7 +79,7 @@ public sealed class CursorService : ICursorService, IDisposable
                 throw new ArgumentException($"All frames of a cursor must have the same size, but frame {i} is {image.Size.Width}x{image.Size.Height} and frame 0 is {size.Width}x{size.Height}.", nameof(frames));
             }
 
-            durations[i] = ToMilliseconds(frames[i].Duration, i);
+            frameInfos[i].duration = ToMilliseconds(frames[i].Duration, i);
         }
 
         if (hotspot.X < 0 || hotspot.Y < 0 || hotspot.X >= size.Width || hotspot.Y >= size.Height)
@@ -88,33 +87,41 @@ public sealed class CursorService : ICursorService, IDisposable
             throw new ArgumentOutOfRangeException(nameof(hotspot), hotspot, $"The hotspot must lie within the {size.Width}x{size.Height} cursor image.");
         }
 
-        unsafe
+        return Track(CreateAnimatedCursor(frames, frameInfos, 0, hotspot), "SDL_CreateAnimatedCursor");
+    }
+
+    // A surface from SDL_CreateSurfaceFrom borrows the pixels, so every frame stays pinned until SDL_CreateAnimatedCursor returns.
+    // C# pins a span only for the scope of a fixed statement, so each call pins one frame and recurses for the next.
+    // No video driver keeps a borrowed surface after the call: Windows duplicates it, and the others copy the pixels during the call.
+    private static unsafe Pointer<SDL_Cursor> CreateAnimatedCursor(ReadOnlySpan<CursorFrame> frames, SDL_CursorFrameInfo[] frameInfos, int index, Vector2Int hotspot)
+    {
+        if (index == frames.Length)
         {
-            SDL_CursorFrameInfo[] frameInfos = new SDL_CursorFrameInfo[frames.Length];
+            fixed (SDL_CursorFrameInfo* frameInfosPointer = frameInfos)
+            {
+                // SDL makes a static cursor out of one frame.
+                return SDL_CreateAnimatedCursor(frameInfosPointer, frameInfos.Length, hotspot.X, hotspot.Y);
+            }
+        }
+
+        Image image = frames[index].Image;
+        int pitch = ImageSurfaces.GetPackedPitch(image);
+        fixed (byte* pixels = image.Data)
+        {
+            Pointer<SDL_Surface> surface = SDL_CreateSurfaceFrom(image.Size.Width, image.Size.Height, (SDL_PixelFormat)image.PixelFormat, (IntPtr)pixels, pitch);
+            if (surface.IsNull)
+            {
+                throw new PixelyException($"SDL_CreateSurfaceFrom failed: {SdlError.GetError()}");
+            }
+
+            frameInfos[index].surface = surface;
             try
             {
-                for (int i = 0; i < frames.Length; i++)
-                {
-                    frameInfos[i].surface = ImageSurfaces.CreateCopy(frames[i].Image, SDL_PixelFormat.SDL_PIXELFORMAT_ARGB8888);
-                    frameInfos[i].duration = durations[i];
-                }
-
-                fixed (SDL_CursorFrameInfo* frameInfosPointer = frameInfos)
-                {
-                    // SDL makes a static cursor out of one frame.
-                    return Track(SDL_CreateAnimatedCursor(frameInfosPointer, frameInfos.Length, hotspot.X, hotspot.Y), "SDL_CreateAnimatedCursor");
-                }
+                return CreateAnimatedCursor(frames, frameInfos, index + 1, hotspot);
             }
             finally
             {
-                // A native cursor that keeps a surface holds its own reference to it, so this releases only Pixely's.
-                foreach (SDL_CursorFrameInfo frameInfo in frameInfos)
-                {
-                    if (frameInfo.surface != null)
-                    {
-                        SDL_DestroySurface(frameInfo.surface);
-                    }
-                }
+                SDL_DestroySurface(surface);
             }
         }
     }

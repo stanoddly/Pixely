@@ -23,13 +23,6 @@ public class PixelyException : Exception
 
 internal static class SdlError
 {
-    private static readonly string[] IgnoredErrors = ["No HID devices found in the system.", "No HID devices with requested VID/PID found in the system.", "Parameter 'table' is invalid"];
-
-    public static void Clear()
-    {
-        SDL_ClearError();
-    }
-    
     public static void ThrowOnFalse(bool value)
     {
         if (!value) throw new PixelyException(GetError());
@@ -63,28 +56,6 @@ internal static class SdlError
         if (pointer == null) throw new PixelyException(GetError());
     }
     
-    public static void ThrowOnError()
-    {
-        string? error = GetError();
-        if (string.IsNullOrEmpty(error))
-        {
-            return;
-        }
-
-        // an ugly hack: sometimes an error is randomly raised (from some random place?)
-        // https://github.com/libsdl-org/SDL/blob/afa27243df76f61509d71041fcc8203b545c0388/src/hidapi/linux/hid.c#L1087
-        foreach (string ignoredError in IgnoredErrors)
-        {
-            if (error == ignoredError)
-            {
-                Console.Error.WriteLine("IGNORED: " + error);
-                return;
-            }
-        }
-
-        throw new PixelyException(error);
-    }
-
     public static void Throw(string context)
     {
         string? error = GetError();

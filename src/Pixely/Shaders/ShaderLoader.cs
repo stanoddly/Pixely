@@ -102,12 +102,8 @@ public class ShaderLoader : IShaderLoader
         string path = VirtualPath.Combine(directory, shaderInstance.Filename);
         ContentFile file = _contentSource.GetFile(path);
         using Stream stream = file.Open();
-        int shaderCodeSize = (int)stream.Length;
-        // SDL reads a text shader as a C string as well as by size, so the buffer needs a terminator that
-        // the size does not count.
-        bool isTextFormat = ShaderFormats.TextFormats.Contains(shaderInstance.Format);
-        byte[] shaderCode = new byte[isTextFormat ? shaderCodeSize + 1 : shaderCodeSize];
-        stream.ReadExactly(shaderCode.AsSpan(0, shaderCodeSize));
+        byte[] shaderCode = new byte[(int)stream.Length];
+        stream.ReadExactly(shaderCode);
         byte[] entryPoint = System.Text.Encoding.UTF8.GetBytes(shaderInstance.EntryPoint + "\0");
 
         unsafe
@@ -118,7 +114,7 @@ public class ShaderLoader : IShaderLoader
                 SDL_GPUShaderCreateInfo createInfo = new()
                 {
                     code = shaderCodePointer,
-                    code_size = (nuint)shaderCodeSize,
+                    code_size = (nuint)shaderCode.Length,
                     entrypoint = entryPointPointer,
                     format = (SDL_GPUShaderFormat)shaderInstance.Format,
                     stage = stage,
