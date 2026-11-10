@@ -11,7 +11,7 @@ namespace Pixely.Tests;
 public sealed class FontSystemTests
 {
     private const string FontPath = "fonts/GohuFont-Medium.ttf";
-    private const ushort FontSize = 14;
+    private const float FontSize = 14;
     private const string VariableFontPath = "fonts/Cantarell-VF.otf";
 
     private FontSystem _fontSystem = null!;
@@ -357,6 +357,108 @@ public sealed class FontSystemTests
         });
     }
 
+    [Test]
+    public void GetScaled_KeepsVariationsFeaturesAndScaledLetterSpacing()
+    {
+        Font plain = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")]);
+        Font tracked = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1);
+
+        Font scaledPlain = plain.GetScaled(2f)!;
+        Font scaledTracked = tracked.GetScaled(2f)!;
+
+        unsafe
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(TTF_GetFontWeight(scaledTracked.TtfFont), Is.EqualTo(600));
+                Assert.That(scaledTracked.Measure("1111.11").Width, Is.EqualTo(scaledTracked.Measure("8888.88").Width));
+                Assert.That(scaledTracked.Measure("Hello").Width, Is.EqualTo(scaledPlain.Measure("Hello").Width + 10), "1 px at a scale of 2 after each of 5 characters");
+                Assert.That((scaledTracked.Variations, scaledTracked.Features, scaledTracked.LetterSpacing), Is.EqualTo((tracked.Variations, tracked.Features, 1f)));
+            });
+        }
+    }
+
+    [Test]
+    public void GetScaled_FractionalLoadedSize_ReturnsTheLoadedFontAtItsOwnSize()
+    {
+        Font font = _fontSystem.Load(VariableFontPath, 14.67f);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(font.GetScaled(1.0001f), Is.SameAs(font), "14.67 x 1.0001 lands on the same 64th");
+            Assert.That(font.GetScaled(1.5f)!.GetScaled(1 / 1.5f), Is.SameAs(font), "scaled there and back");
+            Assert.That(font.GetScaled(2f)!.Scale, Is.EqualTo(1878 / (64f * 14.67f)), "the factor rounded to the 64th of a pixel");
+        });
+    }
+
+    [Test]
+    public void GetScaled_SizeHalfwayBetweenTwo64ths_RoundsAsSdlTtfDoes()
+    {
+        // 14.5078125 px is 928.5 64ths, which SDL_ttf opens at 929, so 1.001 times it, 929.43, is the loaded size.
+        Font font = _fontSystem.Load(VariableFontPath, 14.5078125f);
+
+        Assert.That(font.GetScaled(1.001f), Is.SameAs(font));
+    }
+
+    [Test]
+    public void ReleaseFont_FractionalLoadedSize_ReleasesItsScaledFonts()
+    {
+        Font font = _fontSystem.Load(VariableFontPath, 14.67f);
+        Font scaled = font.GetScaled(2f)!;
+
+        font.Dispose();
+        Font reloaded = _fontSystem.Load(VariableFontPath, 14.67f);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reloaded.GetScaled(2f), Is.Not.SameAs(scaled));
+            Assert.That(() => scaled.Dispose(), Throws.Nothing, "released already, so nothing is closed twice");
+        });
+    }
+
+    [Test]
+    public void GetScaled_AboveTheLargestSize_Throws()
+    {
+        Font font = LoadScalable();
+
+        Assert.That(() => font.GetScaled(5000f), Throws.InstanceOf<ArgumentOutOfRangeException>(), "14 px x 5000 is above 65535 px");
+    }
+
+    [Test]
+    public void GetScaled_BelowOnePixel_IsOnePixel()
+    {
+        Font font = LoadScalable();
+
+        Font tiny = font.GetScaled(0.05f)!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(font.GetScaled(0.06f), Is.SameAs(tiny), "14 px x 0.05 and x 0.06 both draw at 1 px");
+            Assert.That(tiny.Scale, Is.EqualTo(1 / FontSize));
+        });
+    }
+
+    [Test]
+    public void GetScaled_ReleasedFont_Throws()
+    {
+        Font font = LoadScalable();
+        font.Dispose();
+
+        Assert.That(() => font.GetScaled(2f), Throws.InstanceOf<ObjectDisposedException>());
+    }
+
+    [Test]
+    public void ReleaseFont_Twice_KeepsAFontLoadedSince()
+    {
+        Font font = LoadScalable();
+        font.Dispose();
+        Font reloaded = LoadScalable();
+
+        font.Dispose();
+
+        Assert.That(LoadScalable(), Is.SameAs(reloaded));
+    }
+
     // The alpha of every pixel of the rendered text, summed: a heavier weight covers more.
     private static unsafe long Coverage(Font font, string text)
     {
@@ -380,26 +482,6 @@ public sealed class FontSystemTests
         finally
         {
             SDL_DestroySurface(surface);
-        }
-    }
-    [Test]
-    public void GetScaled_KeepsVariationsFeaturesAndScaledLetterSpacing()
-    {
-        Font plain = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")]);
-        Font tracked = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1);
-
-        Font scaledPlain = plain.GetScaled(2f)!;
-        Font scaledTracked = tracked.GetScaled(2f)!;
-
-        unsafe
-        {
-            Assert.Multiple(() =>
-            {
-                Assert.That(TTF_GetFontWeight(scaledTracked.TtfFont), Is.EqualTo(600));
-                Assert.That(scaledTracked.Measure("1111.11").Width, Is.EqualTo(scaledTracked.Measure("8888.88").Width));
-                Assert.That(scaledTracked.Measure("Hello").Width, Is.EqualTo(scaledPlain.Measure("Hello").Width + 10), "1 px at a scale of 2 after each of 5 characters");
-                Assert.That((scaledTracked.Variations, scaledTracked.Features, scaledTracked.LetterSpacing), Is.EqualTo((tracked.Variations, tracked.Features, 1f)));
-            });
         }
     }
 }

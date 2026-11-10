@@ -121,8 +121,13 @@ public sealed class StubFontSystem : IFontSystem
             return font.GetScaled(factor);
         }
 
+        if (font.Size * (double)factor > FontKey.MaxSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, $"The scaled size must be at most {FontKey.MaxSize} pixels, as a loaded size must.");
+        }
+
         int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
-        if (sizeIn64ths == Font.ToSizeIn64ths(font.Size, 1))
+        if (sizeIn64ths == font.SizeIn64ths)
         {
             return font;
         }
@@ -131,7 +136,7 @@ public sealed class StubFontSystem : IFontSystem
         {
             unsafe
             {
-                scaledFont = new Font(this, default, null, font.Key, font.Variations, font.Features, font, sizeIn64ths / (64f * font.Size));
+                scaledFont = new Font(this, default, null, font.Key, font.Variations, font.Features, font, sizeIn64ths);
             }
 
             _scaledFonts[(font, sizeIn64ths)] = scaledFont;
@@ -160,7 +165,7 @@ public sealed class StubFontSystem : IFontSystem
 
         if (font.Unscaled != null)
         {
-            _scaledFonts.Remove((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)));
+            _scaledFonts.Remove((font.Unscaled, font.SizeIn64ths));
             _releasedFonts.Add(font);
             return;
         }
@@ -199,7 +204,7 @@ public sealed class StubFontSystem : IFontSystem
     {
         if (font.Unscaled != null)
         {
-            return _scaledFonts.TryGetValue((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)), out Font? scaled) && ReferenceEquals(scaled, font);
+            return _scaledFonts.TryGetValue((font.Unscaled, font.SizeIn64ths), out Font? scaled) && ReferenceEquals(scaled, font);
         }
 
         return _fonts.TryGetValue(font.Key, out Font? loaded) && ReferenceEquals(loaded, font);

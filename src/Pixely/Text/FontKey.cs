@@ -9,8 +9,8 @@ internal readonly record struct FontKey(string Path, float Size, FontRasterizati
     string VariationSettings, string FeatureSettings, float LetterSpacing)
 {
     // FreeType raises a size below 1 px to 1 px, and the old ushort size stopped at 65535.
-    private const float MinSize = 1;
-    private const float MaxSize = 65535;
+    internal const float MinSize = 1;
+    internal const float MaxSize = 65535;
     // XDL_SetFontCharSpacing takes this range, so the spacing in 26.6 fixed point fits an int.
     internal const float MinLetterSpacing = -32768;
     internal const float MaxLetterSpacing = 32767;

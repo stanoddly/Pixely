@@ -19,7 +19,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly Dictionary<FontKey, Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
-    // Keyed by the loaded font they came from and their size in 64ths of a point, see Font.ToSizeIn64ths. Kept apart from _fonts
+    // Keyed by the loaded font they came from and their size in 64ths of a pixel, see Font.ToSizeIn64ths. Kept apart from _fonts
     // because each one is released with its loaded font, before the data they share is freed.
     private readonly Dictionary<(Font unscaled, int sizeIn64ths), Font> _scaledFonts = new();
 
@@ -115,8 +115,19 @@ internal class FontSystem: IFontSystem, IUpdatable
             return font.GetScaled(factor);
         }
 
+        // A released font's SDL font is closed, so copying it would read freed memory.
+        if (!_fontCache.TryGetValue(font.Key, out Font? loadedFont) || !ReferenceEquals(loadedFont, font))
+        {
+            throw new ObjectDisposedException(nameof(Font), $"The font {font.Path} at {font.Size} was released.");
+        }
+
+        if (font.Size * (double)factor > FontKey.MaxSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, $"The scaled size must be at most {FontKey.MaxSize} pixels, as a loaded size must.");
+        }
+
         int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
-        if (sizeIn64ths == Font.ToSizeIn64ths(font.Size, 1))
+        if (sizeIn64ths == font.SizeIn64ths)
         {
             return font;
         }
@@ -145,7 +156,7 @@ internal class FontSystem: IFontSystem, IUpdatable
             if (font.LetterSpacing != 0)
             {
                 // Clamped, so zooming a UI far in cannot push the spacing out of the range Load checked.
-                float letterSpacing = Math.Clamp(font.LetterSpacing * sizeIn64ths / (64f * font.Size), FontKey.MinLetterSpacing, FontKey.MaxLetterSpacing);
+                float letterSpacing = Math.Clamp(font.LetterSpacing * Font.ToScale(font.Size, sizeIn64ths), FontKey.MinLetterSpacing, FontKey.MaxLetterSpacing);
                 SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, letterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{font.Path}'");
             }
         }
@@ -158,7 +169,7 @@ internal class FontSystem: IFontSystem, IUpdatable
         Font scaledFont;
         unsafe
         {
-            scaledFont = new Font(this, ttfFont, null, font.Key, font.Variations, font.Features, font, sizeIn64ths / (64f * font.Size));
+            scaledFont = new Font(this, ttfFont, null, font.Key, font.Variations, font.Features, font, sizeIn64ths);
         }
 
         _scaledFonts[(font, sizeIn64ths)] = scaledFont;
@@ -388,6 +399,12 @@ internal class FontSystem: IFontSystem, IUpdatable
             return;
         }
 
+        // Released already, so its SDL font is closed and its data freed, and the cache may hold a font loaded again since.
+        if (!_fonts.Remove(font))
+        {
+            return;
+        }
+
         // Before the loaded font, whose data they read.
         List<Font> scaledFonts = new();
         foreach (Font scaledFont in _scaledFonts.Values)
@@ -403,7 +420,6 @@ internal class FontSystem: IFontSystem, IUpdatable
             ReleaseScaledFont(scaledFont);
         }
 
-        _fonts.Remove(font);
         _fontCache.Remove(font.Key);
 
         unsafe
@@ -417,7 +433,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     // Only the font in the cache is closed, so disposing a scaled font twice, or after its loaded font, closes nothing twice.
     private void ReleaseScaledFont(Font font)
     {
-        (Font unscaled, int sizeIn64ths) key = (font.Unscaled!, Font.ToSizeIn64ths(font.Size, font.Scale));
+        (Font unscaled, int sizeIn64ths) key = (font.Unscaled!, font.SizeIn64ths);
         if (!_scaledFonts.TryGetValue(key, out Font? cached) || !ReferenceEquals(cached, font))
         {
             return;

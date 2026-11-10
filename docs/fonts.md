@@ -89,10 +89,14 @@ Font large = body.GetScaled(1.5f)!;
 ```
 
 - The scaled font rasterises at 24 px here, and its `Measure` and `CreateTextSprite` are in pixels of that size. A fractional size is kept, so 16 px at 1.33 rasterises at 21.28 px. `Size` stays 16, and `Scale` is 1.5.
-- It shares the loaded font's data and settings, through `TTF_CopyFont`. It keeps the variations and features, and its letter spacing is the loaded font's times the scale, so 1 px at a scale of 2 is 2 px of the scaled font. FreeType keeps a size in 64ths of a point, so the size is rounded to one, and the font system caches the scaled font per size: two factors that land on the same 64th return the same `Font`, whose `Scale` is the rounded one. Scaling a scaled font multiplies the factors, and a factor that lands on the loaded size returns the loaded font.
+- It shares the loaded font's data and settings, through `TTF_CopyFont`. It keeps the variations and features.
+- Its letter spacing is the loaded font's times the scale, so 1 px at a scale of 2 is 2 px of the scaled font. The result is clamped to -32768 to 32767 pixels. `LetterSpacing` still reports the loaded font's value.
+- FreeType keeps a size in 64ths of a pixel, so the size is rounded to one. The font system caches the scaled font per size: two factors that land on the same 64th return the same `Font`, whose `Scale` is the rounded one.
+- Scaling a scaled font multiplies its rounded `Scale` by the factor. So 16 px at 1.1 and then at 2 lands on 35.1875 px, one 64th away from 16 px at 2.2, which is 35.203125 px, and gives another `Font`. A factor that lands on the loaded size returns the loaded font.
 - It is released with the loaded font. Disposing it releases only it, and the next `GetScaled` to its size scales again. Until then it stays loaded, so a zoom through many sizes keeps a FreeType face for each size it passed.
 - A bitmap font returns null, because it comes only in its strike sizes.
-- The factor must be finite and above 0.
+- The factor must be finite and above 0, and the scaled size must be at most 65535 pixels, as a loaded size must. A scaled size below 1 pixel is 1 pixel, as FreeType draws it, so its `Scale` is `1 / Size`.
+- `GetScaled` on a released loaded font, or on a font scaled from it, throws `ObjectDisposedException`.
 
 `IFont.GetScaled` returns null unless an implementation overrides it, so a font of an application's own that does not scale is stretched by the UI rather than refused. A font system reaches the same through the internal `IFontSystem.GetScaled`, which only Pixely's font systems implement, because only Pixely creates a `Font`.
 
@@ -109,4 +113,4 @@ Font large = body.GetScaled(1.5f)!;
 
 ## Where the settings come from
 
-Stock SDL_ttf has no API for variations, features or letter spacing. XDL, the patched SDL that Pixely is built on, adds `XDL_SetFontVariations`, `XDL_SetFontFeatures` and `XDL_SetFontCharSpacing` to SDL_ttf, and Pixely calls them once when it loads a font. They work wherever Pixely runs, the browser included.
+Stock SDL_ttf has no API for variations, features or letter spacing. XDL, the patched SDL that Pixely is built on, adds `XDL_SetFontVariations`, `XDL_SetFontFeatures` and `XDL_SetFontCharSpacing` to SDL_ttf, and Pixely calls them once when it loads a font. A scaled font takes them through `TTF_CopyFont`, and Pixely sets its letter spacing again for the scale. They work wherever Pixely runs, the browser included.
