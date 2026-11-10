@@ -126,8 +126,6 @@ projects, is rewritten only when its content changes, and is removed by `dotnet 
 - PIXELY0007: a browser build whose framework is not a browser one. The SDK switches a single
   `net11.0` without `-f`; a project with `TargetFrameworks` lists `net11.0-browser` itself and
   publishes with `dotnet publish -f net11.0-browser -r browser-wasm` (see below).
-- PIXELY0006: a browser build without a writable Emscripten cache. Set `WasmCachePath` (see
-  [XDL in the browser](#xdl-in-the-browser)).
 
 ## The browser
 
@@ -218,23 +216,19 @@ The .NET runtime for the browser contains no SDL. Pixely calls XDL, the patched 
 through the XdlSharp bindings (`DllImport("XDL3")`, `"XDL3_image"`, `"XDL3_ttf"`, `"XDL3_mixer"`),
 so XDL is linked into `dotnet.native.wasm`. The SDK adds `XdlSharp.Native.browser-wasm` for
 `-r browser-wasm` (see [SDK](sdk.md#what-the-sdk-adds)); its targets add the four Emscripten archives
-as native references, named after the modules they bind, and add `--use-port=emdawnwebgpu` to the link.
-The archives are built with the Emscripten of .NET 11's `wasm-tools` workload, the only one they link with.
+as native references, named after the modules they bind, and link emdawnwebgpu, the WebGPU binding
+XDL's GPU backend calls, which XDL ships prebuilt. The archives are built with the Emscripten of .NET 11's
+`wasm-tools` workload, the only one they link with.
 
 - The relink needs the `wasm-tools` workload (`dotnet workload install wasm-tools`). Native references
   alone would be skipped with a warning without it, and the first SDL call would fail at run time with
   `DllNotFoundException`, so the SDK sets `WasmBuildNative` to `true` and a missing workload fails the build.
-- XDL's GPU backend in the browser is WebGPU, built on emdawnwebgpu, the WebGPU binding Emscripten ships
-  as a remote port. The port is fetched and built into the Emscripten cache at link time, which the
-  workload's frozen cache cannot hold, so `WasmCachePath` names a writable copy of it (PIXELY0006
-  otherwise). The first link downloads the port; later links reuse the cache.
+- The link uses the workload's own read-only Emscripten cache, so a project sets no `WasmCachePath`.
 - The archives come from the same XDL release as the bindings, so every P/Invoke resolves, also in
   `dotnet build -r browser-wasm` and `dotnet run -r browser-wasm`, which do not trim.
 
-Copy the workload's cache (`packs/Microsoft.NET.Runtime.Emscripten.*.Cache.*/<version>/tools/emscripten/cache` in the .NET installation) to a writable directory once, then:
-
 ```shell
-dotnet publish -r browser-wasm -c Release -p:WasmCachePath=/path/to/emcache
+dotnet publish -r browser-wasm -c Release
 ```
 
 XDL3_image and XDL3_mixer decode only the formats their own source does: no animated PNG, TIFF, WebP
@@ -396,7 +390,7 @@ so such a project sets `PixelyBrowserDefaultAssets=false`.
 `tutorials/Pixely.Tutorials.Browser` is the smallest example: `UseDefaultRendering` and one renderer
 drawing a magenta quad from embedded shaders, logging `ResolutionChanged`. On the desktop it runs as
 any other tutorial (see [Window rendering](window-rendering.md)); in the browser it needs the
-`wasm-tools` workload and a writable `WasmCachePath` as described above.
+`wasm-tools` workload as described above.
 
 ### Compressed downloads
 

@@ -85,22 +85,14 @@ public class PlatformSettingsTests
 
     [TestCase("en,")]
     [TestCase("en, ")]
-    public void GetPreferredLocales_TrailingEmptyItem_SkipsIt(string locales)
+    [TestCase(",en")]
+    [TestCase("en,,")]
+    public void GetPreferredLocales_EmptyItem_SkipsIt(string locales)
     {
         IPlatformSettings settings = Build(new PixelyConfig()).GetRequiredService<IPlatformSettings>();
         SetPreferredLocales(locales);
 
         Assert.That(settings.GetPreferredLocales(), Is.EqualTo(new[] { new Locale("en", null) }));
-    }
-
-    // SDL parses ",en" as the language ",en" followed by a null entry, which it still counts.
-    [Test]
-    public void GetPreferredLocales_LeadingComma_SkipsTheNullEntry()
-    {
-        IPlatformSettings settings = Build(new PixelyConfig()).GetRequiredService<IPlatformSettings>();
-        SetPreferredLocales(",en");
-
-        Assert.That(settings.GetPreferredLocales(), Is.EqualTo(new[] { new Locale(",en", null) }));
     }
 
     [Test]

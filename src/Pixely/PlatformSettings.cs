@@ -49,15 +49,7 @@ public sealed class PlatformSettings : IPlatformSettings
                 List<Locale> result = new(count);
                 for (int i = 0; i < count; i++)
                 {
-                    // SDL counts every comma-separated item, but an empty one such as in "en," or ",en" comes back as a null language or a
-                    // null entry, which would crash the process on dereference.
-                    string? language = locales[i].IsNull ? null : Marshal.PtrToStringUTF8((nint)locales[i].Value.language);
-                    if (string.IsNullOrEmpty(language))
-                    {
-                        continue;
-                    }
-
-                    result.Add(new Locale(language, Marshal.PtrToStringUTF8((nint)locales[i].Value.country)));
+                    result.Add(new Locale(Marshal.PtrToStringUTF8((nint)locales[i].Value.language)!, Marshal.PtrToStringUTF8((nint)locales[i].Value.country)));
                 }
 
                 return result;

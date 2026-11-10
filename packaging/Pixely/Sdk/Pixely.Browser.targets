@@ -69,10 +69,9 @@
 
     <!--
       A browser app links XDL's archives from XdlSharp.Native.browser-wasm (Pixely.Native.targets), whose targets add them as
-      native references and add emdawnwebgpu, the Emscripten port XDL's WebGPU backend is built on, to the link. The port is
-      fetched and built at link time, which the workload's frozen cache cannot hold, so WasmCachePath has to name a writable
-      copy of it (docs/hosting.md). pixely-host.js hands the page's adapter and device to XDL through the port's entry points,
-      which are exported only when the port is linked; an undefined export fails the link.
+      native references with emdawnwebgpu, the WebGPU binding XDL's WebGPU backend calls, prebuilt by XDL so that the link needs
+      nothing that the workload's read-only Emscripten cache lacks. pixely-host.js hands the page's adapter and device to XDL through
+      emdawnwebgpu's entry points, which are exported only when it is linked; an undefined export fails the link.
 
       Native references alone do not require the wasm-tools workload: without it they are skipped with a warning and the first
       SDL call fails at run time with DllNotFoundException, even with RunAOTCompilation=false. WasmBuildNative makes the workload
@@ -92,11 +91,6 @@
         <EmccExportedRuntimeMethod Include="WebGPU" />
         <EmccExportedFunction Include="_wgpuCreateInstance" />
     </ItemGroup>
-
-    <Target Name="_PixelyRequireWritableWasmCache" BeforeTargets="BeforeBuild"
-            Condition="'$(_PixelyBrowserXdl)' == 'true' and ('$(WasmCachePath)' == '' or '$(WasmCachePath)' == '$(EmscriptenCacheSdkCacheDir)')">
-        <Error Code="PIXELY0006" File="$(MSBuildProjectFullPath)" Text="A browser app links XDL's WebGPU backend, whose emdawnwebgpu port is built at link time and needs a writable Emscripten cache: set WasmCachePath to a writable copy of the workload's cache (docs/hosting.md, XDL in the browser)." />
-    </Target>
 
     <!--
       A NativeUrlReference is a native reference downloaded from a URL and pinned by its SHA-256 (Sha256 metadata). The cache
