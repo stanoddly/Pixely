@@ -43,9 +43,8 @@ export async function createGpuDevice() {
     const info = adapter.info;
     const name = [info?.vendor, info?.architecture, info?.device, info?.description].filter(Boolean).join(' ') || 'unknown';
     gpuAdapter = Object.freeze({ name, isFallbackAdapter: (info?.isFallbackAdapter ?? adapter.isFallbackAdapter) === true });
-    const adapterName = gpuAdapter.isFallbackAdapter ? `${name} (fallback adapter)` : name;
     if (gpuAdapter.isFallbackAdapter) {
-        console.warn(`WebGPU runs on ${adapterName}, which draws in software, so the app runs slowly. Turning on hardware acceleration in the browser may fix it.`);
+        console.warn(`WebGPU runs on ${name} (fallback adapter), which draws in software, so the app runs slowly. Turning on hardware acceleration in the browser may fix it.`);
     }
     globalThis.dispatchEvent(new CustomEvent('pixelygpuadapter', { detail: gpuAdapter }));
     // A device has only the features it was requested with, and which of them SDL requires or uses is SDL's to decide. So the
@@ -63,8 +62,8 @@ export async function createGpuDevice() {
     });
     device.addEventListener('uncapturederror', event => console.error('WebGPU error', event.error?.message ?? event.error));
 
-    // SDL's WebGPU backend names no device, so the diagnostics name the adapter.
-    return { instance, adapter: adapterPtr, device: devicePtr, adapterName };
+    // SDL's device name does not mark a fallback adapter, so the diagnostics take the flag from here.
+    return { instance, adapter: adapterPtr, device: devicePtr, isFallbackAdapter: gpuAdapter.isFallbackAdapter };
 }
 
 // The adapter createGpuDevice requested, the same { name, isFallbackAdapter } its pixelygpuadapter event carries, or null before

@@ -16,7 +16,7 @@ At startup, the GPU device, when the root provider registers one:
 GPU device: AMD Radeon Graphics (RADV REMBRANDT), backend vulkan, driver radv 26.2.3, upload wait off
 ```
 
-In the browser, SDL names no device, so the name is what the browser reveals of the WebGPU adapter: its vendor, architecture, device and description, whichever are not empty, or `unknown` when all are, and `(fallback adapter)` for an adapter that draws in software (see [hosting.md](hosting.md#webgpu-in-the-browser)):
+In the browser, SDL names the device after the WebGPU adapter's description. Browsers often hide the description, and SDL then joins the adapter's vendor, architecture and device. When the browser reveals none of them, the name is `unknown`. SDL's name does not say that an adapter draws in software, so Pixely adds `(fallback adapter)` for such an adapter (see [hosting.md](hosting.md#webgpu-in-the-browser)):
 
 ```text
 GPU device: google swiftshader (fallback adapter), backend webgpu, driver unknown unknown, upload wait off

@@ -277,8 +277,8 @@ whichever the browser reveals, or `unknown` when it reveals none. `readGpuAdapte
 same object afterwards, and `null` before the request or for an app without a `GpuDevice`, so a
 page that subscribes late reads it there. The default `main.js` shows a notice for a fallback
 adapter (see [The page](#the-page)); a page of its own can show its own. The diagnostics name the
-device by the same name, with `(fallback adapter)` for a fallback adapter (see
-[Diagnostics](diagnostics.md)).
+device by SDL's name for it, which can differ from `name` because SDL prefers the description, and
+add `(fallback adapter)` for a fallback adapter (see [Diagnostics](diagnostics.md)).
 
 WebGPU takes an uncaptured error callback only when it creates a device, so SDL logs no uncaptured
 error of an adopted device. `pixely-host.js` observes `uncapturederror` itself and logs the error.

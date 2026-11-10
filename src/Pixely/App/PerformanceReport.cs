@@ -118,12 +118,15 @@ internal sealed class PerformanceReport : IUpdatable, IDisposable
 
     private static string DescribeDevice(GpuDevice gpuDevice, bool? waitsForUploads)
     {
-        string? name = gpuDevice.DeviceName;
+        string name = gpuDevice.DeviceName ?? "unknown";
 #if BROWSER
-        // SDL's WebGPU backend names no device, so the page's description of the adapter stands in.
-        name ??= BrowserHost.AdapterName;
+        // A fallback adapter draws in software, which explains slow numbers, and SDL's name for it does not say so.
+        if (BrowserHost.IsFallbackAdapter)
+        {
+            name += " (fallback adapter)";
+        }
 #endif
-        return FormatDevice(name ?? "unknown", gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", gpuDevice.DriverVersion ?? "unknown", waitsForUploads);
+        return FormatDevice(name, gpuDevice.Driver, gpuDevice.NativeDriverName ?? "unknown", gpuDevice.DriverVersion ?? "unknown", waitsForUploads);
     }
 
     internal static string FormatDevice(string name, string backend, string driverName, string driverVersion, bool? waitsForUploads)
