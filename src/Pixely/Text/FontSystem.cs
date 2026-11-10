@@ -80,7 +80,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
                 // FontStyle mirrors the values of TTF_FontStyleFlags.
                 TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
-                ApplyTypography(ttfFont, cacheKey, 1);
+                ApplyTypography(ttfFont, cacheKey);
             }
             catch
             {
@@ -141,8 +141,13 @@ internal class FontSystem: IFontSystem, IUpdatable
             SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, sizeIn64ths / 64f), nameof(TTF_SetFontSize));
             TTF_SetFontHinting(ttfFont, ToSdlHintingMode(font.HintingMode));
             TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)font.Style);
-            // A copy takes none of XDL's settings, and its spacing is in pixels of the scaled target.
-            ApplyTypography(ttfFont, font.Key, sizeIn64ths / (64f * font.Size));
+            // A copy takes XDL's settings, but its spacing is in pixels of the scaled target.
+            if (font.LetterSpacing != 0)
+            {
+                // Clamped, so zooming a UI far in cannot push the spacing out of the range Load checked.
+                float letterSpacing = Math.Clamp(font.LetterSpacing * sizeIn64ths / (64f * font.Size), FontKey.MinLetterSpacing, FontKey.MaxLetterSpacing);
+                SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, letterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{font.Path}'");
+            }
         }
         catch
         {
@@ -274,7 +279,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     }
 
     // XDL's additions to SDL_ttf. Each is called only when it changes the font's defaults.
-    private static void ApplyTypography(Pointer<TTF_Font> ttfFont, FontKey key, float scale)
+    private static void ApplyTypography(Pointer<TTF_Font> ttfFont, FontKey key)
     {
         if (key.VariationSettings.Length > 0)
         {
@@ -290,9 +295,7 @@ internal class FontSystem: IFontSystem, IUpdatable
 
         if (key.LetterSpacing != 0)
         {
-            // Clamped, so zooming a UI far in cannot push the spacing out of the range Load checked.
-            float letterSpacing = Math.Clamp(key.LetterSpacing * scale, FontKey.MinLetterSpacing, FontKey.MaxLetterSpacing);
-            SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, letterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{key.Path}'");
+            SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, key.LetterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{key.Path}'");
         }
     }
 

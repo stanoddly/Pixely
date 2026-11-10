@@ -8,10 +8,10 @@ Design decisions with the constraints that decided them and their known costs, n
 
 - SDL_ttf 3.2 keeps all such state on the `TTF_Font`, so a setting per label is a font per combination, which the label takes like any other font. A label property would need the same fonts behind it.
 - Stock SDL_ttf 3.2 passes HarfBuzz only `kern` and has no variation axes or spacing. Laying out digits in cells or glyphs one by one in Pixely would lose kerning and shaping; the patch keeps HarfBuzz shaping the whole run with the font's own tabular figures and its own interpolated weights.
-- A scaled font from `Font.GetScaled` is a `TTF_CopyFont`, which takes none of XDL's settings, so Pixely applies them to the copy again, with the letter spacing times the scale.
+- A scaled font from `Font.GetScaled` is a `TTF_CopyFont`, which takes XDL's settings since XDL v3.4.20-12, so Pixely only sets the copy's letter spacing to the loaded font's times the scale.
 - The variations and features reach XDL in HarfBuzz's comma-separated syntax. `FontKey` keeps them in that form, so equal lists compare equal and Pixely's font system and `StubFontSystem` validate them the same way.
 
-Cost: each combination opens the font file again and keeps its own copy of the font data, so five weights of one variable font hold five copies. `Font.Size` is a `float` instead of a `ushort`. The settings need XDL v3.4.20-11 or later.
+Cost: each combination opens the font file again and keeps its own copy of the font data, so five weights of one variable font hold five copies. `Font.Size` is a `float` instead of a `ushort`. The settings need XDL v3.4.20-11 or later, and scaled fonts keep them from v3.4.20-12, the first whose `TTF_CopyFont` copies them.
 
 ## 2026-11-10: A UI scales pixelated or smooth, and smooth sampling averages the footprint instead of using mipmaps
 
