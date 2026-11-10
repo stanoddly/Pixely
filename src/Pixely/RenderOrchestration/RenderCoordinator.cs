@@ -50,9 +50,9 @@ public sealed class RenderCoordinator<TRenderContext> : IRenderCoordinator
     public bool Execute()
     {
 #if BROWSER
-        // SDL's browser driver does not hide the canvas, so a frame acquired for a hidden window would present an undrawn
-        // texture and blank it. The browser needs no acquire to free finished work: the WebGPU fork frees it on every acquire
-        // and submit. Pending uploads are still submitted, so their buffers are not cycled on every update while hidden.
+        // The WebGPU fork frees finished work on every submit, not only on one that requested a swapchain texture as Vulkan
+        // does. So the coordinator acquires nothing for a window that is not renderable. Pending uploads are still submitted,
+        // so their buffers are not cycled on every update while hidden.
         if (!_window.IsRenderable)
         {
             _gpu.SubmitUploads();
