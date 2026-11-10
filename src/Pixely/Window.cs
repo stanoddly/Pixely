@@ -324,6 +324,18 @@ public abstract class Window : IDisposable
         }
     }
 
+    /// <summary>
+    /// Minimises the window, as its minimise button would, and returns false where SDL cannot, such as in the browser. On Wayland it
+    /// returns true but does nothing when the compositor does not offer minimising. A hidden window is minimised when it is shown.
+    /// </summary>
+    public bool Minimize()
+    {
+        unsafe
+        {
+            return SDL_MinimizeWindow(SdlWindow);
+        }
+    }
+
     private bool _draggable;
     private GCHandle _hitTestHandle;
     private Func<Vector2Int, HitTestResult>? _hitTestCallback;
