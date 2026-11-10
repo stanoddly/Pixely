@@ -145,46 +145,46 @@ public sealed class Label : Element
         }
 
         IFont font = ResolveFont();
-        ShortSize size = font.Measure(_content);
-        _measuredSize = new Vector2Int(size.Width, size.Height);
+        _measuredSize = TextRaster.MeasureLogical(font, _content, OwnerRoot?.TextScale ?? 1f);
         _measuredFont = font;
         return _measuredSize;
     }
 
     protected override void PaintContent(PaintContext context)
     {
-        // Text is rasterised on first paint, so a label scrolled out of view is culled before the
-        // sprite exists rather than after the renderer would have dropped the quad. The sprite sits
-        // at the bounds' origin and may overflow them, so the test is against the text's own size.
-        if (_content.Length == 0 || IsCulled(context.CurrentClip))
+        if (_content.Length == 0)
         {
             return;
         }
 
-        TextSpriteAsset sprite = ResolveSprite();
-        context.DrawSprite(sprite, new Rectangle(Bounds.X, Bounds.Y, sprite.Size.X, sprite.Size.Y), ResolvedColor);
+        // The font is resolved every time rather than only on a cache miss, because a style
+        // replaced on the root — or a subtree moved to a root with a different one — changes it
+        // without anything reaching this label. The walk is an ancestor chain and no allocation.
+        IFont font = ResolveFont();
+
+        // Text is rasterised on first paint, so a label scrolled out of view is culled before the
+        // sprite exists rather than after the renderer would have dropped the quad. The sprite sits
+        // at the bounds' origin and may overflow them, so the test is against the text's own size.
+        if (IsCulled(font, context.CurrentClip))
+        {
+            return;
+        }
+
+        // Rasterised in the font at the paint's scale, so under a smooth scale the glyphs are drawn
+        // at the size they are shown at rather than stretched from the logical one.
+        TextRaster text = TextRaster.Resolve(context, font);
+        text.Draw(context, ResolveSprite(text.Font), context.ToRasterX(Bounds.X), context.ToRasterY(Bounds.Y), ResolvedColor);
     }
 
-    private bool IsCulled(Rectangle clip)
+    private bool IsCulled(IFont font, Rectangle clip)
     {
-        IFont font = ResolveFont();
-        Vector2Int size;
-
-        if (_sprite != null && ReferenceEquals(font, _spriteFont))
+        // The font changed underneath the last measure, so the text's size is unknown here.
+        if (_measuredFont == null || !ReferenceEquals(font, _measuredFont))
         {
-            size = new Vector2Int(_sprite.Size.X, _sprite.Size.Y);
-        }
-        else if (_measuredFont != null && ReferenceEquals(font, _measuredFont))
-        {
-            size = _measuredSize;
-        }
-        else
-        {
-            // The font changed underneath the last measure, so the text's size is unknown here.
             return false;
         }
 
-        Rectangle visible = clip.Intersect(new Rectangle(Bounds.X, Bounds.Y, size.X, size.Y));
+        Rectangle visible = clip.Intersect(new Rectangle(Bounds.X, Bounds.Y, _measuredSize.X, _measuredSize.Y));
         return visible.Width <= 0 || visible.Height <= 0;
     }
 
@@ -201,13 +201,8 @@ public sealed class Label : Element
         return null;
     }
 
-    private TextSpriteAsset ResolveSprite()
+    private TextSpriteAsset ResolveSprite(IFont font)
     {
-        // The font is resolved every time rather than only on a cache miss, because a style
-        // replaced on the root — or a subtree moved to a root with a different one — changes it
-        // without anything reaching this label. The walk is an ancestor chain and no allocation.
-        IFont font = ResolveFont();
-
         if (_sprite == null || !ReferenceEquals(font, _spriteFont))
         {
             _sprite = font.CreateTextSprite(_content);

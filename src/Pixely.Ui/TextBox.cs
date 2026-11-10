@@ -100,31 +100,36 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     protected override Vector2Int MeasureContent(Constraints constraints)
     {
         IFont font = ResolveFont();
+        float scale = OwnerRoot?.TextScale ?? 1f;
 
         // Measured against the value rather than what is being typed, so a field does not resize
         // itself with every keystroke and shuffle everything beside it along.
-        int height = font.Measure("Ay").Height;
-        int width = _text.Length == 0 ? 0 : font.Measure(_text).Width;
+        int height = TextRaster.MeasureLogical(font, "Ay", scale).Y;
+        int width = _text.Length == 0 ? 0 : TextRaster.MeasureLogical(font, _text, scale).X;
         return new Vector2Int(width, height);
     }
 
     protected override void PaintContent(PaintContext context)
     {
-        IFont font = ResolveFont();
+        // In raster pixels and in the font the text is rasterised in, so the caret and the selection
+        // land between the glyphs as drawn rather than where the logical font would put them.
+        TextRaster text = TextRaster.Resolve(context, ResolveFont());
         Rectangle content = Padding.Deflate(Bounds);
+        Rectangle rasterContent = context.ToRaster(content);
         string display = DisplayText;
         int caret = _editor?.CursorPosition ?? 0;
+        int caretWidth = context.ToRasterThickness(CaretWidth);
 
         _scrollOffset = _editor == null
             ? 0
-            : ScrollOffsetFor(TextWidth(font, display, caret), TextWidth(font, display), content.Width, _scrollOffset);
-        int originX = content.X - _scrollOffset;
+            : ScrollOffsetFor(text.Width(display[..caret]), text.Width(display), rasterContent.Width, caretWidth, _scrollOffset);
+        int originX = rasterContent.X - _scrollOffset;
 
         using ClipScope scope = context.PushClip(context.CurrentClip.Intersect(content));
 
         // Everything below is clipped to the content rectangle, so nothing shows once that is empty;
         // returning here keeps a scrolled-away field from rasterising its text.
-        if (context.CurrentClip.Width <= 0 || context.CurrentClip.Height <= 0)
+        if (context.CurrentRasterClip.Width <= 0 || context.CurrentRasterClip.Height <= 0)
         {
             return;
         }
@@ -132,20 +137,19 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
         if (_editor != null && _editor.HasSelection)
         {
             (int start, int length) = _editor.GetSelectionRange();
-            int selectionX = originX + TextWidth(font, display, start);
-            int selectionWidth = TextWidth(font, display.Substring(start, length));
-            context.FillRectangle(new Rectangle(selectionX, content.Y, selectionWidth, content.Height), SelectionColor());
+            int selectionX = originX + text.Width(display[..start]);
+            int selectionWidth = text.Width(display.Substring(start, length));
+            context.FillRaster(new Rectangle(selectionX, rasterContent.Y, selectionWidth, rasterContent.Height), SelectionColor());
         }
 
         if (display.Length > 0)
         {
-            TextSpriteAsset sprite = font.CreateTextSprite(display);
-            context.DrawSprite(sprite, new Rectangle(originX, content.Y, sprite.Size.X, sprite.Size.Y), ForegroundColor());
+            text.Draw(context, text.Font.CreateTextSprite(display), originX, rasterContent.Y, ForegroundColor());
         }
 
         if (_editor != null)
         {
-            context.FillRectangle(new Rectangle(originX + TextWidth(font, display, caret), content.Y, CaretWidth, content.Height), CaretColor());
+            context.FillRaster(new Rectangle(originX + text.Width(display[..caret]), rasterContent.Y, caretWidth, rasterContent.Height), CaretColor());
         }
     }
 
@@ -293,7 +297,7 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
     /// Takes widths rather than text so the arithmetic can be checked on its own. Everything else
     /// about drawing a field needs a font that can rasterise.
     /// </remarks>
-    internal static int ScrollOffsetFor(int caretX, int textWidth, int contentWidth, int currentOffset)
+    internal static int ScrollOffsetFor(int caretX, int textWidth, int contentWidth, int caretWidth, int currentOffset)
     {
         if (contentWidth <= 0)
         {
@@ -306,9 +310,9 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
         // The caret is a rectangle starting at its own coordinate, so sitting exactly on the trailing
         // edge puts it wholly outside a clip that ends there.
-        if (caretX - offset + CaretWidth > contentWidth)
+        if (caretX - offset + caretWidth > contentWidth)
         {
-            offset = caretX + CaretWidth - contentWidth;
+            offset = caretX + caretWidth - contentWidth;
         }
         else if (caretX - offset < 0)
         {
@@ -317,10 +321,6 @@ public class TextBox : Element, IPointerTarget, IFocusTarget
 
         return Math.Max(0, offset);
     }
-
-    private static int TextWidth(IFont font, string text, int length) => TextWidth(font, text[..length]);
-
-    private static int TextWidth(IFont font, string text) => text.Length == 0 ? 0 : font.Measure(text).Width;
 
     private IFont ResolveFont() =>
         _font

@@ -14,4 +14,11 @@ public interface IFont
 
     /// <summary>Rasterises <paramref name="text"/>. Needs a device; layout must not call it.</summary>
     TextSpriteAsset CreateTextSprite(string text);
+
+    /// <summary>
+    /// The same font at <paramref name="factor"/> times its size, which measures and rasterises in pixels of a target scaled by
+    /// <paramref name="factor"/>. A UI that scales smoothly draws its text in it, so glyphs are rasterised at the size they are
+    /// shown at rather than stretched. Null when the font comes only in the sizes it was made at, such as a bitmap font.
+    /// </summary>
+    IFont? GetScaled(float factor) => null;
 }
