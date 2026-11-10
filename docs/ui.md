@@ -97,11 +97,32 @@ A scale that changes at runtime, such as a zoom the player controls, is requeste
 root.RequestScale(2f);
 ```
 
-The request takes effect at the next `Update`, which is when the viewport, the pointer's logical position and the layout all change together, so it can be requested from anywhere, including a pointer callback. A root built by hand takes its starting scale in the initializer, `new UiRoot { Scale = 2f }`. The scale must be finite and at least 1.
+The request takes effect at the next `Update`, which is when the viewport, the pointer's logical position and the layout all change together, so it can be requested from anywhere, including a pointer callback. A root built by hand takes its starting scale in the initializer, `new UiRoot { Scale = 2f }`.
 
-The tree never sees the scale. `ViewportSize`, the viewport event, `PointerPosition` and every layout and pointer callback are in logical pixels; the renderer paints the tree at its logical size into the retained texture and presents that texture at the scale with nearest sampling. A 16 px font at 2x is 2x2 blocks, which is what keeps pixel fonts and sprites crisp; nothing is reloaded or re-rasterised. A fractional scale such as 2.5 works the same way and shows uneven pixel widths, the same as a scene scaled by it.
+`ViewportSize`, the viewport event, `PointerPosition` and every layout and pointer callback are in logical pixels in either scale mode below. Under `Smooth` a text's logical size follows the scale, see below, so a label can be a pixel wider or narrower at another scale.
 
 `ViewportSize` is `TargetSize` divided by the scale and rounded up, so a target that is not a multiple of the scale is covered by a last row and column of logical pixels that are partly outside it. Content aligned to the end of such an axis loses up to one logical pixel; an integer scale on a target it divides is exact.
+
+### Scale modes
+
+The scale mode says how the logical pixels reach the target. It is fixed when the root is built:
+
+```csharp
+builder.UseUi(scale: 1.33f, scaleMode: UiScaleMode.Smooth);
+UiRoot root = new(UiScaleMode.Smooth) { Scale = 1.33f };
+```
+
+`UiScaleMode.Pixelated`, the default, suits pixel art. The renderer paints the tree at its logical size and presents it at the scale with nearest sampling. A 16 px font at 2x is 2x2 blocks, which is what keeps pixel fonts and sprites crisp; nothing is reloaded or re-rasterised. A fractional scale such as 2.5 works the same way and shows uneven pixel widths, the same as a scene scaled by it. The scale must be finite and at least 1, because nearest sampling below 1 drops pixels.
+
+`UiScaleMode.Smooth` suits a UI of vector fonts and smooth pictures, such as one made larger on a large display. The tree is still laid out at its logical size, but the renderer paints it at the target's size:
+
+- A label or a field draws its text in its font at the scale, from `IFont.GetScaled` (see [fonts.md](fonts.md)). A 16 px font at 1.33 is rasterised at 21.28 px and drawn one texel to one target pixel, so no pixel is doubled. A font that cannot be scaled, such as a bitmap font, is stretched to its logical size instead, with the root's linear sampling, so its text is blurred; a UI of bitmap fonts suits `Pixelated`. Text is measured in the same font as it is drawn, divided by the scale and rounded up, so its bounds hold it.
+- Every edge is rounded to the nearest target pixel, so two rectangles that meet in logical pixels meet in target pixels. A border's thicknesses, a nine-patch's insets and a field's caret are rounded on their own, so a 1 px border is equally thick on every side wherever it sits, and the fill inside a border meets it.
+- Sprites are sampled linearly, so an `Image` stretched to twice or half its texture's size has no stair-stepped edges. Linear sampling averages all the texels one target pixel covers, up to 8 along each axis, so an image shown much smaller than its texture does not alias. This stands in for mipmaps, which would blend neighbouring sprites of an atlas. Each sample stays inside the sprite's own region.
+
+The scale must be finite and above 0, so a smooth UI can also be made smaller than its logical size. Each size a smooth root draws a scalable font at, rounded to a 64th of a point, keeps one more copy of that font; the copies are released with the font.
+
+`Image.Filter` chooses nearest or linear sampling for one image, whatever the mode, and `SpriteDrawable` and `NinePatchDrawable` take the same choice as an optional `filter`. Null, the default, follows the root: nearest when pixelated, linear when smooth. A pixel-art icon in a smooth UI sets `TextureFilter.Nearest`; a photo in a pixelated UI that is stretched to other bounds sets `TextureFilter.Linear`. Linear sampling blends a texel with its transparent neighbours, so a picture with transparent edges should have colour in its transparent texels, as most image editors can export.
 
 Anchoring something in the tree to a position in the world means dividing that position by the scale after converting it to target pixels, since the anchor is in logical pixels.
 

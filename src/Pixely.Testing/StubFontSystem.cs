@@ -19,6 +19,7 @@ public sealed class StubFontSystem : IFontSystem
     private readonly bool _ownsGpuDevice;
     private readonly Dictionary<(string Path, ushort Size, FontRasterizationMode RasterizationMode, FontHintingMode HintingMode, FontStyle Style), Font> _fonts = new();
     private readonly Dictionary<(string Text, Font Font), TextSprite> _textSprites = new();
+    private readonly Dictionary<(Font Unscaled, int SizeIn64ths), Font> _scaledFonts = new();
     private readonly List<Font> _releasedFonts = new();
     private bool _disposed;
 
@@ -78,7 +79,7 @@ public sealed class StubFontSystem : IFontSystem
 
         if (!_textSprites.TryGetValue((text, font), out TextSprite textSprite))
         {
-            ShortSize size = Measure(text);
+            ShortSize size = Measure(text, font.Scale);
             // A texture has at least one pixel; text of only line breaks measures 0 wide.
             Texture backingTexture = _gpuDevice.CreateTexture(new ShortSize(Math.Max(size.Width, (ushort)1), Math.Max(size.Height, (ushort)1)), TextureFormat.R8G8B8A8UnormSrgb,
                 TextureUsage.Sampler);
@@ -98,13 +99,50 @@ public sealed class StubFontSystem : IFontSystem
     {
         ArgumentNullException.ThrowIfNull(text);
         ThrowIfNotLoaded(font);
-        return Measure(text);
+        return Measure(text, font.Scale);
+    }
+
+    /// <summary>
+    /// Returns the font scaled before to the same size, or a new one, as Pixely's font system does, which <see cref="Font.GetScaled"/>
+    /// reaches. A scaled font measures its glyph width and line height times its <see cref="Font.Scale"/>, each rounded half away
+    /// from zero, and is released with its loaded font.
+    /// </summary>
+    Font? IFontSystem.GetScaled(Font font, float factor)
+    {
+        ThrowIfNotLoaded(font);
+        if (!float.IsFinite(factor) || factor <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, "The factor must be finite and greater than 0.");
+        }
+
+        if (font.Unscaled != null)
+        {
+            return font.GetScaled(factor);
+        }
+
+        int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
+        if (sizeIn64ths == font.Size * 64)
+        {
+            return font;
+        }
+
+        if (!_scaledFonts.TryGetValue((font, sizeIn64ths), out Font? scaledFont))
+        {
+            unsafe
+            {
+                scaledFont = new Font(this, default, null, font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style, font, sizeIn64ths / (64f * font.Size));
+            }
+
+            _scaledFonts[(font, sizeIn64ths)] = scaledFont;
+        }
+
+        return scaledFont;
     }
 
     /// <summary>
     /// Records the font in <see cref="ReleasedFonts"/>, and a later <see cref="Load"/> with its path, size and settings returns a new
     /// font, as in Pixely's font system. A font released already, or released after the stub is disposed, is left as it is, so a
-    /// second <see cref="Font.Dispose"/> does nothing.
+    /// second <see cref="Font.Dispose"/> does nothing. Releasing a loaded font releases its scaled fonts first, as there.
     /// </summary>
     public void ReleaseFont(Font font)
     {
@@ -117,6 +155,18 @@ public sealed class StubFontSystem : IFontSystem
         if (!IsLoaded(font))
         {
             throw new InvalidOperationException($"The font {font.Path} at {font.Size} was not loaded by this {nameof(StubFontSystem)}.");
+        }
+
+        if (font.Unscaled != null)
+        {
+            _scaledFonts.Remove((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)));
+            _releasedFonts.Add(font);
+            return;
+        }
+
+        foreach (Font scaledFont in _scaledFonts.Values.Where(scaledFont => ReferenceEquals(scaledFont.Unscaled, font)).ToArray())
+        {
+            ReleaseFont(scaledFont);
         }
 
         _fonts.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
@@ -146,6 +196,11 @@ public sealed class StubFontSystem : IFontSystem
 
     private bool IsLoaded(Font font)
     {
+        if (font.Unscaled != null)
+        {
+            return _scaledFonts.TryGetValue((font.Unscaled, Font.ToSizeIn64ths(font.Size, font.Scale)), out Font? scaled) && ReferenceEquals(scaled, font);
+        }
+
         return _fonts.TryGetValue((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style), out Font? loaded) && ReferenceEquals(loaded, font);
     }
 
@@ -165,7 +220,7 @@ public sealed class StubFontSystem : IFontSystem
         }
     }
 
-    private ShortSize Measure(string text)
+    private ShortSize Measure(string text, float scale)
     {
         if (text.Length == 0)
         {
@@ -188,6 +243,9 @@ public sealed class StubFontSystem : IFontSystem
             longestLine = Math.Max(longestLine, lineLength);
         }
 
-        return new ShortSize(checked((ushort)(longestLine * _glyphWidth)), checked((ushort)(lines * _lineHeight)));
+        // Half away from zero, as the UI rounds edges, so a test's arithmetic is the same rule throughout.
+        int glyphWidth = (int)Math.Round(_glyphWidth * (double)scale, MidpointRounding.AwayFromZero);
+        int lineHeight = (int)Math.Round(_lineHeight * (double)scale, MidpointRounding.AwayFromZero);
+        return new ShortSize(checked((ushort)(longestLine * glyphWidth)), checked((ushort)(lines * lineHeight)));
     }
 }

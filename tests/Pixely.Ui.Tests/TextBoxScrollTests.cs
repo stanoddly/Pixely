@@ -60,6 +60,13 @@ public class TextBoxScrollTests
         Assert.That(Offset(caretX: 40, textWidth: 400, contentWidth: 0, currentOffset: 10), Is.Zero);
     }
 
+    [Test]
+    public void AWiderCaret_ScrollsFarEnoughToShowAllOfIt()
+    {
+        // A smooth scale draws the caret more than one pixel wide, and all of it has to stay in view.
+        Assert.That(TextBox.ScrollOffsetFor(caretX: 100, textWidth: 100, contentWidth: 100, caretWidth: 2, currentOffset: 0), Is.EqualTo(2));
+    }
+
     private static int Offset(int caretX, int textWidth, int contentWidth, int currentOffset) =>
-        TextBox.ScrollOffsetFor(caretX, textWidth, contentWidth, currentOffset);
+        TextBox.ScrollOffsetFor(caretX, textWidth, contentWidth, caretWidth: 1, currentOffset);
 }

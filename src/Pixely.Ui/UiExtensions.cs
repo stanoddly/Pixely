@@ -19,9 +19,10 @@ public static class UiExtensions
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        float scale = 1f)
+        float scale = 1f,
+        UiScaleMode scaleMode = UiScaleMode.Pixelated)
     {
-        return UseUi<BasicRenderContext>(appBuilder, default, renderOrder, updateOrder, inputOrder, clearTarget, scale);
+        return UseUi<BasicRenderContext>(appBuilder, default, renderOrder, updateOrder, inputOrder, clearTarget, scale, scaleMode: scaleMode);
     }
 
     public static PixelyAppBuilder UseUi(
@@ -31,9 +32,10 @@ public static class UiExtensions
         int updateOrder = UpdateOrders.Ui,
         int inputOrder = -10_000,
         bool clearTarget = false,
-        float scale = 1f)
+        float scale = 1f,
+        UiScaleMode scaleMode = UiScaleMode.Pixelated)
     {
-        return UseUi<BasicRenderContext>(appBuilder, viewScope, renderOrder, updateOrder, inputOrder, clearTarget, scale);
+        return UseUi<BasicRenderContext>(appBuilder, viewScope, renderOrder, updateOrder, inputOrder, clearTarget, scale, scaleMode: scaleMode);
     }
 
     /// <param name="renderOrder">When the UI is drawn relative to the other renderers, lower first. Defaults late, so it draws over the game.</param>
@@ -46,7 +48,12 @@ public static class UiExtensions
     /// <param name="scale">
     /// How many target pixels one logical pixel covers, see <see cref="UiRoot.Scale"/>. The root
     /// starts at it, so the first build is laid out at it; <see cref="UiRoot.RequestScale"/> changes
-    /// it at runtime. Must be finite and at least 1.
+    /// it at runtime. Must be finite, at least 1 when <paramref name="scaleMode"/> is
+    /// <see cref="UiScaleMode.Pixelated"/>, and above 0 when it is <see cref="UiScaleMode.Smooth"/>.
+    /// </param>
+    /// <param name="scaleMode">
+    /// How the scale is drawn, see <see cref="UiRoot.ScaleMode"/>: <see cref="UiScaleMode.Pixelated"/>
+    /// for pixel art, <see cref="UiScaleMode.Smooth"/> for vector fonts and smooth pictures.
     /// </param>
     /// <param name="selectColorTarget">
     /// The texture the UI is presented into, picked from the frame's render context. Defaults to
@@ -63,13 +70,15 @@ public static class UiExtensions
         int inputOrder = -10_000,
         bool clearTarget = false,
         float scale = 1f,
-        Func<TRenderContext, Texture>? selectColorTarget = null)
+        Func<TRenderContext, Texture>? selectColorTarget = null,
+        UiScaleMode scaleMode = UiScaleMode.Pixelated)
         where TRenderContext : IRenderContext
     {
         ArgumentNullException.ThrowIfNull(appBuilder);
 
         // Refused here rather than when the root is built, so a bad scale names the UseUi call.
-        UiRoot.ValidateScale(scale);
+        UiRoot.ValidateScaleMode(scaleMode);
+        UiRoot.ValidateScale(scale, scaleMode);
 
         appBuilder.UseGpu();
 
@@ -89,7 +98,7 @@ public static class UiExtensions
         appBuilder.AddSingleton<ScopedUiRoot>(provider =>
             new ScopedUiRoot(
                 viewScope,
-                new UiRoot { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>(), Scale = scale }));
+                new UiRoot(scaleMode) { Style = provider.GetService<UiStyle>() ?? UiStyle.Default, Clipboard = provider.GetRequiredService<IClipboardService>(), Scale = scale }));
 
         appBuilder.AddSingleton<UiInputSystem>(provider =>
             new UiInputSystem(

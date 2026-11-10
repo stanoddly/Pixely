@@ -18,6 +18,23 @@ The font system caches fonts by path, size and all three settings. Loading the s
 
 A bitmap font must contain a strike of the requested size. `Load` throws otherwise and lists the sizes the font has.
 
+## Scaled fonts
+
+`Font.GetScaled(factor)` returns the same font at `factor` times its size, which a UI that scales smoothly draws its text in (see [ui.md](ui.md), Scale modes):
+
+```csharp
+Font body = fonts.Load("fonts/Montserrat-Medium.ttf", 16);
+Font large = body.GetScaled(1.5f)!;
+```
+
+- The scaled font rasterises at 24 px here, and its `Measure` and `CreateTextSprite` are in pixels of that size. A fractional size is kept, so 16 px at 1.33 rasterises at 21.28 px. `Size` stays 16, and `Scale` is 1.5.
+- It shares the loaded font's data and settings, through `TTF_CopyFont`. FreeType keeps a size in 64ths of a point, so the size is rounded to one, and the font system caches the scaled font per size: two factors that land on the same 64th return the same `Font`, whose `Scale` is the rounded one. Scaling a scaled font multiplies the factors, and a factor that lands on the loaded size returns the loaded font.
+- It is released with the loaded font. Disposing it releases only it, and the next `GetScaled` to its size scales again. Until then it stays loaded, so a zoom through many sizes keeps a FreeType face for each size it passed.
+- A bitmap font returns null, because it comes only in its strike sizes.
+- The factor must be finite and above 0.
+
+`IFont.GetScaled` returns null unless an implementation overrides it, so a font of an application's own that does not scale is stretched by the UI rather than refused. A font system reaches the same through the internal `IFontSystem.GetScaled`, which only Pixely's font systems implement, because only Pixely creates a `Font`.
+
 ## Styles
 
 `FontStyle` is a flags enum, so styles combine: `FontStyle.Bold | FontStyle.Underline`.

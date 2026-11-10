@@ -18,6 +18,10 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style), Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
+    // Keyed by the loaded font they came from and their size in 64ths of a point, see Font.ToSizeIn64ths. Kept apart from _fonts
+    // because each one is released with its loaded font, before the data they share is freed.
+    private readonly Dictionary<(Font unscaled, int sizeIn64ths), Font> _scaledFonts = new();
+
     // Cleared after every Update, so the per-frame sweep allocates nothing.
     private readonly List<(string text, Font font)> _keysToRemove = new();
 
@@ -97,6 +101,63 @@ internal class FontSystem: IFontSystem, IUpdatable
 
             return font;
         }
+    }
+
+    Font? IFontSystem.GetScaled(Font font, float factor)
+    {
+        ArgumentNullException.ThrowIfNull(font);
+
+        if (!float.IsFinite(factor) || factor <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(factor), factor, "The factor must be finite and greater than 0.");
+        }
+
+        if (font.Unscaled != null)
+        {
+            return font.GetScaled(factor);
+        }
+
+        int sizeIn64ths = Font.ToSizeIn64ths(font.Size, factor);
+        if (sizeIn64ths == font.Size * 64)
+        {
+            return font;
+        }
+
+        if (_scaledFonts.TryGetValue((font, sizeIn64ths), out Font? cachedFont))
+        {
+            return cachedFont;
+        }
+
+        // A bitmap font's sizes are its strikes, so another size would land on whichever strike is nearest.
+        if (!TTF_FontIsScalable(font.TtfFont))
+        {
+            return null;
+        }
+
+        // A copy shares the loaded font's data rather than reading the file again.
+        Pointer<TTF_Font> ttfFont = TTF_CopyFont(font.TtfFont);
+        SdlError.ThrowOnNull(ttfFont, nameof(TTF_CopyFont));
+
+        try
+        {
+            SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, sizeIn64ths / 64f), nameof(TTF_SetFontSize));
+            TTF_SetFontHinting(ttfFont, ToSdlHintingMode(font.HintingMode));
+            TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)font.Style);
+        }
+        catch
+        {
+            TTF_CloseFont(ttfFont);
+            throw;
+        }
+
+        Font scaledFont;
+        unsafe
+        {
+            scaledFont = new Font(this, ttfFont, null, font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style, font, sizeIn64ths / (64f * font.Size));
+        }
+
+        _scaledFonts[(font, sizeIn64ths)] = scaledFont;
+        return scaledFont;
     }
 
     public TextSpriteAsset CreateTextSprite(string text, Font font)
@@ -295,6 +356,27 @@ internal class FontSystem: IFontSystem, IUpdatable
 
     public void ReleaseFont(Font font)
     {
+        if (font.Unscaled != null)
+        {
+            ReleaseScaledFont(font);
+            return;
+        }
+
+        // Before the loaded font, whose data they read.
+        List<Font> scaledFonts = new();
+        foreach (Font scaledFont in _scaledFonts.Values)
+        {
+            if (ReferenceEquals(scaledFont.Unscaled, font))
+            {
+                scaledFonts.Add(scaledFont);
+            }
+        }
+
+        foreach (Font scaledFont in scaledFonts)
+        {
+            ReleaseScaledFont(scaledFont);
+        }
+
         _fonts.Remove(font);
         _fontCache.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
 
@@ -304,6 +386,23 @@ internal class FontSystem: IFontSystem, IUpdatable
         }
 
         font.FreeFontData();
+    }
+
+    // Only the font in the cache is closed, so disposing a scaled font twice, or after its loaded font, closes nothing twice.
+    private void ReleaseScaledFont(Font font)
+    {
+        (Font unscaled, int sizeIn64ths) key = (font.Unscaled!, Font.ToSizeIn64ths(font.Size, font.Scale));
+        if (!_scaledFonts.TryGetValue(key, out Font? cached) || !ReferenceEquals(cached, font))
+        {
+            return;
+        }
+
+        _scaledFonts.Remove(key);
+
+        unsafe
+        {
+            TTF_CloseFont(font.TtfFont);
+        }
     }
 
     public void Dispose()

@@ -7,11 +7,12 @@ using Pixely.Shaders;
 namespace Pixely.Ui;
 
 /// <summary>
-/// Paints a built <see cref="IUiPaintSource"/> into a persistent texture the size of its viewport and
-/// blits that texture over the frame at the source's scale. The texture is only repainted when the
-/// instructions changed, so a static UI costs one quad per frame; the scale costs nothing beyond the
-/// blit, and nearest sampling is what makes an integer scale pixel-exact. The build itself belongs
-/// to <see cref="UiUpdateSystem"/>, which is why this holds a source rather than the root. Where the
+/// Paints a built <see cref="IUiPaintSource"/> into a persistent texture the size of its raster and
+/// blits that texture over the frame at the source's present scale. The texture is only repainted
+/// when the instructions changed, so a static UI costs one quad per frame. A pixelated root's raster
+/// is its viewport, and nearest sampling in the blit is what makes an integer scale pixel-exact; a
+/// smooth root's raster is the target, blitted one to one. The build itself belongs to
+/// <see cref="UiUpdateSystem"/>, which is why this holds a source rather than the root. Where the
 /// blit lands is the selector's answer for the frame's context, by default its colour target.
 /// </summary>
 internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, IDisposable
@@ -28,7 +29,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     private readonly GpuVertexBuffer<PositionTextureVertex> _vertexBuffer;
     private readonly GraphicsPipeline _quadPipeline;
     private readonly GraphicsPipeline _presentPipeline;
-    private readonly Sampler _sampler;
+    private readonly Sampler _nearestSampler;
+    private readonly Sampler _linearSampler;
     private readonly GpuDevice _gpuDevice;
     private readonly TextureFormat _colorTargetFormat;
     private readonly IUiPaintSource _source;
@@ -104,6 +106,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             quadPipeline,
             presentPipeline,
             gpuDevice.CreateSampler(SamplerConfig.PixelArt),
+            gpuDevice.CreateSampler(SamplerConfig.Linear),
             gpuMemorySystem.CreateTexture(whitePixel),
             colorTargetFormat);
 
@@ -129,7 +132,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         _vertexBuffer = resources.VertexBuffer;
         _quadPipeline = resources.QuadPipeline;
         _presentPipeline = resources.PresentPipeline;
-        _sampler = resources.Sampler;
+        _nearestSampler = resources.NearestSampler;
+        _linearSampler = resources.LinearSampler;
         _whiteTexture = resources.WhiteTexture;
         _colorTargetFormat = resources.ColorTargetFormat;
     }
@@ -139,7 +143,8 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         GpuVertexBuffer<PositionTextureVertex> VertexBuffer,
         GraphicsPipeline QuadPipeline,
         GraphicsPipeline PresentPipeline,
-        Sampler Sampler,
+        Sampler NearestSampler,
+        Sampler LinearSampler,
         Texture WhiteTexture,
         TextureFormat ColorTargetFormat);
 
@@ -148,9 +153,9 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
         Texture colorTarget = _selectColorTarget(renderContext);
         ShortSize targetSize = colorTarget.Size;
         Vector2Int target = new(targetSize.Width, targetSize.Height);
-        Vector2Int viewport = _source.PaintedViewportSize;
+        Vector2Int raster = _source.PaintedRasterSize;
 
-        if (IsStale(_source.PaintedTargetSize, _source.TargetSize, target) || viewport.X <= 0 || viewport.Y <= 0)
+        if (IsStale(_source.PaintedTargetSize, _source.TargetSize, target) || raster.X <= 0 || raster.Y <= 0)
         {
             // The retained texture is left alone: the catch-up build decides its size. It may paint
             // the same quads and leave PaintVersion where it is, so the repaint is asked for here.
@@ -164,7 +169,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             return;
         }
 
-        Texture retainedTexture = EnsureRetainedTexture(new ShortSize((ushort)viewport.X, (ushort)viewport.Y));
+        Texture retainedTexture = EnsureRetainedTexture(new ShortSize((ushort)raster.X, (ushort)raster.Y));
 
         if (NeedsRepaint(_source.PaintVersion, _paintedVersion, _retainedTextureDirty))
         {
@@ -173,7 +178,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             _retainedTextureDirty = false;
         }
 
-        Present(renderContext.CommandBuffer, colorTarget, retainedTexture, CreatePresentWorld(viewport, _source.PaintedScale, target));
+        Present(renderContext.CommandBuffer, colorTarget, retainedTexture, CreatePresentWorld(raster, _source.PaintedPresentScale, target));
     }
 
     /// <summary>
@@ -190,12 +195,13 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
     }
 
     /// <summary>
-    /// Where the retained texture lands on the target: logical pixel 0 on target pixel 0, and each
-    /// logical pixel <paramref name="scale"/> target pixels wide. The viewport is rounded up to cover
-    /// the target, so the quad can overhang it by less than one logical pixel, which the target clips.
+    /// Where the retained texture lands on the target: its pixel 0 on target pixel 0, and each of
+    /// its pixels <paramref name="scale"/> target pixels wide. A pixelated viewport is rounded up to
+    /// cover the target, so the quad can overhang it by less than one logical pixel, which the
+    /// target clips.
     /// </summary>
-    internal static Matrix4x4 CreatePresentWorld(Vector2Int viewport, float scale, Vector2Int target) =>
-        Matrix4x4.CreateScale((float)(viewport.X * (double)scale / target.X), (float)(viewport.Y * (double)scale / target.Y), 1f);
+    internal static Matrix4x4 CreatePresentWorld(Vector2Int raster, float scale, Vector2Int target) =>
+        Matrix4x4.CreateScale((float)(raster.X * (double)scale / target.X), (float)(raster.Y * (double)scale / target.Y), 1f);
 
     /// <summary>
     /// Whether the retained texture no longer shows what the source holds. Compared against the
@@ -238,15 +244,18 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
         commandBuffer.PushVertexUniformData(0, _viewProjection);
 
-        // One pipeline for the whole UI; only the sampler and the scissor change between batches.
+        // One pipeline for the whole UI; only the sampler, the sampling and the scissor change
+        // between batches.
         renderPass.BindGraphicsPipeline(_quadPipeline);
         renderPass.BindVertexBuffer(_vertexBuffer);
 
         for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
         {
             PaintBatch batch = batches[batchIndex];
+            bool linear = batch.Filter == TextureFilter.Linear;
             renderPass.SetScissor(batch.Clip);
-            renderPass.BindFragmentSampler(batch.Texture ?? _whiteTexture, _sampler);
+            renderPass.BindFragmentSampler(batch.Texture ?? _whiteTexture, linear ? _linearSampler : _nearestSampler);
+            commandBuffer.PushFragmentUniformData(2, CreateSampling(linear));
 
             for (int i = batch.Start; i < batch.Start + batch.Count; i++)
             {
@@ -264,6 +273,13 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
             }
         }
     }
+
+    /// <summary>
+    /// What the quad shader reads in its sampling slot: x is 1 to average every texel a pixel covers,
+    /// which is what stands in for mipmaps when a texture is shown smaller than it is, and 0 to take
+    /// the one sample under the pixel's centre.
+    /// </summary>
+    internal static Vector4 CreateSampling(bool linear) => new(linear ? 1f : 0f, 0f, 0f, 0f);
 
     private static void Clear(CommandBuffer commandBuffer, Texture retainedTexture)
     {
@@ -296,7 +312,7 @@ internal sealed class UiRenderer<TRenderContext> : IRenderer<TRenderContext>, ID
 
         presentPass.BindGraphicsPipeline(_presentPipeline);
         presentPass.BindVertexBuffer(_vertexBuffer);
-        presentPass.BindFragmentSampler(retainedTexture, _sampler);
+        presentPass.BindFragmentSampler(retainedTexture, _nearestSampler);
         presentPass.DrawPrimitive();
     }
 
