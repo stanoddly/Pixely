@@ -82,7 +82,7 @@ A game without `InvariantGlobalization` can use `CultureInfo.CurrentUICulture` i
 
 The SDL hint `SDL_HINT_PREFERRED_LOCALES` replaces the platform's list, for example `cs_CZ,en`. SDL also reads it from the `SDL_PREFERRED_LOCALES` environment variable, which outranks a hint set at normal priority. Set the hint with `SDL_HINT_OVERRIDE` priority to win over the environment.
 
-Pixely skips entries that SDL returns without a language, so `en,` gives only `en`. A leading comma is not repaired: SDL parses `,en` as the language `,en`.
+Empty items are skipped, so `en,` and `,en` both give only `en`.
 
 ### Changes while the app runs
 
