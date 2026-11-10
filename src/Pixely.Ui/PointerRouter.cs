@@ -77,6 +77,11 @@ internal sealed class PointerRouter
 
     internal Vector2Int Position => _position;
 
+    // Routes nothing and moves nothing, so a window's hit test can ask it while SDL processes events. A held press takes the pointer
+    // everywhere: macOS hit tests every move of a drag and drops the release on a draggable point, which would leave the capture
+    // with no way to end.
+    internal bool TakesPointerAt(Vector2Int position) => Array.Exists(_captured, captured => captured != null) || HitTest(position) != null;
+
     internal bool Moved(Vector2Int position)
     {
         int version = ++_routeVersion;

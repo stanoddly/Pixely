@@ -29,6 +29,14 @@ public class WindowTests
     }
 
     [Test]
+    public void Minimize_DisposedWindow_ReturnsFalse()
+    {
+        Window window = CreateDisposedWindow();
+
+        Assert.That(window.Minimize(), Is.False);
+    }
+
+    [Test]
     public void ColorTargetFormat_WindowWithoutGpuDevice_Throws()
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));

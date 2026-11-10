@@ -172,6 +172,40 @@ window.Sync();
 Size<uint> size = window.Size;
 ```
 
+## Dragging and minimising a borderless window
+
+A window created with `Borderless: true` has no title bar, so it draws its own controls.
+
+`Window.Minimize()` minimises the window, as a minimise button would. The user restores it from the task bar or the Dock. Windows, macOS and X11 minimise it. Wayland minimises it only when the compositor offers minimising; otherwise nothing happens and the call still returns true. It returns false where SDL cannot minimise, such as in the browser and on the dummy video driver of Pixely.Testing. A hidden window is minimised when it is shown. A minimised window is not renderable, so its renderers do not run until it is restored. In headless mode the window stays hidden, so `Minimize()` changes nothing and the window keeps rendering.
+
+`Window.Draggable = true` lets the user drag the window by any point. `Window.SetHitTest` decides point by point instead. Its callback gets a point and returns `HitTestResult.Draggable` or `HitTestResult.Normal`. This one drags the window by its top 24 rows:
+
+```csharp
+window.SetHitTest(point => point.Y < 24 ? HitTestResult.Draggable : HitTestResult.Normal);
+```
+
+Setting either one replaces the other. `Draggable = false` and `SetHitTest(null)` both turn dragging off.
+
+- Only the left button drags. The platform moves the window itself, so a left press on a draggable point never reaches the app: `IMouseService` raises no press and no release for it, and a UI never sees it. Presses of other buttons reach the app as usual.
+- The point is in window coordinates, the same as the positions of mouse events: units of `Window.Size`, not render pixels.
+- The callback runs on the main thread while SDL processes events, which is mostly at the start of a frame, before the updatables. SDL calls it whenever the pointer moves over the window, not only on a press, so keep it cheap.
+- An exception thrown from the callback ends the process, because it cannot pass through SDL.
+- On Windows and macOS the app gets no pointer motion over a draggable point. Windows reports the pointer as leaving the window instead. macOS reports nothing, so whatever was hovered last stays hovered until the pointer comes back.
+- `Draggable` and `SetHitTest` throw `PixelyException` where SDL has no hit testing, such as in the browser and on the dummy video driver of Pixely.Testing. Synthetic input in headless mode does not go through the hit test, so a synthetic press on a draggable point reaches the app.
+
+A window that draws its controls with Pixely.Ui can drag from every point where the UI would not take a press. `UiRoot.TakesPointerAt` answers that for a point in window coordinates and accounts for `UiRoot.Scale`:
+
+```csharp
+builder.OnBuilt(provider =>
+{
+    Window window = provider.GetWindow();
+    UiRoot root = provider.GetUiRoot();
+    window.SetHitTest(point => root.TakesPointerAt(window, point) ? HitTestResult.Normal : HitTestResult.Draggable);
+});
+```
+
+A press on a button then reaches the button, and a press on empty space drags the window. `TakesPointerAt` reads the layout of the UI's last build and routes nothing. It counts only pointer targets that can take input: a disabled or hidden button, a label, a panel and a scroll view's background all drag the window. While the UI holds a press, such as a button pressed and dragged off, it takes the pointer everywhere, so the release reaches the UI. A press on empty space normally takes focus away and commits a text field; a press that drags the window does not. A minimise button calls `window.Minimize()` from its `Clicked` handler.
+
 ## The browser
 
 In a browser the page is the screen: the window fills it and follows the browser window's size, so `WindowConfig.Size` is ignored, as are `Position`, `Fullscreen`, `Resizable`, `Transparent`, `Borderless`, `AlwaysOnTop` and `Utility`. `HighPixelDensity` applies: the canvas then has the page's device pixels, its CSS size times `window.devicePixelRatio`. `Window.Size` reports the page size and resizes arrive through `ResolutionChanged` as on the desktop.

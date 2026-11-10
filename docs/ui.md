@@ -321,6 +321,8 @@ Capture is per button, so a right-drag and a left-drag can be held by different 
 
 Motion is never consumed — a camera that follows the mouse has to keep seeing it while the pointer is over a button.
 
+`UiRoot.TakesPointerAt(window, position)` says whether the UI takes the pointer at a point in window coordinates: a pointer target is there, or the UI holds a press. It converts the point the way a press is converted, so it accounts for `Scale`, and it routes nothing. A borderless window uses it in its hit test to drag from everywhere except its controls; see "Dragging and minimising a borderless window" in window-rendering.md.
+
 An element that follows the pointer while it holds a press, a slider or a scrollbar's thumb, implements `IPointerDragTarget` as well. `OnPointerDrag` is sent for every move between the accepted press and its release or cancel, with the button that press was, wherever the pointer has gone, including off the element; a button held by another element is reported to that element alone. The drag is delivered before hover follows the move, so a drag callback that rearranges the tree is settled by the hover that comes after it. A plain `IPointerTarget` never hears of a move.
 
 The wheel is routed separately, to `IScrollTarget`s, and is described under Scrolling. It moves the pointer and hover the way motion does, is delivered whatever capture is in progress, and is consumed only when a target took some of it. An element that is only an `IScrollTarget` is transparent to the pointer the way a panel is.

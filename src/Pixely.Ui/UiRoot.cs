@@ -501,6 +501,22 @@ public sealed class UiRoot : IUiPaintSource
         return true;
     }
 
+    /// <summary>
+    /// Whether the UI takes the pointer at <paramref name="windowPosition"/>: a pointer target is there, or the UI holds a press
+    /// anywhere. The position is in the coordinates of <paramref name="window"/>, the window this root draws into, which are what its
+    /// mouse events and its <see cref="Window.SetHitTest"/> callback report, and the <see cref="Scale"/> is accounted for. It reads the
+    /// bounds of the last <see cref="Update"/> and changes nothing, so a hit test callback can call it to drag a borderless window from
+    /// wherever the UI would not take a press.
+    /// </summary>
+    public bool TakesPointerAt(Window window, Vector2Int windowPosition)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        return TakesPointerAt(window.Size, windowPosition);
+    }
+
+    internal bool TakesPointerAt(Size<uint> windowSize, Vector2Int windowPosition) =>
+        _pointerRouter.TakesPointerAt(UiInputSystem.ToUiPosition(new Vector2(windowPosition.X, windowPosition.Y), windowSize, _targetSize, _scale));
+
     /// <summary>Where the pointer last was, in the same coordinates the tree is laid out in.</summary>
     public Vector2Int PointerPosition => _pointerRouter.Position;
 
