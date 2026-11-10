@@ -21,7 +21,36 @@ public class StubFontSystemTests
             Assert.That(second, Is.SameAs(first));
             Assert.That(underlined, Is.Not.SameAs(first));
             Assert.That(larger, Is.Not.SameAs(first));
-            Assert.That((first.Path, first.Size, underlined.Style), Is.EqualTo(("fonts/a.ttf", (ushort)20, FontStyle.Underline)));
+            Assert.That((first.Path, first.Size, underlined.Style), Is.EqualTo(("fonts/a.ttf", 20f, FontStyle.Underline)));
+        });
+    }
+
+    [Test]
+    public void Load_DifferentTypography_ReturnsSeparateFontsThatMeasureTheSame()
+    {
+        using StubFontSystem fontSystem = new(glyphWidth: 6, lineHeight: 11);
+
+        Font plain = fontSystem.Load("fonts/a.ttf", 14.5f);
+        Font typeset = fontSystem.Load("fonts/a.ttf", 14.5f, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeset, Is.Not.SameAs(plain));
+            Assert.That(fontSystem.Load("fonts/a.ttf", 14.5f, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1), Is.SameAs(typeset));
+            Assert.That(typeset.Measure("Score"), Is.EqualTo(plain.Measure("Score")));
+        });
+    }
+
+    [Test]
+    public void Load_InvalidSettings_ThrowsAsPixelysFontSystemDoes()
+    {
+        using StubFontSystem fontSystem = new();
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => fontSystem.Load("fonts/a.ttf", 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => fontSystem.Load("fonts/a.ttf", 14, letterSpacing: float.NaN));
+            Assert.Throws<ArgumentException>(() => fontSystem.Load("fonts/a.ttf", 14, features: [new FontFeature("tnum,liga")]));
         });
     }
 

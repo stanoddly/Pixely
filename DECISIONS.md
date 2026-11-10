@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-10: Variations, OpenType features and letter spacing are settings of a font, from XDL's additions to SDL_ttf
+
+`IFontSystem.Load` takes a `float` size, `variations`, `features` and `letterSpacing`, and caches a font by all of them (`docs/fonts.md`). XDL patches SDL_ttf with `XDL_SetFontVariations`, `XDL_SetFontFeatures` and `XDL_SetFontCharSpacing`, which Pixely calls once when it opens the font.
+
+- SDL_ttf 3.2 keeps all such state on the `TTF_Font`, so a setting per label is a font per combination, which the label takes like any other font. A label property would need the same fonts behind it.
+- Stock SDL_ttf 3.2 passes HarfBuzz only `kern` and has no variation axes or spacing. Laying out digits in cells or glyphs one by one in Pixely would lose kerning and shaping; the patch keeps HarfBuzz shaping the whole run with the font's own tabular figures and its own interpolated weights.
+- The variations and features reach XDL in HarfBuzz's comma-separated syntax. `FontKey` keeps them in that form, so equal lists compare equal and Pixely's font system and `StubFontSystem` validate them the same way.
+
+Cost: each combination opens the font file again and keeps its own copy of the font data, so five weights of one variable font hold five copies. `Font.Size` is a `float` instead of a `ushort`. The settings need XDL v3.4.20-11 or later.
+
 ## 2026-11-09: Pixely binds XDL through XdlSharp, and the SDK picks XDL's native package by RID
 
 Pixely calls [XDL](https://github.com/stanoddly/XDL), a patched SDL 3.4, through the [XdlSharp](https://github.com/stanoddly/XDLSharp) bindings instead of ppy.SDL3-CS. The bindings are one package; XDL's runtime is one `XdlSharp.Native.<rid>` package per platform, and the SDK references the one for `RuntimeIdentifier`, or for the build host's portable RID when none is set (`docs/sdk.md`).

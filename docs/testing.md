@@ -128,7 +128,7 @@ Font font = fontSystem.Load("fonts/Montserrat-Medium.ttf", 20);
 UiRoot root = new() { Style = new UiStyle(font) };
 ```
 
-- `Load` returns a real `Font`, the same one for the same path, size, rasterization, hinting and style, as Pixely's font system does. The path is never read, and the size does not change the metrics.
+- `Load` returns a real `Font`, the same one for the same path, size and settings, as Pixely's font system does. The path is never read. It checks the size, variations, features and letter spacing as Pixely's font system does, but not against a font file: a variation of an axis the font lacks, or a fractional size of a bitmap font, loads here and throws in the game. Neither the size nor any setting changes the metrics.
 - Text is as wide as its longest line's characters times `glyphWidth`, and as high as its lines times `lineHeight`. Only `\n` starts a line; `\r`, spaces and tabs are characters like any other. A character is a Unicode scalar value, so an emoji is one. Empty text measures 0 × 0. The defaults are 8 and 16. "Score" measures 30 × 11 with the metrics above. A size over 65535 pixels throws `OverflowException`, where Pixely's font system would truncate it.
 - `CreateTextSprite` returns a sprite of the measured size on a blank `R8G8B8A8UnormSrgb` texture, the same sprite for the same text and font, so a `Label` lays out and paints as in the game. As in Pixely's font system, the texture is borrowed, so disposing it does nothing, and empty text throws `PixelyException`.
 - The textures are on the `StubGpuDevice` passed as `gpuDevice`, so a test reads a bound text texture back with `ReadTexture` on its own device. Without one, the stub creates a device of its own and disposes it with itself.

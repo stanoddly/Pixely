@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using Pixely.Content;
 using Pixely.Gpu;
@@ -15,7 +16,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     private readonly GpuMemorySystem _gpuMemorySystem;
     private readonly ContentSource _contentSource;
     private readonly List<Font> _fonts = new();
-    private readonly Dictionary<(string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style), Font> _fontCache = new();
+    private readonly Dictionary<FontKey, Font> _fontCache = new();
     private readonly Dictionary<(string text, Font font), CachedTextSprite> _textSpriteCache = new();
 
     // Cleared after every Update, so the per-frame sweep allocates nothing.
@@ -37,15 +38,11 @@ internal class FontSystem: IFontSystem, IUpdatable
         return new FontSystem(gpuMemorySystem, contentSource);
     }
 
-    public Font Load(
-        string path,
-        ushort size,
-        FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended,
-        FontHintingMode hintingMode = FontHintingMode.Normal,
-        FontStyle style = FontStyle.Normal)
+    public Font Load(string path, float size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
+        FontStyle style = FontStyle.Normal, IReadOnlyList<FontVariation>? variations = null, IReadOnlyList<FontFeature>? features = null, float letterSpacing = 0)
     {
-        (string path, ushort size, FontRasterizationMode rasterizationMode, FontHintingMode hintingMode, FontStyle style) cacheKey =
-            (path, size, rasterizationMode, hintingMode, style);
+        (FontKey cacheKey, ImmutableArray<FontVariation> normalizedVariations, ImmutableArray<FontFeature> normalizedFeatures) =
+            FontKey.Create(path, size, rasterizationMode, hintingMode, style, variations, features, letterSpacing);
         if (_fontCache.TryGetValue(cacheKey, out Font? cachedFont))
         {
             return cachedFont;
@@ -79,6 +76,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 TTF_SetFontHinting(ttfFont, ToSdlHintingMode(hintingMode));
                 // FontStyle mirrors the values of TTF_FontStyleFlags.
                 TTF_SetFontStyle(ttfFont, (TTF_FontStyleFlags)style);
+                ApplyTypography(ttfFont, cacheKey);
             }
             catch
             {
@@ -91,7 +89,7 @@ internal class FontSystem: IFontSystem, IUpdatable
                 throw;
             }
 
-            Font font = new Font(this, ttfFont, nativeFontData, path, size, rasterizationMode, hintingMode, style);
+            Font font = new Font(this, ttfFont, nativeFontData, cacheKey, normalizedVariations, normalizedFeatures);
             _fonts.Add(font);
             _fontCache[cacheKey] = font;
 
@@ -186,7 +184,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     // requested size would silently land on some strike. Resolve the pixel size to the strike index from the font file instead.
     // Only TrueType and OpenType files carry a strike table Pixely can read; a bitmap PCF, BDF, FON or WOFF font is rejected rather than rendered at an unverified size.
     // SDL_ttf rejects a size of zero but truncates the index from a float, so index + 0.5 reaches every strike, including the first.
-    private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, ushort size)
+    private static unsafe void SelectBitmapStrike(Pointer<TTF_Font> ttfFont, ReadOnlySpan<byte> fontData, string path, float size)
     {
         IReadOnlyList<int> strikePixelSizes = SfntBitmapStrikes.ReadPixelSizes(fontData);
         int strikeIndex = -1;
@@ -210,6 +208,27 @@ internal class FontSystem: IFontSystem, IUpdatable
         }
 
         SdlError.ThrowOnFalse(TTF_SetFontSize(ttfFont, strikeIndex + 0.5f), nameof(TTF_SetFontSize));
+    }
+
+    // XDL's additions to SDL_ttf. Each is called only when it changes the font's defaults.
+    private static void ApplyTypography(Pointer<TTF_Font> ttfFont, FontKey key)
+    {
+        if (key.VariationSettings.Length > 0)
+        {
+            using NullTerminatedUtf8 variations = new(key.VariationSettings);
+            SdlError.ThrowOnFalse(XDL_SetFontVariations(ttfFont, variations.Span), $"{nameof(XDL_SetFontVariations)} for font '{key.Path}'");
+        }
+
+        if (key.FeatureSettings.Length > 0)
+        {
+            using NullTerminatedUtf8 features = new(key.FeatureSettings);
+            SdlError.ThrowOnFalse(XDL_SetFontFeatures(ttfFont, features.Span), $"{nameof(XDL_SetFontFeatures)} for font '{key.Path}'");
+        }
+
+        if (key.LetterSpacing != 0)
+        {
+            SdlError.ThrowOnFalse(XDL_SetFontCharSpacing(ttfFont, key.LetterSpacing), $"{nameof(XDL_SetFontCharSpacing)} for font '{key.Path}'");
+        }
     }
 
     private static TTF_HintingFlags ToSdlHintingMode(FontHintingMode hintingMode)
@@ -296,7 +315,7 @@ internal class FontSystem: IFontSystem, IUpdatable
     public void ReleaseFont(Font font)
     {
         _fonts.Remove(font);
-        _fontCache.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
+        _fontCache.Remove(font.Key);
 
         unsafe
         {

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using Pixely.Utilities;
 using XdlSharp;
@@ -12,32 +13,26 @@ public class Font : IFont, IDisposable
     private readonly Pointer<TTF_Font> _ttfFont;
     private readonly unsafe byte* _fontData;
 
-    internal unsafe Font(
-        IFontSystem fontSystem,
-        Pointer<TTF_Font> ttfFont,
-        byte* fontData,
-        string path,
-        ushort size,
-        FontRasterizationMode rasterizationMode,
-        FontHintingMode hintingMode,
-        FontStyle style)
+    internal unsafe Font(IFontSystem fontSystem, Pointer<TTF_Font> ttfFont, byte* fontData, FontKey key, ImmutableArray<FontVariation> variations, ImmutableArray<FontFeature> features)
     {
         _fontSystem = fontSystem;
         _ttfFont = ttfFont;
         _fontData = fontData;
-        Path = path;
-        Size = size;
-        RasterizationMode = rasterizationMode;
-        HintingMode = hintingMode;
-        Style = style;
+        Key = key;
+        Variations = variations;
+        Features = features;
     }
 
     internal Pointer<TTF_Font> TtfFont => _ttfFont;
-    public string Path { get; }
-    public ushort Size { get; }
-    public FontRasterizationMode RasterizationMode { get; }
-    public FontHintingMode HintingMode { get; }
-    public FontStyle Style { get; }
+    internal FontKey Key { get; }
+    public string Path => Key.Path;
+    public float Size => Key.Size;
+    public FontRasterizationMode RasterizationMode => Key.RasterizationMode;
+    public FontHintingMode HintingMode => Key.HintingMode;
+    public FontStyle Style => Key.Style;
+    public IReadOnlyList<FontVariation> Variations { get; }
+    public IReadOnlyList<FontFeature> Features { get; }
+    public float LetterSpacing => Key.LetterSpacing;
 
     /// <summary>
     /// Rasterises <paramref name="text"/> with this font. Results are cached by the font system,

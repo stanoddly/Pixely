@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using Pixely.Gpu;
 using Pixely.Text;
@@ -17,7 +18,7 @@ public sealed class StubFontSystem : IFontSystem
     private readonly ushort _lineHeight;
     private readonly StubGpuDevice _gpuDevice;
     private readonly bool _ownsGpuDevice;
-    private readonly Dictionary<(string Path, ushort Size, FontRasterizationMode RasterizationMode, FontHintingMode HintingMode, FontStyle Style), Font> _fonts = new();
+    private readonly Dictionary<FontKey, Font> _fonts = new();
     private readonly Dictionary<(string Text, Font Font), TextSprite> _textSprites = new();
     private readonly List<Font> _releasedFonts = new();
     private bool _disposed;
@@ -41,19 +42,19 @@ public sealed class StubFontSystem : IFontSystem
 
     /// <summary>
     /// Returns the font loaded before with the same path, size and settings, as Pixely's font system does, or a new one. The path
-    /// is never read.
+    /// is never read. The arguments are checked as there, but not against a font file, and none of them changes how text measures.
     /// </summary>
-    public Font Load(string path, ushort size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
-        FontStyle style = FontStyle.Normal)
+    public Font Load(string path, float size, FontRasterizationMode rasterizationMode = FontRasterizationMode.Blended, FontHintingMode hintingMode = FontHintingMode.Normal,
+        FontStyle style = FontStyle.Normal, IReadOnlyList<FontVariation>? variations = null, IReadOnlyList<FontFeature>? features = null, float letterSpacing = 0)
     {
-        ArgumentNullException.ThrowIfNull(path);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        (string, ushort, FontRasterizationMode, FontHintingMode, FontStyle) key = (path, size, rasterizationMode, hintingMode, style);
+        (FontKey key, ImmutableArray<FontVariation> normalizedVariations, ImmutableArray<FontFeature> normalizedFeatures) =
+            FontKey.Create(path, size, rasterizationMode, hintingMode, style, variations, features, letterSpacing);
         if (!_fonts.TryGetValue(key, out Font? font))
         {
             unsafe
             {
-                font = new Font(this, default, null, path, size, rasterizationMode, hintingMode, style);
+                font = new Font(this, default, null, key, normalizedVariations, normalizedFeatures);
             }
 
             _fonts[key] = font;
@@ -119,7 +120,7 @@ public sealed class StubFontSystem : IFontSystem
             throw new InvalidOperationException($"The font {font.Path} at {font.Size} was not loaded by this {nameof(StubFontSystem)}.");
         }
 
-        _fonts.Remove((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style));
+        _fonts.Remove(font.Key);
         _releasedFonts.Add(font);
     }
 
@@ -146,7 +147,7 @@ public sealed class StubFontSystem : IFontSystem
 
     private bool IsLoaded(Font font)
     {
-        return _fonts.TryGetValue((font.Path, font.Size, font.RasterizationMode, font.HintingMode, font.Style), out Font? loaded) && ReferenceEquals(loaded, font);
+        return _fonts.TryGetValue(font.Key, out Font? loaded) && ReferenceEquals(loaded, font);
     }
 
     // A released font's SDL font is closed in Pixely's font system, so using it there would crash the game.
