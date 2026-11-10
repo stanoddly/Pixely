@@ -16,4 +16,6 @@ public sealed record WindowConfig(
     bool AlwaysOnTop = false,
     bool InitiallyVisible = true,
     WindowCloseBehavior CloseBehavior = WindowCloseBehavior.QuitApplication,
-    bool Utility = false);
+    bool Utility = false,
+    bool HighPixelDensity = true,
+    WindowPosition? Position = null);

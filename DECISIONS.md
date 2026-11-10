@@ -8,9 +8,31 @@ Design decisions with the constraints that decided them and their known costs, n
 
 - SDL_ttf 3.2 keeps all such state on the `TTF_Font`, so a setting per label is a font per combination, which the label takes like any other font. A label property would need the same fonts behind it.
 - Stock SDL_ttf 3.2 passes HarfBuzz only `kern` and has no variation axes or spacing. Laying out digits in cells or glyphs one by one in Pixely would lose kerning and shaping; the patch keeps HarfBuzz shaping the whole run with the font's own tabular figures and its own interpolated weights.
+- A scaled font from `Font.GetScaled` is a `TTF_CopyFont`, which takes none of XDL's settings, so Pixely applies them to the copy again, with the letter spacing times the scale.
 - The variations and features reach XDL in HarfBuzz's comma-separated syntax. `FontKey` keeps them in that form, so equal lists compare equal and Pixely's font system and `StubFontSystem` validate them the same way.
 
 Cost: each combination opens the font file again and keeps its own copy of the font data, so five weights of one variable font hold five copies. `Font.Size` is a `float` instead of a `ushort`. The settings need XDL v3.4.20-11 or later.
+
+## 2026-11-10: A UI scales pixelated or smooth, and smooth sampling averages the footprint instead of using mipmaps
+
+`UiRoot` takes a `UiScaleMode` at construction (`docs/ui.md`, Scale modes). `Pixelated`, the default, keeps painting the tree at its logical size and presenting it with nearest sampling. `Smooth` lays the tree out at its logical size and paints it at the target's: `PaintContext` takes logical pixels from every caller and rounds them to target pixels, text is measured and drawn in `IFont.GetScaled`, and sprites are sampled linearly unless `Image.Filter` or the `filter` of `SpriteDrawable` and `NinePatchDrawable` says otherwise.
+
+- Layout, hit testing and every callback stay in logical pixels in both modes. Under `Smooth` a text's logical size is its size in the scaled font divided by the scale and rounded up, so its bounds hold what is drawn; it can differ from the pixelated size by a pixel. The conversion sits in `PaintContext`, the one place every quad passes through, so a custom `Drawable` gets it without a change.
+- Edges are rounded rather than positions and sizes, so rectangles that meet in logical pixels meet in target pixels. A border's thicknesses and a nine-patch's insets are rounded on their own, so a 1 px edge has one thickness wherever it sits; the inside a border leaves is then not where rounding the logical inside would land, so the border snaps its fill's edges to its own for the fill's paint.
+- A scaled font is a `TTF_CopyFont` of the loaded one at a fractional size, so 16 px at 1.33 is 21.28 px rather than 21, and it shares the loaded font's data. It belongs to the loaded font and is released with it. `IFont.GetScaled` is a default interface member that returns null, so a font implemented outside Pixely still compiles and its text is stretched. `IFontSystem.GetScaled` is internal, because only Pixely creates a `Font`.
+- Linear sampling averages up to 8 x 8 bilinear taps across the texels one pixel covers, in the quad shader, instead of sampling a mipmap chain. A sprite is usually a region of an atlas, and a mipmap of an atlas blends neighbouring sprites; the taps stay inside the sprite's region. It also needs no change to how textures are loaded or uploaded, and it works on text sprites and any texture a game hands a drawable.
+
+Cost: a texture shown more than 8 times smaller than it is starts to alias again, and a linearly sampled pixel costs up to 64 bilinear samples where a trilinear mipmap lookup costs 2. Each size a smooth root paints text at keeps one more FreeType face per scalable font until the font is released. Sizes are cached by the 64th of a point FreeType rounds them to, which bounds the set, but a zoom through many sizes still keeps one face for each. The retained texture of a smooth root is the target's size rather than the viewport's. A pixelated root's scale must still be at least 1.
+
+## 2026-11-10: Windows have high pixel density by default
+
+`WindowConfig.HighPixelDensity` is on unless an app turns it off, so on a scaled display a window on macOS, Wayland and in the browser renders at the screen's pixels instead of its window size (`docs/window-rendering.md`).
+
+- Without it the compositor stretches the window to the screen with a filter the app does not pick, so text and sprites come out soft whatever the app draws. A fractional scale such as 150 % can never be pixel perfect that way.
+- Godot 4 (`display/window/dpi/allow_hidpi`) and Unity ("Mac Retina Support") are on by default too, so a game ported to Pixely gets the render size it expects.
+- Windows and X11 always size windows in pixels, so the default changes nothing there.
+
+Cost: on a scaled display an app that draws in render pixels gets twice as many on macOS, Wayland and in the browser, so content drawn at a fixed pixel size, such as `Pixely.Ui` at scale 1, looks half as big there as before. The app scales by `Window.DisplayScale` or turns the option off.
 
 ## 2026-11-09: Pixely binds XDL through XdlSharp, and the SDK picks XDL's native package by RID
 

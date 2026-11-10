@@ -12,8 +12,8 @@ internal readonly record struct FontKey(string Path, float Size, FontRasterizati
     private const float MinSize = 1;
     private const float MaxSize = 65535;
     // XDL_SetFontCharSpacing takes this range, so the spacing in 26.6 fixed point fits an int.
-    private const float MinLetterSpacing = -32768;
-    private const float MaxLetterSpacing = 32767;
+    internal const float MinLetterSpacing = -32768;
+    internal const float MaxLetterSpacing = 32767;
 
     // Returns the key with the lists it was made from, without repeated tags and sorted by tag, so lists that differ only in order or in
     // an overridden tag give the same font. HarfBuzz applies the last of repeated tags, and the order of different tags does not matter.

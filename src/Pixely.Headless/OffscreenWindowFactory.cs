@@ -34,7 +34,7 @@ internal sealed class OffscreenWindowFactory : IWindowFactory
         TextureFormat colorTargetFormat = OffscreenWindow.SelectColorTargetFormat(
             format => gpuDevice.IsTextureFormatSupported(format, TextureType.TwoD, TextureUsage.ColorTarget | TextureUsage.Sampler));
         (uint width, uint height) = config.Size ?? PixelyFactory.DefaultSize;
-        return _pixelyFactory.CreateUnclaimedWindow(config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN,
+        return _pixelyFactory.CreateUnclaimedWindow(new SdlWindowParameters(config.Title, width, height, SDL_WindowFlags.SDL_WINDOW_HIDDEN),
             (sdlWindow, sdlWindowId) => new OffscreenWindow(viewScope, sdlWindow, gpuDevice, colorTargetFormat, sdlWindowId, frameClock, platformInfo, WindowCloseBehavior.QuitApplication));
     }
 }

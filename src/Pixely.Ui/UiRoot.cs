@@ -1,4 +1,5 @@
 using System.Numerics;
+using Pixely.Gpu;
 using Pixely.Input;
 
 namespace Pixely.Ui;
@@ -42,14 +43,30 @@ public sealed class UiRoot : IUiPaintSource
     private readonly ChangeNotifier<Element?> _focusChanged = new();
     private readonly ChangeNotifier<Vector2Int> _viewportChanged = new();
 
-    public UiRoot()
+    /// <param name="scaleMode">How the tree is drawn at a <see cref="Scale"/> other than 1, see <see cref="ScaleMode"/>.</param>
+    public UiRoot(UiScaleMode scaleMode = UiScaleMode.Pixelated)
     {
+        ScaleMode = ValidateScaleMode(scaleMode);
         _pointerRouter = new PointerRouter(this);
         _focusRouter = new FocusRouter(this);
     }
 
-    /// <summary>The viewport the completed instructions were laid out in, which is the size to paint them at.</summary>
+    /// <summary>The viewport the completed instructions were laid out in.</summary>
     internal Vector2Int PaintedViewportSize { get; private set; }
+
+    /// <summary>
+    /// The size of the space the completed instructions are in, which is the size of the texture to
+    /// paint them into: the viewport under <see cref="UiScaleMode.Pixelated"/> and the target under
+    /// <see cref="UiScaleMode.Smooth"/>.
+    /// </summary>
+    internal Vector2Int PaintedRasterSize { get; private set; }
+
+    /// <summary>
+    /// How many target pixels one pixel of that texture covers when it is presented: the scale under
+    /// <see cref="UiScaleMode.Pixelated"/>, and 1 under <see cref="UiScaleMode.Smooth"/>, which has
+    /// already painted at it.
+    /// </summary>
+    internal float PaintedPresentScale { get; private set; } = 1f;
 
     /// <summary>
     /// The target size the completed instructions were built to be presented into. The renderer
@@ -137,37 +154,71 @@ public sealed class UiRoot : IUiPaintSource
     public Vector2Int TargetSize => _targetSize;
 
     /// <summary>
-    /// How many target pixels one logical pixel covers. Layout, paint, pointer positions and the
-    /// viewport are all in logical pixels; the renderer paints them at this scale. An integer keeps
-    /// every logical pixel the same size on screen, which is what keeps pixel fonts and sprites
-    /// crisp; a fraction is accepted and shows uneven pixels, the same as a scene scaled by it.
-    /// Set at construction, and changed afterwards through <see cref="RequestScale"/>. Must be
-    /// finite and at least 1.
+    /// How a <see cref="Scale"/> other than 1 is drawn. <see cref="UiScaleMode.Pixelated"/> paints
+    /// the tree at its logical size and presents it with nearest sampling, for pixel art;
+    /// <see cref="UiScaleMode.Smooth"/> paints it at the target's size, for vector fonts and smooth
+    /// pictures. Fixed at construction, since what the tree's fonts and pictures are made for does
+    /// not change at runtime.
+    /// </summary>
+    public UiScaleMode ScaleMode { get; }
+
+    /// <summary>
+    /// How many target pixels one logical pixel covers. Layout, pointer positions and the viewport
+    /// are all in logical pixels whatever the scale and the <see cref="ScaleMode"/>.
+    /// <see cref="UiScaleMode.Pixelated"/> presents the tree at this scale: an integer keeps every
+    /// logical pixel the same size on screen, which is what keeps pixel fonts and sprites crisp, and
+    /// a fraction shows uneven pixels, the same as a scene scaled by it.
+    /// <see cref="UiScaleMode.Smooth"/> paints the tree at this scale, so a fraction is as sharp as
+    /// an integer. Set at construction, and changed afterwards through <see cref="RequestScale"/>.
+    /// Must be finite, at least 1 under <see cref="UiScaleMode.Pixelated"/> and above 0 under
+    /// <see cref="UiScaleMode.Smooth"/>.
     /// </summary>
     public float Scale
     {
         get => _scale;
         // Applied directly: there is no target yet to re-derive the viewport from, and the pointer
         // is still at the origin, which is the same logical position at every scale.
-        init => _scale = _requestedScale = ValidateScale(value);
+        init => _scale = _requestedScale = ValidateScale(value, ScaleMode);
     }
 
     /// <summary>
     /// Asks for a scale, which takes effect at the next <see cref="Update"/>. Deferred rather than
     /// applied here because a change moves the viewport and the pointer's logical position at once,
     /// and a request can come from inside a pointer callback, where neither may be reported from.
-    /// Must be finite and at least 1.
+    /// Must be finite, and in the range <see cref="Scale"/> gives for the <see cref="ScaleMode"/>.
     /// </summary>
     public void RequestScale(float scale)
     {
-        _requestedScale = ValidateScale(scale);
+        _requestedScale = ValidateScale(scale, ScaleMode);
     }
 
-    internal static float ValidateScale(float scale)
+    /// <summary>
+    /// The scale text is measured and rasterised at: the scale under <see cref="UiScaleMode.Smooth"/>,
+    /// and 1 under <see cref="UiScaleMode.Pixelated"/>, which paints in logical pixels.
+    /// </summary>
+    internal float TextScale => ScaleMode == UiScaleMode.Smooth ? _scale : 1f;
+
+    internal static UiScaleMode ValidateScaleMode(UiScaleMode scaleMode)
     {
-        if (!float.IsFinite(scale) || scale < 1f)
+        if (!Enum.IsDefined(scaleMode))
         {
-            throw new ArgumentOutOfRangeException(nameof(scale), scale, "The scale must be finite and at least 1.");
+            throw new ArgumentOutOfRangeException(nameof(scaleMode), scaleMode, "Unknown scale mode.");
+        }
+
+        return scaleMode;
+    }
+
+    internal static float ValidateScale(float scale, UiScaleMode scaleMode)
+    {
+        // Below 1, nearest sampling drops logical pixels rather than shrinking them.
+        if (scaleMode == UiScaleMode.Pixelated && (!float.IsFinite(scale) || scale < 1f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scale), scale, "The scale must be finite and at least 1 when the UI scales pixelated.");
+        }
+
+        if (!float.IsFinite(scale) || scale <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scale), scale, "The scale must be finite and greater than 0.");
         }
 
         return scale;
@@ -188,6 +239,17 @@ public sealed class UiRoot : IUiPaintSource
         float previous = _scale;
         _scale = _requestedScale;
         _pointerRouter.Rescale(previous, _scale);
+
+        // A smooth root measures text in the font at its scale, so every measure is stale, whether
+        // or not the viewport moved.
+        if (ScaleMode == UiScaleMode.Smooth)
+        {
+            foreach (Element layer in _layers)
+            {
+                layer.InvalidateSubtreeMeasure();
+            }
+        }
+
         ApplyViewport();
     }
 
@@ -673,7 +735,12 @@ public sealed class UiRoot : IUiPaintSource
         Rectangle viewport = new(0, 0, viewportSize.X, viewportSize.Y);
         Constraints constraints = Constraints.Tight(viewportSize);
 
-        _paintContext.Reset(viewport);
+        // Pixelated paints in logical pixels and leaves the scale to the present; smooth paints in
+        // target pixels and presents them one to one.
+        bool smooth = ScaleMode == UiScaleMode.Smooth;
+        Vector2Int rasterSize = smooth ? targetSize : viewportSize;
+        float presentScale = smooth ? 1f : scale;
+        _paintContext.Reset(viewport, smooth ? scale : 1f, rasterSize, smooth ? TextureFilter.Linear : TextureFilter.Nearest);
 
         foreach (Element layer in _layers)
         {
@@ -714,6 +781,8 @@ public sealed class UiRoot : IUiPaintSource
         _layersChanged = false;
         IsPaintDirty = false;
         PaintedViewportSize = viewportSize;
+        PaintedRasterSize = rasterSize;
+        PaintedPresentScale = presentScale;
         PaintedTargetSize = targetSize;
         PaintedScale = scale;
         BuildVersion++;
@@ -773,9 +842,9 @@ public sealed class UiRoot : IUiPaintSource
     // because PaintInstruction and PaintBatch are internal types.
     IReadOnlyList<PaintInstruction> IUiPaintSource.Instructions => Instructions;
     IReadOnlyList<PaintBatch> IUiPaintSource.Batches => Batches;
-    Vector2Int IUiPaintSource.PaintedViewportSize => PaintedViewportSize;
+    Vector2Int IUiPaintSource.PaintedRasterSize => PaintedRasterSize;
     Vector2Int IUiPaintSource.PaintedTargetSize => PaintedTargetSize;
-    float IUiPaintSource.PaintedScale => PaintedScale;
+    float IUiPaintSource.PaintedPresentScale => PaintedPresentScale;
     Vector2Int IUiPaintSource.TargetSize => TargetSize;
     ulong IUiPaintSource.PaintVersion => PaintVersion;
 }

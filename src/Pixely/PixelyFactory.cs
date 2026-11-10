@@ -11,6 +11,9 @@ using static XdlSharp.Xdl;
 
 namespace Pixely;
 
+// What SDL creates a window from. A null title is the entry assembly's name, and a null position leaves placement to the platform.
+internal readonly record struct SdlWindowParameters(string? Title, uint Width, uint Height, SDL_WindowFlags Flags, WindowPosition? Position = null);
+
 public partial class PixelyFactory: IDisposable
 {
     internal static readonly Size<uint> DefaultSize = (640, 480);
@@ -122,17 +125,42 @@ public partial class PixelyFactory: IDisposable
         return window;
     }
 
-    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(SdlGpuDevice? gpuDevice, string? title, uint width, uint height, SDL_WindowFlags windowFlags)
+    private (Pointer<SDL_Window> SdlWindow, uint SdlWindowId) CreateSdlWindow(SdlGpuDevice? gpuDevice, SdlWindowParameters parameters)
     {
         EnsureSdlInitialized();
 
         // The entry assembly's name, which the browser has too, unlike a process name.
-        using NullTerminatedUtf8 windowTitle = new NullTerminatedUtf8(title ?? AppDomain.CurrentDomain.FriendlyName);
-        Pointer<SDL_Window> sdlWindow = SDL_CreateWindow(windowTitle.Span, (int)width, (int)height, windowFlags);
+        using NullTerminatedUtf8 windowTitle = new NullTerminatedUtf8(parameters.Title ?? AppDomain.CurrentDomain.FriendlyName);
+        Pointer<SDL_Window> sdlWindow;
+        SDL_PropertiesID props = SDL_CreateProperties();
+        if (props == 0)
+        {
+            throw new PixelyInitializationException($"SDL_CreateProperties failed: {SdlError.GetError()}");
+        }
+
+        try
+        {
+            SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, windowTitle.Span);
+            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, parameters.Width);
+            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, parameters.Height);
+            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, (long)parameters.Flags);
+            // Without a position SDL leaves the placement to the platform, as SDL_CreateWindow does.
+            if (parameters.Position is { } position)
+            {
+                SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, position.SdlX);
+                SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, position.SdlY);
+            }
+
+            sdlWindow = SDL_CreateWindowWithProperties(props);
+        }
+        finally
+        {
+            SDL_DestroyProperties(props);
+        }
 
         if (sdlWindow.IsNull)
         {
-            throw new PixelyInitializationException($"SDL_CreateWindow failed: {SdlError.GetError()}");
+            throw new PixelyInitializationException($"SDL_CreateWindowWithProperties failed: {SdlError.GetError()}");
         }
 
         // Nothing owns the SDL window until this returns, so every failure below releases the claim and destroys the window.
@@ -299,6 +327,13 @@ public partial class PixelyFactory: IDisposable
         EnsureSdlInitialized();
 
         return new CursorService();
+    }
+
+    internal DisplayService CreateDisplayService()
+    {
+        EnsureSdlInitialized();
+
+        return new DisplayService();
     }
 
     internal PlatformSettings CreatePlatformSettings()

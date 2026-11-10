@@ -11,6 +11,7 @@ public sealed class Image : Element
 {
     private SpriteAsset _sprite;
     private SrgbColor _tint = SrgbColors.White;
+    private TextureFilter? _filter;
 
     public Image(SpriteAsset sprite)
     {
@@ -32,8 +33,19 @@ public sealed class Image : Element
         set => SetPaintProperty(ref _tint, value);
     }
 
+    /// <summary>
+    /// How the sprite is sampled when it is not shown at its texture's size, or null to follow the root: nearest under
+    /// <see cref="UiScaleMode.Pixelated"/> and linear under <see cref="UiScaleMode.Smooth"/>. Nearest keeps pixel art sharp;
+    /// linear keeps a photo or an illustration from stair-stepping, including one shown much smaller than its texture.
+    /// </summary>
+    public TextureFilter? Filter
+    {
+        get => _filter;
+        set => SetPaintProperty(ref _filter, value);
+    }
+
     protected override Vector2Int MeasureContent(Constraints constraints) =>
         new(_sprite.Size.X, _sprite.Size.Y);
 
-    protected override void PaintContent(PaintContext context) => context.DrawSprite(_sprite, Bounds, _tint);
+    protected override void PaintContent(PaintContext context) => context.DrawSprite(_sprite, Bounds, _tint, _filter ?? context.Filter);
 }

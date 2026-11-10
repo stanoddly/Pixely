@@ -79,6 +79,23 @@ The spacing follows every character, the last one too. With 2 px, "Hello" measur
 
 A tag in `FontVariation` or `FontFeature` must be four ASCII letters or digits, or `Load` throws `ArgumentException`. A variation value must be finite and a feature value must not be negative. The OpenType specification lists the registered [feature tags](https://learn.microsoft.com/typography/opentype/spec/featuretags) and [axis tags](https://learn.microsoft.com/typography/opentype/spec/dvaraxisreg). A font's own axes and features are listed by tools such as `hb-info` or FontDrop.
 
+## Scaled fonts
+
+`Font.GetScaled(factor)` returns the same font at `factor` times its size, which a UI that scales smoothly draws its text in (see [ui.md](ui.md), Scale modes):
+
+```csharp
+Font body = fonts.Load("fonts/Montserrat-Medium.ttf", 16);
+Font large = body.GetScaled(1.5f)!;
+```
+
+- The scaled font rasterises at 24 px here, and its `Measure` and `CreateTextSprite` are in pixels of that size. A fractional size is kept, so 16 px at 1.33 rasterises at 21.28 px. `Size` stays 16, and `Scale` is 1.5.
+- It shares the loaded font's data and settings, through `TTF_CopyFont`. It keeps the variations and features, and its letter spacing is the loaded font's times the scale, so 1 px at a scale of 2 is 2 px of the scaled font. FreeType keeps a size in 64ths of a point, so the size is rounded to one, and the font system caches the scaled font per size: two factors that land on the same 64th return the same `Font`, whose `Scale` is the rounded one. Scaling a scaled font multiplies the factors, and a factor that lands on the loaded size returns the loaded font.
+- It is released with the loaded font. Disposing it releases only it, and the next `GetScaled` to its size scales again. Until then it stays loaded, so a zoom through many sizes keeps a FreeType face for each size it passed.
+- A bitmap font returns null, because it comes only in its strike sizes.
+- The factor must be finite and above 0.
+
+`IFont.GetScaled` returns null unless an implementation overrides it, so a font of an application's own that does not scale is stretched by the UI rather than refused. A font system reaches the same through the internal `IFontSystem.GetScaled`, which only Pixely's font systems implement, because only Pixely creates a `Font`.
+
 ## Styles
 
 `FontStyle` is a flags enum, so styles combine: `FontStyle.Bold | FontStyle.Underline`.

@@ -86,6 +86,118 @@ public sealed class FontSystemTests
     }
 
     [Test]
+    public void GetScaled_BitmapFont_ReturnsNull()
+    {
+        Font font = _fontSystem.Load(FontPath, FontSize);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(font.GetScaled(2f), Is.Null, "a bitmap font comes only in its strike sizes");
+            Assert.That(font.GetScaled(1f), Is.SameAs(font), "but it is at its own size");
+        });
+    }
+
+    [Test]
+    public void GetScaled_ScalableFont_MeasuresAtTheScaledSize()
+    {
+        Font font = LoadScalable();
+
+        Font scaled = font.GetScaled(2f)!;
+        ShortSize size = font.Measure("Hello");
+        ShortSize scaledSize = scaled.Measure("Hello");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scaled.Size, Is.EqualTo(FontSize), "the size it was loaded at");
+            Assert.That(scaled.Scale, Is.EqualTo(2f));
+            Assert.That(scaledSize.Width, Is.InRange(size.Width * 2 - 2, size.Width * 2 + 2));
+            Assert.That(scaledSize.Height, Is.InRange(size.Height * 2 - 2, size.Height * 2 + 2));
+        });
+    }
+
+    [Test]
+    public void GetScaled_FractionalFactor_IsNotRoundedToAWholeSize()
+    {
+        Font font = LoadScalable();
+
+        unsafe
+        {
+            float pointSize = TTF_GetFontSize(font.GetScaled(1.5f)!.TtfFont);
+            Assert.That(pointSize, Is.EqualTo(FontSize * 1.5f).Within(0.01f));
+        }
+    }
+
+    [Test]
+    public void GetScaled_IsCachedPerFactor_AndComposes()
+    {
+        Font font = LoadScalable();
+        Font scaled = font.GetScaled(2f)!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(font.GetScaled(2f), Is.SameAs(scaled));
+            Assert.That(font.GetScaled(1f), Is.SameAs(font));
+            Assert.That(scaled.GetScaled(0.5f), Is.SameAs(font), "a scaled font scaled back is the loaded one");
+            Assert.That(font.GetScaled(4f), Is.SameAs(scaled.GetScaled(2f)), "factors multiply");
+        });
+    }
+
+    [Test]
+    public void GetScaled_KeepsTheStyle()
+    {
+        Font font = LoadScalable(FontStyle.Underline);
+
+        unsafe
+        {
+            Assert.That(TTF_GetFontStyle(font.GetScaled(2f)!.TtfFont), Is.EqualTo(TTF_FontStyleFlags.TTF_STYLE_UNDERLINE));
+        }
+    }
+
+    [TestCase(0f)]
+    [TestCase(-1f)]
+    [TestCase(float.NaN)]
+    [TestCase(float.PositiveInfinity)]
+    public void GetScaled_AFactorThatIsNotPositive_Throws(float factor)
+    {
+        Font font = LoadScalable();
+
+        Assert.That(() => font.GetScaled(factor), Throws.InstanceOf<ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void ReleaseFont_LoadedFont_ReleasesItsScaledFonts()
+    {
+        Font font = LoadScalable();
+        Font scaled = font.GetScaled(2f)!;
+
+        font.Dispose();
+        Font reloaded = LoadScalable();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reloaded.GetScaled(2f), Is.Not.SameAs(scaled));
+            Assert.That(() => scaled.Dispose(), Throws.Nothing, "released already, so nothing is closed twice");
+        });
+    }
+
+    private Font LoadScalable(FontStyle style = FontStyle.Normal)
+    {
+        return _fontSystem.Load(VariableFontPath, FontSize, style: style);
+    }
+
+    [Test]
+    public void ReleaseFont_ScaledFont_IsScaledAgainAfterwards()
+    {
+        Font font = LoadScalable();
+        Font scaled = font.GetScaled(2f)!;
+
+        scaled.Dispose();
+        scaled.Dispose();
+
+        Assert.That(font.GetScaled(2f), Is.Not.SameAs(scaled));
+    }
+
+    [Test]
     public void Measure_FractionalSize_DiffersFromTheNextWholeSize()
     {
         Font fractional = _fontSystem.Load(VariableFontPath, 14.67f);
@@ -268,6 +380,26 @@ public sealed class FontSystemTests
         finally
         {
             SDL_DestroySurface(surface);
+        }
+    }
+    [Test]
+    public void GetScaled_KeepsVariationsFeaturesAndScaledLetterSpacing()
+    {
+        Font plain = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")]);
+        Font tracked = _fontSystem.Load(VariableFontPath, FontSize, variations: [new FontVariation("wght", 600)], features: [new FontFeature("tnum")], letterSpacing: 1);
+
+        Font scaledPlain = plain.GetScaled(2f)!;
+        Font scaledTracked = tracked.GetScaled(2f)!;
+
+        unsafe
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(TTF_GetFontWeight(scaledTracked.TtfFont), Is.EqualTo(600));
+                Assert.That(scaledTracked.Measure("1111.11").Width, Is.EqualTo(scaledTracked.Measure("8888.88").Width));
+                Assert.That(scaledTracked.Measure("Hello").Width, Is.EqualTo(scaledPlain.Measure("Hello").Width + 10), "1 px at a scale of 2 after each of 5 characters");
+                Assert.That((scaledTracked.Variations, scaledTracked.Features, scaledTracked.LetterSpacing), Is.EqualTo((tracked.Variations, tracked.Features, 1f)));
+            });
         }
     }
 }
