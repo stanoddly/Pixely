@@ -12,6 +12,10 @@ public readonly record struct ResolutionChangedEventArgs(ShortSize OldSize, Shor
 
 public delegate void ResolutionChangedHandler(ResolutionChangedEventArgs eventArgs);
 
+public readonly record struct ScaleChangedEventArgs(float PixelDensity, float DisplayScale, ulong Timestamp);
+
+public delegate void ScaleChangedHandler(ScaleChangedEventArgs eventArgs);
+
 /// <summary>
 /// An SDL window: its events, size, input and dialogs. How its frames reach the screen is up to the derived window:
 /// <see cref="SwapchainWindow"/> presents them through a swapchain. Headless mode (Pixely.Headless) renders them into a texture
@@ -28,8 +32,13 @@ public abstract class Window : IDisposable
     internal ViewScope ViewScope { get; }
 
     private ShortSize _lastSize;
+    private float _lastPixelDensity;
+    private float _lastDisplayScale;
 
     public event ResolutionChangedHandler? ResolutionChanged;
+
+    // Raised when PixelDensity or DisplayScale changes, such as when the window moves to a display with another scale.
+    public event ScaleChangedHandler? ScaleChanged;
 
     internal Window(
         ViewScope viewScope,
@@ -46,6 +55,8 @@ public abstract class Window : IDisposable
         _platformInfo = platformInfo;
         CloseBehavior = closeBehavior;
         _lastSize = RenderSizeInPixels;
+        _lastPixelDensity = PixelDensity;
+        _lastDisplayScale = DisplayScale;
     }
 
     internal void OnPixelSizeChanged(ulong timestamp)
@@ -57,6 +68,88 @@ public abstract class Window : IDisposable
 
         _lastSize = newSize;
         ResolutionChanged?.Invoke(new ResolutionChangedEventArgs(oldSize, newSize, timestamp));
+    }
+
+    // SDL raises SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED when the display scale changes. A pixel density change comes with a pixel size
+    // change, so SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED checks as well.
+    internal void OnScaleChanged(ulong timestamp)
+    {
+        float pixelDensity = PixelDensity;
+        float displayScale = DisplayScale;
+        if (pixelDensity == _lastPixelDensity && displayScale == _lastDisplayScale)
+        {
+            return;
+        }
+
+        _lastPixelDensity = pixelDensity;
+        _lastDisplayScale = displayScale;
+        ScaleChanged?.Invoke(new ScaleChangedEventArgs(pixelDensity, displayScale, timestamp));
+    }
+
+    /// <summary>
+    /// Render pixels per unit of <see cref="Size"/>: <see cref="RenderSizeInPixels"/> divided by <see cref="Size"/>. It is 2 for a
+    /// window with <see cref="WindowConfig.HighPixelDensity"/> on a 200 % display on macOS, Wayland and in the browser, and 1 without
+    /// it. Windows and X11 size windows in pixels, so it is 1 there.
+    /// </summary>
+    public float PixelDensity
+    {
+        get
+        {
+            unsafe
+            {
+                return SDL_GetWindowPixelDensity(SdlWindow);
+            }
+        }
+    }
+
+    /// <summary>
+    /// How many render pixels the user wants a unit of content to take, such as a 1 px line. On a 200 % display it is 2 on Windows
+    /// and X11, and on macOS, Wayland and in the browser for a window with high pixel density; without it, those report 1, since the
+    /// compositor scales the window instead.
+    /// </summary>
+    public virtual float DisplayScale
+    {
+        get
+        {
+            unsafe
+            {
+                return SDL_GetWindowDisplayScale(SdlWindow);
+            }
+        }
+    }
+
+    /// <summary>The display SDL says the window is on: usually the one holding its centre. Main thread only.</summary>
+    public Display Display
+    {
+        get
+        {
+            DisplayService.ThrowIfNotMainThread();
+            SDL_DisplayID displayId;
+            unsafe
+            {
+                displayId = SDL_GetDisplayForWindow(SdlWindow);
+            }
+
+            if (displayId == 0)
+            {
+                throw new PixelyException($"SDL_GetDisplayForWindow failed: {SdlError.GetError()}");
+            }
+
+            return DisplayService.Read(displayId);
+        }
+    }
+
+    /// <summary>
+    /// Waits until the platform has applied the window's pending changes, such as a new <see cref="Size"/> or
+    /// <see cref="Position"/>. X11 and Wayland apply them later, so reading them right after setting them can return the old values.
+    /// Returns false when the wait timed out; the changes may still arrive later.
+    /// </summary>
+    public bool Sync()
+    {
+        unsafe
+        {
+            return SDL_SyncWindow(SdlWindow);
+        }
     }
 
     public ShortSize RenderSizeInPixels

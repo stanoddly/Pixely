@@ -19,8 +19,7 @@ internal sealed class StubWindowFactory : IWindowFactory
 
     public Window CreateWindow(ViewScope viewScope, GpuDevice? gpuDevice, PixelyFrameClock frameClock, WindowConfig config, PlatformInfo platformInfo)
     {
-        (uint width, uint height, SDL_WindowFlags windowFlags) = PixelyFactory.GetWindowCreationParameters(config);
-        return _pixelyFactory.CreateUnclaimedWindow(config.Title, width, height, windowFlags,
+        return _pixelyFactory.CreateUnclaimedWindow(PixelyFactory.GetWindowCreationParameters(config),
             (sdlWindow, sdlWindowId) => new StubWindow(_gpuDevice, viewScope, sdlWindow, sdlWindowId, frameClock, platformInfo, config.CloseBehavior));
     }
 }

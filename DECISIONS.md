@@ -2,6 +2,16 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-10: Windows have high pixel density by default
+
+`WindowConfig.HighPixelDensity` is on unless an app turns it off, so on a scaled display a window on macOS, Wayland and in the browser renders at the screen's pixels instead of its window size (`docs/window-rendering.md`).
+
+- Without it the compositor stretches the window to the screen with a filter the app does not pick, so text and sprites come out soft whatever the app draws. A fractional scale such as 150 % can never be pixel perfect that way.
+- Godot 4 (`display/window/dpi/allow_hidpi`) and Unity ("Mac Retina Support") are on by default too, so a game ported to Pixely gets the render size it expects.
+- Windows and X11 always size windows in pixels, so the default changes nothing there.
+
+Cost: on a scaled display an app that draws in render pixels gets twice as many on macOS, Wayland and in the browser, so content drawn at a fixed pixel size, such as `Pixely.Ui` at scale 1, looks half as big there as before. The app scales by `Window.DisplayScale` or turns the option off.
+
 ## 2026-11-09: Pixely binds XDL through XdlSharp, and the SDK picks XDL's native package by RID
 
 Pixely calls [XDL](https://github.com/stanoddly/XDL), a patched SDL 3.4, through the [XdlSharp](https://github.com/stanoddly/XDLSharp) bindings instead of ppy.SDL3-CS. The bindings are one package; XDL's runtime is one `XdlSharp.Native.<rid>` package per platform, and the SDK references the one for `RuntimeIdentifier`, or for the build host's portable RID when none is set (`docs/sdk.md`).

@@ -55,6 +55,10 @@ public sealed class OffscreenWindow : Window
 
     internal override bool IsOffscreen => true;
 
+    // The frame has the window's Size in pixels on every platform, so a game that scales by the display scale renders the same
+    // whatever displays the machine has.
+    public override float DisplayScale => 1;
+
     // There is always a frame to draw, whether or not the SDL window is shown.
     public override bool IsRenderable => true;
 
