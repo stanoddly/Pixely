@@ -1350,6 +1350,21 @@ public class PackageIntegrationTests
         });
     }
 
+    // The .NET SDK leaves a PrivateAssets="all" package out of a publish unless the reference says Publish="true". A build and dotnet run
+    // copy the libraries either way, so only a publish shows it.
+    [TestCase("linux-x64", new[] { "libXDL3.so", "libXDL3_image.so", "libXDL3_mixer.so", "libXDL3_ttf.so" })]
+    [TestCase("win-x64", new[] { "XDL3.dll", "XDL3_image.dll", "XDL3_mixer.dll", "XDL3_ttf.dll" })]
+    public async Task PublishForARuntimeIdentifierIncludesTheNativeLibraries(string runtimeIdentifier, string[] libraries)
+    {
+        string consumerDirectory = GetConsumerDirectory("HostedConsumer");
+        DeleteConsumerOutputs("HostedConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, runtimeIdentifier);
+
+        string publishDirectory = Path.Combine(consumerDirectory, "bin", "Release", "net11.0", runtimeIdentifier, "publish");
+        Assert.That(libraries.Where(library => !File.Exists(Path.Combine(publishDirectory, library))), Is.Empty);
+    }
+
     // The workload decision is made at evaluation, so the SDK sets WasmBuildNative there for a browser app that links XDL; the WebAssembly
     // SDK sets it only in its targets, which -getProperty does not run.
     [TestCase("HostedConsumer", "false", "true")]
