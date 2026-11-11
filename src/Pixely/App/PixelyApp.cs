@@ -1,4 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using Pixely.DependencyInjection;
 using Pixely.RenderOrchestration;
 using XdlSharp;
@@ -23,6 +26,9 @@ public class PixelyApp : IPixelyApp
 #if !BROWSER
     private readonly bool _pacesUndrawnFrames;
 #endif
+    private bool _runsLiveFrame;
+    private bool _ranLiveFrame;
+    private ExceptionDispatchInfo? _liveFrameFailure;
 
     internal PixelyApp(
         ServiceProvider serviceProvider,
@@ -55,8 +61,34 @@ public class PixelyApp : IPixelyApp
 
     public int Run()
     {
-        while (RunFrame())
+        GCHandle handle = GCHandle.Alloc(this);
+        try
         {
+            unsafe
+            {
+                if (!SDL_AddEventWatch(&WatchEvent, GCHandle.ToIntPtr(handle)))
+                {
+                    throw new PixelyException($"SDL_AddEventWatch failed: {SdlError.GetError()}");
+                }
+            }
+
+            try
+            {
+                while (RunFrame())
+                {
+                }
+            }
+            finally
+            {
+                unsafe
+                {
+                    SDL_RemoveEventWatch(&WatchEvent, GCHandle.ToIntPtr(handle));
+                }
+            }
+        }
+        finally
+        {
+            handle.Free();
         }
 
         return 0;
@@ -66,12 +98,70 @@ public class PixelyApp : IPixelyApp
     // requestAnimationFrame, calls this instead of Run, which never yields to its caller.
     public bool RunFrame()
     {
-        _frameTimingRecorder.BeginFrame();
-        // start the frame before applying queued stage transitions
-        _frameClock.StartFrame();
-        _stageManager.ApplyPendingTransition();
+        return RunFrame(live: false);
+    }
+
+    // On Windows, dragging or resizing a window runs the system's own loop inside SDL_PollEvent until the mouse button is released,
+    // and so does a live resize on macOS, which would stop every window's frames with it. All through it SDL sends an expose event
+    // with data1 set to 1, a live resize update, on a timer, which only an event watch hears in time. Each one runs a live frame. It
+    // runs inside SDL_PollEvent of the frame that stopped, so it takes only the events already queued. None runs elsewhere, such as
+    // in a modal dialog an event handler opened, inside another, or once a quit is requested. A stage transition it requests is
+    // applied right after it, as it would be before the events that follow. An exception cannot cross the native callback, so it
+    // is kept and thrown once the stopped frame's event processing ends, and no further live frame runs.
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe byte WatchEvent(nint userdata, SDL_Event* evt)
+    {
+        if ((SDL_EventType)evt->type == SDL_EventType.SDL_EVENT_WINDOW_EXPOSED && evt->window.data1 == 1)
+        {
+            PixelyApp app = (PixelyApp)GCHandle.FromIntPtr(userdata).Target!;
+            if (app._eventService.IsPolling && !app._runsLiveFrame && app._liveFrameFailure == null && !app._appControl.QuitRequested)
+            {
+                app._runsLiveFrame = true;
+                try
+                {
+                    app.RunFrame(live: true);
+                    app._stageManager.ApplyPendingTransition();
+                }
+                catch (Exception exception)
+                {
+                    app._liveFrameFailure = ExceptionDispatchInfo.Capture(exception);
+                }
+                finally
+                {
+                    app._runsLiveFrame = false;
+                    app._ranLiveFrame = true;
+                }
+            }
+        }
+
+        return 1;
+    }
+
+    private bool RunFrame(bool live)
+    {
+        StartFrame();
         // then process events
-        _eventService.Process();
+        if (live)
+        {
+            _eventService.ProcessQueued();
+        }
+        else
+        {
+            _eventService.Process();
+
+            if (_liveFrameFailure is { } failure)
+            {
+                _liveFrameFailure = null;
+                failure.Throw();
+            }
+
+            // A live frame ran since this one started, so this one starts again after it, with its own frame number and time.
+            if (_ranLiveFrame)
+            {
+                _ranLiveFrame = false;
+                StartFrame();
+            }
+        }
 
         Update(_updatables);
         _frameTimingRecorder.EndUpdate();
@@ -89,8 +179,9 @@ public class PixelyApp : IPixelyApp
         // the display. Without this wait the loop would spin, and every update would record GPU uploads for frames nobody
         // sees. An event, such as the window being restored, ends the wait early and stays queued for the next frame. The
         // browser needs no wait: requestAnimationFrame paces its frames. An isolated app, headless or under test, needs none either:
-        // its game time steps by a fixed amount per frame, and a test with a hidden window would otherwise wait every frame.
-        if (!drawn && _pacesUndrawnFrames)
+        // its game time steps by a fixed amount per frame, and a test with a hidden window would otherwise wait every frame. A live frame
+        // inside the system's loop must not wait, because waiting asks the platform for events, and the system's loop paces it.
+        if (!drawn && _pacesUndrawnFrames && !live)
         {
             unsafe
             {
@@ -106,6 +197,14 @@ public class PixelyApp : IPixelyApp
     public void Dispose()
     {
         ServiceProvider.Dispose();
+    }
+
+    private void StartFrame()
+    {
+        _frameTimingRecorder.BeginFrame();
+        // start the frame before applying queued stage transitions
+        _frameClock.StartFrame();
+        _stageManager.ApplyPendingTransition();
     }
 
     private static void Update(ServiceRegistry<IUpdatable> updatables)
