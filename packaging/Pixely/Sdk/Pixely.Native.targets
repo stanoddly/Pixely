@@ -5,6 +5,8 @@
       Every project gets it, libraries included: the restore evaluation of a test project imports no package props, so it still
       sees the OutputType Library that Microsoft.NET.Test.Sdk later turns into Exe. PrivateAssets keeps the package out of a packed
       library's dependencies, and a library's RID-agnostic reference build has no RuntimeIdentifier for PIXELY0015 to check.
+      The .NET SDK reads PrivateAssets="all" as Publish="false" unless Publish is set, so without Publish="true" a publish would
+      leave the native libraries out.
       Evaluated after the project body, so a RuntimeIdentifier set there counts. Consumers get this file from Sdk.targets; repository tests and
       tutorials import it from their Directory.Build.targets. _PixelySkipNativePackage is for the SDK's own browser fixtures,
       which cannot relink the runtime; it is not a supported setting.
@@ -22,7 +24,7 @@
 
     <!-- Implicit with its own version, as the SDK's reference to Pixely, so central package management needs no entry for it. -->
     <ItemGroup Condition="'$(_PixelyNativeApplies)' == 'true' and '$(_PixelyNativeRuntimeIdentifierSupported)' == 'true'">
-        <PackageReference Include="$(_PixelyNativePackageId)" Version="[$(PixelyXdlSharpVersion)]" PrivateAssets="all" IsImplicitlyDefined="true" />
+        <PackageReference Include="$(_PixelyNativePackageId)" Version="[$(PixelyXdlSharpVersion)]" PrivateAssets="all" Publish="true" IsImplicitlyDefined="true" />
     </ItemGroup>
 
     <Target Name="_PixelyRequireSupportedNativeRuntimeIdentifier" BeforeTargets="CollectPackageReferences;BeforeBuild"
