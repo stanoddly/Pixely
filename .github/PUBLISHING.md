@@ -10,7 +10,7 @@ The merged pull request receives two comments. The publish job posts the version
 
 Versions use the form `0.0.N`. The source commit's absolute first-parent height plus the fixed migration offset `-281` determines `N`, making the first automatically published `main` commit version `0.0.9`; every later first-parent commit increments `N`. The package repository metadata records the complete source commit.
 
-Cloudflare Pages hosts the service index at `https://pixely.pages.dev/index.json`. Its resource URLs point to the public `pixely` Backblaze B2 bucket, so adding packages or versions does not require another Pages deployment.
+Cloudflare Pages hosts the service index at `https://nuget.stanoddly.dev/index.json`. Its resource URLs point to the public `pixely` Backblaze B2 bucket, so adding packages or versions does not require another Pages deployment.
 
 ## B2 configuration
 
