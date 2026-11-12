@@ -1,3 +1,4 @@
+using System.Numerics;
 using Pixely.App;
 using Pixely.Gpu;
 using Pixely.Shaders;
@@ -49,6 +50,35 @@ public class StubComputePassTests
         computePass.BindComputePipeline(pipeline);
 
         Assert.Throws<InvalidOperationException>(() => computePass.Dispatch(4, 1, 1));
+    }
+
+    [Test]
+    public void Build_PassesTheStructuredStorageBufferSlotsOfTheShader()
+    {
+        using IPixelyApp app = BuildApp();
+        StubGpuDevice device = app.GetRequiredService<StubGpuDevice>();
+
+        // The fixture's only read-write buffer, slot 0, is an RWStructuredBuffer<int>.
+        using ComputePipeline pipeline = app.GetRequiredService<ComputePipelineBuilder>().Build(app.GetRequiredService<IComputeShaderLoader>().Load("shaders/fill"));
+
+        Assert.That(device.GetStructuredStorageBuffers(pipeline), Is.EqualTo(((byte)0, (byte)0b1)));
+    }
+
+    [Test]
+    public void CreateStorageBuffer_PassesTheElementSizeAsTheStride()
+    {
+        using IPixelyApp app = BuildApp();
+        StubGpuDevice device = app.GetRequiredService<StubGpuDevice>();
+        GpuMemorySystem gpuMemorySystem = app.GetRequiredService<GpuMemorySystem>();
+
+        using GpuStorageBuffer<Matrix4x4> empty = gpuMemorySystem.CreateStorageBuffer<Matrix4x4>(4, StorageBufferUsage.ComputeStorageWrite);
+        using GpuStorageBuffer<Vector3> uploaded = gpuMemorySystem.CreateStorageBuffer<Vector3>([Vector3.One]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(device.GetBufferStride(empty), Is.EqualTo(64u));
+            Assert.That(device.GetBufferStride(uploaded), Is.EqualTo(12u));
+        });
     }
 
     private static IPixelyApp BuildApp()

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Pixely.Content;
 using Pixely.Utilities;
 using XdlSharp;
@@ -93,7 +94,7 @@ public class GpuMemorySystem: ICopyPass
             throw new ArgumentException($"A storage buffer needs one or more of {allUsages}, but the usage is '{usage}'.", nameof(usage));
         }
 
-        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore((SDL_GPUBufferUsageFlags)usage, sizeBytes);
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore((SDL_GPUBufferUsageFlags)usage, sizeBytes, (uint)Unsafe.SizeOf<T>());
 
         GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, length, usage);
         _gpuDevice.RegisterStorageBuffer(storageBuffer);

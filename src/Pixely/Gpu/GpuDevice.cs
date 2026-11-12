@@ -243,7 +243,7 @@ public abstract class GpuDevice : IDisposable
     public GpuVertexBuffer<TVertexType> CreateVertexBuffer<TVertexType>(int length) where TVertexType: unmanaged, IVertexType
     {
         uint sizeBytes = (uint)(Unsafe.SizeOf<TVertexType>() * length);
-        Pointer<SDL_GPUBuffer> handle = CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes);
+        Pointer<SDL_GPUBuffer> handle = CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes, 0);
 
         GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(this, handle, length);
         RegisterVertexBuffer(vertexBuffer);
@@ -326,11 +326,14 @@ public abstract class GpuDevice : IDisposable
     internal abstract CommandBuffer AcquireCommandBufferCore();
     internal abstract Pointer<SDL_GPUSampler> CreateSamplerCore(SamplerConfig config);
     internal abstract Pointer<SDL_GPUTexture> CreateTextureCore(TextureType type, ShortSize size, uint layerCount, TextureFormat format, TextureUsage usage, SampleCount sampleCount);
-    internal abstract Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes);
+    // A storage buffer's stride is the size of its element, which Direct3D 12 needs for a StructuredBuffer<T> slot; any other buffer passes 0.
+    internal abstract Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes, uint stride);
     internal abstract Pointer<SDL_GPUTransferBuffer> CreateUploadTransferBufferCore(uint sizeInBytes);
-    internal abstract Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo);
+    // The structured masks have bit i set when storage buffer slot i is a StructuredBuffer<T> or RWStructuredBuffer<T>, see ShaderBindingLayout.
+    internal abstract Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo, byte structuredStorageBuffers);
     internal abstract Pointer<SDL_GPUGraphicsPipeline> CreateGraphicsPipelineCore(in SDL_GPUGraphicsPipelineCreateInfo createInfo);
-    internal abstract Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(in SDL_GPUComputePipelineCreateInfo createInfo);
+    internal abstract Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(
+        in SDL_GPUComputePipelineCreateInfo createInfo, byte structuredReadOnlyStorageBuffers, byte structuredReadWriteStorageBuffers);
     internal abstract void ReleaseTextureCore(Pointer<SDL_GPUTexture> texture);
     internal abstract void ReleaseBufferCore(Pointer<SDL_GPUBuffer> buffer);
     // Called with a null transfer buffer too, which releases nothing.

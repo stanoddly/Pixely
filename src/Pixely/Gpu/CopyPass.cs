@@ -58,7 +58,7 @@ internal abstract class CopyPass
         }
 
         uint sizeBytes = (uint)(Unsafe.SizeOf<TVertexType>() * vertices.Length);
-        Pointer<SDL_GPUBuffer> rawVertexBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes);
+        Pointer<SDL_GPUBuffer> rawVertexBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_VERTEX, sizeBytes, 0);
         UploadToNewBuffer(vertices, rawVertexBuffer);
 
         GpuVertexBuffer<TVertexType> vertexBuffer = new GpuVertexBuffer<TVertexType>(_gpuDevice, rawVertexBuffer, vertices.Length);
@@ -111,7 +111,7 @@ internal abstract class CopyPass
         }
 
         uint sizeBytes = (uint)(Unsafe.SizeOf<TIndexType>() * indices.Length);
-        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_INDEX, sizeBytes);
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_INDEX, sizeBytes, 0);
         UploadToNewBuffer(indices, rawBuffer);
 
         GpuIndexBuffer indexBuffer = new GpuIndexBuffer(_gpuDevice, rawBuffer, indices.Length, elementSize);
@@ -158,7 +158,7 @@ internal abstract class CopyPass
     public GpuStorageBuffer<T> CreateStorageBuffer<T>(ReadOnlySpan<T> data) where T : unmanaged
     {
         uint sizeBytes = GpuStorageBuffer<T>.ValidateAllocationSize(data.Length, nameof(data));
-        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, sizeBytes);
+        Pointer<SDL_GPUBuffer> rawBuffer = _gpuDevice.CreateBufferCore(SDL_GPUBufferUsageFlags.SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, sizeBytes, (uint)Unsafe.SizeOf<T>());
         UploadToNewBuffer(data, rawBuffer);
 
         GpuStorageBuffer<T> storageBuffer = new GpuStorageBuffer<T>(_gpuDevice, rawBuffer, data.Length, StorageBufferUsage.GraphicsStorageRead);

@@ -1266,6 +1266,10 @@ public class SdlangCompiler
         Dictionary<int, uint> storageBufferElementSizesByRegisterIndex = new();
         Dictionary<int, uint> readWriteStorageBufferElementSizesByRegisterIndex = new();
 
+        // The registers of StructuredBuffer<T> and RWStructuredBuffer<T>, which Direct3D 12 reads through a structured view, as opposed to a ByteAddressBuffer's raw one.
+        HashSet<int> structuredStorageBufferRegisterIndices = new();
+        HashSet<int> readWriteStructuredStorageBufferRegisterIndices = new();
+
         List<ResourceBinding> resourceBindings = new();
 
         HashSet<string> usedParameterNames = GetUsedParameterNames(selectedEntryPoint);
@@ -1309,15 +1313,26 @@ public class SdlangCompiler
                         {
                             // A byte address buffer has no element type, so its size stays 0 and the runtime skips the element-size check.
                             uint elementSize = ComputeStructuredBufferElementSize(paramType);
+                            bool isStructured = baseShape == "structuredBuffer";
                             if (isReadWrite)
                             {
                                 readWriteStorageBufferElementSizesByRegisterIndex[index] = elementSize;
+                                if (isStructured)
+                                {
+                                    readWriteStructuredStorageBufferRegisterIndices.Add(index);
+                                }
+
                                 readWriteStorageBuffers++;
                                 resourceBindings.Add(new ResourceBinding(paramName, ResourceType.ReadWriteStorageBuffer, space, index));
                             }
                             else
                             {
                                 storageBufferElementSizesByRegisterIndex[index] = elementSize;
+                                if (isStructured)
+                                {
+                                    structuredStorageBufferRegisterIndices.Add(index);
+                                }
+
                                 storageBuffers++;
                                 resourceBindings.Add(new ResourceBinding(paramName, ResourceType.StorageBuffer, space, index));
                             }
@@ -1369,7 +1384,9 @@ public class SdlangCompiler
             new ShaderBindingCounts(samplers, storageTextures, storageBuffers, readWriteStorageTextures, readWriteStorageBuffers),
             shaderUniformSlots,
             BuildStorageBufferElementSizes(storageBufferElementSizesByRegisterIndex, readOnlyTextureCount),
-            BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesByRegisterIndex, readWriteStorageTextures));
+            BuildStorageBufferElementSizes(readWriteStorageBufferElementSizesByRegisterIndex, readWriteStorageTextures),
+            BuildStructuredStorageBufferSlots(structuredStorageBufferRegisterIndices, readOnlyTextureCount),
+            BuildStructuredStorageBufferSlots(readWriteStructuredStorageBufferRegisterIndices, readWriteStorageTextures));
         return new ShaderReflection(stage, shaderBindingLayout, threadCountX, threadCountY, threadCountZ, resourceBindings);
     }
 
@@ -1694,6 +1711,18 @@ public class SdlangCompiler
         elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex + 2, out uint slot2);
         elementSizesByRegisterIndex.TryGetValue(firstStorageBufferRegisterIndex + 3, out uint slot3);
         return new StorageBufferElementSizes((ushort)slot0, (ushort)slot1, (ushort)slot2, (ushort)slot3);
+    }
+
+    // Bit i set: storage buffer slot i is structured. A slot is its register minus the textures before the storage buffers, as in BuildStorageBufferElementSizes.
+    private static byte BuildStructuredStorageBufferSlots(HashSet<int> structuredRegisterIndices, int firstStorageBufferRegisterIndex)
+    {
+        int slots = 0;
+        foreach (int registerIndex in structuredRegisterIndices)
+        {
+            slots |= 1 << (registerIndex - firstStorageBufferRegisterIndex);
+        }
+
+        return (byte)slots;
     }
 
     private static string DescribeStage(ShaderStageDto stage) => stage switch
