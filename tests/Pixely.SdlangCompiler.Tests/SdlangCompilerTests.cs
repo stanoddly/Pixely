@@ -1250,6 +1250,7 @@ public class SdlangCompilerTests
         {
             Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(16u));
             Assert.That(metadata.Fragment.BindingLayout.StorageBufferElementSizes.Slot2, Is.EqualTo(0u));
+            Assert.That(metadata.Fragment.BindingLayout.StructuredStorageBuffers, Is.EqualTo((byte)0b1));
         });
     }
 
@@ -1380,8 +1381,52 @@ public class SdlangCompilerTests
             Assert.That(metadata.BindingLayout.BindingCounts.NumReadWriteStorageTextures, Is.EqualTo(0));
             Assert.That(metadata.BindingLayout.StorageBufferElementSizes.Slot0, Is.EqualTo(0u));
             Assert.That(metadata.BindingLayout.ReadWriteStorageBufferElementSizes.Slot0, Is.EqualTo(0u));
+            Assert.That(metadata.BindingLayout.StructuredStorageBuffers, Is.EqualTo((byte)0));
+            Assert.That(metadata.BindingLayout.ReadWriteStructuredStorageBuffers, Is.EqualTo((byte)0));
         });
         AssertGeneratedTargets(metadata.Shaders, "byte_address", "computeMain");
+    }
+
+    // Structured and byte address buffers alternate behind textures in both spaces. 'weights' has a matrix element, whose
+    // size the reflection cannot tell, so only its shape can mark its slot structured.
+    private const string ComputeShaderWithStructuredAndByteAddressBuffers = """
+                                                                            Texture2D<float4> source : register(t0, space0);
+                                                                            SamplerState sourceSampler : register(s0, space0);
+                                                                            StructuredBuffer<float4x4> weights : register(t1, space0);
+                                                                            ByteAddressBuffer raw : register(t2, space0);
+                                                                            StructuredBuffer<float> biases : register(t3, space0);
+                                                                            RWTexture2D<float4> outputTexture : register(u0, space1);
+                                                                            RWByteAddressBuffer rawTotals : register(u1, space1);
+                                                                            RWStructuredBuffer<uint> counts : register(u2, space1);
+
+                                                                            [numthreads(8, 8, 1)]
+                                                                            [shader("compute")]
+                                                                            void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+                                                                            {
+                                                                                float4 sample = source.SampleLevel(sourceSampler, float2(dispatchThreadID.xy) / 8.0, 0.0);
+                                                                                outputTexture[dispatchThreadID.xy] = mul(weights[0], sample) + biases[0] + asfloat(raw.Load(0));
+                                                                                rawTotals.Store(0, asuint(sample.x));
+                                                                                counts[0] += 1;
+                                                                            }
+                                                                            """;
+
+    [Test]
+    public void CompileShader_ComputeStructuredAndByteAddressBuffers_MarksStructuredSlots()
+    {
+        string shaderPath = CreateTemporaryShaderFile(ComputeShaderWithStructuredAndByteAddressBuffers);
+        SdlangCompiler compiler = SdlangCompilerTestFactory.Create();
+        compiler.Compile([shaderPath], force: true);
+
+        string json = File.ReadAllText(Path.ChangeExtension(Path.Combine(_testDir, ".generated", Path.GetFileName(shaderPath)), ".metadata.json"));
+        ComputeShaderMetadataDto? metadata = JsonSerializer.Deserialize(json, ShaderMetadataJsonContext.Default.ComputeShaderMetadataDto);
+
+        // Read-only slots 0 and 2 are structured and slot 1 is raw; read-write slot 0 is raw and slot 1 structured.
+        Assert.That(metadata, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.BindingLayout.StructuredStorageBuffers, Is.EqualTo((byte)0b101));
+            Assert.That(metadata.BindingLayout.ReadWriteStructuredStorageBuffers, Is.EqualTo((byte)0b10));
+        });
     }
 
     private const string FragmentShaderWithTextureArray = """

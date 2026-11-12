@@ -124,7 +124,7 @@ public class ShaderLoader : IShaderLoader
                     num_storage_textures = (uint)bindingLayout.NumStorageTextures()
                 };
 
-                return new GraphicsShader(_gpuDevice.CreateShaderCore(createInfo), bindingLayout);
+                return new GraphicsShader(_gpuDevice.CreateShaderCore(createInfo, bindingLayout.StructuredStorageBuffers), bindingLayout);
             }
         }
     }

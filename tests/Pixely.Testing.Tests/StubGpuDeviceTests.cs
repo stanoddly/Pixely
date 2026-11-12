@@ -1,12 +1,28 @@
 using System.Numerics;
+using Pixely.App;
 using Pixely.Content;
 using Pixely.Gpu;
+using Pixely.Shaders;
 
 namespace Pixely.Testing.Tests;
 
 public class StubGpuDeviceTests
 {
     private static readonly PositionVertex[] Vertices = [new(new Vector3(1, 2, 3)), new(new Vector3(4, 5, 6))];
+
+    [Test]
+    public void LoadGraphicsShaderProgram_PassesEachStagesStructuredStorageBufferSlots()
+    {
+        PixelyAppBuilder builder = TestApp.CreateBuilder();
+        builder.UseDefaultContent();
+        using IPixelyApp app = builder.Build();
+        StubGpuDevice device = app.GetRequiredService<StubGpuDevice>();
+
+        // The fixture's vertex shader has one structured storage buffer, and its fragment shader structured slots 0 and 2 around a raw slot 1.
+        using GraphicsShaderProgram program = app.GetRequiredService<IShaderLoader>().LoadGraphicsShaderProgram("shaders/structured");
+
+        Assert.That(device.GetStructuredStorageBuffers(program), Is.EqualTo(((byte)0b1, (byte)0b101)));
+    }
 
     [Test]
     public void ReadVertexBuffer_BeforeTheUploadsAreSubmitted_ReadsZeros()

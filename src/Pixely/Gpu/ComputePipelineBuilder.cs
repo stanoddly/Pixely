@@ -39,7 +39,7 @@ public class ComputePipelineBuilder
                     threadcount_z = computeShader.ThreadCountZ
                 };
 
-                Pointer<SDL_GPUComputePipeline> pipeline = _gpuDevice.CreateComputePipelineCore(createInfo);
+                Pointer<SDL_GPUComputePipeline> pipeline = _gpuDevice.CreateComputePipelineCore(createInfo, bindingLayout.StructuredStorageBuffers, bindingLayout.ReadWriteStructuredStorageBuffers);
 
                 ComputePipeline computePipeline = new ComputePipeline(_gpuDevice, pipeline, bindingLayout, computeShader.ThreadCountX, computeShader.ThreadCountY, computeShader.ThreadCountZ);
                 _gpuDevice.RegisterComputePipeline(computePipeline);

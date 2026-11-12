@@ -135,19 +135,33 @@ internal sealed class SdlGpuDevice : GpuDevice
         }
     }
 
-    internal override Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes)
+    internal override Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes, uint stride)
     {
-        unsafe
+        SDL_PropertiesID props = stride == 0 ? default : CreateProperties();
+        try
         {
-            SDL_GPUBufferCreateInfo createInfo = new SDL_GPUBufferCreateInfo
+            if (stride != 0)
             {
-                usage = usage,
-                size = sizeInBytes
-            };
+                SetNumberProperty(props, XDL_PROP_GPU_BUFFER_CREATE_STRIDE_NUMBER, stride);
+            }
 
-            Pointer<SDL_GPUBuffer> buffer = SDL_CreateGPUBuffer(Pointer, &createInfo);
-            SdlError.ThrowOnNull(buffer);
-            return buffer;
+            unsafe
+            {
+                SDL_GPUBufferCreateInfo createInfo = new SDL_GPUBufferCreateInfo
+                {
+                    usage = usage,
+                    size = sizeInBytes,
+                    props = props
+                };
+
+                Pointer<SDL_GPUBuffer> buffer = SDL_CreateGPUBuffer(Pointer, &createInfo);
+                SdlError.ThrowOnNull(buffer);
+                return buffer;
+            }
+        }
+        finally
+        {
+            DestroyProperties(props);
         }
     }
 
@@ -166,13 +180,21 @@ internal sealed class SdlGpuDevice : GpuDevice
         }
     }
 
-    internal override Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo)
+    internal override Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo, byte structuredStorageBuffers)
     {
-        unsafe
+        SDL_PropertiesID props = structuredStorageBuffers == 0 ? default : CreateProperties();
+        try
         {
-            fixed (SDL_GPUShaderCreateInfo* createInfoPointer = &createInfo)
+            if (structuredStorageBuffers != 0)
             {
-                SDL_GPUShader* shader = SDL_CreateGPUShader(Pointer, createInfoPointer);
+                SetNumberProperty(props, XDL_PROP_GPU_SHADER_CREATE_STRUCTURED_STORAGE_BUFFERS_NUMBER, structuredStorageBuffers);
+            }
+
+            SDL_GPUShaderCreateInfo createInfoWithProperties = createInfo;
+            createInfoWithProperties.props = props;
+            unsafe
+            {
+                SDL_GPUShader* shader = SDL_CreateGPUShader(Pointer, &createInfoWithProperties);
                 if (shader == null)
                 {
                     string stageName = createInfo.stage == SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX ? "vertex" : "fragment";
@@ -181,6 +203,10 @@ internal sealed class SdlGpuDevice : GpuDevice
 
                 return shader;
             }
+        }
+        finally
+        {
+            DestroyProperties(props);
         }
     }
 
@@ -201,13 +227,24 @@ internal sealed class SdlGpuDevice : GpuDevice
         }
     }
 
-    internal override Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(in SDL_GPUComputePipelineCreateInfo createInfo)
+    internal override Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(
+        in SDL_GPUComputePipelineCreateInfo createInfo, byte structuredReadOnlyStorageBuffers, byte structuredReadWriteStorageBuffers)
     {
-        unsafe
+        bool hasStructured = structuredReadOnlyStorageBuffers != 0 || structuredReadWriteStorageBuffers != 0;
+        SDL_PropertiesID props = hasStructured ? CreateProperties() : default;
+        try
         {
-            fixed (SDL_GPUComputePipelineCreateInfo* createInfoPointer = &createInfo)
+            if (hasStructured)
             {
-                SDL_GPUComputePipeline* pipeline = SDL_CreateGPUComputePipeline(Pointer, createInfoPointer);
+                SetNumberProperty(props, XDL_PROP_GPU_COMPUTEPIPELINE_CREATE_STRUCTURED_READONLY_STORAGE_BUFFERS_NUMBER, structuredReadOnlyStorageBuffers);
+                SetNumberProperty(props, XDL_PROP_GPU_COMPUTEPIPELINE_CREATE_STRUCTURED_READWRITE_STORAGE_BUFFERS_NUMBER, structuredReadWriteStorageBuffers);
+            }
+
+            SDL_GPUComputePipelineCreateInfo createInfoWithProperties = createInfo;
+            createInfoWithProperties.props = props;
+            unsafe
+            {
+                SDL_GPUComputePipeline* pipeline = SDL_CreateGPUComputePipeline(Pointer, &createInfoWithProperties);
                 if (pipeline == null)
                 {
                     throw new PixelyInitializationException($"SDL_CreateGPUComputePipeline failed: {SdlError.GetError()}");
@@ -215,6 +252,34 @@ internal sealed class SdlGpuDevice : GpuDevice
 
                 return pipeline;
             }
+        }
+        finally
+        {
+            DestroyProperties(props);
+        }
+    }
+
+    // The properties of a create info that needs some. The caller destroys them with DestroyProperties.
+    private static SDL_PropertiesID CreateProperties()
+    {
+        SDL_PropertiesID props = SDL_CreateProperties();
+        if (props == default)
+        {
+            SdlError.Throw(nameof(SDL_CreateProperties));
+        }
+
+        return props;
+    }
+
+    private static void SetNumberProperty(SDL_PropertiesID props, ReadOnlySpan<byte> name, long value) =>
+        SdlError.ThrowOnFalse(SDL_SetNumberProperty(props, name, value), nameof(SDL_SetNumberProperty));
+
+    // Nothing to destroy for a create info that needed no properties.
+    private static void DestroyProperties(SDL_PropertiesID props)
+    {
+        if (props != default)
+        {
+            SDL_DestroyProperties(props);
         }
     }
 

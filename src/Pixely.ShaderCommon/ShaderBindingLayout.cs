@@ -5,11 +5,15 @@ namespace Pixely.ShaderCommon;
 
 public record struct StorageBufferElementSizes(ushort Slot0, ushort Slot1, ushort Slot2, ushort Slot3);
 
+// StructuredStorageBuffers and ReadWriteStructuredStorageBuffers have bit i set when storage buffer slot i is a StructuredBuffer<T> or RWStructuredBuffer<T>
+// rather than a ByteAddressBuffer, so Direct3D 12 binds it through a structured view.
 public readonly record struct ShaderBindingLayout(
     ShaderBindingCounts BindingCounts,
     ShaderUniformSlotSizes UniformSlotSizes,
     StorageBufferElementSizes StorageBufferElementSizes = default,
-    StorageBufferElementSizes ReadWriteStorageBufferElementSizes = default)
+    StorageBufferElementSizes ReadWriteStorageBufferElementSizes = default,
+    byte StructuredStorageBuffers = 0,
+    byte ReadWriteStructuredStorageBuffers = 0)
 {
     public int NumSamplers() => BindingCounts.NumSamplers;
     public int NumStorageTextures() => BindingCounts.NumStorageTextures;

@@ -20,6 +20,11 @@ public sealed class StubGpuDevice : GpuDevice
     private readonly Dictionary<nint, byte[]> _bufferContents = new();
     private readonly Dictionary<nint, uint> _textureLayerCounts = new();
     private readonly Dictionary<(nint Texture, uint Layer), byte[]> _textureContents = new();
+
+    // What Direct3D 12 needs for structured views: each buffer's stride, and each shader's and compute pipeline's structured storage buffer slots.
+    private readonly Dictionary<nint, uint> _bufferStrides = new();
+    private readonly Dictionary<nint, byte> _shaderStructuredStorageBuffers = new();
+    private readonly Dictionary<nint, (byte ReadOnly, byte ReadWrite)> _computePipelineStructuredStorageBuffers = new();
     private long _lastHandle;
 
     private StubGpuDevice(StubGpuDeviceOptions options) : base("stub", null)
@@ -213,27 +218,70 @@ public sealed class StubGpuDevice : GpuDevice
         return texture;
     }
 
-    internal override Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes)
+    internal override Pointer<SDL_GPUBuffer> CreateBufferCore(SDL_GPUBufferUsageFlags usage, uint sizeInBytes, uint stride)
     {
         Pointer<SDL_GPUBuffer> buffer = NextHandle<SDL_GPUBuffer>();
         lock (_lock)
         {
             _bufferContents.Add(HandleOf(buffer), new byte[sizeInBytes]);
+            _bufferStrides.Add(HandleOf(buffer), stride);
         }
 
         return buffer;
     }
 
+    internal uint GetBufferStride(GpuStorageBuffer buffer)
+    {
+        lock (_lock)
+        {
+            return _bufferStrides[HandleOf(buffer.SdlBuffer)];
+        }
+    }
+
+    internal (byte Vertex, byte Fragment) GetStructuredStorageBuffers(GraphicsShaderProgram program)
+    {
+        lock (_lock)
+        {
+            return (_shaderStructuredStorageBuffers[HandleOf(program.VertexShader.Pointer)], _shaderStructuredStorageBuffers[HandleOf(program.FragmentShader.Pointer)]);
+        }
+    }
+
+    internal (byte ReadOnly, byte ReadWrite) GetStructuredStorageBuffers(ComputePipeline pipeline)
+    {
+        lock (_lock)
+        {
+            return _computePipelineStructuredStorageBuffers[HandleOf(pipeline.Pointer)];
+        }
+    }
+
     // Stub copy passes keep their uploads themselves, so nothing writes to a transfer buffer.
     internal override Pointer<SDL_GPUTransferBuffer> CreateUploadTransferBufferCore(uint sizeInBytes) => NextHandle<SDL_GPUTransferBuffer>();
 
-    internal override Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo) => NextHandle<SDL_GPUShader>();
+    internal override Pointer<SDL_GPUShader> CreateShaderCore(in SDL_GPUShaderCreateInfo createInfo, byte structuredStorageBuffers)
+    {
+        Pointer<SDL_GPUShader> shader = NextHandle<SDL_GPUShader>();
+        lock (_lock)
+        {
+            _shaderStructuredStorageBuffers.Add(HandleOf(shader), structuredStorageBuffers);
+        }
+
+        return shader;
+    }
 
     internal override Pointer<SDL_GPUGraphicsPipeline> CreateGraphicsPipelineCore(in SDL_GPUGraphicsPipelineCreateInfo createInfo) =>
         NextHandle<SDL_GPUGraphicsPipeline>();
 
-    internal override Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(in SDL_GPUComputePipelineCreateInfo createInfo) =>
-        NextHandle<SDL_GPUComputePipeline>();
+    internal override Pointer<SDL_GPUComputePipeline> CreateComputePipelineCore(
+        in SDL_GPUComputePipelineCreateInfo createInfo, byte structuredReadOnlyStorageBuffers, byte structuredReadWriteStorageBuffers)
+    {
+        Pointer<SDL_GPUComputePipeline> pipeline = NextHandle<SDL_GPUComputePipeline>();
+        lock (_lock)
+        {
+            _computePipelineStructuredStorageBuffers.Add(HandleOf(pipeline), (structuredReadOnlyStorageBuffers, structuredReadWriteStorageBuffers));
+        }
+
+        return pipeline;
+    }
 
     internal override void ReleaseTextureCore(Pointer<SDL_GPUTexture> texture)
     {
@@ -257,6 +305,7 @@ public sealed class StubGpuDevice : GpuDevice
         lock (_lock)
         {
             _bufferContents.Remove(HandleOf(buffer));
+            _bufferStrides.Remove(HandleOf(buffer));
         }
     }
 
@@ -270,6 +319,10 @@ public sealed class StubGpuDevice : GpuDevice
 
     internal override void ReleaseShaderCore(Pointer<SDL_GPUShader> shader)
     {
+        lock (_lock)
+        {
+            _shaderStructuredStorageBuffers.Remove(HandleOf(shader));
+        }
     }
 
     internal override void ReleaseGraphicsPipelineCore(Pointer<SDL_GPUGraphicsPipeline> pipeline)
@@ -278,6 +331,10 @@ public sealed class StubGpuDevice : GpuDevice
 
     internal override void ReleaseComputePipelineCore(Pointer<SDL_GPUComputePipeline> pipeline)
     {
+        lock (_lock)
+        {
+            _computePipelineStructuredStorageBuffers.Remove(HandleOf(pipeline));
+        }
     }
 
     // The stub finishes work as it is submitted.
