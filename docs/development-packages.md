@@ -3,7 +3,7 @@
 Every `main` commit is available from the public Pixely development feed as soon as it is packed, before its cross-platform validation finishes:
 
 ```text
-https://pixely.pages.dev/index.json
+https://nuget.stanoddly.dev/index.json
 ```
 
 The packages use versions in the form `0.0.N`. Although they do not have a suffix, every package obtained from this feed is a development build until that exact version is published to nuget.org.
@@ -16,7 +16,7 @@ Add the development feed alongside nuget.org:
   <packageSources>
     <clear />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-    <add key="pixely-development" value="https://pixely.pages.dev/index.json" protocolVersion="3" />
+    <add key="pixely-development" value="https://nuget.stanoddly.dev/index.json" protocolVersion="3" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="nuget.org">
