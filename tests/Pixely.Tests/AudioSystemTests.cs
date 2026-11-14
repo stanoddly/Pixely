@@ -111,10 +111,12 @@ public sealed class AudioSystemTests
     [Test]
     public void CreateGroup_WithAName_ReturnsOneGroupPerName()
     {
+        AudioGroup music = _audioSystem.CreateGroup("music");
+
         Assert.Multiple(() =>
         {
-            Assert.That(_audioSystem.CreateGroup("music"), Is.SameAs(_audioSystem.CreateGroup("music")));
-            Assert.That(_audioSystem.CreateGroup("music"), Is.Not.SameAs(_audioSystem.CreateGroup("ui")));
+            Assert.That(_audioSystem.CreateGroup("music"), Is.SameAs(music));
+            Assert.That(music, Is.Not.SameAs(_audioSystem.CreateGroup("ui")));
             Assert.That(() => _audioSystem.CreateGroup(" "), Throws.ArgumentException);
         });
     }
