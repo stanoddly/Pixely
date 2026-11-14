@@ -9,7 +9,7 @@ public sealed class WindowRegistryTests
     public void GetWindow_WithoutScope_ReturnsDefaultWindow()
     {
         WindowRegistry windowRegistry = new();
-        Window window = CreateWindow(default, 42);
+        Window window = new FixedWindow(default);
 
         windowRegistry.Register(window);
 
@@ -20,7 +20,7 @@ public sealed class WindowRegistryTests
     public void Register_IndexesWindowByViewScopeAndSdlId()
     {
         WindowRegistry windowRegistry = new();
-        Window window = CreateWindow(new ViewScope(7), 42);
+        Window window = CreateNativeWindow(new ViewScope(7), 42);
 
         windowRegistry.Register(window);
 
@@ -36,10 +36,10 @@ public sealed class WindowRegistryTests
     public void Register_DuplicateViewScope_Throws()
     {
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(new ViewScope(7), 42));
+        windowRegistry.Register(new FixedWindow(new ViewScope(7)));
 
         InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() =>
-            windowRegistry.Register(CreateWindow(new ViewScope(7), 43)));
+            windowRegistry.Register(new FixedWindow(new ViewScope(7))));
 
         Assert.That(exception!.Message, Does.Contain("ViewScope 7"));
     }
@@ -48,10 +48,10 @@ public sealed class WindowRegistryTests
     public void Register_DuplicateSdlId_Throws()
     {
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(new ViewScope(7), 42));
+        windowRegistry.Register(CreateNativeWindow(new ViewScope(7), 42));
 
         InvalidOperationException? exception = Assert.Throws<InvalidOperationException>(() =>
-            windowRegistry.Register(CreateWindow(new ViewScope(8), 42)));
+            windowRegistry.Register(CreateNativeWindow(new ViewScope(8), 42)));
 
         Assert.That(exception!.Message, Does.Contain("SDL window ID 42"));
     }
@@ -60,7 +60,7 @@ public sealed class WindowRegistryTests
     public void Register_NegativeViewScope_IndexesWindow()
     {
         WindowRegistry windowRegistry = new();
-        Window window = CreateWindow(new ViewScope(-1), 42);
+        Window window = new FixedWindow(new ViewScope(-1));
 
         windowRegistry.Register(window);
 
@@ -71,8 +71,8 @@ public sealed class WindowRegistryTests
     public void Unregister_RemovesOnlyMatchingWindow()
     {
         WindowRegistry windowRegistry = new();
-        Window first = CreateWindow(new ViewScope(7), 42);
-        Window second = CreateWindow(new ViewScope(9), 43);
+        Window first = new FixedWindow(new ViewScope(7));
+        Window second = new FixedWindow(new ViewScope(9));
         windowRegistry.Register(first);
         windowRegistry.Register(second);
 
@@ -85,17 +85,37 @@ public sealed class WindowRegistryTests
         });
     }
 
-    private static Window CreateWindow(ViewScope viewScope, uint sdlId)
+    [Test]
+    public void Register_ANativeAndAWindowWithoutAPlatform_TakesBoth()
+    {
+        WindowRegistry windowRegistry = new();
+        Window native = CreateNativeWindow(new ViewScope(7), 42);
+        Window withoutPlatform = new FixedWindow(new ViewScope(8));
+
+        windowRegistry.Register(native);
+        windowRegistry.Register(withoutPlatform);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(windowRegistry.GetWindow(new ViewScope(8)), Is.SameAs(withoutPlatform));
+            Assert.That(windowRegistry.TryGetWindow(42, out Window bySdlId), Is.True);
+            Assert.That(bySdlId, Is.SameAs(native));
+        });
+    }
+
+    // Created uninitialised, so it never reaches SDL.
+    private static Window CreateNativeWindow(ViewScope viewScope, uint sdlId)
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
+        SetBackingField<Window, ViewScope>(window, nameof(Window.ViewScope), viewScope);
+        SetBackingField<NativeWindow, uint>(window, nameof(NativeWindow.SdlId), sdlId);
         return window;
     }
 
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
+    // The property's backing field is declared on TDeclaringWindow.
+    private static void SetBackingField<TDeclaringWindow, T>(Window window, string propertyName, T value) where TDeclaringWindow : Window
     {
-        FieldInfo field = typeof(Window).GetField(
+        FieldInfo field = typeof(TDeclaringWindow).GetField(
             $"<{propertyName}>k__BackingField",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         field.SetValue(window, value);

@@ -16,6 +16,9 @@ public readonly record struct WindowPosition
 
     internal int SdlY { get; }
 
+    // Centred on a display, which SDL encodes in the high bits of the coordinate.
+    internal bool IsCentered => ((uint)SdlX & 0xFFFF0000u) == SDL_WINDOWPOS_CENTERED_MASK;
+
     public static WindowPosition At(Vector2Int topLeft) => new(topLeft.X, topLeft.Y);
 
     public static WindowPosition Centered() => new((int)SDL_WINDOWPOS_CENTERED, (int)SDL_WINDOWPOS_CENTERED);

@@ -130,7 +130,7 @@ public class DisplayTests
 
         SDL_Event evt = default;
         evt.type = (uint)SDL_EventType.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED;
-        evt.window.windowID = (SDL_WindowID)window.SdlId;
+        evt.window.windowID = (SDL_WindowID)((NativeWindow)window).SdlId;
         unsafe
         {
             Assert.That(SDL_PushEvent(&evt), Is.True, () => SdlError.GetError() ?? string.Empty);

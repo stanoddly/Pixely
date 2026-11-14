@@ -10,7 +10,7 @@ namespace Pixely;
 /// the app registers no rendering, it has no swapchain, and <see cref="ColorTargetFormat"/> and
 /// <see cref="TryWaitAndAcquireSwapchainTexture"/> throw.
 /// </summary>
-public sealed partial class SwapchainWindow : Window
+public sealed partial class SwapchainWindow : NativeWindow
 {
     internal Pointer<SDL_GPUDevice> SdlGpuDevice { get; }
 
@@ -22,7 +22,7 @@ public sealed partial class SwapchainWindow : Window
         PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
+        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior, ReadDisplayScale(sdlWindow))
     {
         SdlGpuDevice = sdlGpuDevice;
     }

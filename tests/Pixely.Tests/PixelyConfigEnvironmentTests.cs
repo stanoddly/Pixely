@@ -3,6 +3,8 @@ using Pixely.DependencyInjection;
 
 namespace Pixely.Tests;
 
+// Sets a PIXELY_* variable, which every app built at the same time would read.
+[NonParallelizable]
 public class PixelyConfigEnvironmentTests
 {
     private static Func<string, string?> Variables(params (string Name, string? Value)[] variables)

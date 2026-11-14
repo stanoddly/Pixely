@@ -1,37 +1,24 @@
-using Pixely.Content;
+using System.Numerics;
 using Pixely.Utilities;
 using XdlSharp;
-using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
-public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
+/// <summary>
+/// The audio system: its checks and the lifetime of its sources, buffers, streams and groups. What plays them is up to the
+/// derived system: SDL_mixer in an app, and Pixely.Testing's <c>StubAudioSystem</c> in a test app, which plays nothing.
+/// </summary>
+public abstract class AudioSystem : IAudioSystem, IDisposable
 {
-    private readonly PixelyFactory _sdlLifetime;
-    private readonly ContentSource _contentSource;
     private readonly LockedSet<AudioSource> _sources = new();
     private readonly LockedSet<AudioBuffer> _buffers = new();
     private readonly LockedSet<AudioStream> _streams = new();
     private readonly Dictionary<string, AudioGroup> _groups = new(StringComparer.Ordinal);
-    private Pointer<MIX_Mixer> _mixer;
     private float _masterGain = 1.0f;
-    private bool _sdlAudioInitialized;
-    private bool _mixerInitialized;
     private bool _disposed;
 
-    internal AudioSystem(
-        PixelyFactory sdlLifetime,
-        ContentSource contentSource,
-        Pointer<MIX_Mixer> mixer,
-        bool sdlAudioInitialized,
-        bool mixerInitialized)
+    internal AudioSystem()
     {
-        _sdlLifetime = sdlLifetime;
-        _contentSource = contentSource;
-        _mixer = mixer;
-        _sdlAudioInitialized = sdlAudioInitialized;
-        _mixerInitialized = mixerInitialized;
-
         Listener = new AudioListener(this);
     }
 
@@ -47,9 +34,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
         {
             ThrowIfDisposed();
             ThrowIfNegative(value, nameof(value));
-            SdlError.ThrowOnFalse(
-                MIX_SetMixerGain(_mixer, value),
-                nameof(MIX_SetMixerGain));
+            SetMasterGainCore(value);
             _masterGain = value;
         }
     }
@@ -58,52 +43,25 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
     {
         ThrowIfDisposed();
 
-        using Stream fileStream = _contentSource.OpenStream(path);
-        using MemoryStream memoryStream = new();
-        fileStream.CopyTo(memoryStream);
-        byte[] fileData = memoryStream.ToArray();
-
-        fixed (byte* fileDataPointer = fileData)
-        {
-            Pointer<SDL_IOStream> ioStream = SDL_IOFromConstMem((IntPtr)fileDataPointer, (UIntPtr)fileData.Length);
-            SdlError.ThrowOnNull(ioStream, nameof(SDL_IOFromConstMem));
-
-            Pointer<MIX_Audio> sdlAudio = MIX_LoadAudio_IO(_mixer, ioStream, true, true);
-            SdlError.ThrowOnNull(sdlAudio, nameof(MIX_LoadAudio_IO));
-
-            AudioBuffer buffer = new(this, sdlAudio);
-            _buffers.Add(buffer);
-            return buffer;
-        }
+        AudioBuffer buffer = new(this, LoadAudioCore(path));
+        _buffers.Add(buffer);
+        return buffer;
     }
 
     public AudioStream OpenStream(ReadOnlySpan<char> path)
     {
         ThrowIfDisposed();
 
-        Stream fileStream = _contentSource.OpenStream(path);
-
-        try
-        {
-            AudioStream stream = new(this, fileStream);
-            _streams.Add(stream);
-            return stream;
-        }
-        catch
-        {
-            fileStream.Dispose();
-            throw;
-        }
+        AudioStream stream = new(this, OpenStreamCore(path));
+        _streams.Add(stream);
+        return stream;
     }
 
     public AudioSource CreateSource()
     {
         ThrowIfDisposed();
 
-        Pointer<MIX_Track> track = MIX_CreateTrack(_mixer);
-        SdlError.ThrowOnNull(track, nameof(MIX_CreateTrack));
-
-        AudioSource source = new(this, track);
+        AudioSource source = new(this, CreateTrackCore());
         _sources.Add(source);
         return source;
     }
@@ -149,27 +107,8 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
             ReleaseStream(stream);
         }
 
-        if (!_mixer.IsNull)
-        {
-            MIX_DestroyMixer(_mixer);
-            _mixer = Pointer<MIX_Mixer>.Null;
-        }
-
-        if (_mixerInitialized)
-        {
-            MIX_Quit();
-            _mixerInitialized = false;
-        }
-
-        if (_sdlAudioInitialized)
-        {
-            SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
-            _sdlAudioInitialized = false;
-        }
-
+        DestroyCore();
         _groups.Clear();
-
-        GC.KeepAlive(_sdlLifetime);
     }
 
     internal void SetSourceGroup(AudioSource source, AudioGroup? oldGroup, AudioGroup? newGroup)
@@ -179,43 +118,37 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
 
         if (oldGroup != null)
         {
-            using NullTerminatedUtf8 oldTag = new NullTerminatedUtf8(oldGroup.Name);
-            MIX_UntagTrack(source.SdlTrack, oldTag.Span);
+            UntagTrackCore(source.SdlTrack, oldGroup.Name);
         }
 
         if (newGroup != null)
         {
-            using NullTerminatedUtf8 newTag = new NullTerminatedUtf8(newGroup.Name);
-            SdlError.ThrowOnFalse(MIX_TagTrack(source.SdlTrack, newTag.Span), nameof(MIX_TagTrack));
+            TagTrackCore(source.SdlTrack, newGroup.Name);
         }
     }
 
     internal void SetGroupGain(AudioGroup group, float gain)
     {
         ThrowIfDisposed();
-        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
-        SdlError.ThrowOnFalse(MIX_SetTagGain(_mixer, tag.Span, gain), nameof(MIX_SetTagGain));
+        SetTagGainCore(group.Name, gain);
     }
 
     internal void PauseGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
-        SdlError.ThrowOnFalse(MIX_PauseTag(_mixer, tag.Span), nameof(MIX_PauseTag));
+        PauseTagCore(group.Name);
     }
 
     internal void ResumeGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
-        SdlError.ThrowOnFalse(MIX_ResumeTag(_mixer, tag.Span), nameof(MIX_ResumeTag));
+        ResumeTagCore(group.Name);
     }
 
     internal void StopGroup(AudioGroup group)
     {
         ThrowIfDisposed();
-        using NullTerminatedUtf8 tag = new NullTerminatedUtf8(group.Name);
-        SdlError.ThrowOnFalse(MIX_StopTag(_mixer, tag.Span, 0), nameof(MIX_StopTag));
+        StopTagCore(group.Name);
     }
 
     internal void UpdateSourcePositions()
@@ -236,7 +169,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
         }
 
         source.Clip = null;
-        MIX_DestroyTrack(pointer);
+        DestroyTrackCore(pointer);
         source.Pointer = Pointer<MIX_Track>.Null;
     }
 
@@ -250,7 +183,7 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
         }
 
         buffer.DetachFromSources();
-        MIX_DestroyAudio(pointer);
+        DestroyAudioCore(pointer);
         buffer.Pointer = Pointer<MIX_Audio>.Null;
     }
 
@@ -267,6 +200,61 @@ public unsafe sealed class AudioSystem : IAudioSystem, IDisposable
             throw new ArgumentOutOfRangeException(parameterName, value, "Audio gain cannot be negative.");
         }
     }
+
+    // A loaded sound, decoded in full.
+    internal abstract Pointer<MIX_Audio> LoadAudioCore(ReadOnlySpan<char> path);
+
+    internal abstract void DestroyAudioCore(Pointer<MIX_Audio> audio);
+
+    // A sound decoded while it plays. The content opens here, so a missing path throws from OpenStream.
+    internal abstract nint OpenStreamCore(ReadOnlySpan<char> path);
+
+    internal abstract void ReleaseStreamCore(nint stream);
+
+    internal abstract Pointer<MIX_Track> CreateTrackCore();
+
+    internal abstract void DestroyTrackCore(Pointer<MIX_Track> track);
+
+    // A null audio detaches the track's audio.
+    internal abstract void SetTrackAudioCore(Pointer<MIX_Track> track, Pointer<MIX_Audio> audio);
+
+    // A zero stream detaches the track's stream.
+    internal abstract void SetTrackStreamCore(Pointer<MIX_Track> track, nint stream);
+
+    internal abstract void PlayTrackCore(Pointer<MIX_Track> track);
+
+    internal abstract void PauseTrackCore(Pointer<MIX_Track> track);
+
+    internal abstract void ResumeTrackCore(Pointer<MIX_Track> track);
+
+    internal abstract void StopTrackCore(Pointer<MIX_Track> track);
+
+    internal abstract AudioSourceState GetTrackStateCore(Pointer<MIX_Track> track);
+
+    internal abstract void SetTrackGainCore(Pointer<MIX_Track> track, float gain);
+
+    // -1 loops forever, 0 plays once.
+    internal abstract void SetTrackLoopsCore(Pointer<MIX_Track> track, int loopCount);
+
+    // Relative to the listener.
+    internal abstract void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3 position);
+
+    internal abstract void TagTrackCore(Pointer<MIX_Track> track, string tag);
+
+    internal abstract void UntagTrackCore(Pointer<MIX_Track> track, string tag);
+
+    internal abstract void SetTagGainCore(string tag, float gain);
+
+    internal abstract void PauseTagCore(string tag);
+
+    internal abstract void ResumeTagCore(string tag);
+
+    internal abstract void StopTagCore(string tag);
+
+    internal abstract void SetMasterGainCore(float gain);
+
+    // Runs once, after every source, buffer and stream is released.
+    internal abstract void DestroyCore();
 
     private void ThrowIfDisposed()
     {

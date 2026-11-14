@@ -294,21 +294,26 @@ public partial class PixelyFactory: IDisposable
         return SdlGpuDevice.Create(device);
     }
 
-    internal KeyboardService CreateKeyboardService(AppControl appControl)
+    // Starts SDL's audio after SDL itself, so the audio driver hint and the app metadata are set first. Pixely.Audio stops it.
+    internal bool InitializeAudio()
     {
         EnsureSdlInitialized();
 
+        return SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
+    }
+
+    internal KeyboardService CreateKeyboardService(AppControl appControl)
+    {
         return new KeyboardService(appControl);
     }
     
     internal GamepadService CreateGamepadService()
     {
-        EnsureSdlInitialized();
-        
         GamepadService gamepadService = new();
         // Without the gamepad subsystem, which an isolated app does not start, SDL cannot list gamepads.
         if (!_config.IsIsolated)
         {
+            EnsureSdlInitialized();
             gamepadService.SetupGamepads();
         }
 
@@ -317,8 +322,6 @@ public partial class PixelyFactory: IDisposable
 
     internal MouseService CreateMouseService(WindowRegistry windowRegistry)
     {
-        EnsureSdlInitialized();
-
         return new MouseService(windowRegistry);
     }
 
@@ -345,8 +348,6 @@ public partial class PixelyFactory: IDisposable
 
     internal TextInputService CreateTextInputService(WindowRegistry windowRegistry)
     {
-        EnsureSdlInitialized();
-
         return new TextInputService(windowRegistry);
     }
 
@@ -368,7 +369,7 @@ public partial class PixelyFactory: IDisposable
         GamepadService gamepadService,
         MouseService mouseService,
         TextInputService textInputService,
-        PlatformSettings platformSettings,
+        PlatformSettings? platformSettings,
         WindowRegistry windowRegistry,
         AppControl appControl)
     {

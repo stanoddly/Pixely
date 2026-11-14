@@ -1,7 +1,9 @@
 using Pixely.App;
+using Pixely.Audio;
 using Pixely.Gpu;
 using Pixely.Headless;
 using Pixely.Input;
+using Pixely.Text;
 
 namespace Pixely.Testing;
 
@@ -9,9 +11,10 @@ public static class TestApp
 {
     /// <summary>
     /// Creates a builder for a game's tests, which a test passes to the game's own <c>Configure</c> before <c>Build()</c>. The app
-    /// renders on a <see cref="StubGpuDevice"/>, with every window a <see cref="StubWindow"/>, uses SDL's dummy video and audio
-    /// drivers unless <c>SDL_VIDEO_DRIVER</c> or <c>SDL_AUDIO_DRIVER</c> picks another, ignores the machine's gamepads and the OS's
-    /// theme, and advances game time by 1/30 s per frame. <see cref="TestInput"/> sends it synthetic input, and no console reads
+    /// never starts SDL, so apps can run in parallel, each on one thread at a time. It renders on a <see cref="StubGpuDevice"/>,
+    /// with every window a <see cref="StubWindow"/>, measures text with a <see cref="StubFontSystem"/>, plays sound on a
+    /// <see cref="StubAudioSystem"/>, has a display, cursors, a clipboard and platform settings of its own, ignores the machine's
+    /// gamepads, and advances game time by 1/30 s per frame. <see cref="TestInput"/> sends it synthetic input, and no console reads
     /// standard input, so <c>AddHeadlessSupport()</c> and <c>PIXELY_COMMAND_CONSOLE</c> add nothing.
     /// </summary>
     public static PixelyAppBuilder CreateBuilder(StubGpuDeviceOptions? options = null)
@@ -21,16 +24,31 @@ public static class TestApp
         // build, also one a later registration hides, so a stub registered after UseGpu would leave the SDL device created.
         builder.AddSingleton<StubGpuDevice>(_ => StubGpuDevice.Create(options));
         builder.AddAlias<GpuDevice, StubGpuDevice>();
-        builder.AddSingleton<IWindowFactory>(provider => new StubWindowFactory(provider.GetRequiredService<PixelyFactory>(), provider.GetRequiredService<StubGpuDevice>()));
+        builder.AddSingleton<StubEventSource>(static provider => new StubEventSource(provider.GetRequiredService<FrameClock>()));
+        builder.AddAlias<IEventSource, StubEventSource>();
+        builder.AddSingleton<IWindowFactory>(static provider => new StubWindowFactory(provider.GetRequiredService<StubGpuDevice>(), provider.GetRequiredService<StubEventSource>()));
+        // Before AddGpuServices, which then keeps it.
+        builder.AddSingleton<StubFontSystem>(static provider => new StubFontSystem(gpuDevice: provider.GetRequiredService<StubGpuDevice>()));
+        builder.AddAlias<IFontSystem, StubFontSystem>();
         GpuExtensions.AddGpuServices(builder);
+
+        // Registered before the game's Configure, whose RegisterAudio then keeps the stub.
+        builder.AddSingleton<StubAudioSystem>(static _ => new StubAudioSystem());
+        builder.AddAlias<AudioSystem, StubAudioSystem>();
+        builder.AddAlias<IAudioSystem, AudioSystem>();
+
+        // Registered before the game's Configure, and PixelyAppBuilder.Build then registers none of SDL's.
+        builder.AddSingleton(new PlatformInfo((string?)null));
+        builder.AddSingleton<ICursorService>(static _ => new StubCursorService());
+        builder.AddSingleton<IClipboardService>(static _ => new StubClipboardService());
+        builder.AddSingleton<IPlatformSettings>(static _ => new StubPlatformSettings());
+        builder.AddSingleton<IDisplayService>(static _ => new StubDisplayService());
 
         // Registered after PixelyAppBuilder applies the PIXELY_* variables, so it runs after them.
         builder.OnActivated(static (instance, _) =>
         {
             if (instance is PixelyConfig config)
             {
-                config.SdlVideoDriver ??= "dummy";
-                config.SdlAudioDriver ??= "dummy";
                 config.IsIsolated = true;
                 config.EnableCommandConsole = false;
             }

@@ -1,10 +1,9 @@
 using Pixely.Utilities;
 using XdlSharp;
-using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
-public unsafe sealed class AudioBuffer : AudioClip
+public sealed class AudioBuffer : AudioClip
 {
     private readonly AudioSystem _audioSystem;
     private readonly HashSet<AudioSource> _sources = new(ReferenceEqualityComparer.Instance);
@@ -30,13 +29,11 @@ public unsafe sealed class AudioBuffer : AudioClip
     internal override void AttachTo(AudioSource source)
     {
         source.ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            MIX_SetTrackAudio(source.SdlTrack, SdlAudio),
-            nameof(MIX_SetTrackAudio));
+        _audioSystem.SetTrackAudioCore(source.SdlTrack, SdlAudio);
         _sources.Add(source);
     }
 
-    internal override void DetachFrom(AudioSource source)
+    internal override void DetachFrom(AudioSource source, bool replaced)
     {
         if (!_sources.Remove(source))
         {
@@ -44,9 +41,10 @@ public unsafe sealed class AudioBuffer : AudioClip
         }
 
         source.ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            MIX_SetTrackAudio(source.SdlTrack, Pointer<MIX_Audio>.Null),
-            nameof(MIX_SetTrackAudio));
+        if (!replaced)
+        {
+            _audioSystem.SetTrackAudioCore(source.SdlTrack, Pointer<MIX_Audio>.Null);
+        }
     }
 
     public override void Dispose()

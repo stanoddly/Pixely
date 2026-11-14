@@ -7,13 +7,13 @@ using Pixely.Headless;
 using Pixely.Input;
 using Pixely.RenderOrchestration;
 using Pixely.Testing;
+using Pixely.Text;
 using XdlSharp;
 using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
-// In Pixely.Tests, which sees the app's config and services that are internal. Builds real apps, which start SDL.
-[NonParallelizable]
+// In Pixely.Tests, which sees the app's config and services that are internal.
 public class TestAppTests
 {
     [Test]
@@ -46,6 +46,21 @@ public class TestAppTests
             Assert.That(app.GetRequiredService<PixelyFrameClock>(), Is.TypeOf<FixedStepFrameClock>());
             Assert.That(app.ServiceProvider.GetService<TestInput>(), Is.Not.Null);
             Assert.That(config.IsIsolated, Is.True);
+        });
+    }
+
+    [Test]
+    public void Build_WithTheGamesGpu_KeepsTheStubFontSystemOnTheStubDevice()
+    {
+        PixelyAppBuilder builder = TestApp.CreateBuilder();
+        builder.UseGpu();
+
+        using IPixelyApp app = builder.Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(app.GetRequiredService<IFontSystem>(), Is.SameAs(app.GetRequiredService<StubFontSystem>()));
+            Assert.That(app.ServiceProvider.GetService<FontSystem>(), Is.Null);
         });
     }
 
@@ -84,26 +99,18 @@ public class TestAppTests
     }
 
     [Test]
-    public void Build_PicksTheDummyVideoAndAudioDriversOnlyWhileTheAppRuns()
+    public void Build_WithTheGamesAudio_KeepsTheStubAndStartsNoSdlAudio()
     {
-        string? videoEnvironment = Environment.GetEnvironmentVariable("SDL_VIDEO_DRIVER");
-        string? audioEnvironment = Environment.GetEnvironmentVariable("SDL_AUDIO_DRIVER");
         PixelyAppBuilder builder = TestApp.CreateBuilder();
         builder.RegisterAudio();
 
-        string? video;
-        string? audio;
-        using (IPixelyApp app = builder.Build())
-        {
-            video = Marshal.PtrToStringUTF8((nint)SDL_GetHint(SDL_HINT_VIDEO_DRIVER));
-            audio = Marshal.PtrToStringUTF8((nint)SDL_GetCurrentAudioDriver());
-        }
+        using IPixelyApp app = builder.Build();
 
         Assert.Multiple(() =>
         {
-            Assert.That(video, Is.EqualTo(videoEnvironment ?? "dummy"));
-            Assert.That(audio, Is.EqualTo(audioEnvironment ?? "dummy"));
-            Assert.That(Marshal.PtrToStringUTF8((nint)SDL_GetHint(SDL_HINT_AUDIO_DRIVER)), Is.EqualTo(audioEnvironment));
+            Assert.That(app.GetRequiredService<IAudioSystem>(), Is.TypeOf<StubAudioSystem>());
+            Assert.That(app.GetRequiredService<AudioSystem>(), Is.SameAs(app.GetRequiredService<StubAudioSystem>()));
+            Assert.That(SDL_WasInit(SDL_InitFlags.SDL_INIT_AUDIO), Is.EqualTo((SDL_InitFlags)0));
         });
     }
 

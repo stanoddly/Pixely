@@ -28,11 +28,7 @@ public class TextInputService : ITextInputService
 
     public bool IsActiveFor(ViewScope viewScope = default)
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
-        unsafe
-        {
-            return SDL_TextInputActive(window.SdlWindow);
-        }
+        return _windowRegistry.GetWindow(viewScope).IsTextInputActive;
     }
 
     public event InputEventHandler<TextInputEventArgs> TextInput
@@ -69,20 +65,12 @@ public class TextInputService : ITextInputService
 
     public void Start(ViewScope viewScope = default)
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
-        unsafe
-        {
-            SDL_StartTextInput(window.SdlWindow);
-        }
+        _windowRegistry.GetWindow(viewScope).StartTextInput();
     }
 
     public void Stop(ViewScope viewScope = default)
     {
-        Window window = _windowRegistry.GetWindow(viewScope);
-        unsafe
-        {
-            SDL_StopTextInput(window.SdlWindow);
-        }
+        _windowRegistry.GetWindow(viewScope).StopTextInput();
     }
 
     internal TextInputService(WindowRegistry windowRegistry)

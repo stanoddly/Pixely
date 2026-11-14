@@ -1,11 +1,10 @@
 using System.Numerics;
 using Pixely.Utilities;
 using XdlSharp;
-using static XdlSharp.Xdl;
 
 namespace Pixely.Audio;
 
-public unsafe sealed class AudioSource : IDisposable
+public sealed class AudioSource : IDisposable
 {
     private readonly AudioSystem _audioSystem;
     internal Pointer<MIX_Track> Pointer { get; set; }
@@ -47,9 +46,19 @@ public unsafe sealed class AudioSource : IDisposable
                 return;
             }
 
-            _clip?.DetachFrom(this);
+            _clip?.DetachFrom(this, replaced: newClip != null);
             _clip = null;
-            newClip?.AttachTo(this);
+            try
+            {
+                newClip?.AttachTo(this);
+            }
+            catch
+            {
+                // The old clip's input is still on the track, which then has no clip.
+                _audioSystem.SetTrackAudioCore(SdlTrack, Pointer<MIX_Audio>.Null);
+                throw;
+            }
+
             _clip = newClip;
         }
     }
@@ -78,9 +87,7 @@ public unsafe sealed class AudioSource : IDisposable
         {
             ThrowIfDisposed();
             AudioSystem.ThrowIfNegative(value, nameof(value));
-            SdlError.ThrowOnFalse(
-                MIX_SetTrackGain(SdlTrack, value),
-                nameof(MIX_SetTrackGain));
+            _audioSystem.SetTrackGainCore(SdlTrack, value);
             _gain = value;
         }
     }
@@ -121,21 +128,13 @@ public unsafe sealed class AudioSource : IDisposable
         get
         {
             ThrowIfDisposed();
-            if (MIX_TrackPaused(SdlTrack))
-            {
-                return AudioSourceState.Paused;
-            }
-
-            if (MIX_TrackPlaying(SdlTrack))
-            {
-                return AudioSourceState.Playing;
-            }
-
-            return AudioSourceState.Stopped;
+            return _audioSystem.GetTrackStateCore(SdlTrack);
         }
     }
 
     internal Pointer<MIX_Track> SdlTrack => Pointer;
+
+    internal AudioSystem AudioSystem => _audioSystem;
 
     public void Play()
     {
@@ -147,33 +146,25 @@ public unsafe sealed class AudioSource : IDisposable
 
         ApplyLooping();
         ApplyPosition();
-        SdlError.ThrowOnFalse(
-            MIX_PlayTrack(SdlTrack, 0),
-            nameof(MIX_PlayTrack));
+        _audioSystem.PlayTrackCore(SdlTrack);
     }
 
     public void Pause()
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            MIX_PauseTrack(SdlTrack),
-            nameof(MIX_PauseTrack));
+        _audioSystem.PauseTrackCore(SdlTrack);
     }
 
     public void Resume()
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            MIX_ResumeTrack(SdlTrack),
-            nameof(MIX_ResumeTrack));
+        _audioSystem.ResumeTrackCore(SdlTrack);
     }
 
     public void Stop()
     {
         ThrowIfDisposed();
-        SdlError.ThrowOnFalse(
-            MIX_StopTrack(SdlTrack, 0),
-            nameof(MIX_StopTrack));
+        _audioSystem.StopTrackCore(SdlTrack);
     }
 
     public void Dispose()
@@ -184,17 +175,7 @@ public unsafe sealed class AudioSource : IDisposable
     internal void ApplyPosition()
     {
         ThrowIfDisposed();
-        Vector3 relativePosition = _position - _audioSystem.Listener.Position;
-        MIX_Point3D point = new()
-        {
-            x = relativePosition.X,
-            y = relativePosition.Y,
-            z = relativePosition.Z
-        };
-
-        SdlError.ThrowOnFalse(
-            MIX_SetTrack3DPosition(SdlTrack, &point),
-            nameof(MIX_SetTrack3DPosition));
+        _audioSystem.SetTrack3DPositionCore(SdlTrack, _position - _audioSystem.Listener.Position);
     }
 
     internal void ThrowIfDisposed()
@@ -208,9 +189,6 @@ public unsafe sealed class AudioSource : IDisposable
     private void ApplyLooping()
     {
         ThrowIfDisposed();
-        int loopCount = _looping ? -1 : 0;
-        SdlError.ThrowOnFalse(
-            MIX_SetTrackLoops(SdlTrack, loopCount),
-            nameof(MIX_SetTrackLoops));
+        _audioSystem.SetTrackLoopsCore(SdlTrack, _looping ? -1 : 0);
     }
 }

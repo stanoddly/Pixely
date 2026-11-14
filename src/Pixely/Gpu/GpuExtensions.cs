@@ -37,7 +37,11 @@ public static class GpuExtensions
 
         services.AddSingleton<ComputePipelineBuilder>();
 
-        services.AddSingleton<FontSystem>(FontSystem.Create);
-        services.AddAlias<IFontSystem, FontSystem>();
+        // A font system registered before, such as Pixely.Testing's stub, is kept.
+        if (!services.IsRegistered<IFontSystem>())
+        {
+            services.AddSingleton<FontSystem>(FontSystem.Create);
+            services.AddAlias<IFontSystem, FontSystem>();
+        }
     }
 }

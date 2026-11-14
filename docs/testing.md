@@ -1,6 +1,6 @@
 # Testing a game, its renderers, input and text without devices
 
-`Pixely.Testing` runs a game's own app in its tests ([The game's app](#the-games-app)), and gives them a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), and a font system without font files ([Fonts](#fonts)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. Under [orange-architecture.md](orange-architecture.md) a test of a system alone needs none of this ([Testing a system](#testing-a-system)); it is for the renderers, the views and the game's app as a whole. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
+`Pixely.Testing` runs a game's own app in its tests ([The game's app](#the-games-app)), and gives them a GPU device without a GPU, a keyboard and gamepads that a test presses ([Input](#input)), a font system without font files ([Fonts](#fonts)), and an audio system that plays nothing ([Audio](#audio)). `StubGpuDevice` is a `GpuDevice`: the game's renderers, `GpuMemorySystem`, the shader and texture loaders, `GraphicsPipelineBuilder`, `RenderPassBuilder` and Pixely.Ui run on it unchanged, Pixely's validation runs as on the GPU, and the stub records what reaches it. Nothing is rendered. Under [peach-architecture.md](peach-architecture.md) `Foo.Game` knows no output, so its tests need none of this; it is for `Foo.Frontend.Rendering` and the frontend code that renders. Under [orange-architecture.md](orange-architecture.md) a test of a system alone needs none of this ([Testing a system](#testing-a-system)); it is for the renderers, the views and the game's app as a whole. It is built for the desktop only, and the assembly is marked unsupported in the browser, so a call to it there is a CA1416 warning.
 
 ## The game's app
 
@@ -19,14 +19,14 @@ app.RunFrame();
 
 - The game makes `Program` and `Configure` public, and its test project references the game's project, so the test can call `Configure`. The content, shaders included, loads from the test's output directory, so the test project needs the game's content there.
 - The app renders on the stub GPU device ([The stub GPU device](#the-stub-gpu-device)), with every window a `StubWindow`. `CreateBuilder(options)` passes `StubGpuDeviceOptions` to it ([Options](#options)).
-- SDL uses its dummy video and audio drivers, at default priority, so `SDL_VIDEO_DRIVER` and `SDL_AUDIO_DRIVER` in the environment override them. `Pixely.Audio` then plays into nothing.
-- The app ignores the machine's gamepads and the OS's theme, as in headless mode (headless.md): a pad plugged into the machine and a dark theme do not reach the test, and `IPlatformSettings.Theme` is `Unknown`.
+- The app never starts SDL. Its windows, display, cursors, clipboard and platform settings are stubs without a platform ([Windows](#windows)), its text uses `StubFontSystem` ([Fonts](#fonts)) and its sound `StubAudioSystem` ([Audio](#audio)). A test that needs a real window, real fonts or real sound uses headless mode (headless.md).
+- The app ignores the machine's gamepads, theme and locales: a pad plugged into the machine and a dark theme do not reach the test, `IPlatformSettings.Theme` is `Unknown`, and `GetPreferredLocales()` is empty. Its clipboard is its own, so a test never reads or replaces the machine's.
 - Game time starts at 0 and advances by 33,333,334 ns per frame, 1/30 s rounded up, however fast the frames run. Three `RunFrame` calls make 66,666,668 ns of `ElapsedNanoseconds`, since the first frame has no previous one.
 - A frame that no window drew, for example one whose windows are hidden, does not wait for the display, so a test with a hidden window runs its frames at once.
 - No console reads standard input: `AddHeadlessSupport()` in `Configure` adds nothing, even with `PIXELY_HEADLESS` set, and `PIXELY_COMMAND_CONSOLE` has no effect.
-- Text uses Pixely's font system, which loads the game's font files from the content, as in the game. [Fonts](#fonts) has a stub that needs no font files.
-- The app starts SDL when it is built and stops it when it is disposed, and SDL is shared by the whole process. Only one app may exist at a time, so tests that build one must not run in parallel; in NUnit they are `[NonParallelizable]`, as Pixely's own are.
-- `Build`, `RunFrame` and disposal run on the same thread, because SDL reads its events on the thread that started its video. For example, an `async` test that continues on another thread after an `await` must not call `RunFrame` there.
+- Several apps can exist at once, each on its own thread, so tests that build them can run in parallel. One app is used by one thread at a time; an `async` test may continue on another thread after an `await`.
+- NUnit runs fixtures one at a time unless the test assembly says otherwise, so a game's test project adds `[assembly: Parallelizable(ParallelScope.Fixtures)]` to run them in parallel, as Pixely's own do.
+- A fixture that uses state of the whole process is `[NonParallelizable]`, so NUnit runs it alone: one that starts real SDL, as a headless app or an app from a plain `PixelyAppBuilder` does; one that uses Pixely's font system, because SDL_ttf closes fonts without a lock; and one that sets an environment variable an app reads, such as `PIXELY_DIAGNOSTICS`. While real SDL shuts down it also clears state that stub apps read, such as its keyboard layout.
 
 `TestInput` is the synthetic input of headless mode:
 
@@ -39,7 +39,7 @@ app.RunFrame();
 
 ## The stub GPU device
 
-`TestApp.CreateBuilder()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it, so `UseGpu`, `UseDefaultRendering` and the game's registrars that call them keep the stub. Every window is a `StubWindow`: an SDL window created as its `WindowConfig` says, without a swapchain. Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer. Its events, size and visibility work as on any window, and a hidden window is not renderable. Building still initializes SDL video, with the dummy driver of [The game's app](#the-games-app); with another driver from `SDL_VIDEO_DRIVER` the windows show. The choice lasts as long as the app, so another app in the same test process, on the GPU or not, is unaffected.
+`TestApp.CreateBuilder()` registers the stub as the app's `GpuDevice`, with every GPU service on top of it, so `UseGpu`, `UseDefaultRendering` and the game's registrars that call them keep the stub. Every window is a `StubWindow` ([Windows](#windows)). Each frame it hands out a new `SwapchainTexture` of its size at once, with no wait, so a frame submits only its own command buffer.
 
 ```csharp
 PixelyAppBuilder builder = TestApp.CreateBuilder();
@@ -61,6 +61,18 @@ Shaders load from the content as in the game, so the test project needs the comp
 
 A renderer can also be called without a frame: `StubGpuDevice.CreateSwapchainTexture(size)` makes the target of a `BasicRenderContext`, and `device.AcquireCommandBuffer()` returns a `StubCommandBuffer` to record into and submit.
 
+## Windows
+
+A `StubWindow` is a window without a platform, on one display of 1024 × 768 at (0, 0) and scale 1, as SDL's dummy video driver reports it:
+
+- It opens at its `WindowConfig`'s `Size`, 640 × 480 without one, or at the display's size when `Fullscreen` is set. It opens at its `Position`, or centred on the display without one or with `WindowPosition.Centered`. Its `PixelDensity` and `DisplayScale` are 1, so `RenderSizeInPixels` equals `Size`.
+- A new `Size` reads back at once. `ResolutionChanged` follows in the next `RunFrame`, before any update, as on the desktop.
+- `SetFullscreenBorderless(true)` covers the display, with a `ResolutionChanged` in the next frame, and `false` restores the window's size and position. A window created fullscreen restores to 640 × 480 or its configured size.
+- It is renderable while it is visible. `Show` and `Hide` change that at once. `Minimize` returns false and does nothing, so a test hides a window to make it not renderable.
+- `AlwaysOnTop`, `MouseGrab`, `WindowRelativeMouseMode`, `Draggable`, `Position` and text input keep what was set, also on a hidden window. `SetHitTest` and `SetIcon` are accepted. `SetShape` throws `PixelyException` unless the window was created with `Transparent`.
+- `ShowModalMessageBox` throws `PixelyException`, and the file dialogs return a result with `FileDialogStatus.Error`.
+- `ICursorService` checks cursors as on the desktop and keeps the cursor's visibility. It creates system cursors too, which SDL's dummy driver cannot. `IMouseService.GetGlobalState()` is at (0, 0) with no buttons.
+
 ## What is recorded
 
 - `SubmittedCommandBuffers`: every submitted `StubCommandBuffer`, oldest first, until `ClearSubmittedCommandBuffers()`. Besides the frames this includes the command buffers `GpuMemorySystem` submits its uploads with. A cancelled command buffer is not submitted; it has `IsCancelled`.
@@ -81,7 +93,7 @@ The stub keeps what is uploaded. An upload reaches the contents when its command
 
 ## What the stub cannot tell
 
-It runs no shader, so it cannot show what a frame looks like or catch a shader bug, SDL's own validation or a driver's. It does not check a texture's usage against its binding, which Pixely does not check either. Its fences are signalled at once. It records blits without carrying them out, so a texture a blit writes to reads back without the blit's result. It runs on the desktop build of Pixely only, not the browser one.
+It runs no shader, so it cannot show what a frame looks like or catch a shader bug, SDL's own validation or a driver's. Text sprites of the app's `StubFontSystem` are created directly on the device, so no upload of text reaches `GpuMemorySystem` or its contents. It does not check a texture's usage against its binding, which Pixely does not check either. Its fences are signalled at once. It records blits without carrying them out, so a texture a blit writes to reads back without the blit's result. It runs on the desktop build of Pixely only, not the browser one.
 
 ## Input
 
@@ -120,7 +132,7 @@ Neither stub needs an app, a window or SDL started, so a test creates it with `n
 
 ## Fonts
 
-`StubFontSystem` is an `IFontSystem` that reads no font file. Every character measures the same, so a test knows the size of any text:
+`StubFontSystem` is an `IFontSystem` that reads no font file. Every character measures the same, so a test knows the size of any text. An app from `TestApp.CreateBuilder()` has one with the default metrics on its `StubGpuDevice`, so its text measures 8 × 16 per character, and a test can also create one itself:
 
 ```csharp
 using StubFontSystem fontSystem = new(glyphWidth: 6, lineHeight: 11);
@@ -139,6 +151,29 @@ UiRoot root = new() { Style = new UiStyle(font) };
 
 Its sizes are not a real font's. Real glyphs differ in width. SDL_ttf measures a trailing `\n` differently, and in text of several lines it leaves out a `\r` before `\n` and the spaces and tabs at the end of each line.
 
+
+## Audio
+
+`StubAudioSystem` is an `AudioSystem` that reads no file and plays nothing. An app from `TestApp.CreateBuilder()` has one, and `RegisterAudio()` in the game's `Configure` keeps it. A test can also create one with `new`:
+
+```csharp
+using StubAudioSystem audio = new();
+// What the game's code does with its IAudioSystem.
+AudioSource jump = audio.CreateSource();
+jump.Clip = audio.LoadBuffer("sounds/jump.wav");
+jump.Play();
+
+Assert.That(audio.LoadedPath(jump.Clip!), Is.EqualTo("sounds/jump.wav"));
+audio.Finish(jump);
+Assert.That(jump.State, Is.EqualTo(AudioSourceState.Stopped));
+```
+
+- A source keeps the state SDL_mixer gives it. `Play` plays it from any state. `Pause` pauses only a playing source, and `Resume` resumes only a paused one. `Stop` stops it. A group's `Pause`, `Resume` and `Stop` do the same to each of its sources.
+- A sound has no length, so it plays until the game stops it or the test calls `Finish(source)`, which stops it as its end would, looping or not. Clearing the clip of a playing source, or disposing the buffer or stream it plays, stops it, where SDL_mixer stops it once its mixer finds nothing to play. A paused source without a clip stays paused and stops when it resumes. A new clip in place of the old one keeps the source's state, as in SDL_mixer.
+- What the game set reads back through the objects it already has: a source's `Clip`, `Gain`, `Group`, `Looping` and `Position`, a group's `Gain`, and the listener's `Position` and `Gain`. `LoadedPath(clip)` returns the path a buffer was loaded from or a stream opened from.
+- The checks of the audio system apply as in the game: a negative gain, a clip from another audio system, playing without a clip and a disposed object throw. `Finish` and `LoadedPath` throw `ArgumentException` for an object of another audio system.
+- No path is read, so a test does not catch a path missing from the content, which throws in the game. `LoadedPath` of a disposed buffer or stream throws `ObjectDisposedException`.
+- The app has an `IAudioSystem` even when the game's `Configure` never calls `RegisterAudio()`, so a game that needs audio without registering it passes its tests and fails to build in the game.
 
 ## Testing a system
 

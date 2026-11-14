@@ -22,9 +22,7 @@ internal unsafe sealed class AudioFactory
 
         try
         {
-            SdlError.ThrowOnFalse(
-                SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO),
-                nameof(SDL_InitSubSystem));
+            SdlError.ThrowOnFalse(_sdlLifetime.InitializeAudio(), nameof(SDL_InitSubSystem));
             sdlAudioInitialized = true;
 
             SdlError.ThrowOnFalse(
@@ -35,7 +33,7 @@ internal unsafe sealed class AudioFactory
             mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
             SdlError.ThrowOnNull(mixer, nameof(MIX_CreateMixerDevice));
 
-            return new AudioSystem(_sdlLifetime, contentSource, mixer, sdlAudioInitialized, mixerInitialized);
+            return new SdlAudioSystem(_sdlLifetime, contentSource, mixer, sdlAudioInitialized, mixerInitialized);
         }
         catch
         {

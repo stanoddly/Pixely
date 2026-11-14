@@ -1,6 +1,4 @@
 using System.Numerics;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Pixely.Headless;
 using Pixely.Input;
 using XdlSharp;
@@ -143,8 +141,8 @@ public sealed class InputAutomationTests
     {
         ViewScope otherViewScope = new(8);
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
-        windowRegistry.Register(CreateWindow(otherViewScope, 43));
+        windowRegistry.Register(new FixedWindow(_viewScope));
+        windowRegistry.Register(new FixedWindow(otherViewScope));
         (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry);
         List<(Vector2 Position, Vector2 RelativeMotion)> otherMotions = new();
         mouseService.SubscribeMotion(otherViewScope, 0, eventArgs => otherMotions.Add((eventArgs.Position, eventArgs.RelativeMotion)));
@@ -178,7 +176,7 @@ public sealed class InputAutomationTests
     {
         TestFrameClock frameClock = new();
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
+        windowRegistry.Register(new FixedWindow(_viewScope));
         (InputAutomation automation, _, KeyboardService keyboardService, _) = CreateAutomation(windowRegistry, frameClock: frameClock);
         ulong? timestamp = null;
         keyboardService.SubscribeKeyDown(_viewScope, 0, eventArgs => timestamp = eventArgs.Timestamp);
@@ -286,7 +284,7 @@ public sealed class InputAutomationTests
     private static (InputAutomation Automation, MouseService MouseService, KeyboardService KeyboardService, TextInputService TextInputService) CreateAutomation()
     {
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(CreateWindow(_viewScope, 42));
+        windowRegistry.Register(new FixedWindow(_viewScope));
         return CreateAutomation(windowRegistry);
     }
 
@@ -298,19 +296,5 @@ public sealed class InputAutomationTests
         TextInputService textInputService = new(windowRegistry);
         InputAutomation automation = new(windowRegistry, mouseService, keyboardService, textInputService, gamepadService ?? new GamepadService(), frameClock ?? new TestFrameClock());
         return (automation, mouseService, keyboardService, textInputService);
-    }
-
-    internal static Window CreateWindow(ViewScope viewScope, uint sdlId)
-    {
-        Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(SwapchainWindow));
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
-        return window;
-    }
-
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
-    {
-        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        field.SetValue(window, value);
     }
 }

@@ -5,7 +5,7 @@ namespace Pixely;
 
 public sealed class WindowRegistry
 {
-    private FastListStruct<(ViewScope ViewScope, uint SdlId, Window Window)> _windows = new(4);
+    private FastListStruct<Window> _windows = new(4);
 
     internal WindowRegistry()
     {
@@ -45,11 +45,9 @@ public sealed class WindowRegistry
 
     public bool TryGetWindow(ViewScope viewScope, out Window window)
     {
-        ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows =
-            _windows.AsReadOnlySpan();
-        foreach ((ViewScope registeredViewScope, _, Window registeredWindow) in windows)
+        foreach (Window registeredWindow in _windows.AsReadOnlySpan())
         {
-            if (registeredViewScope == viewScope)
+            if (registeredWindow.ViewScope == viewScope)
             {
                 window = registeredWindow;
                 return true;
@@ -67,11 +65,9 @@ public sealed class WindowRegistry
 
     internal bool TryGetWindow(uint sdlWindowId, out Window window)
     {
-        ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows =
-            _windows.AsReadOnlySpan();
-        foreach ((_, uint registeredSdlId, Window registeredWindow) in windows)
+        foreach (Window registeredWindow in _windows.AsReadOnlySpan())
         {
-            if (registeredSdlId == sdlWindowId)
+            if (registeredWindow is NativeWindow nativeWindow && nativeWindow.SdlId == sdlWindowId)
             {
                 window = registeredWindow;
                 return true;
@@ -84,43 +80,35 @@ public sealed class WindowRegistry
 
     internal void Register(Window window)
     {
-        ViewScope viewScope = window.ViewScope;
-        uint sdlId = window.SdlId;
-        ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows =
-            _windows.AsReadOnlySpan();
-        foreach ((
-            ViewScope registeredViewScope,
-            uint registeredSdlId,
-            Window registeredWindow) in windows)
+        foreach (Window registeredWindow in _windows.AsReadOnlySpan())
         {
             if (ReferenceEquals(registeredWindow, window))
             {
                 return;
             }
 
-            if (registeredViewScope == viewScope)
+            if (registeredWindow.ViewScope == window.ViewScope)
             {
                 throw new InvalidOperationException(
-                    $"A window for ViewScope {viewScope.Value} is already registered.");
+                    $"A window for ViewScope {window.ViewScope.Value} is already registered.");
             }
 
-            if (registeredSdlId == sdlId)
+            if (registeredWindow is NativeWindow registeredNativeWindow && window is NativeWindow nativeWindow && registeredNativeWindow.SdlId == nativeWindow.SdlId)
             {
                 throw new InvalidOperationException(
-                    $"SDL window ID {sdlId} is already registered.");
+                    $"SDL window ID {nativeWindow.SdlId} is already registered.");
             }
         }
 
-        _windows.Add((viewScope, sdlId, window));
+        _windows.Add(window);
     }
 
     internal void Unregister(Window window)
     {
-        ReadOnlySpan<(ViewScope ViewScope, uint SdlId, Window Window)> windows =
-            _windows.AsReadOnlySpan();
+        ReadOnlySpan<Window> windows = _windows.AsReadOnlySpan();
         for (int i = 0; i < windows.Length; i++)
         {
-            if (ReferenceEquals(windows[i].Window, window))
+            if (ReferenceEquals(windows[i], window))
             {
                 _windows.SwapRemove(i);
                 return;

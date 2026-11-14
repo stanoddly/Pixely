@@ -158,7 +158,7 @@ public sealed class InputAutomationConsoleTests
     private static Fixture CreateConsole(TextReader input, IFrameTimingRecorder? frameTimingRecorder = null)
     {
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
+        windowRegistry.Register(new FixedWindow(default));
         (InputAutomation automation, _, KeyboardService keyboardService, _) = InputAutomationTests.CreateAutomation(windowRegistry);
 
         // Concurrent, because the pipe test runs the update on another thread.

@@ -54,4 +54,6 @@ Custom cursors keep their pixel size on high-DPI displays. Images for other disp
 
 In headless mode (`docs/headless.md`) cursors work, but screenshots do not show them and SDL animates them in real time, not on the fixed-step game clock.
 
+An app from `TestApp.CreateBuilder()` of [testing.md](testing.md) has cursors without a platform. They are checked as on the desktop, on any thread, and system cursors are created too. Nothing shows them.
+
 See [Pixely.Tutorials.Cursor](../tutorials/Pixely.Tutorials.Cursor/README.md) for a runnable example.

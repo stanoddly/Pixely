@@ -9,6 +9,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="Pixely.Testing" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
         <ProjectReference Include="..\Pixely\Pixely.csproj" />
         <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />

@@ -14,7 +14,7 @@ public class PixelyApp : IPixelyApp
     public ServiceProvider ServiceProvider { get; }
 
     private readonly PixelyFrameClock _frameClock;
-    private readonly EventService _eventService;
+    private readonly IEventSource _eventSource;
     private readonly AppControl _appControl;
     private readonly ServiceRegistry<IRenderCoordinator> _renderCoordinators;
     private readonly ServiceRegistry<IUpdatable> _updatables;
@@ -27,7 +27,7 @@ public class PixelyApp : IPixelyApp
     internal PixelyApp(
         ServiceProvider serviceProvider,
         PixelyFrameClock frameClock,
-        EventService eventService,
+        IEventSource eventSource,
         AppControl appControl,
         ServiceRegistry<IRenderCoordinator> renderCoordinators,
         ServiceRegistry<IUpdatable> updatables,
@@ -37,7 +37,7 @@ public class PixelyApp : IPixelyApp
     {
         ServiceProvider = serviceProvider;
         _frameClock = frameClock;
-        _eventService = eventService;
+        _eventSource = eventSource;
         _appControl = appControl;
         _renderCoordinators = renderCoordinators;
         _updatables = updatables;
@@ -71,7 +71,7 @@ public class PixelyApp : IPixelyApp
         _frameClock.StartFrame();
         _stageManager.ApplyPendingTransition();
         // then process events
-        _eventService.Process();
+        _eventSource.Process();
 
         Update(_updatables);
         _frameTimingRecorder.EndUpdate();

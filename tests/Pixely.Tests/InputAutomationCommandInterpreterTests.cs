@@ -243,8 +243,8 @@ public sealed class InputAutomationCommandInterpreterTests
 
         ViewScope secondary = new(7);
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(InputAutomationTests.CreateWindow(default, 42));
-        windowRegistry.Register(InputAutomationTests.CreateWindow(secondary, 43));
+        windowRegistry.Register(new FixedWindow(default));
+        windowRegistry.Register(new FixedWindow(secondary));
         GamepadService gamepadService = new();
         (InputAutomation automation, MouseService mouseService, KeyboardService keyboardService, TextInputService textInputService) = InputAutomationTests.CreateAutomation(windowRegistry, gamepadService);
 
