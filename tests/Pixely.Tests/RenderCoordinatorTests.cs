@@ -492,26 +492,27 @@ public class RenderCoordinatorTests
     private static Window CreateWindow(ViewScope viewScope, uint sdlId)
     {
         Window window = (Window)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
+        SetBackingField<Window, ViewScope>(window, nameof(Window.ViewScope), viewScope);
+        SetBackingField<NativeWindow, uint>(window, nameof(NativeWindow.SdlId), sdlId);
         return window;
     }
 
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
+    // The property's backing field is declared on TDeclaringWindow.
+    private static void SetBackingField<TDeclaringWindow, T>(Window window, string propertyName, T value) where TDeclaringWindow : Window
     {
-        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo field = typeof(TDeclaringWindow).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
         field.SetValue(window, value);
     }
 
     // Created uninitialised, so it never reaches SDL. The constructor exists only because a derived class must name a base
     // constructor to compile.
-    private sealed class TestWindow : Window
+    private sealed class TestWindow : NativeWindow
     {
         // Static, because the window is created uninitialised and its instance initialisers never run.
         private static readonly StubGpuDevice _swapchainDevice = StubGpuDevice.Create();
 
         private TestWindow()
-            : base(default, default, 0, null!, null!, default)
+            : base(default, default, 0, null!, null!, default, 0)
         {
         }
 
