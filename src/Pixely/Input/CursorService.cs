@@ -6,7 +6,7 @@ namespace Pixely.Input;
 
 // SDL has one active cursor for the whole application and allows cursor calls on the main thread only. The service owns every
 // cursor it creates and destroys those still alive when it is disposed, which happens before PixelyFactory shuts SDL down.
-public sealed class CursorService : ICursorService, IDisposable
+public sealed class CursorService : ICursorService, ICursorOwner, IDisposable
 {
     private readonly HashSet<Cursor> _cursors = new();
     private bool _disposed;
@@ -55,12 +55,26 @@ public sealed class CursorService : ICursorService, IDisposable
     public Cursor CreateCursor(ReadOnlySpan<CursorFrame> frames, Vector2Int hotspot)
     {
         ThrowIfUnusable();
+        uint[] durations = GetFrameDurations(frames, hotspot);
+        SDL_CursorFrameInfo[] frameInfos = new SDL_CursorFrameInfo[frames.Length];
+        for (int i = 0; i < frames.Length; i++)
+        {
+            frameInfos[i].duration = durations[i];
+        }
+
+        return Track(CreateAnimatedCursor(frames, frameInfos, 0, hotspot), "SDL_CreateAnimatedCursor");
+    }
+
+    // Checks the frames and the hotspot of a cursor, which every cursor service checks the same, and returns each frame's duration in
+    // milliseconds.
+    internal static uint[] GetFrameDurations(ReadOnlySpan<CursorFrame> frames, Vector2Int hotspot)
+    {
         if (frames.IsEmpty)
         {
             throw new ArgumentException("A cursor needs at least one frame.", nameof(frames));
         }
 
-        SDL_CursorFrameInfo[] frameInfos = new SDL_CursorFrameInfo[frames.Length];
+        uint[] durations = new uint[frames.Length];
         ShortSize size = default;
         for (int i = 0; i < frames.Length; i++)
         {
@@ -79,7 +93,7 @@ public sealed class CursorService : ICursorService, IDisposable
                 throw new ArgumentException($"All frames of a cursor must have the same size, but frame {i} is {image.Size.Width}x{image.Size.Height} and frame 0 is {size.Width}x{size.Height}.", nameof(frames));
             }
 
-            frameInfos[i].duration = ToMilliseconds(frames[i].Duration, i);
+            durations[i] = ToMilliseconds(frames[i].Duration, i);
         }
 
         if (hotspot.X < 0 || hotspot.Y < 0 || hotspot.X >= size.Width || hotspot.Y >= size.Height)
@@ -87,7 +101,7 @@ public sealed class CursorService : ICursorService, IDisposable
             throw new ArgumentOutOfRangeException(nameof(hotspot), hotspot, $"The hotspot must lie within the {size.Width}x{size.Height} cursor image.");
         }
 
-        return Track(CreateAnimatedCursor(frames, frameInfos, 0, hotspot), "SDL_CreateAnimatedCursor");
+        return durations;
     }
 
     // A surface from SDL_CreateSurfaceFrom borrows the pixels, so every frame stays pinned until SDL_CreateAnimatedCursor returns.
@@ -173,7 +187,7 @@ public sealed class CursorService : ICursorService, IDisposable
         return (uint)((duration.Ticks + TimeSpan.TicksPerMillisecond - 1) / TimeSpan.TicksPerMillisecond);
     }
 
-    internal void Destroy(Cursor cursor)
+    void ICursorOwner.Destroy(Cursor cursor)
     {
         if (cursor.IsDisposed)
         {

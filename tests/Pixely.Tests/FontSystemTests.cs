@@ -8,6 +8,8 @@ using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
 
+// SDL_ttf opens and closes fonts on one FreeType library without a lock around closing.
+[NonParallelizable]
 public sealed class FontSystemTests
 {
     private const string FontPath = "fonts/GohuFont-Medium.ttf";

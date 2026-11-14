@@ -67,7 +67,12 @@ public class PixelyAppBuilder : ServiceCollection
         }
         AddSingleton<PixelyFactory>();
 
-        AddSingleton<PlatformInfo, PixelyFactory>();
+        // A service registered before Build, such as Pixely.Testing's stub of it, replaces the default, which is then not even
+        // created: the container creates every singleton, also one a later registration hides.
+        if (!IsRegistered<PlatformInfo>())
+        {
+            AddSingleton<PlatformInfo, PixelyFactory>();
+        }
 
         AddSingleton<KeyboardService, PixelyFactory>();
         AddAlias<IKeyboardService, KeyboardService>();
@@ -78,22 +83,38 @@ public class PixelyAppBuilder : ServiceCollection
         AddSingleton<MouseService, PixelyFactory>();
         AddAlias<IMouseService, MouseService>();
 
-        AddSingleton<CursorService, PixelyFactory>();
-        AddAlias<ICursorService, CursorService>();
+        if (!IsRegistered<ICursorService>())
+        {
+            AddSingleton<CursorService, PixelyFactory>();
+            AddAlias<ICursorService, CursorService>();
+        }
 
         AddSingleton<TextInputService, PixelyFactory>();
         AddAlias<ITextInputService, TextInputService>();
 
-        AddSingleton<ClipboardService>();
-        AddAlias<IClipboardService, ClipboardService>();
+        if (!IsRegistered<IClipboardService>())
+        {
+            AddSingleton<ClipboardService>();
+            AddAlias<IClipboardService, ClipboardService>();
+        }
 
-        AddSingleton<PlatformSettings, PixelyFactory>();
-        AddAlias<IPlatformSettings, PlatformSettings>();
+        if (!IsRegistered<IPlatformSettings>())
+        {
+            AddSingleton<PlatformSettings, PixelyFactory>();
+            AddAlias<IPlatformSettings, PlatformSettings>();
+        }
 
-        AddSingleton<DisplayService, PixelyFactory>();
-        AddAlias<IDisplayService, DisplayService>();
+        if (!IsRegistered<IDisplayService>())
+        {
+            AddSingleton<DisplayService, PixelyFactory>();
+            AddAlias<IDisplayService, DisplayService>();
+        }
 
-        AddSingleton<EventService, PixelyFactory>();
+        if (!IsRegistered<IEventSource>())
+        {
+            AddSingleton<EventService, PixelyFactory>();
+            AddAlias<IEventSource, EventService>();
+        }
 
 #if !BROWSER
         // PixelyConfig.EnableCommandConsole only; the factory returns null otherwise.
@@ -143,7 +164,7 @@ public class PixelyAppBuilder : ServiceCollection
         return new PixelyApp(
             serviceProvider,
             serviceProvider.GetRequiredService<PixelyFrameClock>(),
-            serviceProvider.GetRequiredService<EventService>(),
+            serviceProvider.GetRequiredService<IEventSource>(),
             serviceProvider.GetRequiredService<AppControl>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IRenderCoordinator>>(),
             serviceProvider.GetRequiredService<ServiceRegistry<IUpdatable>>(),

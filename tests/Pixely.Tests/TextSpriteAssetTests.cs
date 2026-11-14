@@ -7,6 +7,8 @@ using Pixely.Text;
 
 namespace Pixely.Tests;
 
+// SDL_ttf opens and closes fonts on one FreeType library without a lock around closing.
+[NonParallelizable]
 public sealed class TextSpriteAssetTests
 {
     private const string FontPath = "fonts/GohuFont-Medium.ttf";

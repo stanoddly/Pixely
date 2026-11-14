@@ -2,6 +2,17 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-14: A test app never starts SDL, so tests run in parallel
+
+`TestApp.CreateBuilder()` builds an app without SDL (`docs/testing.md`). Its windows are `StubWindow`s without a platform, its display, cursors, clipboard and platform settings are stubs, its text uses `StubFontSystem`, and its sound `StubAudioSystem`. `Window` became platform-neutral, and `NativeWindow` holds the SDL window under `SwapchainWindow` and `OffscreenWindow`. `AudioSystem` became an abstract base with internal `*Core` methods, as `GpuDevice` is, with `SdlAudioSystem` on SDL_mixer. `PixelyAppBuilder.Build()`, `AddGpuServices` and `RegisterAudio` register a default only when nothing has registered the service, and a frame reads the platform through an internal `IEventSource`.
+
+- SDL's state belongs to the whole process: one event queue, which an app drains of other apps' events, `SDL_Quit` for every subsystem, global hints and the main-thread rule of its video. So no way of sharing SDL lets apps run on several threads at once.
+- A stub records what the game asks for, and the test decides the outcome, as `StubGpuDevice` renders nothing. So the audio stub reads no file and a sound plays until the game stops it, its clip is cleared or disposed, or the test calls `Finish`, rather than running SDL_mixer on a mixer without a device.
+- Headless mode keeps real SDL and a real GPU, so a test that needs to see a window, real fonts or real sound runs headless and stays serial.
+- SDL_ttf closes fonts without its lock and SDL_mixer counts its initialization in a plain `int`, so neither could run in parallel tests without a lock of Pixely's.
+
+Cost: a stub window approximates SDL's dummy driver, so behavior SDL adds later does not reach it without a matching change, and it differs where the dummy driver lacks a feature: always-on-top, dragging, the hit test and system cursors work, and the file dialogs fail. A test app's text measures with fixed metrics, its text sprites skip `GpuMemorySystem`, and neither a font nor an audio path is read, so a test does not catch a missing one. `Window` has about 25 abstract members that every window implements, and every SDL_mixer call goes through a virtual call. A test app has an audio system even when the game registers none, so a game that needs audio without registering it passes its tests. A game's test project needs `[assembly: Parallelizable(ParallelScope.Fixtures)]` to gain anything, and a fixture that starts real SDL, uses Pixely's font system or sets an environment variable an app reads must be `[NonParallelizable]`.
+
 ## 2026-11-10: A window that is not renderable gets no frame
 
 `RenderCoordinator` skips a window whose `Window.IsRenderable` is false on the desktop as it already did in the browser: it acquires no command buffer or swapchain texture, calls neither the provider nor the renderers, and submits only the pending uploads of `GpuMemorySystem` (`docs/window-rendering.md`). This supersedes the desktop acquire of a window that is not renderable in the 2026-09-30 entry, with its first three reasons, the #597 sentence of its fourth, and its costs for hidden windows and for apps without window rendering, and the Vulkan note of the 2026-09-29 entry. The rest of both entries stands. So does the 16 ms wait of `PixelyApp.RunFrame` when no window draws, which paces the loop.

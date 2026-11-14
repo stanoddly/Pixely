@@ -21,6 +21,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Pixely\Pixely.csproj" />
+        <ProjectReference Include="..\Pixely.Audio\Pixely.Audio.csproj" />
         <ProjectReference Include="..\Pixely.Core\Pixely.Core.csproj" />
         <ProjectReference Include="..\Pixely.DependencyInjection\Pixely.DependencyInjection.csproj" />
         <ProjectReference Include="..\Pixely.Headless\Pixely.Headless.csproj" />

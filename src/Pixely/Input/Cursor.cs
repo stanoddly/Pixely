@@ -12,13 +12,13 @@ public sealed class Cursor : IDisposable
 {
     private Pointer<SDL_Cursor> _handle;
 
-    internal Cursor(CursorService owner, Pointer<SDL_Cursor> handle)
+    internal Cursor(ICursorOwner owner, Pointer<SDL_Cursor> handle)
     {
         Owner = owner;
         _handle = handle;
     }
 
-    internal CursorService Owner { get; }
+    internal ICursorOwner Owner { get; }
 
     internal bool IsDisposed => _handle.IsNull;
 

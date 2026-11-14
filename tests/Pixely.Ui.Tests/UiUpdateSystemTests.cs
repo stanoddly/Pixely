@@ -224,13 +224,13 @@ public class UiUpdateSystemTests
     /// A window that never reaches SDL. Constructed uninitialised, so only what is set here answers;
     /// <see cref="Window.IsRenderable"/> is overridden because SDL is otherwise its only source.
     /// </summary>
-    private sealed class TestWindow : Window
+    private sealed class TestWindow : NativeWindow
     {
         // Never runs. The instance is created uninitialised, because the real constructor ends by
         // reading RenderSizeInPixels from SDL. This exists only because a derived class must name a
         // base constructor to compile.
         private TestWindow()
-            : base(default, default, 0, null!, null!, default)
+            : base(default, default, 0, null!, null!, default, 0)
         {
         }
 
@@ -247,16 +247,17 @@ public class UiUpdateSystemTests
     {
         TestWindow window = (TestWindow)RuntimeHelpers.GetUninitializedObject(typeof(TestWindow));
         window.Visible = visible;
-        SetBackingField(window, nameof(Window.ViewScope), viewScope);
+        SetBackingField<Window, ViewScope>(window, nameof(Window.ViewScope), viewScope);
 
         // The window registry keys on this, and two windows sharing an id is what it refuses.
-        SetBackingField(window, nameof(Window.SdlId), sdlId);
+        SetBackingField<NativeWindow, uint>(window, nameof(NativeWindow.SdlId), sdlId);
         return window;
     }
 
-    private static void SetBackingField<T>(Window window, string propertyName, T value)
+    // The property's backing field is declared on TDeclaringWindow.
+    private static void SetBackingField<TDeclaringWindow, T>(Window window, string propertyName, T value) where TDeclaringWindow : Window
     {
-        FieldInfo field = typeof(Window).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo field = typeof(TDeclaringWindow).GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
         field.SetValue(window, value);
     }
 }

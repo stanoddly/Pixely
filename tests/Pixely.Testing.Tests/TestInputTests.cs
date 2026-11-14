@@ -5,8 +5,6 @@ using Pixely.RenderOrchestration;
 
 namespace Pixely.Testing.Tests;
 
-// Builds real apps, which start SDL.
-[NonParallelizable]
 public class TestInputTests
 {
     [Test]

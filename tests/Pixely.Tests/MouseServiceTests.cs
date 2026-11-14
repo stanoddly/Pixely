@@ -10,7 +10,7 @@ public sealed class MouseServiceTests
     public void IsInWindow_FollowsPresenceEventsAndHandlersSeeTheNewState()
     {
         WindowRegistry windowRegistry = new();
-        windowRegistry.Register(InputAutomationTests.CreateWindow(_viewScope, 42));
+        windowRegistry.Register(new FixedWindow(_viewScope));
         MouseService mouseService = new(windowRegistry);
         List<(string Event, bool IsInWindow)> events = new();
         mouseService.SubscribeWindowEnter(_viewScope, 0, _ => events.Add(("enter", mouseService.IsInWindow(_viewScope))));

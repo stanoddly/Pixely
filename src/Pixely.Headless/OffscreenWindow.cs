@@ -12,7 +12,7 @@ namespace Pixely.Headless;
 /// the SDL window. Without a swapchain there is no vsync, so acquiring waits for the GPU to finish all earlier work instead, which
 /// keeps at most about one frame in flight.
 /// </summary>
-public sealed class OffscreenWindow : Window
+public sealed class OffscreenWindow : NativeWindow
 {
     private readonly GpuDevice _gpuDevice;
     private Texture? _colorTarget;
@@ -26,7 +26,7 @@ public sealed class OffscreenWindow : Window
         PixelyFrameClock frameClock,
         PlatformInfo platformInfo,
         WindowCloseBehavior closeBehavior)
-        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior)
+        : base(viewScope, sdlWindow, sdlId, frameClock, platformInfo, closeBehavior, FrameDisplayScale)
     {
         _gpuDevice = gpuDevice;
         ColorTargetFormat = colorTargetFormat;
@@ -57,7 +57,9 @@ public sealed class OffscreenWindow : Window
 
     // The frame has the window's Size in pixels on every platform, so a game that scales by the display scale renders the same
     // whatever displays the machine has.
-    public override float DisplayScale => 1;
+    public override float DisplayScale => FrameDisplayScale;
+
+    private const float FrameDisplayScale = 1;
 
     // There is always a frame to draw, whether or not the SDL window is shown.
     public override bool IsRenderable => true;
