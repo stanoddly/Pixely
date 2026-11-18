@@ -1,4 +1,6 @@
 <Project>
+    <!-- Sets up PixelyBrowserOffline, which has to precede the WebAssembly SDK's targets. -->
+    <Import Project="$(MSBuildThisFileDirectory)Pixely.BrowserOffline.targets" />
     <!--
       The WebAssembly SDK's targets read _WebAssemblyTargetsFile from nuget.g.targets, which Microsoft.Common.targets
       imports, so they must follow the base targets; they come before the hosting targets, whose browser branch relies

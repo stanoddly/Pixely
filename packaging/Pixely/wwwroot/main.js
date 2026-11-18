@@ -13,13 +13,25 @@ globalThis.addEventListener('pixelygpuadapter', event => {
         showFallbackNotice();
     }
 });
-globalThis.addEventListener('pixelyfirstframe', () => loading.indicator.remove(), { once: true });
+// A publish with PixelyBrowserOffline puts serviceWorker in the boot config. The worker is registered after the first frame, so that
+// its downloads do not compete with the game's and find most files in the HTTP cache the game has just filled.
+let offline = false;
+globalThis.addEventListener('pixelyfirstframe', () => {
+    loading.indicator.remove();
+    if (offline) {
+        registerServiceWorker();
+    }
+}, { once: true });
 
 try {
     // runMain resolves with the value the managed Main returns; it rejects when Main throws, which the default OnException does.
     // The loader reads PixelyBrowserBrotli from the boot config that onConfigLoaded hands it, before the runtime downloads any file.
     // onRuntimeInitialized runs once every file the runtime needs to start is in memory.
-    const moduleConfig = { canvas, onConfigLoaded: host.configureCompressedResources, onRuntimeInitialized: () => { loading.stage.textContent = 'Starting…'; } };
+    const onConfigLoaded = config => {
+        offline = config.extensions?.pixely?.serviceWorker === true;
+        return host.configureCompressedResources?.(config);
+    };
+    const moduleConfig = { canvas, onConfigLoaded, onRuntimeInitialized: () => { loading.stage.textContent = 'Starting…'; } };
     const exitCode = await dotnet.withModuleConfig(moduleConfig).withResourceLoader(host.loadCompressedResource).runMain();
     console.log(`Pixely exited with code ${exitCode}`);
     if (exitCode !== 0) {
@@ -52,6 +64,13 @@ function showLoading() {
     indicator.append(stage, bar);
     document.body.append(indicator);
     return { indicator, stage };
+}
+
+// The worker sits beside the page. updateViaCache 'none' makes the browser's update check also bypass the HTTP cache for the assets
+// list the worker imports, which a host such as GitHub Pages lets caches keep for 10 minutes. Browsers hide serviceWorker outside a
+// secure context, where the game then runs online only.
+function registerServiceWorker() {
+    navigator.serviceWorker?.register('service-worker.js', { updateViaCache: 'none' }).catch(error => console.warn('Pixely could not register its offline worker', error));
 }
 
 // A managed exception reaches the page with its message only, so the type comes from the record BrowserHost.ReportExceptionAsync left.

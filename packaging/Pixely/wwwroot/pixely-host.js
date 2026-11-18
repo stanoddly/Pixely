@@ -148,10 +148,19 @@ let brotliFetchPolicy = null;
 // An onConfigLoaded callback for dotnet.withModuleConfig, which runs before the runtime downloads any file. The SDK puts
 // PixelyBrowserBrotli in a publish's boot config as extensions.pixely.brotli; a build has no .br files and no extension. The loader
 // follows the config's disableIntegrityCheck and disableNoCacheFetch; it never sees a file's own cache or credentials setting.
+// It stays off while the offline worker of PixelyBrowserOffline controls the page, since that worker answers from its cache and has
+// no .br copies; a worker of another site on the origin can control the page too, so the check is by the worker's URL.
 export function configureCompressedResources(config) {
-    brotliFetchPolicy = config.extensions?.pixely?.brotli === true
+    const pixely = config.extensions?.pixely;
+    brotliFetchPolicy = pixely?.brotli === true && !(pixely.serviceWorker === true && isControlledByOfflineWorker())
         ? { integrity: !config.disableIntegrityCheck, cache: config.disableNoCacheFetch ? undefined : 'no-cache' }
         : null;
+}
+
+// Node has no service workers and no document.
+function isControlledByOfflineWorker() {
+    const scriptUrl = globalThis.navigator?.serviceWorker?.controller?.scriptURL;
+    return scriptUrl !== undefined && scriptUrl === new URL('service-worker.js', globalThis.document?.baseURI ?? globalThis.location?.href).href;
 }
 
 // A loader for dotnet.withResourceLoader that fetches the Brotli copy a publish writes beside each runtime file and decompresses it

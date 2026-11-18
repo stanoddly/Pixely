@@ -63,14 +63,15 @@ lib/net11.0-browser1.0/                        the library, the browser build of
 analyzers/dotnet/cs/                           the dependency-injection and ECS generators
 Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
+Sdk/Pixely.BrowserOffline.targets              the offline worker of PixelyBrowserOffline, imported before the WebAssembly targets
 Sdk/Pixely.Hosting.targets                     the entry point generator
 Sdk/Pixely.Browser.props                       imports the WebAssembly SDK props on browser-wasm
-Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, XDL's link settings, native URL references, PIXELY0004 to PIXELY0012, the default web assets, the Brotli boot config extension, the browser file system
+Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, XDL's link settings, native URL references, PIXELY0004 to PIXELY0012 and PIXELY0016, the default web assets, the web app manifest, the boot config extension, the deletion of a stale offline worker, the browser file system
 Sdk/Pixely.Native.targets                      the XdlSharp.Native.<rid> reference, PIXELY0014 and PIXELY0015
 Sdk/Pixely.Version.props                       the package version and the XdlSharp version, generated at pack time
 buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK
 tools/net11.0/any/                             the shader compilation task and its props and targets
-wwwroot/                                       index.html, main.js and pixely-host.js for the browser
+wwwroot/                                       index.html, main.js, pixely-host.js and service-worker.js for the browser
 docs/                                          this documentation
 ```
 

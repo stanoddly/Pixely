@@ -50,7 +50,8 @@
         <PublishTrimmed>true</PublishTrimmed>
         <AppendRuntimeIdentifierToOutputPath>true</AppendRuntimeIdentifierToOutputPath>
         <PixelyBrowserDefaultAssets Condition="'$(PixelyBrowserDefaultAssets)' == ''">true</PixelyBrowserDefaultAssets>
-        <PixelyBrowserIndexHtml Condition="'$(PixelyBrowserIndexHtml)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\index.html</PixelyBrowserIndexHtml>
+        <_PixelyBrowserPackageIndexHtml>$(MSBuildThisFileDirectory)..\wwwroot\index.html</_PixelyBrowserPackageIndexHtml>
+        <PixelyBrowserIndexHtml Condition="'$(PixelyBrowserIndexHtml)' == ''">$(_PixelyBrowserPackageIndexHtml)</PixelyBrowserIndexHtml>
         <PixelyBrowserMainJs Condition="'$(PixelyBrowserMainJs)' == ''">$(MSBuildThisFileDirectory)..\wwwroot\main.js</PixelyBrowserMainJs>
         <_PixelyBrowserHostJs>$(MSBuildThisFileDirectory)..\wwwroot\pixely-host.js</_PixelyBrowserHostJs>
     </PropertyGroup>
@@ -153,20 +154,150 @@
     </Target>
 
     <!--
+      WriteLinesToFile turns every backslash of a line into a slash on Unix, escaped or not, which would break a JSON string and a
+      script, so the generated files are written by these two tasks.
+    -->
+    <UsingTask TaskName="_PixelyWriteTextFile" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <File ParameterType="System.String" Required="true" />
+            <Text ParameterType="System.String" Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Code Type="Fragment" Language="cs"><![CDATA[
+                string existing = System.IO.File.Exists(File) ? System.IO.File.ReadAllText(File) : null;
+                if (existing != Text)
+                {
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(File));
+                    System.IO.File.WriteAllText(File, Text);
+                }
+            ]]></Code>
+        </Task>
+    </UsingTask>
+
+    <UsingTask TaskName="_PixelyFormatWebAppManifest" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <Name ParameterType="System.String" Required="true" />
+            <ThemeColor ParameterType="System.String" Required="true" />
+            <Icons ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+            <Text ParameterType="System.String" Output="true" />
+        </ParameterGroup>
+        <Task>
+            <Code Type="Fragment" Language="cs"><![CDATA[
+                string Quote(string value)
+                {
+                    System.Text.StringBuilder builder = new System.Text.StringBuilder("\"");
+                    foreach (char character in value)
+                    {
+                        if (character == '"' || character == '\\')
+                        {
+                            builder.Append('\\').Append(character);
+                        }
+                        else if (character < ' ')
+                        {
+                            builder.Append("\\u").Append(((int)character).ToString("x4"));
+                        }
+                        else
+                        {
+                            builder.Append(character);
+                        }
+                    }
+                    return builder.Append('"').ToString();
+                }
+
+                System.Collections.Generic.List<string> icons = new System.Collections.Generic.List<string>();
+                foreach (Microsoft.Build.Framework.ITaskItem icon in Icons)
+                {
+                    string purpose = icon.GetMetadata("Purpose");
+                    string purposeMember = purpose.Length > 0 ? ", \"purpose\": " + Quote(purpose) : "";
+                    icons.Add("    { \"src\": " + Quote(icon.GetMetadata("Src")) + ", \"sizes\": " + Quote(icon.GetMetadata("Sizes")) + purposeMember + " }");
+                }
+                Text = "{\n"
+                    + "  \"name\": " + Quote(Name) + ",\n"
+                    + "  \"start_url\": \"./\",\n"
+                    + "  \"display\": \"standalone\",\n"
+                    + "  \"background_color\": " + Quote(ThemeColor) + ",\n"
+                    + "  \"theme_color\": " + Quote(ThemeColor) + ",\n"
+                    + "  \"icons\": [\n" + string.Join(",\n", icons) + "\n  ]\n"
+                    + "}\n";
+            ]]></Code>
+        </Task>
+    </UsingTask>
+
+    <!--
+      PixelyBrowserInstallable makes the page an installable web app: a generated manifest.webmanifest with the app's name, colour and
+      icons, and the manifest link and theme colour inserted into the package's own index.html; a page of the project's adds them itself.
+      Both are default assets below, so a project's own wwwroot file at that path replaces either. An icon under wwwroot/ is an asset
+      already and is only named; another is served at its TargetPath, by default its file name. Chrome installs an app only with a
+      192x192 and a 512x512 icon, so a generated manifest without both fails with PIXELY0016. The name and the colour are tested by
+      length, since a quote in them would end a condition's string.
+    -->
+    <Target Name="_PixelyGenerateBrowserInstallableAssets" Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserInstallable)' == 'true'">
+        <PropertyGroup>
+            <_PixelyBrowserGeneratedRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-browser-generated'))</_PixelyBrowserGeneratedRoot>
+            <_PixelyBrowserWwwroot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', 'wwwroot'))</_PixelyBrowserWwwroot>
+            <_PixelyBrowserAppName>$(PixelyBrowserAppName)</_PixelyBrowserAppName>
+            <_PixelyBrowserAppName Condition="'$(PixelyBrowserAppName.Length)' == '0'">$(Product)</_PixelyBrowserAppName>
+            <_PixelyBrowserThemeColor>$(PixelyBrowserThemeColor)</_PixelyBrowserThemeColor>
+            <_PixelyBrowserThemeColor Condition="'$(PixelyBrowserThemeColor.Length)' == '0'">#000</_PixelyBrowserThemeColor>
+            <_PixelyBrowserThemeColorHtml>$(_PixelyBrowserThemeColor.Replace('&amp;', '&amp;amp;').Replace('"', '&amp;quot;').Replace(`'`, '&amp;#39;').Replace('&lt;', '&amp;lt;'))</_PixelyBrowserThemeColorHtml>
+            <_PixelyBrowserOwnManifest>false</_PixelyBrowserOwnManifest>
+            <_PixelyBrowserOwnManifest Condition="Exists('$(_PixelyBrowserWwwroot)manifest.webmanifest')">true</_PixelyBrowserOwnManifest>
+        </PropertyGroup>
+        <ItemGroup>
+            <_PixelyBrowserAppIcon Include="@(PixelyBrowserAppIcon->'%(FullPath)')" />
+            <_PixelyBrowserAppIcon Update="@(_PixelyBrowserAppIcon)" Condition="'%(_PixelyBrowserAppIcon.TargetPath)' == ''" TargetPath="%(Filename)%(Extension)" />
+            <_PixelyBrowserAppIcon Update="@(_PixelyBrowserAppIcon)" Src="$([System.String]::Copy('%(TargetPath)').Replace('\', '/'))" />
+            <_PixelyBrowserAppIcon Update="@(_PixelyBrowserAppIcon)" Condition="$([System.String]::Copy('%(_PixelyBrowserAppIcon.FullPath)').StartsWith('$(_PixelyBrowserWwwroot)'))"
+                                   Src="$([MSBuild]::MakeRelative('$(_PixelyBrowserWwwroot)', '%(FullPath)').Replace('\', '/'))" InWwwroot="true" />
+        </ItemGroup>
+        <!-- Sizes is a space-separated list, so each size is looked up between '|'. -->
+        <PropertyGroup>
+            <_PixelyBrowserAppIconSizes>|@(_PixelyBrowserAppIcon->'%(Sizes)', '|')|</_PixelyBrowserAppIconSizes>
+            <_PixelyBrowserAppIconSizes>$(_PixelyBrowserAppIconSizes.Replace(' ', '|').ToLowerInvariant())</_PixelyBrowserAppIconSizes>
+        </PropertyGroup>
+        <Error Code="PIXELY0016" File="$(MSBuildProjectFullPath)"
+               Condition="'$(_PixelyBrowserOwnManifest)' != 'true' and ('$(_PixelyBrowserAppIconSizes.Contains(`|192x192|`))' != 'true' or '$(_PixelyBrowserAppIconSizes.Contains(`|512x512|`))' != 'true')"
+               Text="PixelyBrowserInstallable needs PixelyBrowserAppIcon items whose Sizes include 192x192 and 512x512, the icons Chrome requires to install an app; add them, or a wwwroot/manifest.webmanifest of the project's own." />
+        <_PixelyFormatWebAppManifest Name="$(_PixelyBrowserAppName)" ThemeColor="$(_PixelyBrowserThemeColor)" Icons="@(_PixelyBrowserAppIcon)" Condition="'$(_PixelyBrowserOwnManifest)' != 'true'">
+            <Output TaskParameter="Text" PropertyName="_PixelyBrowserManifest" />
+        </_PixelyFormatWebAppManifest>
+        <_PixelyWriteTextFile File="$(_PixelyBrowserGeneratedRoot)manifest.webmanifest" Text="$(_PixelyBrowserManifest)" Condition="'$(_PixelyBrowserOwnManifest)' != 'true'" />
+        <ItemGroup Condition="'$(_PixelyBrowserOwnManifest)' != 'true'">
+            <_PixelyBrowserInstallableAssetSource Include="$(_PixelyBrowserGeneratedRoot)manifest.webmanifest" RelativePath="manifest.webmanifest" />
+            <_PixelyBrowserInstallableAssetSource Include="@(_PixelyBrowserAppIcon)" Condition="'%(_PixelyBrowserAppIcon.InWwwroot)' != 'true'" RelativePath="%(_PixelyBrowserAppIcon.TargetPath)" />
+            <FileWrites Include="$(_PixelyBrowserGeneratedRoot)manifest.webmanifest" />
+        </ItemGroup>
+        <!-- The package's page ends its head with a line of its own, so the two tags go in before it. -->
+        <PropertyGroup Condition="'$(PixelyBrowserIndexHtml)' == '$(_PixelyBrowserPackageIndexHtml)'">
+            <_PixelyBrowserInstallableHead>    &lt;link rel="manifest" href="manifest.webmanifest" /&gt;
+    &lt;meta name="theme-color" content="$(_PixelyBrowserThemeColorHtml)" /&gt;
+&lt;/head&gt;</_PixelyBrowserInstallableHead>
+            <_PixelyBrowserIndexHtmlSource>$(_PixelyBrowserGeneratedRoot)index.html</_PixelyBrowserIndexHtmlSource>
+        </PropertyGroup>
+        <_PixelyWriteTextFile File="$(_PixelyBrowserIndexHtmlSource)" Text="$([System.IO.File]::ReadAllText('$(_PixelyBrowserPackageIndexHtml)').Replace('&lt;/head&gt;', '$(_PixelyBrowserInstallableHead)'))"
+                              Condition="'$(PixelyBrowserIndexHtml)' == '$(_PixelyBrowserPackageIndexHtml)'" />
+        <ItemGroup Condition="'$(PixelyBrowserIndexHtml)' == '$(_PixelyBrowserPackageIndexHtml)'">
+            <FileWrites Include="$(_PixelyBrowserIndexHtmlSource)" />
+        </ItemGroup>
+    </Target>
+
+    <!--
       The default page, its bootstrap and the frame loop, as static web assets of the project, each only when the
       project has no wwwroot file at that relative path (two assets with one path fail manifest generation; a linked
       or generated file at that path needs PixelyBrowserDefaultAssets=false). Copied into obj/ first so two projects
       on one SDK do not share an asset identity. The recipe is the WebAssembly SDK's own hot-reload injection.
     -->
     <Target Name="_PixelyDefineBrowserDefaultAssets" BeforeTargets="ResolveProjectStaticWebAssets" AfterTargets="ResolveStaticWebAssetsConfiguration"
-            Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserDefaultAssets)' == 'true'">
+            DependsOnTargets="_PixelyGenerateBrowserInstallableAssets" Condition="'$(_PixelyBrowser)' == 'true' and '$(PixelyBrowserDefaultAssets)' == 'true'">
         <PropertyGroup>
             <_PixelyBrowserAssetsRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'pixely-browser'))</_PixelyBrowserAssetsRoot>
+            <_PixelyBrowserIndexHtmlSource Condition="'$(_PixelyBrowserIndexHtmlSource)' == ''">$(PixelyBrowserIndexHtml)</_PixelyBrowserIndexHtmlSource>
         </PropertyGroup>
         <ItemGroup>
-            <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserIndexHtml)" RelativePath="index.html" />
+            <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserIndexHtmlSource)" RelativePath="index.html" />
             <_PixelyBrowserDefaultAssetSource Include="$(PixelyBrowserMainJs)" RelativePath="main.js" />
             <_PixelyBrowserDefaultAssetSource Include="$(_PixelyBrowserHostJs)" RelativePath="pixely-host.js" />
+            <_PixelyBrowserDefaultAssetSource Include="@(_PixelyBrowserInstallableAssetSource)" />
             <_PixelyBrowserDefaultAssetSource Remove="@(_PixelyBrowserDefaultAssetSource)" Condition="Exists('$(MSBuildProjectDirectory)/wwwroot/%(RelativePath)')" />
         </ItemGroup>
         <Copy SourceFiles="@(_PixelyBrowserDefaultAssetSource)" DestinationFiles="@(_PixelyBrowserDefaultAssetSource->'$(_PixelyBrowserAssetsRoot)%(RelativePath)')" SkipUnchangedFiles="true" />
@@ -188,9 +319,10 @@
 
     <!--
       The publish's boot config carries extensions.pixely, which pixely-host.js reads when main.js passes it the config: brotli is
-      PixelyBrowserBrotli, when the publish writes .br files (CompressionEnabled and brotli in PublishCompressionFormats). A build
-      writes none and gets no extension, so the loader stays off there. Every publish writes the file, only when its content changes,
-      so turning the property off also makes the incremental boot config target run again.
+      PixelyBrowserBrotli, when the publish writes .br files (CompressionEnabled and brotli in PublishCompressionFormats), and
+      serviceWorker is PixelyBrowserOffline, which main.js registers the offline worker for. A build writes none and gets no extension,
+      so the loader stays off there and no worker is registered. Every publish writes the file, only when its content changes, so
+      turning a property off also makes the incremental boot config target run again.
     -->
     <Target Name="_PixelyAddBrowserBootConfigExtension" BeforeTargets="GeneratePublishWasmBootJson" Condition="'$(_PixelyBrowser)' == 'true'">
         <PropertyGroup>
@@ -200,14 +332,38 @@
             <_PixelyPublishWritesBrotli Condition="'$(CompressionEnabled)' == 'true' and '$(_PixelyPublishCompressionFormats.Contains(`;brotli;`))' == 'true'">true</_PixelyPublishWritesBrotli>
             <_PixelyBrowserBrotli>false</_PixelyBrowserBrotli>
             <_PixelyBrowserBrotli Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' == 'true'">true</_PixelyBrowserBrotli>
+            <_PixelyBrowserServiceWorker>false</_PixelyBrowserServiceWorker>
+            <_PixelyBrowserServiceWorker Condition="'$(PixelyBrowserOffline)' == 'true'">true</_PixelyBrowserServiceWorker>
         </PropertyGroup>
         <Warning Code="PIXELY0012" File="$(MSBuildProjectFullPath)" Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' != 'true'"
                  Text="PixelyBrowserBrotli has no effect: this publish writes no .br files, because CompressionEnabled is not true or PublishCompressionFormats has no brotli." />
-        <WriteLinesToFile File="$(_PixelyBrowserBootConfigExtension)" Lines="{ &quot;brotli&quot;: $(_PixelyBrowserBrotli) }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+        <WriteLinesToFile File="$(_PixelyBrowserBootConfigExtension)" Lines="{ &quot;brotli&quot;: $(_PixelyBrowserBrotli), &quot;serviceWorker&quot;: $(_PixelyBrowserServiceWorker) }" Overwrite="true" WriteOnlyWhenDifferent="true" />
         <ItemGroup>
             <WasmBootConfigExtension Include="$(_PixelyBrowserBootConfigExtension)" Key="pixely" />
             <FileWrites Include="$(_PixelyBrowserBootConfigExtension)" />
         </ItemGroup>
+    </Target>
+
+    <!--
+      dotnet publish deletes no file from the publish folder, so a publish without PixelyBrowserOffline into the folder of one with it
+      would keep the old worker and its assets list. The browser's update check would then find the same worker, and the worker's own
+      check would find the list, so it would never retire. Both files, with their compressed copies, are deleted unless they are static
+      web assets of this publish, as a project's own worker or the SDK's offline worker is.
+    -->
+    <Target Name="_PixelyDeleteStaleBrowserServiceWorker" AfterTargets="_SplitPublishStaticWebAssetsByCopyOptions" Condition="'$(_PixelyBrowser)' == 'true'">
+        <PropertyGroup>
+            <_PixelyBrowserPublishDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(PublishDir)'))</_PixelyBrowserPublishDir>
+            <_PixelyBrowserPublishRoot>$([MSBuild]::NormalizeDirectory('$(_PixelyBrowserPublishDir)', 'wwwroot', '$(StaticWebAssetBasePath.Replace(`\`, `/`).Trim(`/`))'))</_PixelyBrowserPublishRoot>
+        </PropertyGroup>
+        <ItemGroup>
+            <_PixelyBrowserServiceWorkerFileName Include="service-worker.js;service-worker-assets.js" />
+            <_PixelyBrowserStaleServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity)')" />
+            <_PixelyBrowserStaleServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity).br')" />
+            <_PixelyBrowserStaleServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity).gz')" />
+            <_PixelyBrowserPublishedFile Include="$([System.IO.Path]::GetFullPath('$(_PixelyBrowserPublishDir)%(_PublishStaticWebAssetsTargetPath.TargetPath)'))" />
+            <_PixelyBrowserStaleServiceWorkerFile Remove="@(_PixelyBrowserPublishedFile)" />
+        </ItemGroup>
+        <Delete Files="@(_PixelyBrowserStaleServiceWorkerFile)" />
     </Target>
 
     <!--
