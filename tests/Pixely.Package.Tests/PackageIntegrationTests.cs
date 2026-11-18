@@ -1225,6 +1225,40 @@ public class PackageIntegrationTests
         Assert.That(Directory.GetFiles(appRoot, "service-worker*"), Is.Empty);
     }
 
+    // A project's own manifest replaces the generated one, and the icons it names are still served. A quote in an icon's path passes
+    // through the icons, and one in a static web asset's path through the deletion of a stale worker, which every browser publish runs.
+    [Test]
+    public async Task BrowserPublishWithAnOwnManifestServesTheIcons()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
+        string quotedIcon = Path.Combine(consumerDirectory, "Extras", "it's.png");
+        Directory.CreateDirectory(consumerWwwroot);
+        try
+        {
+            File.WriteAllText(Path.Combine(consumerWwwroot, "manifest.webmanifest"), "{ \"name\": \"Own\" }\n");
+            File.WriteAllText(Path.Combine(consumerWwwroot, "it's.txt"), "quoted\n");
+            File.Copy(Path.Combine(consumerDirectory, "Extras", "icon-192.png"), quotedIcon, overwrite: true);
+
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "BrowserContentConsumerQuotedIcon=true"]);
+            string wwwroot = GetPublishedWwwroot(consumerDirectory);
+            Assert.Multiple(() =>
+            {
+                Assert.That(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest")), Does.Contain("\"Own\""));
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icons", "icon-512.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "it's.txt")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "it's.png")), Is.True);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(consumerWwwroot);
+            File.Delete(quotedIcon);
+        }
+    }
+
     // A build has no assets list and no worker, which is what retires a worker an earlier publish left on the same origin.
     [Test]
     public async Task BrowserBuildWithOfflineServesNoWorker()

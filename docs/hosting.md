@@ -472,9 +472,9 @@ window of its own and an entry in the launcher or on the home screen:
 - The package's `index.html` gets `<link rel="manifest" href="manifest.webmanifest" />` and
   `<meta name="theme-color">` before `</head>`. A project's own `wwwroot/index.html` or a page named
   by `PixelyBrowserIndexHtml` adds both itself.
-- A project's own `wwwroot/manifest.webmanifest` replaces the generated one; the icon check is then
-  the project's own. `PixelyBrowserDefaultAssets=false` turns off the generated manifest with the
-  rest of the page.
+- A project's own `wwwroot/manifest.webmanifest` replaces the generated one. Its icons are still
+  served, and the icon check is then the project's own. `PixelyBrowserDefaultAssets=false` turns off the generated manifest, the
+  served icons and the tags with the rest of the page, since Pixely then adds no web asset.
 
 A browser installs only a page from a secure context, which WebGPU needs anyway. An installed app
 still needs the network unless `PixelyBrowserOffline` is on as well.
