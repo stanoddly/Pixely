@@ -133,7 +133,7 @@ public sealed class StubAudioSystem : AudioSystem
     {
     }
 
-    internal override void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3 position)
+    internal override void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3? position)
     {
     }
 

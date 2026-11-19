@@ -139,13 +139,19 @@ internal unsafe sealed class SdlAudioSystem : AudioSystem
         SdlError.ThrowOnFalse(MIX_SetTrackLoops(track, loopCount), nameof(MIX_SetTrackLoops));
     }
 
-    internal override void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3 position)
+    internal override void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3? position)
     {
+        if (position is not Vector3 value)
+        {
+            SdlError.ThrowOnFalse(MIX_SetTrack3DPosition(track, null), nameof(MIX_SetTrack3DPosition));
+            return;
+        }
+
         MIX_Point3D point = new()
         {
-            x = position.X,
-            y = position.Y,
-            z = position.Z
+            x = value.X,
+            y = value.Y,
+            z = value.Z
         };
 
         SdlError.ThrowOnFalse(MIX_SetTrack3DPosition(track, &point), nameof(MIX_SetTrack3DPosition));

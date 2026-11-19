@@ -1,9 +1,11 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Pixely.App;
 using Pixely.Audio;
 using Pixely.Content;
+using XdlSharp;
 using static XdlSharp.Xdl;
 
 namespace Pixely.Tests;
@@ -87,6 +89,34 @@ public sealed class AudioSystemTests
         AudioSource source = _audioSystem.CreateSource();
 
         Assert.That(source.Play, Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public void Position_ByDefault_IsNullAndLeavesTheTrackUnspatialized()
+    {
+        AudioSource source = CreateSourceWithBuffer();
+        _audioSystem.Listener.Position = new Vector3(4, 0, 0);
+
+        source.Play();
+
+        Assert.That((source.Position, GetTrackPosition(source)), Is.EqualTo(((Vector3?)null, Vector3.Zero)));
+    }
+
+    [Test]
+    public void Position_SetWhilePlaying_SpatializesRelativeToTheListener_AndNullUndoesIt()
+    {
+        AudioSource source = CreateSourceWithBuffer();
+        _audioSystem.Listener.Position = new Vector3(4, 0, 0);
+        source.Play();
+
+        source.Position = new Vector3(1, 2, 3);
+        Vector3 positioned = GetTrackPosition(source);
+        _audioSystem.Listener.Position = new Vector3(0, 0, 1);
+        Vector3 listenerMoved = GetTrackPosition(source);
+        source.Position = null;
+        Vector3 cleared = GetTrackPosition(source);
+
+        Assert.That((positioned, listenerMoved, cleared, source.Position), Is.EqualTo((new Vector3(-3, 2, 3), new Vector3(1, 2, 2), Vector3.Zero, (Vector3?)null)));
     }
 
     [Test]
@@ -285,6 +315,14 @@ public sealed class AudioSystemTests
             Assert.That(_audioSystem.CreateSource, Throws.TypeOf<ObjectDisposedException>());
             Assert.That(() => _audioSystem.LoadBuffer(SoundPath), Throws.TypeOf<ObjectDisposedException>());
         });
+    }
+
+    // SDL_mixer reports the origin for an unspatialized track.
+    private static unsafe Vector3 GetTrackPosition(AudioSource source)
+    {
+        MIX_Point3D point;
+        Assert.That(MIX_GetTrack3DPosition(source.Pointer, &point), Is.True);
+        return new Vector3(point.x, point.y, point.z);
     }
 
     private AudioSource CreateSourceWithBuffer()

@@ -155,7 +155,10 @@ public abstract class AudioSystem : IAudioSystem, IDisposable
     {
         foreach (AudioSource source in _sources.Copy())
         {
-            source.ApplyPosition();
+            if (source.Position is not null)
+            {
+                source.ApplyPosition();
+            }
         }
     }
 
@@ -236,8 +239,8 @@ public abstract class AudioSystem : IAudioSystem, IDisposable
     // -1 loops forever, 0 plays once.
     internal abstract void SetTrackLoopsCore(Pointer<MIX_Track> track, int loopCount);
 
-    // Relative to the listener.
-    internal abstract void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3 position);
+    // Relative to the listener. Null turns spatialization off.
+    internal abstract void SetTrack3DPositionCore(Pointer<MIX_Track> track, Vector3? position);
 
     internal abstract void TagTrackCore(Pointer<MIX_Track> track, string tag);
 
