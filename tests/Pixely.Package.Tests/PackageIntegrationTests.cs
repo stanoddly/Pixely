@@ -1220,6 +1220,47 @@ public class PackageIntegrationTests
         }
     }
 
+    // An icon under the project's wwwroot is named by its path there, and a page named by PixelyBrowserIndexHtml gets no tags.
+    [Test]
+    public async Task BrowserPublishNamesAWwwrootIconByItsPathAndLeavesAnOwnPage()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
+        const string ownPage = "<!DOCTYPE html>\n<html>\n<head>\n</head>\n<body></body>\n</html>\n";
+        string ownPagePath = Path.Combine(_testArtifactsDirectory, "own-index.html");
+        File.WriteAllText(ownPagePath, ownPage);
+        Directory.CreateDirectory(Path.Combine(consumerWwwroot, "images"));
+        string itemsPath = Path.Combine(_testArtifactsDirectory, "extra-items.props");
+        File.WriteAllText(itemsPath, """
+            <Project>
+              <ItemGroup>
+                <PixelyBrowserAppIcon Include="wwwroot\images\icon-192.png" Sizes="192x192" />
+                <PixelyBrowserAppIcon Include="Extras\icon-512.png" Sizes="512x512" />
+              </ItemGroup>
+            </Project>
+            """);
+        try
+        {
+            File.Copy(Path.Combine(consumerDirectory, "Extras", "icon-192.png"), Path.Combine(consumerWwwroot, "images", "icon-192.png"));
+
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", $"BrowserContentConsumerExtraItems={itemsPath}", $"PixelyBrowserIndexHtml={ownPagePath}"]);
+            string wwwroot = GetPublishedWwwroot(consumerDirectory);
+            using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest")));
+            Assert.Multiple(() =>
+            {
+                Assert.That(manifest.RootElement.GetProperty("icons").EnumerateArray().Select(icon => icon.GetProperty("src").GetString()), Is.EqualTo(new[] { "images/icon-192.png", "icon-512.png" }));
+                Assert.That(File.Exists(Path.Combine(wwwroot, "images", "icon-192.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.False);
+                Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Is.EqualTo(ownPage));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(consumerWwwroot);
+        }
+    }
+
     [Test]
     public async Task BrowserBuildOfAnInstallableAppWithoutBothIconsFailsWithPixely0016()
     {

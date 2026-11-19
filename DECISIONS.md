@@ -2,7 +2,7 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-11-18: An installable browser app gets a generated manifest and no service worker
+## 2026-11-19: An installable browser app gets a generated manifest and no service worker
 
 `PixelyBrowserInstallable` generates a web app manifest (`docs/hosting.md`). A publish has no service worker, so an installed game still needs the network to start.
 
