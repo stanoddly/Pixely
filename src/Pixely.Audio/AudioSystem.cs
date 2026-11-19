@@ -209,6 +209,8 @@ public abstract class AudioSystem : IAudioSystem, IDisposable
 
     internal abstract void DestroyAudioCore(Pointer<MIX_Audio> audio);
 
+    internal abstract TimeSpan? GetAudioDurationCore(Pointer<MIX_Audio> audio);
+
     // A sound decoded while it plays. The content opens here, so a missing path throws from OpenStream.
     internal abstract nint OpenStreamCore(ReadOnlySpan<char> path);
 
@@ -224,7 +226,8 @@ public abstract class AudioSystem : IAudioSystem, IDisposable
     // A zero stream detaches the track's stream.
     internal abstract void SetTrackStreamCore(Pointer<MIX_Track> track, nint stream);
 
-    internal abstract void PlayTrackCore(Pointer<MIX_Track> track);
+    // Restarts a playing or paused track. The loop count is as in SetTrackLoopsCore, and SDL_mixer resets it on each play.
+    internal abstract void PlayTrackCore(Pointer<MIX_Track> track, int loopCount, TimeSpan start, TimeSpan fadeIn);
 
     internal abstract void PauseTrackCore(Pointer<MIX_Track> track);
 

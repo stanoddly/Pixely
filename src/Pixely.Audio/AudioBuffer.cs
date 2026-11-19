@@ -17,6 +17,10 @@ public sealed class AudioBuffer : AudioClip
 
     internal override AudioSystem AudioSystem => _audioSystem;
 
+    // Rounded down to whole milliseconds. Null for a sound that loops forever, such as one with a WAV loop whose play count is zero
+    // or an OGG LOOPSTART tag without a count.
+    public TimeSpan? Duration => _audioSystem.GetAudioDurationCore(SdlAudio);
+
     internal Pointer<MIX_Audio> SdlAudio
     {
         get

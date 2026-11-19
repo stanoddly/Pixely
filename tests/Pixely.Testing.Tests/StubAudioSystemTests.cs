@@ -71,6 +71,17 @@ public class StubAudioSystemTests
     }
 
     [Test]
+    public void Play_FromAnyStart_PlaysABufferWithoutALength()
+    {
+        using StubAudioSystem audio = new();
+        AudioSource source = CreateSourceWithBuffer(audio);
+
+        source.Play(TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(10));
+
+        Assert.That((source.State, ((AudioBuffer)source.Clip!).Duration), Is.EqualTo((AudioSourceState.Playing, (TimeSpan?)TimeSpan.Zero)));
+    }
+
+    [Test]
     public void Clip_ClearedOrDisposed_StopsTheSource_AndChanged_KeepsItPlaying()
     {
         using StubAudioSystem audio = new();
@@ -244,6 +255,7 @@ public class StubAudioSystemTests
         Assert.Multiple(() =>
         {
             Assert.That(source.Play, Throws.InvalidOperationException);
+            Assert.That(() => CreateSourceWithBuffer(audio).Play(TimeSpan.FromMilliseconds(-1)), Throws.TypeOf<ArgumentOutOfRangeException>());
             Assert.That(() => source.Gain = -1, Throws.TypeOf<ArgumentOutOfRangeException>());
             Assert.That(() => audio.MasterGain = -1, Throws.TypeOf<ArgumentOutOfRangeException>());
             Assert.That(() => source.Clip = other.LoadBuffer("sounds/jump.wav"), Throws.ArgumentException);
