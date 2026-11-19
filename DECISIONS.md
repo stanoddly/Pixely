@@ -2,17 +2,14 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
-## 2026-11-18: Offline play reuses the .NET SDK's service worker targets, and the worker retires itself
+## 2026-11-18: An installable browser app gets a generated manifest and no service worker
 
-`PixelyBrowserInstallable` generates a web app manifest and `PixelyBrowserOffline` publishes a service worker (`docs/hosting.md`). The worker is declared as the .NET SDK's `ServiceWorker` item, and its list of files is the SDK's `service-worker-assets.js`, with each file's SHA-256.
+`PixelyBrowserInstallable` generates a web app manifest (`docs/hosting.md`). A publish has no service worker, so an installed game still needs the network to start.
 
-- The static web assets SDK already lists every published file with its hash, compressed copies excepted, with the URLs the boot config requests. Pixely's own generator would repeat it.
-- The two properties are separate because Chrome installs an app from its menu without a worker, while the worker delays every update to the launch after the one that found it.
-- A browser keeps a registered worker when its script answers 404, so a publish without the worker cannot remove it. The worker therefore checks its list whenever it serves the page from its cache, and unregisters itself on a 4xx other than 408 and 429 or on an HTML page. That covers a later publish without the property and a build served on the same origin, and needs no retiring worker or publish mode. `dotnet publish` deletes no files, so a publish deletes the two worker files unless they are its own assets.
-- Every site on an origin shares Cache Storage and scopes nest, as on one GitHub Pages account, so caches are named by scope and compared exactly.
+- Chrome installs an app from its menu without a worker.
 - WriteLinesToFile turns backslashes into slashes on Unix, and a quote in a path ends a property function's argument, so an inline task resolves the icons and writes the manifest and the page.
 
-Cost: the first visit with `PixelyBrowserBrotli` downloads the Brotli-loaded files twice, and updates download changed ones without Brotli, because the list has no `.br` copies and the worker no decoder. A deploy that loses the list, or a passing 4xx, retires offline play until the next launch with a network. A project's own `main.js` registers the worker itself, and nothing warns when it does not. The worker's behaviour in a browser is tested by hand with `tests/Pixely.Browser.Harness`, not in CI. The inline task compiles with Roslyn on its first use in a build.
+Cost: the inline task compiles with Roslyn on its first use in a build.
 
 ## 2026-11-14: A test app never starts SDL, so tests run in parallel
 

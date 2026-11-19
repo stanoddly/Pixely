@@ -333,10 +333,9 @@
 
     <!--
       The publish's boot config carries extensions.pixely, which pixely-host.js reads when main.js passes it the config: brotli is
-      PixelyBrowserBrotli, when the publish writes .br files (CompressionEnabled and brotli in PublishCompressionFormats), and
-      serviceWorker is PixelyBrowserOffline, which main.js registers the offline worker for. A build writes none and gets no extension,
-      so the loader stays off there and no worker is registered. Every publish writes the file, only when its content changes, so
-      turning a property off also makes the incremental boot config target run again.
+      PixelyBrowserBrotli, when the publish writes .br files (CompressionEnabled and brotli in PublishCompressionFormats). A build
+      writes none and gets no extension, so the loader stays off there. Every publish writes the file, only when its content changes,
+      so turning the property off also makes the incremental boot config target run again.
     -->
     <Target Name="_PixelyAddBrowserBootConfigExtension" BeforeTargets="GeneratePublishWasmBootJson" Condition="'$(_PixelyBrowser)' == 'true'">
         <PropertyGroup>
@@ -346,41 +345,14 @@
             <_PixelyPublishWritesBrotli Condition="'$(CompressionEnabled)' == 'true' and '$(_PixelyPublishCompressionFormats.Contains(`;brotli;`))' == 'true'">true</_PixelyPublishWritesBrotli>
             <_PixelyBrowserBrotli>false</_PixelyBrowserBrotli>
             <_PixelyBrowserBrotli Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' == 'true'">true</_PixelyBrowserBrotli>
-            <_PixelyBrowserServiceWorker>false</_PixelyBrowserServiceWorker>
-            <_PixelyBrowserServiceWorker Condition="'$(PixelyBrowserOffline)' == 'true'">true</_PixelyBrowserServiceWorker>
         </PropertyGroup>
         <Warning Code="PIXELY0012" File="$(MSBuildProjectFullPath)" Condition="'$(PixelyBrowserBrotli)' == 'true' and '$(_PixelyPublishWritesBrotli)' != 'true'"
                  Text="PixelyBrowserBrotli has no effect: this publish writes no .br files, because CompressionEnabled is not true or PublishCompressionFormats has no brotli." />
-        <WriteLinesToFile File="$(_PixelyBrowserBootConfigExtension)" Lines="{ &quot;brotli&quot;: $(_PixelyBrowserBrotli), &quot;serviceWorker&quot;: $(_PixelyBrowserServiceWorker) }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+        <WriteLinesToFile File="$(_PixelyBrowserBootConfigExtension)" Lines="{ &quot;brotli&quot;: $(_PixelyBrowserBrotli) }" Overwrite="true" WriteOnlyWhenDifferent="true" />
         <ItemGroup>
             <WasmBootConfigExtension Include="$(_PixelyBrowserBootConfigExtension)" Key="pixely" />
             <FileWrites Include="$(_PixelyBrowserBootConfigExtension)" />
         </ItemGroup>
-    </Target>
-
-    <!--
-      dotnet publish deletes no file from the publish folder, so a publish without PixelyBrowserOffline into the folder of one with it
-      would keep the old worker and its assets list. The browser's update check would then find the same worker, and the worker's own
-      check would find the list, so it would never retire. Both files, with their compressed copies, are deleted unless they are static
-      web assets of this publish, as a project's own worker or the SDK's offline worker is.
-    -->
-    <Target Name="_PixelyDeleteStaleBrowserServiceWorker" AfterTargets="_SplitPublishStaticWebAssetsByCopyOptions" Condition="'$(_PixelyBrowser)' == 'true'">
-        <PropertyGroup>
-            <_PixelyBrowserPublishDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(PublishDir)'))</_PixelyBrowserPublishDir>
-            <_PixelyBrowserPublishRoot>$([MSBuild]::NormalizeDirectory('$(_PixelyBrowserPublishDir)', 'wwwroot', '$(StaticWebAssetBasePath.Replace(`\`, `/`).Trim(`/`))'))</_PixelyBrowserPublishRoot>
-        </PropertyGroup>
-        <ItemGroup>
-            <_PixelyBrowserServiceWorkerFileName Include="service-worker.js;service-worker-assets.js" />
-            <_PixelyBrowserServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity)')" />
-            <_PixelyBrowserServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity).br')" />
-            <_PixelyBrowserServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFileName->'$(_PixelyBrowserPublishRoot)%(Identity).gz')" />
-            <!-- FullPath normalizes both lists alike; a property function would break on a quote in an asset's path. -->
-            <_PixelyBrowserStaleServiceWorkerFile Include="@(_PixelyBrowserServiceWorkerFile->'%(FullPath)')" />
-            <_PixelyBrowserPublishedFileSpec Include="$(_PixelyBrowserPublishDir)%(_PublishStaticWebAssetsTargetPath.TargetPath)" />
-            <_PixelyBrowserPublishedFile Include="@(_PixelyBrowserPublishedFileSpec->'%(FullPath)')" />
-            <_PixelyBrowserStaleServiceWorkerFile Remove="@(_PixelyBrowserPublishedFile)" />
-        </ItemGroup>
-        <Delete Files="@(_PixelyBrowserStaleServiceWorkerFile)" />
     </Target>
 
     <!--

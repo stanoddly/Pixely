@@ -440,9 +440,6 @@ content.
 Leave the property off on a host that sends `Content-Encoding: br` itself. The download is the same
 size, and Chrome compiles `dotnet.native.wasm` while it downloads instead of decoding it afterwards.
 
-While the offline worker of `PixelyBrowserOffline` controls the page, the loader stays off: the
-worker answers from its cache, which holds no `.br` copies (see [Offline play](#offline-play)).
-
 ### Installable app
 
 `PixelyBrowserInstallable=true` makes the published page a web app that a browser can install, as a
@@ -477,63 +474,4 @@ window of its own and an entry in the launcher or on the home screen:
   served icons and the tags with the rest of the page, since Pixely then adds no web asset.
 
 A browser installs only a page from a secure context, which WebGPU needs anyway. An installed app
-still needs the network unless `PixelyBrowserOffline` is on as well.
-
-### Offline play
-
-`PixelyBrowserOffline=true` makes a publish keep every file of the game in the browser, so the game
-starts without a network after one visit:
-
-1. The publish adds `service-worker.js`, a service worker (a script the browser runs beside the
-   page, which can answer the page's requests). It also adds `service-worker-assets.js`, the .NET
-   SDK's list of every published file with its SHA-256, compressed copies excepted. Pixely uses the
-   .NET SDK's own service worker targets, which it turns on with `ServiceWorkerAssetsManifest`.
-2. The boot config gets `"serviceWorker": true` in `extensions.pixely`. The default `main.js`
-   registers the worker after the first frame, so its downloads do not compete with the game's and
-   mostly come from the HTTP cache the game has just filled. A build has no extension and serves no
-   worker.
-3. The worker downloads every listed file, `Content.pk3` included, and checks each against its
-   hash. A file an earlier version cached with the same hash is copied, not downloaded again.
-4. From the next visit on, the worker answers the page and every listed file from its cache. It
-   answers only the page at its own folder, `index.html` or the folder itself, so a worker at the
-   root of an origin leaves the pages of other sites there alone.
-5. A new publish gives the list new hashes. The browser installs the new worker in the background,
-   and it takes over when every page of the old one has closed, so players get an update on the
-   launch after the one that found it.
-
-To turn offline play off, publish without the property. Each time the worker answers the page from
-its cache, it also requests `service-worker-assets.js`. When the server answers a 4xx other than 408
-and 429, or answers with an HTML page as a server that falls back to `index.html` does, the worker
-unregisters itself, loads that page again from the network and deletes its caches. Other open
-pages carry on until their next navigation. A 5xx or no network leaves the worker in place. A build
-served on the same origin, such as `dotnet run` on `localhost`, has no list either, so it retires a
-worker an earlier publish left there. `dotnet publish` deletes no file from the publish folder, so a
-publish without the property deletes the two files and their compressed copies from it.
-
-- Caches are named `pixely|<version>|<scope>`, where the version is a hash of the list and the scope
-  the worker's folder. The worker deletes only caches of its own scope, compared exactly, so games
-  on one origin, such as the project sites of one GitHub Pages account, keep their caches.
-- Under `StaticWebAssetBasePath` the SDK writes the base path in front of every URL in the list, while
-  the worker is served beneath it. The worker strips the path in front of `_framework/dotnet.js`,
-  which every publish lists.
-- A project's own `wwwroot/service-worker.js` replaces the package's, in a publish and in a build,
-  where the SDK serves it with a build list.
-- A project's own `main.js` registers the worker itself when `extensions.pixely.serviceWorker` is
-  true, which `onConfigLoaded` hands it:
-
-  ```js
-  navigator.serviceWorker?.register('service-worker.js', { updateViaCache: 'none' });
-  ```
-
-  `updateViaCache: 'none'` makes the browser's update check bypass the HTTP cache for the list as
-  well as the worker. GitHub Pages lets caches keep files for 10 minutes, so without it a new worker
-  can install the old list.
-- With `PixelyBrowserBrotli`, the first visit downloads the Brotli-loaded files twice, once for the
-  page and once uncompressed for the worker, and updates download changed ones uncompressed or with
-  the host's gzip. The list has no `.br` copies, and the worker has no Brotli decoder.
-- A wrongly retired worker, after a deploy that lost the list or a passing 4xx, comes back on the
-  next launch with a network.
-- Service workers exist only in a secure context; elsewhere the game runs online only.
-
-The worker's behaviour in a browser is tested by hand with `run-offline.js` in
-`tests/Pixely.Browser.Harness`.
+still needs the network to start.

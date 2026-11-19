@@ -1153,17 +1153,14 @@ public class PackageIntegrationTests
         Assert.That(result, Does.Contain("RESULT error").And.Contain("PixelyBrowserVfsFile with TargetPath Content.pk3").And.Contain("RESULT exit code 1"));
     }
 
-    // One publish covers the manifest with a name that needs escaping, the icons at their target paths, the tags in the package's page,
-    // the offline worker with its assets list and the boot config flag. A second publish into the same folder without the worker
-    // deletes the worker's files, so a worker installed from the first retires.
+    // One publish covers the manifest with a name that needs escaping, the icons at their target paths and the tags in the package's page.
     [Test]
-    public async Task BrowserPublishMakesAnInstallableOfflineAppAndRetiresItsWorker()
+    public async Task BrowserPublishMakesAnInstallableApp()
     {
         string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
         DeleteConsumerOutputs("BrowserContentConsumer");
-        string[] installable = ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "PixelyBrowserAppName=Pixely%3B C:\\Games 'Game'", "PixelyBrowserThemeColor=#123456"];
 
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: [.. installable, "PixelyBrowserOffline=true"]);
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "PixelyBrowserAppName=Pixely%3B C:\\Games 'Game'", "PixelyBrowserThemeColor=#123456"]);
         string wwwroot = GetPublishedWwwroot(consumerDirectory);
         using (JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest"))))
         {
@@ -1182,51 +1179,17 @@ public class PackageIntegrationTests
                 Assert.That(icons[1].GetProperty("purpose").GetString(), Is.EqualTo("any maskable"));
             });
         }
-        string serviceWorker = File.ReadAllText(Path.Combine(wwwroot, "service-worker.js"));
-        string assetsList = File.ReadAllText(Path.Combine(wwwroot, "service-worker-assets.js"));
         Assert.Multiple(() =>
         {
             Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.True);
             Assert.That(File.Exists(Path.Combine(wwwroot, "icons", "icon-512.png")), Is.True);
             Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")),
                 Does.Contain("<link rel=\"manifest\" href=\"manifest.webmanifest\" />\n    <meta name=\"theme-color\" content=\"#123456\" />\n</head>").And.Contain("<canvas id=\"canvas\""));
-            Assert.That(serviceWorker, Does.StartWith("/* Manifest version: ").And.Contain("self.importScripts('./service-worker-assets.js');").And.Contain(".join('\\n')"));
-            Assert.That(assetsList, Does.StartWith("self.assetsManifest = ").And.Contain("\"Content.pk3\"").And.Contain("\"index.html\"").And.Contain("\"manifest.webmanifest\"")
-                .And.Contain("\"_framework/dotnet.js\"").And.Not.Contain("service-worker.js").And.Not.Contain(".br\""));
-            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""pixely"":\s*\{\s*""brotli"":\s*false,\s*""serviceWorker"":\s*true"));
         });
-
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: installable);
-        Assert.Multiple(() =>
-        {
-            Assert.That(Directory.GetFiles(wwwroot, "service-worker*"), Is.Empty);
-            Assert.That(File.Exists(Path.Combine(wwwroot, "manifest.webmanifest")), Is.True);
-            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "_framework", "dotnet.js")), Does.Match(@"""serviceWorker"":\s*false"));
-        });
-    }
-
-    // Under a base path the SDK writes the prefix in front of every URL of the assets list, the runtime's included, which the worker
-    // strips, and publishes the worker beneath it, where the deletion looks.
-    [Test]
-    public async Task BrowserPublishUnderABasePathListsItAndDeletesTheWorkerThere()
-    {
-        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
-        DeleteConsumerOutputs("BrowserContentConsumer");
-
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["StaticWebAssetBasePath=app", "PixelyBrowserOffline=true"]);
-        string appRoot = Path.Combine(GetPublishedWwwroot(consumerDirectory), "app");
-        Assert.Multiple(() =>
-        {
-            Assert.That(File.Exists(Path.Combine(appRoot, "service-worker.js")), Is.True);
-            Assert.That(File.ReadAllText(Path.Combine(appRoot, "service-worker-assets.js")), Does.Contain("\"app/Content.pk3\"").And.Contain("\"app/_framework/dotnet.js\""));
-        });
-
-        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["StaticWebAssetBasePath=app"]);
-        Assert.That(Directory.GetFiles(appRoot, "service-worker*"), Is.Empty);
     }
 
     // A project's own manifest replaces the generated one, and the icons it names are still served. A quote in an icon's path passes
-    // through the icons, and one in a static web asset's path through the deletion of a stale worker, which every browser publish runs.
+    // through the icons.
     [Test]
     public async Task BrowserPublishWithAnOwnManifestServesTheIcons()
     {
@@ -1238,7 +1201,6 @@ public class PackageIntegrationTests
         try
         {
             File.WriteAllText(Path.Combine(consumerWwwroot, "manifest.webmanifest"), "{ \"name\": \"Own\" }\n");
-            File.WriteAllText(Path.Combine(consumerWwwroot, "it's.txt"), "quoted\n");
             File.Copy(Path.Combine(consumerDirectory, "Extras", "icon-192.png"), quotedIcon, overwrite: true);
 
             await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "BrowserContentConsumerQuotedIcon=true"]);
@@ -1248,7 +1210,6 @@ public class PackageIntegrationTests
                 Assert.That(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest")), Does.Contain("\"Own\""));
                 Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.True);
                 Assert.That(File.Exists(Path.Combine(wwwroot, "icons", "icon-512.png")), Is.True);
-                Assert.That(File.Exists(Path.Combine(wwwroot, "it's.txt")), Is.True);
                 Assert.That(File.Exists(Path.Combine(wwwroot, "it's.png")), Is.True);
             });
         }
@@ -1257,17 +1218,6 @@ public class PackageIntegrationTests
             DeleteDirectory(consumerWwwroot);
             File.Delete(quotedIcon);
         }
-    }
-
-    // A build has no assets list and no worker, which is what retires a worker an earlier publish left on the same origin.
-    [Test]
-    public async Task BrowserBuildWithOfflineServesNoWorker()
-    {
-        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
-        DeleteConsumerOutputs("BrowserContentConsumer");
-
-        await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", properties: ["PixelyBrowserOffline=true"]);
-        Assert.That(File.ReadAllText(Path.Combine(GetBrowserIntermediateDirectory(consumerDirectory), "staticwebassets.build.json")), Does.Not.Contain("service-worker"));
     }
 
     [Test]
