@@ -55,6 +55,24 @@ internal unsafe sealed class SdlAudioSystem : AudioSystem
         MIX_DestroyAudio(audio);
     }
 
+    // A buffer decoded in full has a known length. SDL_mixer keeps one that loops forever undecoded, with MIX_DURATION_INFINITE.
+    internal override TimeSpan? GetAudioDurationCore(Pointer<MIX_Audio> audio)
+    {
+        long frames = MIX_GetAudioDuration(audio);
+        if (frames < 0)
+        {
+            return null;
+        }
+
+        long milliseconds = MIX_AudioFramesToMS(audio, frames);
+        if (milliseconds < 0)
+        {
+            SdlError.Throw(nameof(MIX_GetAudioDuration));
+        }
+
+        return TimeSpan.FromMilliseconds(milliseconds);
+    }
+
     internal override nint OpenStreamCore(ReadOnlySpan<char> path)
     {
         Stream fileStream = _contentSource.OpenStream(path);
@@ -94,9 +112,30 @@ internal unsafe sealed class SdlAudioSystem : AudioSystem
         SdlError.ThrowOnFalse(MIX_SetTrackIOStream(track, ioStream, false), nameof(MIX_SetTrackIOStream));
     }
 
-    internal override void PlayTrackCore(Pointer<MIX_Track> track)
+    internal override void PlayTrackCore(Pointer<MIX_Track> track, int loopCount, TimeSpan start, TimeSpan fadeIn)
     {
-        SdlError.ThrowOnFalse(MIX_PlayTrack(track, 0), nameof(MIX_PlayTrack));
+        // SDL_mixer fails to seek past the end of a buffer without setting an error. A stream's track has no audio here, so its
+        // decoder decides.
+        long startMilliseconds = (long)start.TotalMilliseconds;
+        Pointer<MIX_Audio> audio = MIX_GetTrackAudio(track);
+        if (!audio.IsNull && GetAudioDurationCore(audio) is { } duration && TimeSpan.FromMilliseconds(startMilliseconds) > duration)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start), start, "The start is after the end of the sound.");
+        }
+
+        SDL_PropertiesID options = SDL_CreateProperties();
+        SdlError.ThrowOnFalse(options != 0, nameof(SDL_CreateProperties));
+        try
+        {
+            SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, loopCount);
+            SDL_SetNumberProperty(options, MIX_PROP_PLAY_START_MILLISECOND_NUMBER, startMilliseconds);
+            SDL_SetNumberProperty(options, MIX_PROP_PLAY_FADE_IN_MILLISECONDS_NUMBER, (long)fadeIn.TotalMilliseconds);
+            SdlError.ThrowOnFalse(MIX_PlayTrack(track, options), nameof(MIX_PlayTrack));
+        }
+        finally
+        {
+            SDL_DestroyProperties(options);
+        }
     }
 
     internal override void PauseTrackCore(Pointer<MIX_Track> track)

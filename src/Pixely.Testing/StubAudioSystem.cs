@@ -9,7 +9,8 @@ namespace Pixely.Testing;
 /// An <see cref="AudioSystem"/> that plays nothing and reads no file. Each source keeps the state SDL_mixer would give it:
 /// <c>Play</c> plays it from any state, <c>Pause</c> pauses only a playing source, <c>Resume</c> resumes only a paused one and
 /// <c>Stop</c> stops it, and a group's <c>Pause</c>, <c>Resume</c> and <c>Stop</c> do the same to each of its sources. A sound has
-/// no length, so it plays until the game stops it, its clip is cleared or disposed, or the test calls <see cref="Finish"/>. A new
+/// no length: a buffer's <c>Duration</c> is zero, a start passed to <c>Play</c> is not checked against the end, and the sound plays
+/// until the game stops it, its clip is cleared or disposed, or the test calls <see cref="Finish"/>. A new
 /// clip keeps the source's state, and a paused source without a clip stops when it resumes. What the game set reads back through
 /// the sources, groups and listener, and <see cref="LoadedPath"/> tells which sound a clip is.
 /// </summary>
@@ -69,6 +70,8 @@ public sealed class StubAudioSystem : AudioSystem
     {
     }
 
+    internal override TimeSpan? GetAudioDurationCore(Pointer<MIX_Audio> audio) => TimeSpan.Zero;
+
     internal override nint OpenStreamCore(ReadOnlySpan<char> path)
     {
         nint stream = (nint)NextHandle<byte>();
@@ -109,7 +112,7 @@ public sealed class StubAudioSystem : AudioSystem
 
     internal override void SetTrackStreamCore(Pointer<MIX_Track> track, nint stream) => SetHasClip(track, stream != 0);
 
-    internal override void PlayTrackCore(Pointer<MIX_Track> track) => SetState(track, static _ => AudioSourceState.Playing);
+    internal override void PlayTrackCore(Pointer<MIX_Track> track, int loopCount, TimeSpan start, TimeSpan fadeIn) => SetState(track, static _ => AudioSourceState.Playing);
 
     internal override void PauseTrackCore(Pointer<MIX_Track> track) => SetState(track, Pause);
 

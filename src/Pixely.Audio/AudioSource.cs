@@ -140,15 +140,33 @@ public sealed class AudioSource : IDisposable
 
     public void Play()
     {
+        Play(TimeSpan.Zero, TimeSpan.Zero);
+    }
+
+    public void Play(TimeSpan start)
+    {
+        Play(start, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Plays the clip from <paramref name="start"/>, rising from silence to full gain over <paramref name="fadeIn"/>, both rounded down
+    /// to whole milliseconds. A looping clip loops back to its beginning. A start after the end of an <see cref="AudioBuffer"/> throws
+    /// <see cref="ArgumentOutOfRangeException"/>. A start that SDL_mixer's decoder cannot seek to throws <see cref="PixelyException"/>,
+    /// such as one past the file's length in a WAV buffer that loops forever, or one other than zero in an <see cref="AudioStream"/>
+    /// whose content cannot seek. An OGG or FLAC buffer that loops forever wraps such a start into its loop.
+    /// </summary>
+    public void Play(TimeSpan start, TimeSpan fadeIn)
+    {
         ThrowIfDisposed();
         if (_clip == null)
         {
             throw new InvalidOperationException("Cannot play an audio source without a clip.");
         }
 
-        ApplyLooping();
+        ArgumentOutOfRangeException.ThrowIfLessThan(start, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(fadeIn, TimeSpan.Zero);
         ApplyPosition();
-        _audioSystem.PlayTrackCore(SdlTrack);
+        _audioSystem.PlayTrackCore(SdlTrack, LoopCount, start, fadeIn);
     }
 
     public void Pause()
@@ -188,9 +206,11 @@ public sealed class AudioSource : IDisposable
         }
     }
 
+    private int LoopCount => _looping ? -1 : 0;
+
     private void ApplyLooping()
     {
         ThrowIfDisposed();
-        _audioSystem.SetTrackLoopsCore(SdlTrack, _looping ? -1 : 0);
+        _audioSystem.SetTrackLoopsCore(SdlTrack, LoopCount);
     }
 }

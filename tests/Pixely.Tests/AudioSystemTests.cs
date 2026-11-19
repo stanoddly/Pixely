@@ -11,11 +11,14 @@ using static XdlSharp.Xdl;
 namespace Pixely.Tests;
 
 // The audio system on SDL_mixer, on SDL's dummy audio driver, which plays in real time. The sound lasts several seconds, so no
-// assertion depends on how far playback has advanced.
+// assertion depends on how far playback has advanced. A test that plays the sound's last moment waits for it to end instead.
 [NonParallelizable]
 public sealed class AudioSystemTests
 {
     private const string SoundPath = "sound.wav";
+    private const string EndlessSoundPath = "endless.wav";
+    private static readonly TimeSpan SoundDuration = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan NearTheEnd = SoundDuration - TimeSpan.FromMilliseconds(50);
 
     private IPixelyApp _app = null!;
     private IAudioSystem _audioSystem = null!;
@@ -117,6 +120,76 @@ public sealed class AudioSystemTests
         Vector3 cleared = GetTrackPosition(source);
 
         Assert.That((positioned, listenerMoved, cleared, source.Position), Is.EqualTo((new Vector3(-3, 2, 3), new Vector3(1, 2, 2), Vector3.Zero, (Vector3?)null)));
+    }
+
+    [Test]
+    public void Duration_OfABuffer_IsTheSoundsLength()
+    {
+        Assert.That(_audioSystem.LoadBuffer(SoundPath).Duration, Is.EqualTo(SoundDuration));
+    }
+
+    // Records SDL_mixer's WAV decoder: its endless loop covers the file's length once, and a seek past it fails.
+    [Test]
+    public void Duration_OfASoundThatLoopsForever_IsNull_AndItPlaysFromAStartWithinTheFile()
+    {
+        AudioBuffer buffer = _audioSystem.LoadBuffer(EndlessSoundPath);
+        AudioSource source = _audioSystem.CreateSource();
+        source.Clip = buffer;
+
+        source.Play();
+        source.Play(NearTheEnd);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That((buffer.Duration, source.State), Is.EqualTo(((TimeSpan?)null, AudioSourceState.Playing)));
+            Assert.That(() => source.Play(SoundDuration + TimeSpan.FromSeconds(1)), Throws.TypeOf<PixelyException>());
+        });
+    }
+
+    [Test]
+    public void Play_FromAStart_PlaysTheRestOnly()
+    {
+        AudioSource buffered = CreateSourceWithBuffer();
+        AudioSource streamed = _audioSystem.CreateSource();
+        streamed.Clip = _audioSystem.OpenStream(SoundPath);
+
+        buffered.Play(NearTheEnd);
+        streamed.Play(NearTheEnd, TimeSpan.FromMilliseconds(10));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => buffered.State, Is.EqualTo(AudioSourceState.Stopped).After(5000, 10));
+            Assert.That(() => streamed.State, Is.EqualTo(AudioSourceState.Stopped).After(5000, 10));
+        });
+    }
+
+    // The one-shot source ends first, as both play the same last moment, so the looping one has looped by then.
+    [Test]
+    public void Play_LoopingFromAStart_LoopsBack()
+    {
+        AudioSource oneShot = CreateSourceWithBuffer();
+        AudioSource looping = CreateSourceWithBuffer();
+        looping.Looping = true;
+
+        looping.Play(NearTheEnd);
+        oneShot.Play(NearTheEnd);
+
+        Assert.That(() => oneShot.State, Is.EqualTo(AudioSourceState.Stopped).After(5000, 10));
+        Assert.That(looping.State, Is.EqualTo(AudioSourceState.Playing));
+    }
+
+    [Test]
+    public void Play_WithAStartAfterTheEndOrANegativeTime_Throws()
+    {
+        AudioSource source = CreateSourceWithBuffer();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => source.Play(SoundDuration + TimeSpan.FromMilliseconds(1)), Throws.TypeOf<ArgumentOutOfRangeException>());
+            Assert.That(() => source.Play(TimeSpan.FromMilliseconds(-1)), Throws.TypeOf<ArgumentOutOfRangeException>());
+            Assert.That(() => source.Play(TimeSpan.Zero, TimeSpan.FromMilliseconds(-1)), Throws.TypeOf<ArgumentOutOfRangeException>());
+            Assert.That(() => source.Play(SoundDuration + TimeSpan.FromTicks(1)), Throws.Nothing);
+        });
     }
 
     [Test]
@@ -336,21 +409,24 @@ public sealed class AudioSystemTests
     {
         FrozenDictionary<string, ImmutableArray<ContentFile>> files = new Dictionary<string, ImmutableArray<ContentFile>>
         {
-            ["."] = [new ByteContentFile(SoundPath, CreateSilentWav(TimeSpan.FromSeconds(10)))]
+            ["."] = [new ByteContentFile(SoundPath, CreateSilentWav(SoundDuration, loopsForever: false)), new ByteContentFile(EndlessSoundPath, CreateSilentWav(SoundDuration, loopsForever: true))]
         }.ToFrozenDictionary();
         FrozenDictionary<string, ImmutableArray<string>> directories = new Dictionary<string, ImmutableArray<string>> { ["."] = [] }.ToFrozenDictionary();
         return new DictionaryContentSource(files, directories);
     }
 
-    // 16-bit mono PCM at 8 kHz.
-    private static byte[] CreateSilentWav(TimeSpan duration)
+    // 16-bit mono PCM at 8 kHz. A sound that loops forever has a sampler chunk with one forward loop over all of it, with a play count
+    // of zero.
+    private static byte[] CreateSilentWav(TimeSpan duration, bool loopsForever)
     {
         const int SampleRate = 8000;
-        int dataLength = (int)(SampleRate * duration.TotalSeconds) * sizeof(short);
+        const int SamplerLength = 60;
+        int frames = (int)(SampleRate * duration.TotalSeconds);
+        int dataLength = frames * sizeof(short);
         using MemoryStream stream = new();
         using BinaryWriter writer = new(stream);
         writer.Write("RIFF"u8);
-        writer.Write(36 + dataLength);
+        writer.Write(36 + dataLength + (loopsForever ? 8 + SamplerLength : 0));
         writer.Write("WAVEfmt "u8);
         writer.Write(16);
         writer.Write((short)1);
@@ -362,6 +438,23 @@ public sealed class AudioSystemTests
         writer.Write("data"u8);
         writer.Write(dataLength);
         writer.Write(new byte[dataLength]);
+        if (loopsForever)
+        {
+            writer.Write("smpl"u8);
+            writer.Write(SamplerLength);
+            // Manufacturer, product, sample period, MIDI unity note, MIDI pitch fraction, SMPTE format and SMPTE offset.
+            writer.Write(new byte[7 * sizeof(int)]);
+            writer.Write(1);
+            writer.Write(0);
+            // The loop's identifier, type (forward), start, inclusive end, fraction and play count.
+            writer.Write(0);
+            writer.Write(0);
+            writer.Write(0);
+            writer.Write(frames - 1);
+            writer.Write(0);
+            writer.Write(0);
+        }
+
         writer.Flush();
         return stream.ToArray();
     }
