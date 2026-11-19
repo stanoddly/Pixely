@@ -10,6 +10,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Pixely.Testing" />
+        <InternalsVisibleTo Include="Pixely.Tests" />
     </ItemGroup>
 
     <ItemGroup>

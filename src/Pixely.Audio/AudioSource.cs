@@ -10,7 +10,7 @@ public sealed class AudioSource : IDisposable
     internal Pointer<MIX_Track> Pointer { get; set; }
     private AudioClip? _clip;
     private AudioGroup? _group;
-    private Vector3 _position;
+    private Vector3? _position;
     private float _gain = 1.0f;
     private bool _looping;
 
@@ -106,7 +106,9 @@ public sealed class AudioSource : IDisposable
         }
     }
 
-    public Vector3 Position
+    // Null plays the clip unspatialized, with its own channels. SDL_mixer spatializes a track with any position, Vector3.Zero
+    // included, and then mixes it down to mono.
+    public Vector3? Position
     {
         get
         {
