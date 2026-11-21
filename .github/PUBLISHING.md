@@ -28,7 +28,7 @@ Create an Account API token for R2 with **Object Read & Write** on the `nuget` b
 - `R2_ACCESS_KEY_ID`: the token's access key ID
 - `R2_SECRET_ACCESS_KEY`: the token's secret access key
 
-The workflow installs Sleet 7.2.0 and creates its configuration in the runner's temporary directory. The token needs read, list, write, and delete access because Sleet reads feed state and creates and removes a root `.feedlock` while publishing. R2 does not support the AWS SDK's streaming uploads, so the configuration sets `disablePayloadSigning` and the workflow sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
+The workflow installs Sleet 7.2.0 and creates its configuration in the runner's temporary directory. The token needs read, list, write, and delete access because Sleet reads feed state and creates and removes a root `.feedlock` while publishing. Do not add a bucket lock rule that covers `.feedlock` because it would prevent Sleet from removing this lock. R2 does not support the AWS SDK's streaming uploads, so the configuration sets `disablePayloadSigning` and the workflow sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
 
 Sleet uploads packages and other versioned files with `Cache-Control: public, max-age=31536000, immutable` and feed JSON with `Cache-Control: public, max-age=60`. Promotion files use the immutable value. The `stanoddly.dev` zone has these rules for `nuget.stanoddly.dev`:
 
@@ -36,9 +36,9 @@ Sleet uploads packages and other versioned files with `Cache-Control: public, ma
 - Smart Tiered Cache
 - a URL Rewrite Rule that serves `/index.json` for `/`
 
-Missing files return 404 without `Cache-Control`, so a 404 is never cached and a new package is readable as soon as it is uploaded.
+Missing files return 404 without `Cache-Control`, so a 404 is never cached. A new version's files are readable as soon as they are uploaded, and the version list shows it within a minute.
 
-To rotate the credential, create a replacement with the same restrictions, update both key secrets, wait for or rerun a successful development publication, and then delete the previous token.
+To rotate the credential, create a replacement with the same restrictions, update `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, wait for or rerun a successful development publication, and then delete the previous token.
 
 ## nuget.org configuration
 
