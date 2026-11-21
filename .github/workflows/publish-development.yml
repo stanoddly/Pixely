@@ -8,7 +8,9 @@ permissions:
   contents: read
 
 env:
+  PIXELY_FEED_URL: https://nuget.stanoddly.dev
   PIXELY_VERSION_HEIGHT_OFFSET: '-281'
+  R2_BUCKET: nuget
 
 jobs:
   platform-validation:
@@ -164,25 +166,32 @@ jobs:
       - name: Publish package to development feed
         shell: bash
         env:
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          # R2 does not support the streaming SigV4 uploads and default checksums of the AWS SDK.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
 
-          if [[ -z "$B2_KEY_ID" || -z "$B2_APPLICATION_KEY" ]]; then
-            echo "B2_KEY_ID and B2_APPLICATION_KEY repository secrets are required."
+          if [[ -z "$R2_ACCOUNT_ID" || -z "$R2_ACCESS_KEY_ID" || -z "$R2_SECRET_ACCESS_KEY" ]]; then
+            echo "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY repository secrets are required."
             exit 1
           fi
 
           sleet_config="$RUNNER_TEMP/sleet.json"
           jq --null-input \
-            '{sources: [{name: "pixely", type: "s3", path: "https://pixely.s3.eu-central-003.backblazeb2.com/", baseURI: "https://pixely.s3.eu-central-003.backblazeb2.com/", bucketName: "pixely", serviceURL: "https://s3.eu-central-003.backblazeb2.com", accessKeyId: "$B2_KEY_ID$", secretAccessKey: "$B2_APPLICATION_KEY$"}]}' \
+            --arg feedUrl "$PIXELY_FEED_URL/" \
+            --arg bucketName "$R2_BUCKET" \
+            --arg serviceUrl "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" \
+            '{sources: [{name: "nuget", type: "s3", path: $feedUrl, baseURI: $feedUrl, bucketName: $bucketName, serviceURL: $serviceUrl, accessKeyId: "$R2_ACCESS_KEY_ID$", secretAccessKey: "$R2_SECRET_ACCESS_KEY$", disablePayloadSigning: true, immutableCacheControl: "public, max-age=31536000, immutable", mutableCacheControl: "public, max-age=60"}]}' \
             > "$sleet_config"
 
           "$RUNNER_TEMP/dotnet-tools/sleet" push \
             "artifacts/package-to-publish/Pixely.$PIXELY_VERSION.nupkg" \
             --config "$sleet_config" \
-            --source pixely \
+            --source nuget \
             --skip-existing
 
       - name: Report package availability
@@ -197,7 +206,7 @@ jobs:
           set -euo pipefail
 
           pull_request_number="$(gh api "repos/$REPOSITORY/commits/$REPOSITORY_COMMIT/pulls" --jq '.[0].number')"
-          package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          package_url="$PIXELY_FEED_URL/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
           message="$(printf '📦 Development package [`Pixely %s`](%s) is available.' "$PIXELY_VERSION" "$package_url")"
           body="$(printf '%s\n\n[Workflow run (attempt %s)](%s)' "$message" "$RUN_ATTEMPT" "$RUN_URL")"
           gh api --method POST "repos/$REPOSITORY/issues/$pull_request_number/comments" --field body="$body" >/dev/null
@@ -205,15 +214,17 @@ jobs:
       - name: Store promotion artifacts
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          AWS_DEFAULT_REGION: eu-central-003
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_DEFAULT_REGION: auto
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-          B2_S3_ENDPOINT: https://s3.eu-central-003.backblazeb2.com
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           REPOSITORY_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
+
+          s3_endpoint="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
 
           get_object() {
             local key="$2"
@@ -221,8 +232,8 @@ jobs:
             local target="$1"
             head_error="$(mktemp)"
 
-            if aws --endpoint-url "$B2_S3_ENDPOINT" s3api head-object --bucket pixely --key "$key" >/dev/null 2>"$head_error"; then
-              aws --endpoint-url "$B2_S3_ENDPOINT" s3api get-object --bucket pixely --key "$key" "$target" >/dev/null
+            if aws --endpoint-url "$s3_endpoint" s3api head-object --bucket "$R2_BUCKET" --key "$key" >/dev/null 2>"$head_error"; then
+              aws --endpoint-url "$s3_endpoint" s3api get-object --bucket "$R2_BUCKET" --key "$key" "$target" >/dev/null
               return 0
             fi
 
@@ -239,8 +250,8 @@ jobs:
             local key="$2"
             local content_type="$3"
 
-            aws --endpoint-url "$B2_S3_ENDPOINT" s3api put-object \
-              --bucket pixely \
+            aws --endpoint-url "$s3_endpoint" s3api put-object \
+              --bucket "$R2_BUCKET" \
               --key "$key" \
               --body "$source" \
               --cache-control 'public, max-age=31536000, immutable' \
@@ -264,13 +275,18 @@ jobs:
           nupkg="$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
           snupkg="$promotion_directory/Pixely.$PIXELY_VERSION.snupkg"
           manifest="$promotion_directory/manifest.json"
-          nupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
-          snupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/$promotion_prefix/Pixely.$PIXELY_VERSION.snupkg"
+          package_key="flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
           symbol_key="$promotion_prefix/Pixely.$PIXELY_VERSION.snupkg"
           manifest_key="$promotion_prefix/manifest.json"
+          nupkg_url="$PIXELY_FEED_URL/$package_key"
+          snupkg_url="$PIXELY_FEED_URL/$symbol_key"
           mkdir -p "$promotion_directory"
 
-          curl --fail --silent --show-error "$nupkg_url" --output "$nupkg"
+          # The feed's stored package is canonical; reading it through the S3 API keeps the CDN cache out of the check.
+          if ! get_object "$nupkg" "$package_key"; then
+            echo "The feed does not contain $package_key."
+            exit 1
+          fi
           validate_package "$nupkg"
 
           if get_object "$snupkg" "$symbol_key"; then

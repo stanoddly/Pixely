@@ -18,6 +18,7 @@ permissions:
   id-token: write
 
 env:
+  PIXELY_FEED_URL: https://nuget.stanoddly.dev
   PIXELY_VERSION_HEIGHT_OFFSET: '-281'
 
 jobs:
@@ -48,8 +49,8 @@ jobs:
           fi
 
           promotion_directory="artifacts/promotion"
-          promotion_url="https://pixely.s3.eu-central-003.backblazeb2.com/promotion/pixely/$PIXELY_VERSION"
-          package_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          promotion_url="$PIXELY_FEED_URL/promotion/pixely/$PIXELY_VERSION"
+          package_url="$PIXELY_FEED_URL/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
           mkdir -p "$promotion_directory"
           curl --fail --silent --show-error "$promotion_url/manifest.json" --output "$promotion_directory/manifest.json"
           curl --fail --silent --show-error "$package_url" --output "$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
@@ -65,8 +66,8 @@ jobs:
           manifest="$promotion_directory/manifest.json"
           nupkg="$promotion_directory/Pixely.$PIXELY_VERSION.nupkg"
           snupkg="$promotion_directory/Pixely.$PIXELY_VERSION.snupkg"
-          expected_nupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
-          expected_snupkg_url="https://pixely.s3.eu-central-003.backblazeb2.com/promotion/pixely/$PIXELY_VERSION/Pixely.$PIXELY_VERSION.snupkg"
+          expected_nupkg_url="$PIXELY_FEED_URL/flatcontainer/pixely/$PIXELY_VERSION/pixely.$PIXELY_VERSION.nupkg"
+          expected_snupkg_url="$PIXELY_FEED_URL/promotion/pixely/$PIXELY_VERSION/Pixely.$PIXELY_VERSION.snupkg"
           jq --exit-status \
             --arg packageVersion "$PIXELY_VERSION" \
             --arg nupkgUrl "$expected_nupkg_url" \
