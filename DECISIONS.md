@@ -2,6 +2,15 @@
 
 Design decisions with the constraints that decided them and their known costs, newest first.
 
+## 2026-11-19: An installable browser app gets a generated manifest and no service worker
+
+`PixelyBrowserInstallable` generates a web app manifest (`docs/hosting.md`). A publish has no service worker, so an installed game still needs the network to start.
+
+- Chrome installs an app from its menu without a worker.
+- WriteLinesToFile turns backslashes into slashes on Unix, and a quote in a path ends a property function's argument, so an inline task resolves the icons and writes the manifest and the page.
+
+Cost: the inline task compiles with Roslyn on its first use in a build.
+
 ## 2026-11-14: A test app never starts SDL, so tests run in parallel
 
 `TestApp.CreateBuilder()` builds an app without SDL (`docs/testing.md`). Its windows are `StubWindow`s without a platform, its display, cursors, clipboard and platform settings are stubs, its text uses `StubFontSystem`, and its sound `StubAudioSystem`. `Window` became platform-neutral, and `NativeWindow` holds the SDL window under `SwapchainWindow` and `OffscreenWindow`. `AudioSystem` became an abstract base with internal `*Core` methods, as `GpuDevice` is, with `SdlAudioSystem` on SDL_mixer. `PixelyAppBuilder.Build()`, `AddGpuServices` and `RegisterAudio` register a default only when nothing has registered the service, and a frame reads the platform through an internal `IEventSource`.

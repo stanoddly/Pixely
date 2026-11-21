@@ -1153,6 +1153,124 @@ public class PackageIntegrationTests
         Assert.That(result, Does.Contain("RESULT error").And.Contain("PixelyBrowserVfsFile with TargetPath Content.pk3").And.Contain("RESULT exit code 1"));
     }
 
+    // One publish covers the manifest with a name that needs escaping, the icons at their target paths and the tags in the package's page.
+    [Test]
+    public async Task BrowserPublishMakesAnInstallableApp()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "PixelyBrowserAppName=Pixely%3B C:\\Games 'Game'", "PixelyBrowserThemeColor=#123456"]);
+        string wwwroot = GetPublishedWwwroot(consumerDirectory);
+        using (JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest"))))
+        {
+            JsonElement root = manifest.RootElement;
+            JsonElement[] icons = root.GetProperty("icons").EnumerateArray().ToArray();
+            Assert.Multiple(() =>
+            {
+                Assert.That(root.GetProperty("name").GetString(), Is.EqualTo("Pixely; C:\\Games 'Game'"));
+                Assert.That(root.GetProperty("start_url").GetString(), Is.EqualTo("./"));
+                Assert.That(root.GetProperty("display").GetString(), Is.EqualTo("standalone"));
+                Assert.That(root.GetProperty("theme_color").GetString(), Is.EqualTo("#123456"));
+                Assert.That(root.GetProperty("background_color").GetString(), Is.EqualTo("#123456"));
+                Assert.That(icons.Select(icon => icon.GetProperty("src").GetString()), Is.EqualTo(new[] { "icon-192.png", "icons/icon-512.png" }));
+                Assert.That(icons.Select(icon => icon.GetProperty("sizes").GetString()), Is.EqualTo(new[] { "192x192", "512x512" }));
+                Assert.That(icons[0].TryGetProperty("purpose", out _), Is.False);
+                Assert.That(icons[1].GetProperty("purpose").GetString(), Is.EqualTo("any maskable"));
+            });
+        }
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.True);
+            Assert.That(File.Exists(Path.Combine(wwwroot, "icons", "icon-512.png")), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")),
+                Does.Contain("<link rel=\"manifest\" href=\"manifest.webmanifest\" />\n    <meta name=\"theme-color\" content=\"#123456\" />\n</head>").And.Contain("<canvas id=\"canvas\""));
+        });
+    }
+
+    // A project's own manifest replaces the generated one, and the icons it names are still served. A quote in an icon's path passes
+    // through the icons.
+    [Test]
+    public async Task BrowserPublishWithAnOwnManifestServesTheIcons()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
+        string quotedIcon = Path.Combine(consumerDirectory, "Extras", "it's.png");
+        Directory.CreateDirectory(consumerWwwroot);
+        try
+        {
+            File.WriteAllText(Path.Combine(consumerWwwroot, "manifest.webmanifest"), "{ \"name\": \"Own\" }\n");
+            File.Copy(Path.Combine(consumerDirectory, "Extras", "icon-192.png"), quotedIcon, overwrite: true);
+
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", "BrowserContentConsumerIcons=true", "BrowserContentConsumerQuotedIcon=true"]);
+            string wwwroot = GetPublishedWwwroot(consumerDirectory);
+            Assert.Multiple(() =>
+            {
+                Assert.That(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest")), Does.Contain("\"Own\""));
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icons", "icon-512.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "it's.png")), Is.True);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(consumerWwwroot);
+            File.Delete(quotedIcon);
+        }
+    }
+
+    // An icon under the project's wwwroot is named by its path there, and a page named by PixelyBrowserIndexHtml gets no tags.
+    [Test]
+    public async Task BrowserPublishNamesAWwwrootIconByItsPathAndLeavesAnOwnPage()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+        string consumerWwwroot = Path.Combine(consumerDirectory, "wwwroot");
+        const string ownPage = "<!DOCTYPE html>\n<html>\n<head>\n</head>\n<body></body>\n</html>\n";
+        string ownPagePath = Path.Combine(_testArtifactsDirectory, "own-index.html");
+        File.WriteAllText(ownPagePath, ownPage);
+        Directory.CreateDirectory(Path.Combine(consumerWwwroot, "images"));
+        string itemsPath = Path.Combine(_testArtifactsDirectory, "extra-items.props");
+        File.WriteAllText(itemsPath, """
+            <Project>
+              <ItemGroup>
+                <PixelyBrowserAppIcon Include="wwwroot\images\icon-192.png" Sizes="192x192" />
+                <PixelyBrowserAppIcon Include="Extras\icon-512.png" Sizes="512x512" />
+              </ItemGroup>
+            </Project>
+            """);
+        try
+        {
+            File.Copy(Path.Combine(consumerDirectory, "Extras", "icon-192.png"), Path.Combine(consumerWwwroot, "images", "icon-192.png"));
+
+            await PublishConsumerAsync(consumerDirectory, "browser-wasm", properties: ["PixelyBrowserInstallable=true", $"BrowserContentConsumerExtraItems={itemsPath}", $"PixelyBrowserIndexHtml={ownPagePath}"]);
+            string wwwroot = GetPublishedWwwroot(consumerDirectory);
+            using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(wwwroot, "manifest.webmanifest")));
+            Assert.Multiple(() =>
+            {
+                Assert.That(manifest.RootElement.GetProperty("icons").EnumerateArray().Select(icon => icon.GetProperty("src").GetString()), Is.EqualTo(new[] { "images/icon-192.png", "icon-512.png" }));
+                Assert.That(File.Exists(Path.Combine(wwwroot, "images", "icon-192.png")), Is.True);
+                Assert.That(File.Exists(Path.Combine(wwwroot, "icon-192.png")), Is.False);
+                Assert.That(File.ReadAllText(Path.Combine(wwwroot, "index.html")), Is.EqualTo(ownPage));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(consumerWwwroot);
+        }
+    }
+
+    [Test]
+    public async Task BrowserBuildOfAnInstallableAppWithoutBothIconsFailsWithPixely0016()
+    {
+        string consumerDirectory = GetConsumerDirectory("BrowserContentConsumer");
+        DeleteConsumerOutputs("BrowserContentConsumer");
+
+        string output = await BuildConsumerAsync(consumerDirectory, runtimeIdentifier: "browser-wasm", expectSuccess: false, properties: ["PixelyBrowserInstallable=true"]);
+        Assert.That(output, Does.Contain("error PIXELY0016").And.Contain("192x192 and 512x512"));
+    }
+
     // On the desktop the item is inert and the loader finds the Content directory through the project tree.
     [Test]
     public async Task DesktopBuildIgnoresPixelyBrowserVfsFile()

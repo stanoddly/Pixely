@@ -28,6 +28,16 @@
         <ProjectReference Include="..\BrowserContentLibrary\BrowserContentLibrary.csproj" Condition="'$(BrowserContentConsumerLibraryAsset)' == 'true'" />
     </ItemGroup>
 
+    <!-- The icons of an installable app: one at its file name, one at a nested TargetPath with a purpose. -->
+    <ItemGroup Condition="'$(BrowserContentConsumerIcons)' == 'true'">
+        <PixelyBrowserAppIcon Include="Extras\icon-192.png" Sizes="192x192" />
+        <PixelyBrowserAppIcon Include="Extras\icon-512.png" Sizes="512x512" TargetPath="icons/icon-512.png" Purpose="any maskable" />
+    </ItemGroup>
+    <!-- An icon whose path has a quote, which PackageIntegrationTests writes. -->
+    <ItemGroup Condition="'$(BrowserContentConsumerQuotedIcon)' == 'true'">
+        <PixelyBrowserAppIcon Include="Extras\it's.png" Sizes="48x48" />
+    </ItemGroup>
+
     <!-- Several items at once, from a file PackageIntegrationTests writes, so no property function has to split a list of target paths. -->
     <Import Project="$(BrowserContentConsumerExtraItems)" Condition="'$(BrowserContentConsumerExtraItems)' != ''" />
 

@@ -65,7 +65,7 @@ Sdk/Sdk.props, Sdk/Sdk.targets                 imported by the SDK resolver
 Sdk/Pixely.AfterSdk.targets                    WebAssembly, shader and hosting targets, imported once the base SDK has set its properties
 Sdk/Pixely.Hosting.targets                     the entry point generator
 Sdk/Pixely.Browser.props                       imports the WebAssembly SDK props on browser-wasm
-Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, XDL's link settings, native URL references, PIXELY0004 to PIXELY0012, the default web assets, the Brotli boot config extension, the browser file system
+Sdk/Pixely.Browser.targets                     the framework switch, browser property overrides, XDL's link settings, native URL references, PIXELY0004 to PIXELY0012 and PIXELY0016, the default web assets, the web app manifest, the Brotli boot config extension, the browser file system
 Sdk/Pixely.Native.targets                      the XdlSharp.Native.<rid> reference, PIXELY0014 and PIXELY0015
 Sdk/Pixely.Version.props                       the package version and the XdlSharp version, generated at pack time
 buildTransitive/Pixely.targets                 fails a project that reaches Pixely without the SDK

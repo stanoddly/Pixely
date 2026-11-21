@@ -439,3 +439,39 @@ content.
 
 Leave the property off on a host that sends `Content-Encoding: br` itself. The download is the same
 size, and Chrome compiles `dotnet.native.wasm` while it downloads instead of decoding it afterwards.
+
+### Installable app
+
+`PixelyBrowserInstallable=true` makes the published page a web app that a browser can install, as a
+window of its own and an entry in the launcher or on the home screen:
+
+```xml
+<PropertyGroup>
+    <PixelyBrowserInstallable>true</PixelyBrowserInstallable>
+    <PixelyBrowserAppName>Example Game</PixelyBrowserAppName>
+    <PixelyBrowserThemeColor>#1a1a2e</PixelyBrowserThemeColor>
+</PropertyGroup>
+<ItemGroup>
+    <PixelyBrowserAppIcon Include="Branding\icon-192.png" Sizes="192x192" />
+    <PixelyBrowserAppIcon Include="Branding\icon-512.png" Sizes="512x512" Purpose="any maskable" />
+</ItemGroup>
+```
+
+- The SDK generates `manifest.webmanifest` with the name, `"start_url": "./"`,
+  `"display": "standalone"`, the colour as both theme and background colour, and the icons.
+  `PixelyBrowserAppName` defaults to `$(Product)`, which defaults to the assembly name.
+  `PixelyBrowserThemeColor` defaults to `#000`, the default page's background.
+- An icon under the project's `wwwroot/` is served from there already, and the manifest names it by
+  its path there. Any other icon is served at its `TargetPath`, by default its file name. `Sizes`
+  is the manifest's space-separated `sizes`, and `Purpose`, when set, its `purpose`.
+- Chrome installs an app only with a 192x192 and a 512x512 icon, so without both the build fails
+  with PIXELY0016.
+- The package's `index.html` gets `<link rel="manifest" href="manifest.webmanifest" />` and
+  `<meta name="theme-color">` before `</head>`. A project's own `wwwroot/index.html` or a page named
+  by `PixelyBrowserIndexHtml` adds both itself.
+- A project's own `wwwroot/manifest.webmanifest` replaces the generated one. Its icons are still
+  served, and the icon check is then the project's own. `PixelyBrowserDefaultAssets=false` turns off the generated manifest, the
+  served icons and the tags with the rest of the page, since Pixely then adds no web asset.
+
+A browser installs only a page from a secure context, which WebGPU needs anyway. An installed app
+still needs the network to start.
